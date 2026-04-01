@@ -1,0 +1,82 @@
+#!/bin/bash
+
+cleanFolders(){
+    find 01.* -iname "*.csv" -delete
+    find 01.* -iname "micro*" -delete
+    find 02.* -iname "macro*" -delete
+    find . -name "result*" -delete
+    find . -iname "*.pdf" -delete
+}
+
+prepareCore1D(){
+    core="07.Full.Core.1D/CORE1D.m"
+    sed \
+    -e s/"botReflHeight = .*$"/"botReflHeight = 0; %cm                                             %INPUT"/g \
+    -e s/"fuelHeight = .*$"/"fuelHeight = 0; %cm                                                %INPUT"/g \
+    -e s/"topReflHeight = .*$"/"topReflHeight = 0; %cm                                             %INPUT"/g \
+    -e s/"f2f = .*$"/"f2f = 0; %cm                                                       %INPUT"/g \
+    -e s/"Power = .*$"/"Power = 0;                                                         %INPUT"/g \
+    -e s/"axialRefl.Transport  = .*$"/"axialRefl.Transport  = [0 ; 0];                                    %INPUT"/g \
+    -e s/"axialRefl.Absorption = .*$"/"axialRefl.Absorption = [0 ; 0];                                    %INPUT"/g \
+    -e s/"axialRefl.Fission    = .*$"/"axialRefl.Fission    = [0 ; 0];                                    %INPUT"/g \
+    -e s/"axialRefl.Production = .*$"/"axialRefl.Production = [0 ; 0];                                    %INPUT"/g \
+    -e s/"axialRefl.Chi        = .*$"/"axialRefl.Chi        = [0 ; 0];                                    %INPUT"/g \
+    -e s/"axialRefl.Scattering = .*$"/"axialRefl.Scattering = [0 ; 0];                                    %INPUT"/g \
+    -e s/"fuel.Transport  = .*$"/"fuel.Transport  = [0 ; 0];                                         %INPUT"/g \
+    -e s/"fuel.Absorption = .*$"/"fuel.Absorption = [0 ; 0];                                         %INPUT"/g \
+    -e s/"fuel.Fission    = .*$"/"fuel.Fission    = [0 ; 0];                                         %INPUT"/g \
+    -e s/"fuel.Production = .*$"/"fuel.Production = [0 ; 0];                                         %INPUT"/g \
+    -e s/"fuel.Chi        = .*$"/"fuel.Chi        = [0 ; 0];                                         %INPUT"/g \
+    -e s/"fuel.Scattering = .*$"/"fuel.Scattering = [0 ; 0];                                         %INPUT"/g \
+    $core > temp.$$
+    mv temp.$$ $core
+}
+
+prepareReactorKinetics(){
+    kinetics="10.Reactor.Kinetics.0D/funRHS.m"
+    sed \
+    -e s/"rate_of_power = .*$"/"rate_of_power = 0; %CODE"/g \
+    -e s/"rate_of_cDNP = .*$"/"rate_of_cDNP = 0; %CODE"/g \
+    $kinetics > temp.$$
+    mv temp.$$ $kinetics
+}
+
+while getopts ":chp" opt; do
+    case $opt in
+    c)
+        printf "Executing clean up option ...\n"
+        cleanFolders
+        ;;
+    h)
+        printf "This script cleans up or prepares the folder to give to the students.\n"
+        
+        printf "\n-c Clean up:\n\tthe following files resulting from script runs will be deleted.\n"
+        find . -name "result*" -print
+        find . -name "*.pdf" -print
+
+        printf "\n-p Prepare:\n\tThe following XS files will be deleated and the homework prepared.\n"
+        find 01.* -not -name "convert" -print
+        ;;
+    p)
+        printf "Executing prepare option...\n"
+        temp="MATLAB(prepared)"
+        pwd
+        matlabFolder=$PWD
+        cd ..
+        pwd
+        cp -r $matlabFolder $temp
+        mv $temp $matlabFolder
+        cd "$matlabFolder/$temp"
+        pwd
+        rm Allclean Allrun
+        rm -rf ".git" ".gitignore" ".DS_Store"
+        cleanFolders
+        find 01.* -not -name "convert*" -delete
+        prepareCore1D
+        prepareReactorKinetics
+        ;;
+    \?)
+        echo "Invalid option: -$OPTARG" >&2
+        ;;
+    esac
+done
