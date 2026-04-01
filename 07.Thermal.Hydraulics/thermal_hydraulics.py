@@ -1021,41 +1021,61 @@ def solve_thermal_hydraulics(params: THParams | None = None) -> THResult:
 
     t_eval_1 = t_eval[t_eval <= time_end]
 
-    def _safe_event(t, y):
-        try:
-            return _clad_failure_event(t, y, p)
-        except Exception:
-            return 1e6
+    # Chunked integration with manual event detection (avoids scipy brentq
+    # sign errors).  Each chunk spans one output interval (time_step).
+    t_cur = 0.0
+    y_cur = y0.copy()
 
-    _safe_event.terminal = True
-    _safe_event.direction = -1
+    # Evaluate event at t=0
+    _rhs(t_cur, y_cur, p)
+    ev_prev = _clad_failure_event(t_cur, y_cur, p)
 
-    sol1 = solve_ivp(
-        fun=lambda t, y: _rhs(t, y, p),
-        t_span=(0.0, time_end),
-        y0=y0,
-        method="Radau",
-        t_eval=t_eval_1,
-        # events=_safe_event,  # disabled: event detection triggers spurious brentq errors
-        rtol=1e-6,
-        atol=1e-4,
-        max_step=10.0,
-    )
+    for t_next in t_eval_1:
+        if t_next <= t_cur:
+            continue
 
-    # Record snapshots from phase 1
-    for i in range(len(sol1.t)):
-        _record_snapshot(sol1.t[i], sol1.y[:, i])
+        sol_chunk = solve_ivp(
+            fun=lambda t, y: _rhs(t, y, p),
+            t_span=(t_cur, t_next),
+            y0=y_cur,
+            method="BDF",
+            rtol=1e-6,
+            atol=1e-4,
+            max_step=10.0,
+        )
 
-    # Check for clad failure (event triggered)
-    if sol1.t_events is not None and len(sol1.t_events) > 0 and len(sol1.t_events[0]) > 0:
-        clad_fail_time = float(sol1.t_events[0][0])
-        print(f"Clad failure at time {clad_fail_time:.2f} s")
+        if not sol_chunk.success:
+            print(f"Warning: solver failed at t={t_cur:.2f} s: {sol_chunk.message}")
+            break
 
-        # Switch to failed-clad mode
+        y_end = sol_chunk.y[:, -1]
+        _rhs(t_next, y_end, p)
+        ev_now = _clad_failure_event(t_next, y_end, p)
+
+        if ev_prev > 0 and ev_now <= 0:
+            # Clad failure detected in this chunk.  Use the chunk endpoint
+            # (1 s resolution) as the failure state — it is a fully converged
+            # solver state, unlike dense-output or bisection interpolants
+            # which can produce unphysical intermediate values.
+            clad_fail_time = t_next
+            y_fail = y_end.copy()
+            print(f"Clad failure at time {clad_fail_time:.2f} s")
+
+            # Record snapshot at failure time
+            _record_snapshot(clad_fail_time, y_fail)
+            break
+
+        # No event — record snapshot at this output time
+        _record_snapshot(t_next, y_end)
+
+        y_cur = y_end.copy()
+        t_cur = t_next
+        ev_prev = ev_now
+
+    # --- Phase 2: continue from failure to end (failed-clad mode) ---
+    if not np.isnan(clad_fail_time):
         p["clad_fail"] = True
-        y_fail = sol1.y_events[0][0]
 
-        # Phase 2: continue from failure to end
         t_eval_2 = np.arange(
             clad_fail_time + dt,
             time_end + dt,
@@ -1063,23 +1083,32 @@ def solve_thermal_hydraulics(params: THParams | None = None) -> THResult:
         )
         t_eval_2 = t_eval_2[t_eval_2 <= time_end]
 
-        if len(t_eval_2) > 0:
-            sol2 = solve_ivp(
-                fun=lambda t, y: _rhs(t, y, p),
-                t_span=(clad_fail_time, time_end),
-                y0=y_fail,
-                method="Radau",
-                t_eval=t_eval_2,
-                rtol=1e-6,
-                atol=1e-4,
-                max_step=10.0,
-            )
-
-            for i in range(len(sol2.t)):
-                _record_snapshot(sol2.t[i], sol2.y[:, i])
-
-    elif sol1.status != 0 and not (sol1.t_events is not None and len(sol1.t_events) > 0 and len(sol1.t_events[0]) > 0):
-        print(f"Warning: solver terminated at t={sol1.t[-1]:.2f} s with status {sol1.status}: {sol1.message}")
+        # Chunked integration for post-failure: the Jacobian numerical
+        # differencing can push water properties out of valid range, causing
+        # NaN.  Integrate chunk-by-chunk and stop gracefully if a chunk fails.
+        y_cur2 = y_fail.copy()
+        t_cur2 = clad_fail_time
+        for t_next2 in t_eval_2:
+            try:
+                sol2 = solve_ivp(
+                    fun=lambda t, y: _rhs(t, y, p),
+                    t_span=(t_cur2, t_next2),
+                    y0=y_cur2,
+                    method="BDF",
+                    rtol=1e-6,
+                    atol=1e-4,
+                    max_step=1.0,
+                )
+                if not sol2.success:
+                    print(f"Warning: post-failure solver stopped at t={t_cur2:.1f} s")
+                    break
+                _record_snapshot(sol2.t[-1], sol2.y[:, -1])
+                y_cur2 = sol2.y[:, -1].copy()
+                t_cur2 = sol2.t[-1]
+            except ValueError:
+                print(f"Warning: post-failure solver hit NaN at t={t_cur2:.1f} s, "
+                      "stopping Phase 2")
+                break
 
     # --- Build result dataclass ---
     nt = len(records["time"])

@@ -986,7 +986,7 @@ def solve_reactor_kinetics(
         fun=lambda t, y: _rhs(t, y, p),
         t_span=(0.0, params.t_steady_end),
         y0=y0,
-        method="Radau",
+        method="BDF",
         t_eval=t_eval_ss,
         rtol=params.rtol,
         atol=params.atol,
@@ -1024,34 +1024,67 @@ def solve_reactor_kinetics(
         print("Phase 2: transient ({:.0f} -- {:.0f} s), gap open ...".format(
             params.t_steady_end, params.t_transient_end))
 
-    sol_tr = solve_ivp(
-        fun=lambda t, y: _rhs(t, y, p),
-        t_span=(params.t_steady_end, params.t_transient_end),
-        y0=y_trans,
-        method="Radau",
-        t_eval=t_eval_tr,
-        rtol=params.rtol,
-        atol=params.atol,
-        max_step=params.max_step_transient,
-        # events=lambda t, y: _gap_closure_event(t, y, p),  # disabled: brentq sign issue
-    )
-    if not sol_tr.success:
-        raise RuntimeError(f"Transient integration failed: {sol_tr.message}")
+    # Chunked integration with manual event detection (avoids scipy brentq
+    # sign errors).  Each chunk spans one output interval (dt_transient).
+    t_cur = params.t_steady_end
+    y_cur = y_trans.copy()
 
-    for i in range(len(sol_tr.t)):
-        snap = _collect_snapshot(sol_tr.t[i], sol_tr.y[:, i], p)
-        snapshots.append((sol_tr.t[i], snap))
+    # Evaluate event at the start of the transient
+    _rhs(t_cur, y_cur, p)
+    ev_prev = _gap_closure_event(t_cur, y_cur, p)
+    t_closure = None
+    y_closure = None
+
+    for t_next in t_eval_tr:
+        sol_chunk = solve_ivp(
+            fun=lambda t, y: _rhs(t, y, p),
+            t_span=(t_cur, t_next),
+            y0=y_cur,
+            method="BDF",
+            rtol=params.rtol,
+            atol=params.atol,
+            max_step=params.max_step_transient,
+            dense_output=True,
+        )
+        if not sol_chunk.success:
+            raise RuntimeError(f"Transient integration failed at t={t_cur:.4f}: "
+                               f"{sol_chunk.message}")
+
+        y_end = sol_chunk.y[:, -1]
+        _rhs(t_next, y_end, p)
+        ev_now = _gap_closure_event(t_next, y_end, p)
+
+        if ev_prev > 0 and ev_now <= 0:
+            # Gap closure detected in this chunk — refine via bisection
+            t_lo, t_hi = t_cur, t_next
+            for _ in range(40):  # ~1e-12 precision
+                t_mid = 0.5 * (t_lo + t_hi)
+                y_mid = sol_chunk.sol(t_mid)
+                _rhs(t_mid, y_mid, p)
+                ev_mid = _gap_closure_event(t_mid, y_mid, p)
+                if ev_mid > 0:
+                    t_lo = t_mid
+                else:
+                    t_hi = t_mid
+
+            t_closure = t_hi
+            y_closure = sol_chunk.sol(t_closure)
+            if verbose:
+                print(f"  Gap closure at t = {t_closure:.6f} s")
+            break
+
+        # No event — record snapshot at this output time
+        snap = _collect_snapshot(t_next, y_end, p)
+        snapshots.append((t_next, snap))
+
+        y_cur = y_end.copy()
+        t_cur = t_next
+        ev_prev = ev_now
 
     # ====================================================================
     # Phase 3: Transient with closed gap (if gap closure detected)
     # ====================================================================
-    if sol_tr.t_events is not None and len(sol_tr.t_events) > 0 and len(sol_tr.t_events[0]) > 0:
-        t_closure = float(sol_tr.t_events[0][0])
-        y_closure = sol_tr.y_events[0][0]
-
-        if verbose:
-            print(f"  Gap closure at t = {t_closure:.4f} s")
-
+    if t_closure is not None:
         # Compute strain jumps at closure
         state_cl = _unpack(y_closure, p)
         fuel_Tavg = (
@@ -1110,7 +1143,7 @@ def solve_reactor_kinetics(
             fun=lambda t, y: _rhs(t, y, p),
             t_span=(t_closure, params.t_transient_end),
             y0=y_closure,
-            method="Radau",
+            method="BDF",
             t_eval=t_eval_cl,
             rtol=params.rtol,
             atol=params.atol,
