@@ -16,7 +16,6 @@ import numpy as np
 from scipy.sparse import diags
 
 from data.macro_xs.mixture import Mixture
-from data.micro_xs.isotope import NG
 
 
 @dataclass
@@ -58,6 +57,7 @@ def solve_homogeneous_infinite(
     -------
     HomogeneousResult
     """
+    ng = mix.ng
     sig2_colsum = np.array(mix.Sig2.sum(axis=1)).ravel()
     SigS0_T = mix.SigS[0].T.tocsr()
     Sig2_T = mix.Sig2.T.tocsr()
@@ -65,7 +65,7 @@ def solve_homogeneous_infinite(
     # LHS matrix: diag(SigT) - SigS0^T - 2*Sig2^T
     A = diags(mix.SigT) - SigS0_T - 2.0 * Sig2_T
 
-    phi = np.ones(NG)
+    phi = np.ones(ng)
     k_inf = 1.0
 
     for _ in range(n_iter):
@@ -88,9 +88,9 @@ def solve_homogeneous_infinite(
     total_flux = phi.sum()
 
     eg = mix.eg
-    eg_mid = 0.5 * (eg[:NG] + eg[1 : NG + 1])
-    de = eg[1 : NG + 1] - eg[:NG]
-    du = np.log(eg[1 : NG + 1] / eg[:NG])
+    eg_mid = 0.5 * (eg[:ng] + eg[1 : ng + 1])
+    de = eg[1 : ng + 1] - eg[:ng]
+    du = np.log(eg[1 : ng + 1] / eg[:ng])
 
     return HomogeneousResult(
         k_inf=k_inf,

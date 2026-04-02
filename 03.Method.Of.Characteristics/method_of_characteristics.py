@@ -16,7 +16,6 @@ from enum import IntEnum
 import numpy as np
 
 from data.macro_xs.mixture import Mixture
-from data.micro_xs.isotope import NG
 
 
 # ---------------------------------------------------------------------------
@@ -75,12 +74,12 @@ class MoCResult:
 
     keff: float
     keff_history: list[float]
-    flux_fuel: np.ndarray     # (NG,) volume-averaged scalar flux in fuel
-    flux_clad: np.ndarray     # (NG,) volume-averaged scalar flux in clad
-    flux_cool: np.ndarray     # (NG,) volume-averaged scalar flux in coolant
-    scalar_flux: np.ndarray   # (n_nodes, n_nodes, NG) scalar flux at each node
+    flux_fuel: np.ndarray     # (ng,) volume-averaged scalar flux in fuel
+    flux_clad: np.ndarray     # (ng,) volume-averaged scalar flux in clad
+    flux_cool: np.ndarray     # (ng,) volume-averaged scalar flux in coolant
+    scalar_flux: np.ndarray   # (n_nodes, n_nodes, ng) scalar flux at each node
     geometry: MoCGeometry
-    eg: np.ndarray            # (NG+1,) energy group boundaries
+    eg: np.ndarray            # (ng+1,) energy group boundaries
     elapsed_seconds: float
 
 
@@ -115,9 +114,9 @@ def _fly_from(
 
     Parameters
     ----------
-    fi : (n_nodes, n_nodes, NG, N_RAYS) angular flux array (modified in-place).
-    sig_t : (n_nodes, n_nodes, NG) total cross section.
-    q : (n_nodes, n_nodes, NG) isotropic source per ray.
+    fi : (n_nodes, n_nodes, ng, N_RAYS) angular flux array (modified in-place).
+    sig_t : (n_nodes, n_nodes, ng) total cross section.
+    q : (n_nodes, n_nodes, ng) isotropic source per ray.
     """
     d = direction
 
@@ -189,12 +188,13 @@ def solve_moc(
 
     n = geom.n_nodes
     eg = materials[2].eg
+    ng = materials[2].ng
 
     # --- Pre-compute per-node cross sections ---
-    sig_a = np.empty((n, n, NG))
-    sig_t = np.empty((n, n, NG))
-    sig_p = np.empty((n, n, NG))
-    chi_node = np.empty((n, n, NG))
+    sig_a = np.empty((n, n, ng))
+    sig_t = np.empty((n, n, ng))
+    sig_p = np.empty((n, n, ng))
+    chi_node = np.empty((n, n, ng))
     # Store sparse scattering and (n,2n) matrices per material (only 3 unique)
     sig_s0_mat = {}
     sig2_mat = {}
@@ -209,18 +209,18 @@ def solve_moc(
             sig2_cs = np.array(m.Sig2.sum(axis=1)).ravel()
             sig_a[ix, iy, :] = m.SigF + m.SigC + m.SigL + sig2_cs
             sig_t[ix, iy, :] = sig_a[ix, iy, :] + np.array(m.SigS[0].sum(axis=1)).ravel()
-            sig_p[ix, iy, :] = m.SigP if m.SigP.ndim > 0 and len(m.SigP) == NG else np.zeros(NG)
+            sig_p[ix, iy, :] = m.SigP if m.SigP.ndim > 0 and len(m.SigP) == ng else np.zeros(ng)
             chi_node[ix, iy, :] = m.chi
 
     # --- Initialize angular flux to 1 ---
-    fi = np.ones((n, n, NG, N_RAYS))
+    fi = np.ones((n, n, ng, N_RAYS))
 
     # --- Outer iteration loop ---
     keff_history: list[float] = []
 
     for n_iter in range(1, max_outer + 1):
         # Scalar flux = sum over rays
-        scalar_flux = fi.sum(axis=3)  # (n, n, NG)
+        scalar_flux = fi.sum(axis=3)  # (n, n, ng)
 
         # keff = production / absorption
         p_rate = 0.0
@@ -239,7 +239,7 @@ def solve_moc(
         print(f"  keff = {keff:9.5f}  #outer = {n_iter:3d}")
 
         # Isotropic source per ray: (chi*SigP/keff + 2*Sig2^T + SigS0^T) * FI / nRays
-        q = np.empty((n, n, NG))
+        q = np.empty((n, n, ng))
         for iy in range(n):
             for ix in range(n):
                 FI = scalar_flux[ix, iy, :]
@@ -386,15 +386,15 @@ def solve_moc(
         fi *= 100.0 / p_rate
 
     # --- Post-processing: volume-averaged spectra ---
-    scalar_flux = fi.sum(axis=3)  # (n, n, NG)
+    scalar_flux = fi.sum(axis=3)  # (n, n, ng)
 
     vol_fuel = geom.volume[geom.mat_map == 2].sum()
     vol_clad = geom.volume[geom.mat_map == 1].sum()
     vol_cool = geom.volume[geom.mat_map == 0].sum()
 
-    flux_fuel = np.zeros(NG)
-    flux_clad = np.zeros(NG)
-    flux_cool = np.zeros(NG)
+    flux_fuel = np.zeros(ng)
+    flux_clad = np.zeros(ng)
+    flux_cool = np.zeros(ng)
 
     for iy in range(n):
         for ix in range(n):

@@ -141,8 +141,8 @@ def plot_do_spectra(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     eg = result.eg
-    eg_mid = 0.5 * (eg[:NG] + eg[1:NG + 1])
-    du = np.log(eg[1:NG + 1] / eg[:NG])
+    eg_mid = 0.5 * (eg[:-1] + eg[1:])
+    du = np.log(eg[1:] / eg[:-1])
 
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.semilogx(eg_mid, result.flux_fuel / du, "-r", label="Fuel")
@@ -284,8 +284,8 @@ def plot_moc_spectra(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     eg = result.eg
-    eg_mid = 0.5 * (eg[:NG] + eg[1:NG + 1])
-    du = np.log(eg[1:NG + 1] / eg[:NG])
+    eg_mid = 0.5 * (eg[:-1] + eg[1:])
+    du = np.log(eg[1:] / eg[:-1])
 
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.semilogx(eg_mid, result.flux_fuel / du, "-r", label="Fuel")
@@ -386,5 +386,3 @@ def plot_mc_spectrum(
     plt.close(fig)
 
 
-# Need NG for spectrum calculations
-from data.micro_xs.isotope import NG

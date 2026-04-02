@@ -15,7 +15,6 @@ from dataclasses import dataclass
 import numpy as np
 
 from data.macro_xs.mixture import Mixture
-from data.micro_xs.isotope import NG
 
 
 @dataclass
@@ -26,7 +25,7 @@ class MCParams:
     n_inactive: int = 100        # inactive cycles (source convergence)
     n_active: int = 2000         # active cycles (tally accumulation)
     pitch: float = 3.6           # unit cell side length (cm)
-    seed: int | None = None      # RNG seed (None = random)
+    seed: int | None = None      # Rng seed (None = random)
 
 
 @dataclass
@@ -37,8 +36,8 @@ class MCResult:
     sigma: float              # standard deviation of keff
     keff_history: np.ndarray  # (n_active,) cumulative mean keff
     sigma_history: np.ndarray  # (n_active,) cumulative sigma
-    flux_per_lethargy: np.ndarray  # (NG,) cell-averaged flux / du
-    eg_mid: np.ndarray        # (NG,) mid-group energies
+    flux_per_lethargy: np.ndarray  # (ng,) cell-averaged flux / du
+    eg_mid: np.ndarray        # (ng,) mid-group energies
     elapsed_seconds: float
 
 
@@ -81,27 +80,28 @@ def solve_monte_carlo(
 
     rng = np.random.default_rng(params.seed)
     fuel, clad, cool = materials[2], materials[1], materials[0]
+    ng = fuel.ng
     pitch = params.pitch
 
     eg = fuel.eg
-    eg_mid = 0.5 * (eg[:NG] + eg[1:NG + 1])
-    du = np.log(eg[1:NG + 1] / eg[:NG])
+    eg_mid = 0.5 * (eg[:ng] + eg[1:ng + 1])
+    du = np.log(eg[1:ng + 1] / eg[:ng])
 
     # Majorant: maximum total cross section across all materials
     sig_t_max = np.maximum(np.maximum(fuel.SigT, clad.SigT), cool.SigT)
 
     # Precompute dense scattering rows (from group ig to all groups)
-    # sig_s_dense[mat_id][ig] = dense array of shape (NG,)
+    # sig_s_dense[mat_id][ig] = dense array of shape (ng,)
     sig_s_dense = {}
     for mat_id, mix in materials.items():
-        rows = np.array(mix.SigS[0].todense())  # (NG, NG)
+        rows = np.array(mix.SigS[0].todense())  # (ng, ng)
         sig_s_dense[mat_id] = rows
 
     # Cumulative fission spectrum for sampling
     chi_cum = np.cumsum(fuel.chi)
 
     # Scattering detector
-    detect_s = np.zeros(NG)
+    detect_s = np.zeros(ng)
 
     # Initialize neutron population
     max_n = params.n_neutrons * 4  # buffer for splitting
@@ -109,7 +109,7 @@ def solve_monte_carlo(
     y = rng.random(max_n) * pitch
     weight = np.ones(max_n)
     i_group = np.array([np.searchsorted(chi_cum, rng.random()) for _ in range(max_n)], dtype=int)
-    i_group = np.clip(i_group, 0, NG - 1)
+    i_group = np.clip(i_group, 0, ng - 1)
     n_neutrons = params.n_neutrons
 
     keff_active = np.zeros(params.n_active)
@@ -184,7 +184,7 @@ def solve_monte_carlo(
                         # Sample outgoing energy group
                         cum_s = np.cumsum(sig_s_row)
                         ig = np.searchsorted(cum_s, rng.random() * sig_s_sum)
-                        ig = min(ig, NG - 1)
+                        ig = min(ig, ng - 1)
                     else:
                         # Absorption -> convert to fission neutron
                         if sig_a > 0:
@@ -194,7 +194,7 @@ def solve_monte_carlo(
 
                         # Sample new energy group from fission spectrum
                         ig = np.searchsorted(chi_cum, rng.random())
-                        ig = min(ig, NG - 1)
+                        ig = min(ig, ng - 1)
                         break
 
             x[i_n] = nx_

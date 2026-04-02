@@ -17,7 +17,6 @@ from scipy.integrate import lebedev_rule
 from scipy.sparse.linalg import LinearOperator, bicgstab
 
 from data.macro_xs.mixture import Mixture
-from data.micro_xs.isotope import NG
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +162,7 @@ class DOResult:
 # Core functions
 # ---------------------------------------------------------------------------
 
-def build_equation_map(geom: PinCellGeometry, quad: Quadrature) -> EquationMap:
+def build_equation_map(geom: PinCellGeometry, quad: Quadrature, ng: int) -> EquationMap:
     """Identify which (ordinate, ix, iy) combinations are unknowns.
 
     Filter: mu_z >= 0, and NOT incoming at reflective boundaries.
@@ -189,7 +188,7 @@ def build_equation_map(geom: PinCellGeometry, quad: Quadrature) -> EquationMap:
     n_eq = len(ords)
     return EquationMap(
         n_eq=n_eq,
-        n_unknowns=n_eq * NG,
+        n_unknowns=n_eq * ng,
         ordinate=np.array(ords, dtype=int),
         ix=np.array(ixs, dtype=int),
         iy=np.array(iys, dtype=int),
@@ -201,6 +200,7 @@ def solution_to_angular_flux(
     eq_map: EquationMap,
     quad: Quadrature,
     geom: PinCellGeometry,
+    ng: int,
 ) -> np.ndarray:
     """Convert 1D solution vector to 4D angular flux array.
 
@@ -210,10 +210,10 @@ def solution_to_angular_flux(
     -------
     fi : (NG, N, nx, ny) array
     """
-    fi = np.zeros((NG, quad.N, geom.nx, geom.ny))
+    fi = np.zeros((ng, quad.N, geom.nx, geom.ny))
 
     # Scatter solution into the fi array
-    flux = solution.reshape(NG, eq_map.n_eq, order='F')
+    flux = solution.reshape(ng, eq_map.n_eq, order='F')
     for k in range(eq_map.n_eq):
         fi[:, eq_map.ordinate[k], eq_map.ix[k], eq_map.iy[k]] = flux[:, k]
 
@@ -283,6 +283,7 @@ def transport_operator(
     quad: Quadrature,
     geom: PinCellGeometry,
     sig_t: np.ndarray,
+    ng: int,
 ) -> np.ndarray:
     """Linear operator A*x for the transport equation.
 
@@ -292,9 +293,9 @@ def transport_operator(
     ----------
     sig_t : (nx, ny, NG) total cross section at each node.
     """
-    fi = solution_to_angular_flux(solution, eq_map, quad, geom)
+    fi = solution_to_angular_flux(solution, eq_map, quad, geom, ng)
 
-    lhs = np.empty((NG, eq_map.n_eq))
+    lhs = np.empty((ng, eq_map.n_eq))
     for k in range(eq_map.n_eq):
         n, ix, iy = eq_map.ordinate[k], eq_map.ix[k], eq_map.iy[k]
         dfidx, dfidy = _compute_gradients(fi, n, ix, iy, quad, geom)
@@ -335,13 +336,15 @@ def solve_discrete_ordinates(
     if quad is None:
         quad = Quadrature.lebedev(order=17, L=params.L)
 
-    eg = materials[2].eg  # energy group boundaries from fuel
+    _any_mat = next(iter(materials.values()))
+    eg = _any_mat.eg
+    ng = _any_mat.ng
 
     # --- Pre-compute per-node cross sections ---
-    sig_a = np.empty((geom.nx, geom.ny, NG))
-    sig_t = np.empty((geom.nx, geom.ny, NG))
-    sig_p = np.empty((geom.nx, geom.ny, NG))
-    chi_node = np.empty((geom.nx, geom.ny, NG))
+    sig_a = np.empty((geom.nx, geom.ny, ng))
+    sig_t = np.empty((geom.nx, geom.ny, ng))
+    sig_p = np.empty((geom.nx, geom.ny, ng))
+    chi_node = np.empty((geom.nx, geom.ny, ng))
 
     # Store references to sparse matrices per node
     sig_s_node: list[list[list]] = [
@@ -357,7 +360,7 @@ def solve_discrete_ordinates(
             sig2_colsum = np.array(m.Sig2.sum(axis=1)).ravel()
             sig_a[ix, iy, :] = m.SigF + m.SigC + m.SigL + sig2_colsum
             sig_t[ix, iy, :] = sig_a[ix, iy, :] + np.array(m.SigS[0].sum(axis=1)).ravel()
-            sig_p[ix, iy, :] = m.SigP if m.SigP.ndim > 0 and len(m.SigP) == NG else np.zeros(NG)
+            sig_p[ix, iy, :] = m.SigP if m.SigP.ndim > 0 and len(m.SigP) == ng else np.zeros(ng)
             chi_node[ix, iy, :] = m.chi
 
             # Scattering matrices for each Legendre order
@@ -367,17 +370,17 @@ def solve_discrete_ordinates(
                     sig_s_list.append(m.SigS[j])
                 else:
                     from scipy.sparse import csr_matrix
-                    sig_s_list.append(csr_matrix((NG, NG)))
+                    sig_s_list.append(csr_matrix((ng, ng)))
             sig_s_node[ix][iy] = sig_s_list
             sig2_node[ix][iy] = m.Sig2
 
     # --- Build equation map ---
-    eq_map = build_equation_map(geom, quad)
-    print(f"  Equations: {eq_map.n_eq} angular x {NG} groups = {eq_map.n_unknowns} unknowns")
+    eq_map = build_equation_map(geom, quad, ng)
+    print(f"  Equations: {eq_map.n_eq} angular x {ng} groups = {eq_map.n_unknowns} unknowns")
 
     # --- Build LinearOperator for BiCGSTAB ---
     def matvec(x):
-        return transport_operator(x, eq_map, quad, geom, sig_t)
+        return transport_operator(x, eq_map, quad, geom, sig_t, ng)
 
     A_op = LinearOperator(
         shape=(eq_map.n_unknowns, eq_map.n_unknowns),
@@ -395,20 +398,20 @@ def solve_discrete_ordinates(
         guess = solution.copy()
 
         # Convert to angular flux and compute scalar flux
-        fi = solution_to_angular_flux(solution, eq_map, quad, geom)
+        fi = solution_to_angular_flux(solution, eq_map, quad, geom, ng)
 
         # Legendre flux moments at each node
-        # fiL[ix][iy] shape (NG, L+1, 2*L+1)
-        scalar_flux = np.zeros((geom.nx, geom.ny, NG))
+        # fiL[ix][iy] shape (ng, L+1, 2*L+1)
+        scalar_flux = np.zeros((geom.nx, geom.ny, ng))
         fiL = [[None for _ in range(geom.ny)] for _ in range(geom.nx)]
 
         for iy in range(geom.ny):
             for ix in range(geom.nx):
-                fl = np.zeros((NG, quad.L + 1, 2 * quad.L + 1))
+                fl = np.zeros((ng, quad.L + 1, 2 * quad.L + 1))
                 for j in range(quad.L + 1):
                     for m_idx in range(-j, j + 1):
                         col = j + m_idx
-                        s = np.zeros(NG)
+                        s = np.zeros(ng)
                         for n in range(quad.N):
                             s += fi[:, n, ix, iy] * quad.R[n, j, col] * quad.weights[n]
                         fl[:, j, col] = s
@@ -430,7 +433,7 @@ def solve_discrete_ordinates(
         keff_history.append(keff)
 
         # Build RHS source vector
-        rhs = np.zeros((NG, eq_map.n_eq))
+        rhs = np.zeros((ng, eq_map.n_eq))
         eq_idx = 0
         for iy in range(geom.ny):
             for ix in range(geom.nx):
@@ -454,9 +457,9 @@ def solve_discrete_ordinates(
                         continue
 
                     # Scattering source
-                    qS = np.zeros(NG)
+                    qS = np.zeros(ng)
                     for j in range(quad.L + 1):
-                        s = np.zeros(NG)
+                        s = np.zeros(ng)
                         for m_idx in range(-j, j + 1):
                             col = j + m_idx
                             s += fiL[ix][iy][:, j, col] * quad.R[n, j, col]
@@ -485,7 +488,7 @@ def solve_discrete_ordinates(
                 break
 
     # --- Post-processing: volume-averaged spectra ---
-    fi_final = solution_to_angular_flux(solution, eq_map, quad, geom)
+    fi_final = solution_to_angular_flux(solution, eq_map, quad, geom, ng)
     # Recompute scalar flux from final solution
     for iy in range(geom.ny):
         for ix in range(geom.nx):
@@ -497,9 +500,9 @@ def solve_discrete_ordinates(
     vol_clad = geom.volume[geom.mat_map == 1].sum()
     vol_cool = geom.volume[geom.mat_map == 0].sum()
 
-    flux_fuel = np.zeros(NG)
-    flux_clad = np.zeros(NG)
-    flux_cool = np.zeros(NG)
+    flux_fuel = np.zeros(ng)
+    flux_clad = np.zeros(ng)
+    flux_cool = np.zeros(ng)
 
     for iy in range(geom.ny):
         for ix in range(geom.nx):
