@@ -51,7 +51,7 @@ class Isotope:
 
     @property
     def ng(self) -> int:
-        return NG
+        return len(self.eg) - 1
 
     @property
     def is_fissile(self) -> bool:

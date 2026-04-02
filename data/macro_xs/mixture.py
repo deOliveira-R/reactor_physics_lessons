@@ -41,6 +41,11 @@ class Mixture:
     chi: np.ndarray
     eg: np.ndarray
 
+    @property
+    def ng(self) -> int:
+        """Number of energy groups (inferred from data)."""
+        return len(self.SigT)
+
 
 def compute_macro_xs(
     isotopes: list[Isotope],

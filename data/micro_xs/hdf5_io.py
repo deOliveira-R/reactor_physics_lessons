@@ -73,6 +73,7 @@ def load_isotope_h5(path: Path, temp_K: int) -> Isotope:
         aw = float(grp.attrs["aw"])
         temp = float(grp.attrs["temp"])
         eg = grp["eg"][:]
+        ng = len(eg) - 1
         sig0 = grp["sig0"][:]
         n_sig0 = len(sig0)
 
@@ -83,13 +84,13 @@ def load_isotope_h5(path: Path, temp_K: int) -> Isotope:
         nubar = grp["nubar"][:]
         chi = grp["chi"][:]
 
-        sig2 = _load_sparse(grp, "sig2")
+        sig2 = _load_sparse(grp, "sig2", ng=ng)
 
         # Reconstruct sigS structure: [legendre][sig0_idx]
         sig_s_grp = grp["sigS"]
         n_legendre = max(int(k.split("_")[0][1:]) for k in sig_s_grp.keys()) + 1
         sigS = [
-            [_load_sparse(sig_s_grp, f"L{j}_S{k}") for k in range(n_sig0)]
+            [_load_sparse(sig_s_grp, f"L{j}_S{k}", ng=ng) for k in range(n_sig0)]
             for j in range(n_legendre)
         ]
 
@@ -113,10 +114,10 @@ def _save_sparse(parent: h5py.Group, name: str, mat: csr_matrix) -> None:
     grp.create_dataset("data", data=coo.data, compression="gzip")
 
 
-def _load_sparse(parent: h5py.Group, name: str) -> csr_matrix:
+def _load_sparse(parent: h5py.Group, name: str, ng: int = NG) -> csr_matrix:
     """Load a sparse matrix from COO triplets."""
     grp = parent[name]
     row = grp["row"][:]
     col = grp["col"][:]
     data = grp["data"][:]
-    return coo_matrix((data, (row, col)), shape=(NG, NG)).tocsr()
+    return coo_matrix((data, (row, col)), shape=(ng, ng)).tocsr()
