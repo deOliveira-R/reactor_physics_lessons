@@ -8,9 +8,57 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 from pyXSteam.XSteam import XSteam
 
 _st = XSteam(XSteam.UNIT_SYSTEM_MKS)  # bar, °C, kg/m3
+
+
+# ---------------------------------------------------------------------------
+# IAPWS 2008 viscosity (without pyXSteam's 900 °C cutoff)
+# ---------------------------------------------------------------------------
+# Coefficients for the finite-density correction (H_ij matrix).
+_H_VISC = np.array([
+    [ 0.5132047,  0.3205656,  0.0,         0.0,        -0.7782567,  0.1885447],
+    [ 0.2151778,  0.7317883,  1.241044,    1.476783,    0.0,         0.0],
+    [-0.2818107, -1.070786,  -1.263184,    0.0,         0.0,         0.0],
+    [ 0.1778064,  0.460504,   0.2340379,  -0.4924179,   0.0,         0.0],
+    [-0.0417661,  0.0,        0.0,         0.1600435,   0.0,         0.0],
+    [ 0.0,       -0.01578386, 0.0,         0.0,         0.0,         0.0],
+    [ 0.0,        0.0,        0.0,        -0.003629481, 0.0,         0.0],
+])
+
+
+def _iapws_viscosity(T_K: float, rho: float) -> float:
+    """IAPWS 2008 dynamic viscosity (Pa-s).
+
+    Same correlation as pyXSteam but without the 900 °C upper-temperature
+    cutoff.  Used as a fallback when pyXSteam returns NaN.
+
+    # TODO: Consider using this for ALL viscosity calls (replacing _st.my_ph
+    # entirely). Bit-identical below 900 °C, no region dispatch overhead,
+    # and T_K/rho are already available at call sites.
+    """
+    Ts = T_K / 647.226
+    rhos = rho / 317.763
+
+    # Dilute-gas (kinetic theory) contribution
+    mu0 = Ts**0.5 / (1 + 0.978197 / Ts + 0.579829 / Ts**2 - 0.202354 / Ts**3)
+
+    # Finite-density correction
+    inv_Ts_m1 = 1.0 / Ts - 1.0
+    rhos_m1 = rhos - 1.0
+    S = 0.0
+    rhos_pow = 1.0
+    for i in range(7):
+        inv_pow = 1.0
+        for j in range(6):
+            S += _H_VISC[i, j] * inv_pow * rhos_pow
+            inv_pow *= inv_Ts_m1
+        rhos_pow *= rhos_m1
+    mu1 = np.exp(rhos * S)
+
+    return float(mu0 * mu1 * 55.071e-6)
 
 
 @dataclass
@@ -98,6 +146,8 @@ def h2o_properties(p_MPa: float, h_Jkg: float) -> tuple[FluidProps, SatProps, Sa
         rho = _st.rho_ph(p_bar, h_kJ)
         k = _st.tc_ph(p_bar, h_kJ)
         mu = _st.my_ph(p_bar, h_kJ)
+        if mu != mu:  # NaN fallback
+            mu = _iapws_viscosity(T_K, rho)
         nu = mu / rho if rho > 0 else 0.0
         cp = _st.Cp_ph(p_bar, h_kJ) * 1e3  # J/kg-K
         void = 0.0
@@ -109,6 +159,8 @@ def h2o_properties(p_MPa: float, h_Jkg: float) -> tuple[FluidProps, SatProps, Sa
         rho = _st.rho_ph(p_bar, h_kJ)
         k = _st.tc_ph(p_bar, h_kJ)
         mu = _st.my_ph(p_bar, h_kJ)
+        if mu != mu:  # NaN fallback
+            mu = _iapws_viscosity(T_K, rho)
         nu = mu / rho if rho > 0 else 0.0
         cp = _st.Cp_ph(p_bar, h_kJ) * 1e3
         void = 1.0
