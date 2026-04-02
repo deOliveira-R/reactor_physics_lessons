@@ -49,7 +49,7 @@ python run_homogeneous.py
 
 | Module | Description | Entry script |
 |--------|-------------|-------------|
-| **00.Macro.XS** | Macroscopic cross section recipes (UO2, Zircaloy, borated water) | `recipes.py` |
+| **00.Demo** | Central Limit Theorem and spherical harmonics demos | `central_limit_theorem.py`, `spherical_harmonics.py` |
 | **01.Homogeneous.Reactors** | Infinite medium eigenvalue problem (421 groups) | `run_homogeneous.py` |
 | **02.Discrete.Ordinates** | 2D SN transport with Lebedev quadrature (110 ordinates) | `run_discrete_ordinates.py` |
 | **03.Method.Of.Characteristics** | 2D MoC transport with 8 ray directions | `run_moc.py` |
@@ -64,7 +64,7 @@ python run_homogeneous.py
 The `data/` package provides infrastructure shared across all modules:
 
 - `data/micro_xs/` — 421-group microscopic cross sections (GENDF/HDF5), isotope data model
-- `data/macro_xs/` — sigma-zero iteration, XS interpolation, mixture assembly, material recipes
+- `data/macro_xs/` — sigma-zero iteration, XS interpolation, mixture assembly, material recipes (UO2, Zircaloy, borated water)
 - `data/materials/` — MATPRO correlations (UO2, Zircaloy, gap gases) and water/steam properties (pyXSteam)
 
 ## Nuclear Data
