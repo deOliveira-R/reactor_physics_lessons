@@ -30,6 +30,36 @@ def test_homogeneous_exact(case_name):
     )
 
 
+# ─── Heterogeneous: convergence to Richardson reference ──────────────
+
+@pytest.mark.slow
+@pytest.mark.parametrize("case_name", [
+    "sn_slab_1eg_2rg",
+    "sn_slab_2eg_2rg",
+    "sn_slab_4eg_2rg",
+    "sn_slab_1eg_4rg",
+    "sn_slab_2eg_4rg",
+    "sn_slab_4eg_4rg",
+])
+def test_heterogeneous_convergence(case_name):
+    """SN on heterogeneous slab must converge to the Richardson reference."""
+    case = get(case_name)
+    gp = case.geom_params
+    geom = Slab1DGeometry.from_regions(
+        gp["thicknesses"], gp["mat_ids"], n_cells_per_region=20,
+    )
+    quad = GaussLegendreQuadrature.gauss_legendre(16)
+    result = solve_sn_1d(
+        case.materials, geom, quad,
+        max_outer=500, max_inner=500, inner_tol=1e-10, keff_tol=1e-8,
+    )
+
+    err = abs(result.keff - case.k_inf)
+    assert err < 1e-3, (
+        f"{case_name}: keff={result.keff:.8f} vs ref={case.k_inf:.8f} err={err:.2e}"
+    )
+
+
 # ─── Spatial convergence O(h²) ───────────────────────────────────────
 
 def _convergence_order(values, spacings, reference):

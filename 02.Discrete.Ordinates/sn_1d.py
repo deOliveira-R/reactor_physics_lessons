@@ -94,6 +94,31 @@ class Slab1DGeometry:
         return cls(cell_widths=widths, mat_ids=mat_ids, N=n_fuel + n_mod)
 
     @classmethod
+    def from_regions(
+        cls,
+        thicknesses: list[float],
+        mat_ids_per_region: list[int],
+        n_cells_per_region: int = 10,
+    ) -> Slab1DGeometry:
+        """Build a multi-region slab from thicknesses and material IDs.
+
+        Parameters
+        ----------
+        thicknesses : thickness of each region (innermost first).
+        mat_ids_per_region : material ID for each region.
+        n_cells_per_region : number of cells per region.
+        """
+        widths_list = []
+        mids_list = []
+        for t, mid in zip(thicknesses, mat_ids_per_region):
+            dx = t / n_cells_per_region
+            widths_list.append(np.full(n_cells_per_region, dx))
+            mids_list.append(np.full(n_cells_per_region, mid, dtype=int))
+        widths = np.concatenate(widths_list)
+        mids = np.concatenate(mids_list)
+        return cls(cell_widths=widths, mat_ids=mids, N=len(widths))
+
+    @classmethod
     def homogeneous(
         cls,
         n_cells: int,
