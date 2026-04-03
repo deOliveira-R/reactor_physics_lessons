@@ -3,3 +3,5 @@
 .venv/
 results/
 .claude/
+.gitnexus
+docs/_build/
