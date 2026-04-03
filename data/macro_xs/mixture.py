@@ -46,6 +46,26 @@ class Mixture:
         """Number of energy groups (inferred from data)."""
         return len(self.SigT)
 
+    @property
+    def absorption_xs(self) -> np.ndarray:
+        """(NG,) absorption XS: fission + capture + (n,alpha) + (n,2n) out."""
+        return self.SigF + self.SigC + self.SigL + np.array(self.Sig2.sum(axis=1)).ravel()
+
+    @property
+    def out_scattering_xs(self) -> np.ndarray:
+        """(NG,) out-of-group scattering XS (P0 off-diagonal sum)."""
+        return self.total_scattering_xs - self.in_scattering_xs
+
+    @property
+    def in_scattering_xs(self) -> np.ndarray:
+        """(NG,) in-group (elastic) scattering XS (P0 diagonal)."""
+        return np.array(self.SigS[0].diagonal()).ravel()
+
+    @property
+    def total_scattering_xs(self) -> np.ndarray:
+        """(NG,) total scattering XS (P0 row sum = in + out)."""
+        return np.array(self.SigS[0].sum(axis=1)).ravel()
+
 
 def compute_macro_xs(
     isotopes: list[Isotope],
