@@ -1,29 +1,24 @@
-"""2D Discrete Ordinates (SN) neutron transport solver for a PWR pin cell.
+"""2D SN transport solver — backward-compatible wrapper.
 
-Solves the multi-group transport equation on a 2D Cartesian mesh with
-reflective boundary conditions using Lebedev angular quadrature and
-BiCGSTAB inner iterations.
-
-Port of MATLAB ``discreteOrdinatesPWR.m`` + ``funDO.m`` + ``convert.m``.
+Delegates to the unified ``sn_solver.solve_sn()`` with 2D mesh and
+Lebedev quadrature. All original names are preserved:
+``PinCellGeometry``, ``Quadrature``, ``DOParams``, ``DOResult``,
+``solve_discrete_ordinates``.
 """
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
-from scipy.integrate import lebedev_rule
-from scipy.sparse.linalg import LinearOperator, bicgstab
 
-from data.macro_xs.cell_xs import assemble_cell_xs
 from data.macro_xs.mixture import Mixture
-from numerics.eigenvalue import power_iteration
+from sn_geometry import CartesianMesh
+from sn_quadrature import LebedevSphere
+from sn_solver import solve_sn
 
 
-# ---------------------------------------------------------------------------
-# Data structures
-# ---------------------------------------------------------------------------
+# ── Backward-compatible types ─────────────────────────────────────────
 
 @dataclass
 class PinCellGeometry:
@@ -31,70 +26,57 @@ class PinCellGeometry:
 
     nx: int
     ny: int
-    delta: float  # mesh step (cm)
-    mat_map: np.ndarray  # (nx, ny) int — 0=coolant, 1=clad, 2=fuel
-    volume: np.ndarray  # (nx, ny) cell volumes (cm^2)
+    delta: float
+    mat_map: np.ndarray
+    volume: np.ndarray
 
     @classmethod
     def default_pwr(cls) -> PinCellGeometry:
-        """Standard 10x2 mesh: 5 fuel + 1 clad + 4 coolant cells."""
-        nx, ny, delta = 10, 2, 0.2
-
-        vol = np.full((nx, ny), delta**2)
+        n = 10
+        delta = 0.2
+        vol = np.full((n, n), delta**2)
         vol[0, :] /= 2
         vol[-1, :] /= 2
         vol[:, 0] /= 2
         vol[:, -1] /= 2
+        row = np.array([2, 2, 2, 2, 2, 1, 0, 0, 0, 0], dtype=int)
+        mat = np.tile(row, (n, 1)).T
+        return cls(nx=n, ny=n, delta=delta, mat_map=mat, volume=vol)
 
-        mat = np.array(
-            [[2, 2, 2, 2, 2, 1, 0, 0, 0, 0],
-             [2, 2, 2, 2, 2, 1, 0, 0, 0, 0]], dtype=int
-        ).T  # shape (10, 2)
-
-        return cls(nx=nx, ny=ny, delta=delta, mat_map=mat, volume=vol)
+    def _to_mesh(self) -> CartesianMesh:
+        return CartesianMesh.uniform_2d(self.nx, self.ny, self.delta, self.mat_map)
 
 
 @dataclass
 class Quadrature:
-    """Lebedev angular quadrature on the unit sphere."""
+    """Lebedev angular quadrature on the unit sphere (legacy type)."""
 
-    mu_x: np.ndarray   # (N,) direction cosines
+    mu_x: np.ndarray
     mu_y: np.ndarray
     mu_z: np.ndarray
-    weights: np.ndarray  # (N,) summing to 4*pi
-    ref_x: np.ndarray   # (N,) int — index of X-reflected partner
-    ref_y: np.ndarray   # (N,) int — index of Y-reflected partner
-    ref_z: np.ndarray   # (N,) int — index of Z-reflected partner
-    R: np.ndarray        # (N, L+1, 2*L+1) spherical harmonics
+    weights: np.ndarray
+    ref_x: np.ndarray
+    ref_y: np.ndarray
+    ref_z: np.ndarray
+    R: np.ndarray
     N: int = 0
     L: int = 0
 
     @classmethod
     def lebedev(cls, order: int = 17, L: int = 0) -> Quadrature:
-        """Build quadrature from scipy Lebedev rule.
-
-        Parameters
-        ----------
-        order : int
-            Lebedev order (17 gives 110 points, matching MATLAB default).
-        L : int
-            Scattering anisotropy order (0 = P0 isotropic).
-        """
+        from scipy.integrate import lebedev_rule
+        from sn_quadrature import _find_reflections
         pts, w = lebedev_rule(order)
         mu_x, mu_y, mu_z = pts[0], pts[1], pts[2]
         n_pts = len(w)
-
-        # Reflective direction indices — vectorised search
         ref_x = _find_reflections(-mu_x, mu_y, mu_z, mu_x, mu_y, mu_z)
         ref_y = _find_reflections(mu_x, -mu_y, mu_z, mu_x, mu_y, mu_z)
         ref_z = _find_reflections(mu_x, mu_y, -mu_z, mu_x, mu_y, mu_z)
-
-        # Spherical harmonics for each ordinate
         R = np.zeros((n_pts, L + 1, 2 * L + 1))
         for n in range(n_pts):
             for j in range(L + 1):
                 for m in range(-j, j + 1):
-                    col = j + m  # column index in [0, 2*L]
+                    col = j + m
                     if j == 0 and m == 0:
                         R[n, j, col] = 1.0
                     elif j == 1 and m == -1:
@@ -103,35 +85,9 @@ class Quadrature:
                         R[n, j, col] = mu_x[n]
                     elif j == 1 and m == 1:
                         R[n, j, col] = mu_y[n]
-
         return cls(mu_x=mu_x, mu_y=mu_y, mu_z=mu_z, weights=w,
                    ref_x=ref_x, ref_y=ref_y, ref_z=ref_z,
                    R=R, N=n_pts, L=L)
-
-
-def _find_reflections(
-    target_x: np.ndarray, target_y: np.ndarray, target_z: np.ndarray,
-    all_x: np.ndarray, all_y: np.ndarray, all_z: np.ndarray,
-) -> np.ndarray:
-    """Find index of nearest match for each target in the full set."""
-    n = len(target_x)
-    dist = (
-        (target_x[:, None] - all_x[None, :])**2
-        + (target_y[:, None] - all_y[None, :])**2
-        + (target_z[:, None] - all_z[None, :])**2
-    )
-    return np.argmin(dist, axis=1)
-
-
-@dataclass
-class EquationMap:
-    """Pre-computed mapping between 1D solution vector and 4D angular flux."""
-
-    n_eq: int           # number of angular equations
-    n_unknowns: int     # n_eq * NG
-    ordinate: np.ndarray  # (n_eq,) int — ordinate index
-    ix: np.ndarray        # (n_eq,) int — x-cell index
-    iy: np.ndarray        # (n_eq,) int — y-cell index
 
 
 @dataclass
@@ -141,7 +97,7 @@ class DOParams:
     max_outer: int = 200
     bicgstab_tol: float = 1e-4
     bicgstab_maxiter: int = 2000
-    L: int = 0  # scattering anisotropy (0=P0, 1=P1)
+    L: int = 0
 
 
 @dataclass
@@ -151,429 +107,16 @@ class DOResult:
     keff: float
     keff_history: list[float]
     residual_history: list[float]
-    flux_fuel: np.ndarray     # (NG,) volume-averaged scalar flux in fuel
-    flux_clad: np.ndarray     # (NG,) volume-averaged scalar flux in clad
-    flux_cool: np.ndarray     # (NG,) volume-averaged scalar flux in coolant
-    scalar_flux: np.ndarray   # (nx, ny, NG) scalar flux at each cell
+    flux_fuel: np.ndarray
+    flux_clad: np.ndarray
+    flux_cool: np.ndarray
+    scalar_flux: np.ndarray
     geometry: PinCellGeometry
-    eg: np.ndarray            # (NG+1,) energy group boundaries
+    eg: np.ndarray
     elapsed_seconds: float
 
 
-# ---------------------------------------------------------------------------
-# Core functions
-# ---------------------------------------------------------------------------
-
-def build_equation_map(geom: PinCellGeometry, quad: Quadrature, ng: int) -> EquationMap:
-    """Identify which (ordinate, ix, iy) combinations are unknowns.
-
-    Filter: mu_z >= 0, and NOT incoming at reflective boundaries.
-    """
-    ords, ixs, iys = [], [], []
-    for iy in range(geom.ny):
-        for ix in range(geom.nx):
-            for n in range(quad.N):
-                if quad.mu_z[n] < 0:
-                    continue
-                if ix == 0 and quad.mu_x[n] > 0:
-                    continue
-                if ix == geom.nx - 1 and quad.mu_x[n] < 0:
-                    continue
-                if iy == 0 and quad.mu_y[n] > 0:
-                    continue
-                if iy == geom.ny - 1 and quad.mu_y[n] < 0:
-                    continue
-                ords.append(n)
-                ixs.append(ix)
-                iys.append(iy)
-
-    n_eq = len(ords)
-    return EquationMap(
-        n_eq=n_eq,
-        n_unknowns=n_eq * ng,
-        ordinate=np.array(ords, dtype=int),
-        ix=np.array(ixs, dtype=int),
-        iy=np.array(iys, dtype=int),
-    )
-
-
-def solution_to_angular_flux(
-    solution: np.ndarray,
-    eq_map: EquationMap,
-    quad: Quadrature,
-    geom: PinCellGeometry,
-    ng: int,
-) -> np.ndarray:
-    """Convert 1D solution vector to 4D angular flux array.
-
-    Port of MATLAB ``convert.m``.
-
-    Returns
-    -------
-    fi : (NG, N, nx, ny) array
-    """
-    fi = np.zeros((ng, quad.N, geom.nx, geom.ny))
-
-    # Scatter solution into the fi array
-    flux = solution.reshape(ng, eq_map.n_eq, order='F')
-    for k in range(eq_map.n_eq):
-        fi[:, eq_map.ordinate[k], eq_map.ix[k], eq_map.iy[k]] = flux[:, k]
-
-    # Z-reflection: directions with mu_z < 0 copy from their reflection
-    for n in range(quad.N):
-        if quad.mu_z[n] < 0:
-            fi[:, n, :, :] = fi[:, quad.ref_z[n], :, :]
-
-    # X reflective boundary conditions
-    for n in range(quad.N):
-        if quad.mu_x[n] > 0:
-            fi[:, n, 0, :] = fi[:, quad.ref_x[n], 0, :]
-        if quad.mu_x[n] < 0:
-            fi[:, n, -1, :] = fi[:, quad.ref_x[n], -1, :]
-
-    # Y reflective boundary conditions
-    for n in range(quad.N):
-        if quad.mu_y[n] > 0:
-            fi[:, n, :, 0] = fi[:, quad.ref_y[n], :, 0]
-        if quad.mu_y[n] < 0:
-            fi[:, n, :, -1] = fi[:, quad.ref_y[n], :, -1]
-
-    return fi
-
-
-def _compute_gradients(
-    fi: np.ndarray,
-    n: int, ix: int, iy: int,
-    quad: Quadrature,
-    geom: PinCellGeometry,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Diamond-scheme gradients with reflective BCs.
-
-    Port of the ``gradients`` subfunction in ``funDO.m``.
-    Returns (dfidx, dfidy), each shape (NG,).
-    """
-    # X gradient
-    if quad.mu_x[n] > 0:
-        if ix == 0:
-            dfix = fi[:, quad.ref_x[n], ix, iy] - fi[:, quad.ref_x[n], ix + 1, iy]
-        else:
-            dfix = fi[:, n, ix, iy] - fi[:, n, ix - 1, iy]
-    else:
-        if ix == geom.nx - 1:
-            dfix = fi[:, quad.ref_x[n], ix - 1, iy] - fi[:, quad.ref_x[n], ix, iy]
-        else:
-            dfix = fi[:, n, ix + 1, iy] - fi[:, n, ix, iy]
-
-    # Y gradient
-    if quad.mu_y[n] > 0:
-        if iy == 0:
-            dfiy = fi[:, quad.ref_y[n], ix, iy] - fi[:, quad.ref_y[n], ix, iy + 1]
-        else:
-            dfiy = fi[:, n, ix, iy] - fi[:, n, ix, iy - 1]
-    else:
-        if iy == geom.ny - 1:
-            dfiy = fi[:, quad.ref_y[n], ix, iy - 1] - fi[:, quad.ref_y[n], ix, iy]
-        else:
-            dfiy = fi[:, n, ix, iy + 1] - fi[:, n, ix, iy]
-
-    return dfix / geom.delta, dfiy / geom.delta
-
-
-def transport_operator(
-    solution: np.ndarray,
-    eq_map: EquationMap,
-    quad: Quadrature,
-    geom: PinCellGeometry,
-    sig_t: np.ndarray,
-    ng: int,
-) -> np.ndarray:
-    """Linear operator A*x for the transport equation.
-
-    Port of MATLAB ``funDO.m``.
-
-    Parameters
-    ----------
-    sig_t : (nx, ny, NG) total cross section at each cell.
-    """
-    fi = solution_to_angular_flux(solution, eq_map, quad, geom, ng)
-
-    lhs = np.empty((ng, eq_map.n_eq))
-    for k in range(eq_map.n_eq):
-        n, ix, iy = eq_map.ordinate[k], eq_map.ix[k], eq_map.iy[k]
-        dfidx, dfidy = _compute_gradients(fi, n, ix, iy, quad, geom)
-        lhs[:, k] = (
-            quad.mu_x[n] * dfidx
-            + quad.mu_y[n] * dfidy
-            + sig_t[ix, iy, :] * fi[:, n, ix, iy]
-        )
-
-    return lhs.ravel(order='F')
-
-
-# ---------------------------------------------------------------------------
-# EigenvalueSolver implementation
-# ---------------------------------------------------------------------------
-
-class DO2DSolver:
-    """2D Discrete Ordinates solver satisfying the EigenvalueSolver protocol.
-
-    Wraps the transport operator, quadrature, geometry, and cross sections
-    into the generic power iteration interface.
-    """
-
-    def __init__(
-        self,
-        materials: dict[int, Mixture],
-        geom: PinCellGeometry,
-        quad: Quadrature,
-        params: DOParams,
-    ) -> None:
-        self.geom = geom
-        self.quad = quad
-        self.params = params
-
-        _any_mat = next(iter(materials.values()))
-        self.ng = _any_mat.ng
-
-        # --- Per-cell scalar cross sections via assemble_cell_xs ---
-        cell_xs = assemble_cell_xs(materials, geom.mat_map.ravel())
-        n_cells = geom.nx * geom.ny
-
-        # Reshape from (N_cells, ng) to (nx, ny, ng)
-        self.sig_t = cell_xs.sig_t.reshape(geom.nx, geom.ny, self.ng)
-        self.sig_a = cell_xs.sig_a.reshape(geom.nx, geom.ny, self.ng)
-        self.sig_p = cell_xs.sig_p.reshape(geom.nx, geom.ny, self.ng)
-        self.chi_cell = cell_xs.chi.reshape(geom.nx, geom.ny, self.ng)
-
-        # --- Per-cell scattering matrices and (n,2n) (need sparse storage) ---
-        self.sig_s_cell: list[list[list]] = [
-            [[] for _ in range(geom.ny)] for _ in range(geom.nx)
-        ]
-        self.sig2_cell: list[list] = [
-            [None for _ in range(geom.ny)] for _ in range(geom.nx)
-        ]
-
-        for iy in range(geom.ny):
-            for ix in range(geom.nx):
-                m = materials[geom.mat_map[ix, iy]]
-                sig_s_list = []
-                for j in range(quad.L + 1):
-                    if j < len(m.SigS):
-                        sig_s_list.append(m.SigS[j])
-                    else:
-                        from scipy.sparse import csr_matrix
-                        sig_s_list.append(csr_matrix((self.ng, self.ng)))
-                self.sig_s_cell[ix][iy] = sig_s_list
-                self.sig2_cell[ix][iy] = m.Sig2
-
-        # --- Build equation map and transport linear operator ---
-        self.eq_map = build_equation_map(geom, quad, self.ng)
-        print(f"  Equations: {self.eq_map.n_eq} angular x {self.ng} groups"
-              f" = {self.eq_map.n_unknowns} unknowns")
-
-        def matvec(x):
-            return transport_operator(x, self.eq_map, quad, geom, self.sig_t, self.ng)
-
-        self.A_op = LinearOperator(
-            shape=(self.eq_map.n_unknowns, self.eq_map.n_unknowns),
-            matvec=matvec,
-            dtype=float,
-        )
-
-        # Cached scalar flux and Legendre moments (set by solve_fixed_source)
-        self._scalar_flux: np.ndarray | None = None
-        self._residual_history: list[float] = []
-
-        self._four_pi = 4.0 * np.pi
-
-    # -- EigenvalueSolver protocol methods --
-
-    def initial_flux_distribution(self) -> np.ndarray:
-        """Return a ones vector of the correct size for the solution."""
-        return np.ones(self.eq_map.n_unknowns)
-
-    def compute_fission_source(
-        self,
-        flux_distribution: np.ndarray,
-        keff: float,
-    ) -> np.ndarray:
-        """Build per-cell fission source: chi * (sig_p . phi) / keff / 4pi.
-
-        Returns shape (nx, ny, ng) fission source density (isotropic).
-        """
-        scalar_flux = self._ensure_scalar_flux(flux_distribution)
-
-        fission_source = np.empty((self.geom.nx, self.geom.ny, self.ng))
-        for iy in range(self.geom.ny):
-            for ix in range(self.geom.nx):
-                FI = scalar_flux[ix, iy, :]
-                fission_source[ix, iy, :] = (
-                    self.chi_cell[ix, iy, :]
-                    * (self.sig_p[ix, iy, :] @ FI)
-                    / keff / self._four_pi
-                )
-        return fission_source
-
-    def solve_fixed_source(
-        self,
-        fission_source: np.ndarray,
-        flux_distribution: np.ndarray,
-    ) -> np.ndarray:
-        """Build full RHS (fission + scattering + n2n) and solve with BiCGSTAB.
-
-        Parameters
-        ----------
-        fission_source : (nx, ny, ng) isotropic fission source from
-            ``compute_fission_source``.
-        flux_distribution : 1D solution vector (previous iterate, used as
-            BiCGSTAB initial guess).
-
-        Returns
-        -------
-        Updated 1D solution vector after BiCGSTAB solve.
-        """
-        geom, quad, ng = self.geom, self.quad, self.ng
-        eq_map = self.eq_map
-
-        # Recover angular flux and Legendre moments from current solution
-        fi = solution_to_angular_flux(flux_distribution, eq_map, quad, geom, ng)
-
-        scalar_flux = np.zeros((geom.nx, geom.ny, ng))
-        fiL = [[None for _ in range(geom.ny)] for _ in range(geom.nx)]
-
-        for iy in range(geom.ny):
-            for ix in range(geom.nx):
-                fl = np.zeros((ng, quad.L + 1, 2 * quad.L + 1))
-                for j in range(quad.L + 1):
-                    for m_idx in range(-j, j + 1):
-                        col = j + m_idx
-                        s = np.zeros(ng)
-                        for n in range(quad.N):
-                            s += fi[:, n, ix, iy] * quad.R[n, j, col] * quad.weights[n]
-                        fl[:, j, col] = s
-                fiL[ix][iy] = fl
-                scalar_flux[ix, iy, :] = fl[:, 0, 0]
-
-        # Build RHS source vector
-        rhs = np.zeros((ng, eq_map.n_eq))
-        eq_idx = 0
-        for iy in range(geom.ny):
-            for ix in range(geom.nx):
-                FI = scalar_flux[ix, iy, :]
-
-                # Fission source (pre-computed, isotropic)
-                qF = fission_source[ix, iy, :]
-
-                # (n,2n) source (isotropic)
-                q2 = 2.0 * (self.sig2_cell[ix][iy].T @ FI) / self._four_pi
-
-                for n in range(quad.N):
-                    if quad.mu_z[n] < 0:
-                        continue
-                    if ix == 0 and quad.mu_x[n] > 0:
-                        continue
-                    if ix == geom.nx - 1 and quad.mu_x[n] < 0:
-                        continue
-                    if iy == 0 and quad.mu_y[n] > 0:
-                        continue
-                    if iy == geom.ny - 1 and quad.mu_y[n] < 0:
-                        continue
-
-                    # Scattering source
-                    qS = np.zeros(ng)
-                    for j in range(quad.L + 1):
-                        s = np.zeros(ng)
-                        for m_idx in range(-j, j + 1):
-                            col = j + m_idx
-                            s += fiL[ix][iy][:, j, col] * quad.R[n, j, col]
-                        qS += (2 * j + 1) * (self.sig_s_cell[ix][iy][j].T @ s) / self._four_pi
-
-                    rhs[:, eq_idx] = qF + q2 + qS
-                    eq_idx += 1
-
-        rhs_vec = rhs.ravel(order='F')
-
-        # Inner solve with BiCGSTAB
-        solution, info = bicgstab(
-            self.A_op, rhs_vec, x0=flux_distribution.copy(),
-            rtol=self.params.bicgstab_tol,
-            maxiter=self.params.bicgstab_maxiter,
-        )
-
-        # Compute and cache residual
-        res = np.linalg.norm(self.A_op @ solution - rhs_vec) / np.linalg.norm(rhs_vec)
-        self._residual_history.append(res)
-
-        # Cache scalar flux for compute_keff (avoid recomputing angular flux)
-        fi_new = solution_to_angular_flux(solution, eq_map, quad, geom, ng)
-        sf = np.zeros((geom.nx, geom.ny, ng))
-        for iy in range(geom.ny):
-            for ix in range(geom.nx):
-                sf[ix, iy, :] = np.sum(
-                    fi_new[:, :, ix, iy] * quad.weights[None, :], axis=1
-                )
-        self._scalar_flux = sf
-
-        return solution
-
-    def compute_keff(self, flux_distribution: np.ndarray) -> float:
-        """Compute keff = production / absorption (volume-weighted)."""
-        scalar_flux = self._ensure_scalar_flux(flux_distribution)
-
-        p_rate = 0.0
-        a_rate = 0.0
-        for iy in range(self.geom.ny):
-            for ix in range(self.geom.nx):
-                v = self.geom.volume[ix, iy]
-                FI = scalar_flux[ix, iy, :]
-                sig2_cs = np.array(self.sig2_cell[ix][iy].sum(axis=1)).ravel()
-                p_rate += (self.sig_p[ix, iy, :] + 2 * sig2_cs) @ FI * v
-                a_rate += self.sig_a[ix, iy, :] @ FI * v
-
-        keff = p_rate / a_rate
-        print(f"  keff = {keff:9.5f}  #outer = {len(self._residual_history):3d}"
-              f"  residual = {self._residual_history[-1]:11.5e}")
-        return keff
-
-    def converged(
-        self,
-        keff: float,
-        keff_old: float,
-        flux_distribution: np.ndarray,
-        flux_old: np.ndarray,
-        iteration: int,
-    ) -> bool:
-        """Check residual and keff convergence."""
-        res = self._residual_history[-1]
-        if res < self.params.bicgstab_tol and iteration > 1:
-            if abs(keff - keff_old) < 1e-7:
-                print("  Converged.")
-                return True
-        return False
-
-    # -- Internal helpers --
-
-    def _ensure_scalar_flux(self, flux_distribution: np.ndarray) -> np.ndarray:
-        """Return cached scalar flux or recompute from the solution vector."""
-        if self._scalar_flux is not None:
-            return self._scalar_flux
-
-        fi = solution_to_angular_flux(
-            flux_distribution, self.eq_map, self.quad, self.geom, self.ng,
-        )
-        sf = np.zeros((self.geom.nx, self.geom.ny, self.ng))
-        for iy in range(self.geom.ny):
-            for ix in range(self.geom.nx):
-                sf[ix, iy, :] = np.sum(
-                    fi[:, :, ix, iy] * self.quad.weights[None, :], axis=1
-                )
-        self._scalar_flux = sf
-        return sf
-
-
-# ---------------------------------------------------------------------------
-# Main solver (thin wrapper)
-# ---------------------------------------------------------------------------
+# ── Public API ────────────────────────────────────────────────────────
 
 def solve_discrete_ordinates(
     materials: dict[int, Mixture],
@@ -581,72 +124,57 @@ def solve_discrete_ordinates(
     quad: Quadrature | None = None,
     params: DOParams | None = None,
 ) -> DOResult:
-    """Run the 2D discrete ordinates transport calculation.
+    """Run the 2D SN transport calculation.
 
-    Parameters
-    ----------
-    materials : dict mapping material ID (0=cool, 1=clad, 2=fuel) to Mixture.
-    geom : PinCellGeometry (default: standard 10x2 PWR mesh).
-    quad : Quadrature (default: Lebedev order 17, 110 points, P0).
-    params : DOParams (default: 200 outer iterations, tol=1e-4).
+    Delegates to the unified solver with Lebedev quadrature and
+    source iteration inner solver.
     """
-    t_start = time.perf_counter()
-
     if geom is None:
         geom = PinCellGeometry.default_pwr()
     if params is None:
         params = DOParams()
-    if quad is None:
-        quad = Quadrature.lebedev(order=17, L=params.L)
 
-    _any_mat = next(iter(materials.values()))
-    eg = _any_mat.eg
-    ng = _any_mat.ng
+    mesh = geom._to_mesh()
 
-    solver = DO2DSolver(materials, geom, quad, params)
-    keff, keff_history, solution = power_iteration(solver, max_iter=params.max_outer)
+    # Build Lebedev quadrature for unified solver
+    leb = LebedevSphere.create(order=17)
 
-    # --- Post-processing: volume-averaged spectra ---
-    fi_final = solution_to_angular_flux(solution, solver.eq_map, quad, geom, ng)
-    scalar_flux = np.zeros((geom.nx, geom.ny, ng))
-    for iy in range(geom.ny):
-        for ix in range(geom.nx):
-            scalar_flux[ix, iy, :] = np.sum(
-                fi_final[:, :, ix, iy] * quad.weights[None, :], axis=1
-            )
+    result = solve_sn(
+        materials, mesh, leb,
+        inner_solver="source_iteration",
+        scattering_order=params.L,
+        max_outer=params.max_outer,
+        keff_tol=1e-7,
+        flux_tol=1e-5,
+        max_inner=params.bicgstab_maxiter,
+        inner_tol=params.bicgstab_tol,
+    )
 
-    vol_fuel = geom.volume[geom.mat_map == 2].sum()
-    vol_clad = geom.volume[geom.mat_map == 1].sum()
-    vol_cool = geom.volume[geom.mat_map == 0].sum()
+    # Post-processing: per-material volume-averaged fluxes
+    sf = result.scalar_flux  # (nx, ny, ng)
+    vol = geom.volume
+    ng = sf.shape[2]
 
-    flux_fuel = np.zeros(ng)
-    flux_clad = np.zeros(ng)
-    flux_cool = np.zeros(ng)
-
-    for iy in range(geom.ny):
-        for ix in range(geom.nx):
-            v = geom.volume[ix, iy]
-            FI = scalar_flux[ix, iy, :]
-            mat_id = geom.mat_map[ix, iy]
-            if mat_id == 2:
-                flux_fuel += FI * v / vol_fuel
-            elif mat_id == 1:
-                flux_clad += FI * v / vol_clad
-            else:
-                flux_cool += FI * v / vol_cool
-
-    elapsed = time.perf_counter() - t_start
-    print(f"  Elapsed: {elapsed:.1f}s")
+    flux_per_mat = {}
+    for mat_id in [0, 1, 2]:
+        mask = geom.mat_map == mat_id
+        if mask.any():
+            vol_mat = vol[mask].sum()
+            flux_per_mat[mat_id] = np.zeros(ng)
+            for g in range(ng):
+                flux_per_mat[mat_id][g] = np.sum(sf[:, :, g][mask] * vol[mask]) / vol_mat
+        else:
+            flux_per_mat[mat_id] = np.zeros(ng)
 
     return DOResult(
-        keff=keff_history[-1],
-        keff_history=keff_history,
-        residual_history=solver._residual_history,
-        flux_fuel=flux_fuel,
-        flux_clad=flux_clad,
-        flux_cool=flux_cool,
-        scalar_flux=scalar_flux,
+        keff=result.keff,
+        keff_history=result.keff_history,
+        residual_history=[],
+        flux_fuel=flux_per_mat.get(2, np.zeros(ng)),
+        flux_clad=flux_per_mat.get(1, np.zeros(ng)),
+        flux_cool=flux_per_mat.get(0, np.zeros(ng)),
+        scalar_flux=sf,
         geometry=geom,
-        eg=eg,
-        elapsed_seconds=elapsed,
+        eg=result.eg,
+        elapsed_seconds=result.elapsed_seconds,
     )
