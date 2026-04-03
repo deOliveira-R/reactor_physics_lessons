@@ -47,11 +47,12 @@ autodoc_typehints = 'description'
 mathjax3_config = {
     'tex': {
         'macros': {
-            'Sigt': r'\Sigma_{\mathrm{t}}',
-            'Sigs': r'\Sigma_{\mathrm{s}}',
-            'Siga': r'\Sigma_{\mathrm{a}}',
-            'Sigf': r'\Sigma_{\mathrm{f}}',
-            'nSigf': r'\nu\Sigma_{\mathrm{f}}',
+            # Macros that take a subscript argument to avoid double-subscript errors
+            'Sigt': [r'\Sigma_{\mathrm{t},#1}', 1, ''],
+            'Sigs': [r'\Sigma_{\mathrm{s},#1}', 1, ''],
+            'Siga': [r'\Sigma_{\mathrm{a},#1}', 1, ''],
+            'Sigf': [r'\Sigma_{\mathrm{f},#1}', 1, ''],
+            'nSigf': [r'\nu\Sigma_{\mathrm{f},#1}', 1, ''],
             'keff': r'k_{\mathrm{eff}}',
             'kinf': r'k_{\infty}',
         },

@@ -59,7 +59,7 @@ path** (number of mean free paths) between the two points:
 
    \tau(\mathbf{r}', \mathbf{r})
    = \int_0^{|\mathbf{r} - \mathbf{r}'|}
-     \Sigt\bigl(\mathbf{r}' + s\,\hat{\Omega}\bigr) \, ds
+     \Sigt{}\bigl(\mathbf{r}' + s\,\hat{\Omega}\bigr) \, ds
 
 
 Flat-Source Approximation
@@ -79,7 +79,7 @@ sources in region :math:`i` can be written as
 .. math::
    :label: collision-rate
 
-   \Sigt_j \, \phi_j \, V_j
+   \Sigt{j} \, \phi_j \, V_j
    = \sum_i P_{ji} \, V_i \, Q_i
 
 where :math:`P_{ji}` is the collision probability (probability that a
@@ -131,8 +131,8 @@ From detailed balance, the collision probabilities satisfy
 .. math::
    :label: reciprocity
 
-   \Sigt_i \, V_i \, P_{ij}^{\text{cell}}
-   = \Sigt_j \, V_j \, P_{ji}^{\text{cell}}
+   \Sigt{i} \, V_i \, P_{ij}^{\text{cell}}
+   = \Sigt{j} \, V_j \, P_{ji}^{\text{cell}}
 
 This is fundamental: the CP matrix need only be computed for
 :math:`j \ge i`, and the lower triangle follows from reciprocity.
@@ -152,7 +152,7 @@ region :math:`j` are:
 .. math::
    :label: surface-to-region
 
-   P_{\text{in},j} = \frac{\Sigt_j \, V_j \, P_{j,\text{out}}}{S}
+   P_{\text{in},j} = \frac{\Sigt{j} \, V_j \, P_{j,\text{out}}}{S}
 
 where :math:`S` is the cell surface area.  The geometry-dependent
 values:
@@ -274,7 +274,7 @@ The collision probability for a neutron born in region :math:`i` to
 first collide in region :math:`j` involves the **second difference** of
 :math:`E_3` evaluated at the optical boundaries between the regions.
 
-Let :math:`\tau_k = \Sigt_k \, t_k` be the optical thickness of region
+Let :math:`\tau_k = \Sigt{k} \, t_k` be the optical thickness of region
 :math:`k`, and define the cumulative optical path from the cell centre:
 
 .. math::
@@ -307,8 +307,8 @@ path types:
    .. math::
       :label: self-slab
 
-      r_{ii} = \frac{1}{2} \Sigt_i \left[
-        2 t_i - \frac{2}{\Sigt_i} \left(\frac{1}{2} - E_3(\tau_i)\right)
+      r_{ii} = \frac{1}{2} \Sigt{i} \left[
+        2 t_i - \frac{2}{\Sigt{i}} \left(\frac{1}{2} - E_3(\tau_i)\right)
       \right]
 
 The factor :math:`1/2` accounts for the direction averaging (neutrons
@@ -319,7 +319,7 @@ go left or right with equal probability).  The total reduced CP is:
    r_{ij} = \frac{1}{2}(\delta_d + \delta_c)
 
 and the within-cell CP is :math:`P_{ij}^{\text{cell}} = r_{ij} /
-(\Sigt_i \, t_i)`.
+(\Sigt{i} \, t_i)`.
 
 This is implemented in :func:`_compute_slab_cp_group`.
 
@@ -428,7 +428,7 @@ where :math:`R_k` is the outer radius of region :math:`k` (with
 :math:`y < R_k`.
 
 The optical half-thickness along the chord is
-:math:`\tau_k(y) = \Sigt_k \, \ell_k(y)`.
+:math:`\tau_k(y) = \Sigt{k} \, \ell_k(y)`.
 
 This is computed by :func:`_chord_half_lengths`.
 
@@ -464,8 +464,8 @@ The self-collision term is:
 .. math::
    :label: self-cyl
 
-   r_{ii} = 2\Sigt_i \int_0^{R_{\text{cell}}}
-     \left[2\ell_i(y) - \frac{2}{\Sigt_i}
+   r_{ii} = 2\Sigt{i} \int_0^{R_{\text{cell}}}
+     \left[2\ell_i(y) - \frac{2}{\Sigt{i}}
        \left(\text{Ki}_4(0) - \text{Ki}_4(\tau_i(y))\right)\right] dy
 
 The :math:`y`-integration is performed with composite Gauss–Legendre
@@ -501,8 +501,8 @@ Slab vs. Cylinder: A Comparison
      - 1 (unit transverse area)
      - :math:`2\pi R_{\text{cell}}`
    * - White BC correction
-     - :math:`P_{\text{in},j} = \Sigt_j t_j P_{j,\text{out}}`
-     - :math:`P_{\text{in},j} = \Sigt_j V_j P_{j,\text{out}} / S`
+     - :math:`P_{\text{in},j} = \Sigt{j} t_j P_{j,\text{out}}`
+     - :math:`P_{\text{in},j} = \Sigt{j} V_j P_{j,\text{out}} / S`
    * - Implementation
      - :func:`_compute_slab_cp_group`
      - :func:`_compute_cp_group`
@@ -525,10 +525,10 @@ group :math:`g` is:
 .. math::
    :label: neutron-balance
 
-   \Sigt_{i,g} \, V_i \, \phi_{i,g}
+   \Sigt{i,g} \, V_i \, \phi_{i,g}
    = \sum_{j=1}^{N} P_{ji,g}^{\infty} \, V_j \left[
-       \frac{\chi_{j,g}}{\keff} \sum_{g'=1}^{G} \nSigf_{j,g'} \phi_{j,g'}
-       + \sum_{g'=1}^{G} \Sigs_{j,g' \to g} \phi_{j,g'}
+       \frac{\chi_{j,g}}{\keff} \sum_{g'=1}^{G} \nSigf{j,g'} \phi_{j,g'}
+       + \sum_{g'=1}^{G} \Sigs{j,g' \to g} \phi_{j,g'}
      \right]
 
 This is an eigenvalue problem in :math:`\keff`.
@@ -541,7 +541,7 @@ The eigenvalue problem is solved by **power iteration** (see
 :func:`~numerics.eigenvalue.power_iteration`):
 
 1. **Fission source**: compute
-   :math:`Q^F_{i,g} = \chi_{i,g} \sum_{g'} \nSigf_{i,g'} \phi_{i,g'} / \keff`
+   :math:`Q^F_{i,g} = \chi_{i,g} \sum_{g'} \nSigf{i,g'} \phi_{i,g'} / \keff`
 
 2. **Fixed-source solve**: add scattering and (n,2n) sources, then
    apply the CP matrix:
@@ -549,15 +549,15 @@ The eigenvalue problem is solved by **power iteration** (see
    .. math::
 
       \phi_{i,g}^{\text{new}}
-      = \frac{1}{\Sigt_{i,g} \, V_i}
+      = \frac{1}{\Sigt{i,g} \, V_i}
         \sum_j P_{ji,g}^{\infty} \, V_j \, Q_{j,g}^{\text{total}}
 
 3. **Update** :math:`\keff`:
 
    .. math::
 
-      \keff = \frac{\sum_{i,g} \nSigf_{i,g} \phi_{i,g} V_i}
-                   {\sum_{i,g} \Siga_{i,g} \phi_{i,g} V_i}
+      \keff = \frac{\sum_{i,g} \nSigf{i,g} \phi_{i,g} V_i}
+                   {\sum_{i,g} \Siga{i,g} \phi_{i,g} V_i}
 
    For lattice models with reflective (or white) boundary conditions,
    the leakage term is zero.
