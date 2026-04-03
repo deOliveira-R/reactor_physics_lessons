@@ -17,10 +17,7 @@ Cell Cross Sections
    :undoc-members:
    :show-inheritance:
 
-Benchmarks
-----------
+.. note::
 
-.. automodule:: data.macro_xs.benchmarks
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   Verification benchmarks have moved to the :doc:`derivations <derivations>`
+   package. See :doc:`../theory/verification` for the full reference case table.

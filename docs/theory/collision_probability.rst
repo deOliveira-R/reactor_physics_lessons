@@ -576,7 +576,7 @@ Verification
 ============
 
 The CP implementation is verified against analytical eigenvalues
-computed from the CP matrix itself (see :mod:`data.macro_xs.benchmarks`):
+computed from the CP matrix itself (see :doc:`verification`):
 
 .. list-table::
    :header-rows: 1
