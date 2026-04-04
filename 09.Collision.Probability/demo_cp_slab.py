@@ -13,7 +13,7 @@ from pathlib import Path
 
 from data.macro_xs.recipes import borated_water, uo2_fuel, zircaloy_clad
 from geometry import pwr_slab_half_cell
-from collision_probability import solve_cp_slab
+from collision_probability import solve_cp
 
 OUTPUT = Path("results")
 
@@ -44,7 +44,7 @@ def main():
           f"+ {n_cool} cool = {mesh.N} total")
     print()
 
-    result = solve_cp_slab(materials, mesh)
+    result = solve_cp(materials, mesh)
 
     print(f"\n  keff = {result.keff:.5f}  (SN slab reference: 1.04188)")
     print(f"  Outer iterations: {len(result.keff_history)}")

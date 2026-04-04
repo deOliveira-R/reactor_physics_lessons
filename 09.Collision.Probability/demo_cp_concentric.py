@@ -14,10 +14,7 @@ from pathlib import Path
 
 from data.macro_xs.recipes import borated_water, uo2_fuel, zircaloy_clad
 from geometry import pwr_pin_equivalent
-from collision_probability import (
-    CPParams,
-    solve_cp_concentric,
-)
+from collision_probability import CPParams, solve_cp
 from plotting import (
     plot_cp_convergence,
     plot_cp_geometry,
@@ -53,7 +50,7 @@ def main():
     print()
 
     # 3. Solve
-    result = solve_cp_concentric(materials, mesh, params)
+    result = solve_cp(materials, mesh, params)
 
     # 4. Report
     print(f"\n  keff = {result.keff:.5f}  (SN slab reference: 1.04188)")

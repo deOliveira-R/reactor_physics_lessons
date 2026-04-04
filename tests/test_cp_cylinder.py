@@ -5,7 +5,7 @@ import pytest
 
 from derivations import get
 from geometry import CoordSystem, Mesh1D
-from collision_probability import solve_cp_concentric
+from collision_probability import solve_cp
 
 
 @pytest.mark.parametrize("case_name", [
@@ -30,7 +30,7 @@ def test_cylinder_cp_eigenvalue(case_name):
         mat_ids=np.array(gp["mat_ids"]),
         coord=CoordSystem.CYLINDRICAL,
     )
-    result = solve_cp_concentric(case.materials, mesh)
+    result = solve_cp(case.materials, mesh)
 
     err = abs(result.keff - case.k_inf)
     assert err < 1e-5, (

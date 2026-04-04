@@ -5,7 +5,7 @@ import pytest
 
 from derivations import get
 from geometry import CoordSystem, Mesh1D
-from collision_probability import solve_cp_slab
+from collision_probability import solve_cp
 
 
 @pytest.mark.parametrize("case_name", [
@@ -30,7 +30,9 @@ def test_slab_cp_eigenvalue(case_name):
         mat_ids=np.array(gp["mat_ids"]),
         coord=CoordSystem.CARTESIAN,
     )
-    result = solve_cp_slab(case.materials, mesh, keff_tol=1e-7, flux_tol=1e-6)
+    result = solve_cp(case.materials, mesh,
+                      params=__import__('collision_probability').CPParams(
+                          keff_tol=1e-7, flux_tol=1e-6))
 
     err = abs(result.keff - case.k_inf)
     assert err < 1e-6, (

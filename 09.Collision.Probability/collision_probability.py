@@ -3,24 +3,23 @@
 Solves the multi-group neutron transport equation using the collision
 probability method with white boundary condition for an infinite lattice.
 
-Two geometries are supported:
+The geometry-specific kernel is encapsulated in :class:`CPMesh`, an
+augmented geometry that wraps a :class:`~geometry.mesh.Mesh1D` and
+provides :meth:`~CPMesh.compute_pinf_group`.  Three coordinate systems
+are supported:
 
-* **Slab** — 1D half-cell with E₃ exponential-integral kernel.
-  Requires a :class:`~geometry.mesh.Mesh1D` with
-  ``coord = CoordSystem.CARTESIAN``.
-* **Concentric cylinders** — Wigner-Seitz cell with Ki₃/Ki₄
-  Bickley-Naylor kernel and numerical y-quadrature.
-  Requires a :class:`~geometry.mesh.Mesh1D` with
-  ``coord = CoordSystem.CYLINDRICAL``.
+* **Cartesian** (slab) — E₃ exponential-integral kernel.
+* **Cylindrical** (Wigner-Seitz pin) — Ki₃/Ki₄ Bickley-Naylor kernel.
+* **Spherical** (shell) — exponential kernel with y-weighted quadrature.
 
-Both share the same power iteration: once the P_inf matrices are built,
-the eigenvalue solve is geometry-independent.
+All share the same power iteration via :class:`CPSolver`.
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import Callable
 
 import numpy as np
 from scipy.integrate import quad
@@ -64,20 +63,349 @@ class CPResult:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Helper functions (module-level, used by CPMesh)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _e3(x):
+    """Vectorised E_3(x) = integral_0^1 mu exp(-x/mu) dmu."""
+    return expn(3, np.maximum(x, 0.0))
+
+
+def _build_ki_tables(
+    n_pts: int = 20000,
+    x_max: float = 50.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Tabulate Ki_3 and Ki_4 on a uniform grid.
+
+    Ki_3(x) = int_0^{pi/2} exp(-x/sin t) sin t dt
+    Ki_4(x) = int_x^inf Ki_3(t) dt
+
+    Returns (x_grid, ki3_vals, ki4_vals).
+    """
+    x_grid = np.linspace(0, x_max, n_pts)
+    ki3_vals = np.empty(n_pts)
+    ki3_vals[0] = 1.0
+
+    for i in range(1, n_pts):
+        ki3_vals[i], _ = quad(
+            lambda t, xx=x_grid[i]: np.exp(-xx / np.sin(t)) * np.sin(t),
+            0, np.pi / 2,
+        )
+
+    dx = x_grid[1] - x_grid[0]
+    ki4_vals = np.cumsum(ki3_vals[::-1])[::-1] * dx
+    ki4_vals[-1] = 0.0
+
+    return x_grid, ki3_vals, ki4_vals
+
+
+def _ki4_lookup(x, x_grid, ki4_vals):
+    """Vectorised Ki_4 lookup."""
+    return np.interp(x, x_grid, ki4_vals, right=0.0)
+
+
+def _chord_half_lengths(radii, y_pts):
+    """Half-chord lengths l_k(y) for each annular region.  Shape (N, n_y)."""
+    N = len(radii)
+    chords = np.zeros((N, len(y_pts)))
+    r_inner = np.zeros(N)
+    r_inner[1:] = radii[:-1]
+    y2 = y_pts**2
+
+    for k in range(N):
+        r_out, r_in = radii[k], r_inner[k]
+        outer = np.sqrt(np.maximum(r_out**2 - y2, 0.0))
+        if r_in > 0:
+            inner = np.sqrt(np.maximum(r_in**2 - y2, 0.0))
+            mask = y_pts < r_in
+            chords[k, mask] = outer[mask] - inner[mask]
+        mask_p = (y_pts >= r_in) & (y_pts < r_out)
+        chords[k, mask_p] = outer[mask_p]
+
+    return chords
+
+
+def _composite_gauss_legendre(breakpoints, n_quad):
+    """Composite Gauss-Legendre quadrature over breakpoint intervals.
+
+    Returns (pts, wts) concatenated across all intervals.
+    """
+    gl_pts, gl_wts = np.polynomial.legendre.leggauss(n_quad)
+    y_all, w_all = [], []
+    for seg in range(len(breakpoints) - 1):
+        a, b = breakpoints[seg], breakpoints[seg + 1]
+        y_all.append(0.5 * (b - a) * gl_pts + 0.5 * (b + a))
+        w_all.append(0.5 * (b - a) * gl_wts)
+    return np.concatenate(y_all), np.concatenate(w_all)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# CPMesh — augmented geometry for the collision probability method
+# ═══════════════════════════════════════════════════════════════════════
+
+class CPMesh:
+    """Augmented geometry for the collision probability method.
+
+    Wraps a :class:`~geometry.mesh.Mesh1D` and adds the CP-specific
+    kernel, quadrature, and :meth:`compute_pinf_group` method.  The
+    kernel is selected automatically based on the mesh coordinate system:
+
+    * **Cartesian** — E₃ kernel (slab), scalar computation.
+    * **Cylindrical** — Ki₄ kernel, y-quadrature with chord half-lengths.
+    * **Spherical** — exp(-τ) kernel, y-quadrature with y-weighted chords.
+
+    Parameters
+    ----------
+    mesh : Mesh1D
+        Base geometry.
+    params : CPParams, optional
+        Solver parameters (Ki table size, quadrature order, etc.).
+    """
+
+    def __init__(self, mesh: Mesh1D, params: CPParams | None = None) -> None:
+        self.mesh = mesh
+        self.params = params or CPParams()
+
+        match mesh.coord:
+            case CoordSystem.CARTESIAN:
+                self._setup_slab()
+            case CoordSystem.CYLINDRICAL:
+                self._setup_cylindrical()
+            case CoordSystem.SPHERICAL:
+                self._setup_spherical()
+            case _:
+                raise ValueError(f"CP not implemented for {mesh.coord}")
+
+    # ── Setup methods ─────────────────────────────────────────────────
+
+    def _setup_slab(self) -> None:
+        """Slab: E₃ kernel, no y-quadrature."""
+        self._chords = None
+        self._y_wts = None
+        self._kernel: Callable | None = None
+        self._kernel_zero = None
+
+    def _setup_radial_quadrature(self) -> None:
+        """Shared: build y-quadrature and chord half-lengths for
+        cylindrical or spherical meshes."""
+        p = self.params
+        radii = self.mesh.edges[1:]
+        self._y_pts, self._y_wts = _composite_gauss_legendre(
+            self.mesh.edges, p.n_quad_y,
+        )
+        self._chords = _chord_half_lengths(radii, self._y_pts)
+
+    def _setup_cylindrical(self) -> None:
+        """Cylindrical: Ki₄ kernel + y-quadrature."""
+        p = self.params
+        print("  Building Ki3/Ki4 lookup tables ...")
+        ki_x, _, ki4_v = _build_ki_tables(p.n_ki_table, p.ki_max)
+
+        self._setup_radial_quadrature()
+        n_y = len(self._y_pts)
+        self._kernel = lambda tau: _ki4_lookup(tau, ki_x, ki4_v)
+        self._kernel_zero = _ki4_lookup(np.zeros(n_y), ki_x, ki4_v)
+
+    def _setup_spherical(self) -> None:
+        """Spherical: exp(-τ) kernel + y-weighted quadrature."""
+        self._setup_radial_quadrature()
+        # Kernel F(τ) = exp(-τ)
+        self._kernel = lambda tau: np.exp(-tau)
+        self._kernel_zero = np.ones(len(self._y_pts))
+        # Spherical weight: extra factor of y in the quadrature
+        self._y_wts = self._y_wts * self._y_pts
+
+    # ── P_inf computation ─────────────────────────────────────────────
+
+    def compute_pinf_group(self, sig_t_g: np.ndarray) -> np.ndarray:
+        """Compute the infinite-lattice P_inf matrix for one energy group.
+
+        Parameters
+        ----------
+        sig_t_g : ndarray, shape (N,)
+            Total macroscopic cross section per cell for this group.
+
+        Returns
+        -------
+        ndarray, shape (N, N)
+            Infinite-lattice collision probability matrix.
+        """
+        match self.mesh.coord:
+            case CoordSystem.CARTESIAN:
+                rcp = self._compute_slab_rcp(sig_t_g)
+            case _:
+                rcp = self._compute_radial_rcp(sig_t_g)
+
+        P_cell = self._normalize_rcp(rcp, sig_t_g)
+        return self._apply_white_bc(P_cell, sig_t_g)
+
+    def _compute_slab_rcp(self, sig_t_g: np.ndarray) -> np.ndarray:
+        """Reduced collision probabilities for slab geometry (E₃ kernel).
+
+        Returns rcp[i,j] = Σ_t(i) · V(i) · P_cell(i,j) (un-normalized).
+        """
+        N = self.mesh.N
+        t = self.mesh.widths
+        tau = sig_t_g * t
+
+        # Optical boundary positions
+        bnd_pos = np.concatenate(([0.0], np.cumsum(tau)))
+
+        rcp = np.zeros((N, N))
+
+        for i in range(N):
+            sti = sig_t_g[i]
+            tau_i = tau[i]
+            if sti <= 0:
+                continue
+
+            # Self-same collision: Σ_t·V - (F(0) - F(τ_i))
+            rcp[i, i] += sti * t[i] - (0.5 - _e3(tau_i))
+
+            for j in range(N):
+                tau_j = tau[j]
+
+                # Direct path gap (optical distance between regions)
+                if j > i:
+                    gap_d = bnd_pos[j] - bnd_pos[i + 1]
+                elif j < i:
+                    gap_d = bnd_pos[i] - bnd_pos[j + 1]
+                else:
+                    gap_d = None
+
+                if gap_d is not None:
+                    gap_d = max(gap_d, 0.0)
+                    dd = (_e3(gap_d) - _e3(gap_d + tau_i)
+                          - _e3(gap_d + tau_j) + _e3(gap_d + tau_i + tau_j))
+                else:
+                    dd = 0.0
+
+                # Reflected path (via centre symmetry plane)
+                gap_c = bnd_pos[i] + bnd_pos[j]
+                dc = (_e3(gap_c) - _e3(gap_c + tau_i)
+                      - _e3(gap_c + tau_j) + _e3(gap_c + tau_i + tau_j))
+
+                rcp[i, j] += 0.5 * (dd + dc)
+
+        return rcp
+
+    def _compute_radial_rcp(self, sig_t_g: np.ndarray) -> np.ndarray:
+        """Reduced collision probabilities for radial geometries.
+
+        Shared by cylindrical (Ki₄ kernel) and spherical (exp kernel).
+        The kernel and y-quadrature weights are set during setup.
+
+        Returns rcp[i,j] = Σ_t(i) · V(i) · P_cell(i,j) (un-normalized).
+        """
+        N = self.mesh.N
+        chords = self._chords
+        y_wts = self._y_wts
+        kernel = self._kernel
+        kernel_zero = self._kernel_zero
+        n_y = len(y_wts)
+
+        tau = sig_t_g[:, None] * chords  # (N, n_y)
+
+        # Optical boundary positions at each y-line
+        bnd_pos = np.zeros((N + 1, n_y))
+        for k in range(N):
+            bnd_pos[k + 1, :] = bnd_pos[k, :] + tau[k, :]
+
+        rcp = np.zeros((N, N))
+
+        for i in range(N):
+            tau_i = tau[i, :]
+            sti = sig_t_g[i]
+            if sti == 0:
+                continue
+
+            # Self-same collision
+            self_same = 2.0 * chords[i, :] - (2.0 / sti) * (
+                kernel_zero - kernel(tau_i)
+            )
+            rcp[i, i] += 2.0 * sti * np.dot(y_wts, self_same)
+
+            for j in range(N):
+                tau_j = tau[j, :]
+
+                # Direct path gap
+                if j > i:
+                    gap_d = bnd_pos[j, :] - bnd_pos[i + 1, :]
+                elif j < i:
+                    gap_d = bnd_pos[i, :] - bnd_pos[j + 1, :]
+                else:
+                    gap_d = None
+
+                if gap_d is not None:
+                    gap_d = np.maximum(gap_d, 0.0)
+                    dd = (kernel(gap_d) - kernel(gap_d + tau_i)
+                          - kernel(gap_d + tau_j)
+                          + kernel(gap_d + tau_i + tau_j))
+                else:
+                    dd = np.zeros(n_y)
+
+                # Reflected path
+                gap_c = bnd_pos[i, :] + bnd_pos[j, :]
+                dc = (kernel(gap_c) - kernel(gap_c + tau_i)
+                      - kernel(gap_c + tau_j)
+                      + kernel(gap_c + tau_i + tau_j))
+
+                rcp[i, j] += 2.0 * np.dot(y_wts, dd + dc)
+
+        return rcp
+
+    def _normalize_rcp(
+        self, rcp: np.ndarray, sig_t_g: np.ndarray,
+    ) -> np.ndarray:
+        """Normalize rcp to get P_cell: P_cell[i,:] = rcp[i,:] / (Σ_t·V)."""
+        N = self.mesh.N
+        V = self.mesh.volumes
+        P_cell = np.zeros((N, N))
+        for i in range(N):
+            denom = sig_t_g[i] * V[i]
+            if denom > 0:
+                P_cell[i, :] = rcp[i, :] / denom
+        return P_cell
+
+    def _apply_white_bc(
+        self, P_cell: np.ndarray, sig_t_g: np.ndarray,
+    ) -> np.ndarray:
+        """Apply white boundary condition to get P_inf.
+
+        P_inf = P_cell + P_out ⊗ P_in / (1 - P_inout)
+
+        Works for all coordinate systems because mesh.volumes and
+        mesh.surfaces[-1] encode the geometry correctly.
+        """
+        V = self.mesh.volumes
+        S_cell = self.mesh.surfaces[-1]
+
+        P_out = np.maximum(1.0 - P_cell.sum(axis=1), 0.0)
+        P_in = sig_t_g * V * P_out / S_cell
+        P_inout = max(1.0 - P_in.sum(), 0.0)
+
+        P_inf = P_cell.copy()
+        if P_inout < 1.0:
+            P_inf += np.outer(P_out, P_in) / (1.0 - P_inout)
+
+        return P_inf
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # CP solver class (satisfies EigenvalueSolver protocol)
 # ═══════════════════════════════════════════════════════════════════════
 
 class CPSolver:
     """Geometry-independent CP eigenvalue solver.
 
-    Once the infinite-lattice CP matrices P_inf are built (by the
-    geometry-specific kernel), the eigenvalue iteration is identical
-    for slab and cylindrical geometries:
+    Once the infinite-lattice CP matrices P_inf are built (by
+    :class:`CPMesh`), the eigenvalue iteration is identical for all
+    geometries:
 
         φ_g = P_inf_g^T · (V · Q_g) / (Σ_t · V)
 
-    where V is the cell volume array (thicknesses for slab, areas for
-    cylinder) and Q is the total source (fission + scattering + n,2n).
+    where V is the cell volume array and Q is the total source
+    (fission + scattering + n,2n).
     """
 
     def __init__(
@@ -168,7 +496,7 @@ class CPSolver:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Shared post-processing
+# Post-processing
 # ═══════════════════════════════════════════════════════════════════════
 
 def _volume_averaged_fluxes(
@@ -200,309 +528,32 @@ def _volume_averaged_fluxes(
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Slab E₃ kernel
+# Public API
 # ═══════════════════════════════════════════════════════════════════════
 
-def _e3(x):
-    """Vectorised E_3(x) = integral_0^1 mu exp(-x/mu) dmu."""
-    return expn(3, np.maximum(x, 0.0))
-
-
-def _compute_slab_cp_group(
-    sig_t_g: np.ndarray,
-    mesh: Mesh1D,
-) -> np.ndarray:
-    """Within-cell CP matrix for one energy group in slab geometry.
-
-    Uses the E₃ second-difference formula.  The half-cell has a reflective
-    centre boundary and a white (isotropic re-entry) outer boundary.
-
-    Returns the infinite-lattice CP matrix P_inf (N, N).
-    """
-    N = mesh.N
-    t = mesh.widths
-    tau = sig_t_g * t
-
-    bnd_pos = np.zeros(N + 1)
-    for k in range(N):
-        bnd_pos[k + 1] = bnd_pos[k] + tau[k]
-
-    rcp = np.zeros((N, N))
-
-    for i in range(N):
-        sti = sig_t_g[i]
-        tau_i = tau[i]
-        if sti <= 0:
-            continue
-
-        self_same = 0.5 * sti * (2 * t[i] - (2.0 / sti) * (0.5 - _e3(tau_i)))
-        rcp[i, i] += self_same
-
-        for j in range(N):
-            tau_j = tau[j]
-
-            if j > i:
-                gap_d = bnd_pos[j] - bnd_pos[i + 1]
-            elif j < i:
-                gap_d = bnd_pos[i] - bnd_pos[j + 1]
-            else:
-                gap_d = None
-
-            if gap_d is not None:
-                gap_d = max(gap_d, 0.0)
-                dd = (_e3(gap_d) - _e3(gap_d + tau_i)
-                      - _e3(gap_d + tau_j) + _e3(gap_d + tau_i + tau_j))
-            else:
-                dd = 0.0
-
-            gap_c = bnd_pos[i] + bnd_pos[j]
-            dc = (_e3(gap_c) - _e3(gap_c + tau_i)
-                  - _e3(gap_c + tau_j) + _e3(gap_c + tau_i + tau_j))
-
-            rcp[i, j] += 0.5 * (dd + dc)
-
-    P_cell = np.zeros((N, N))
-    for i in range(N):
-        if sig_t_g[i] * t[i] > 0:
-            P_cell[i, :] = rcp[i, :] / (sig_t_g[i] * t[i])
-
-    P_out = np.maximum(1.0 - P_cell.sum(axis=1), 0.0)
-    P_in = sig_t_g * t * P_out
-    P_inout = max(1.0 - P_in.sum(), 0.0)
-
-    P_inf = P_cell.copy()
-    if P_inout < 1.0:
-        P_inf += np.outer(P_out, P_in) / (1.0 - P_inout)
-
-    return P_inf
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Cylindrical Ki₃/Ki₄ kernel
-# ═══════════════════════════════════════════════════════════════════════
-
-def _build_ki_tables(
-    n_pts: int = 20000,
-    x_max: float = 50.0,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Tabulate Ki_3 and Ki_4 on a uniform grid.
-
-    Ki_3(x) = int_0^{pi/2} exp(-x/sin t) sin t dt
-    Ki_4(x) = int_x^inf Ki_3(t) dt
-
-    Returns (x_grid, ki3_vals, ki4_vals).
-    """
-    x_grid = np.linspace(0, x_max, n_pts)
-    ki3_vals = np.empty(n_pts)
-    ki3_vals[0] = 1.0
-
-    for i in range(1, n_pts):
-        ki3_vals[i], _ = quad(
-            lambda t, xx=x_grid[i]: np.exp(-xx / np.sin(t)) * np.sin(t),
-            0, np.pi / 2,
-        )
-
-    dx = x_grid[1] - x_grid[0]
-    ki4_vals = np.cumsum(ki3_vals[::-1])[::-1] * dx
-    ki4_vals[-1] = 0.0
-
-    return x_grid, ki3_vals, ki4_vals
-
-
-def _ki4_lookup(x, x_grid, ki4_vals):
-    """Vectorised Ki_4 lookup."""
-    return np.interp(x, x_grid, ki4_vals, right=0.0)
-
-
-def _chord_half_lengths(radii, y_pts):
-    """Half-chord lengths l_k(y) for each annular region.  Shape (N, n_y)."""
-    N = len(radii)
-    chords = np.zeros((N, len(y_pts)))
-    r_inner = np.zeros(N)
-    r_inner[1:] = radii[:-1]
-    y2 = y_pts**2
-
-    for k in range(N):
-        r_out, r_in = radii[k], r_inner[k]
-        outer = np.sqrt(np.maximum(r_out**2 - y2, 0.0))
-        if r_in > 0:
-            inner = np.sqrt(np.maximum(r_in**2 - y2, 0.0))
-            mask = y_pts < r_in
-            chords[k, mask] = outer[mask] - inner[mask]
-        mask_p = (y_pts >= r_in) & (y_pts < r_out)
-        chords[k, mask_p] = outer[mask_p]
-
-    return chords
-
-
-def _compute_cp_group(
-    sig_t_g: np.ndarray,
-    mesh: Mesh1D,
-    chords: np.ndarray,
-    y_pts: np.ndarray,
-    y_wts: np.ndarray,
-    ki_x: np.ndarray,
-    ki4_v: np.ndarray,
-) -> np.ndarray:
-    """Within-cell CP matrix for one energy group in cylindrical geometry.
-
-    Uses the Ki₄ second-difference formula with numerical y-quadrature.
-    Returns the infinite-lattice CP matrix P_inf (N, N) after applying
-    the white boundary condition.
-    """
-    N = mesh.N
-    V = mesh.volumes
-    n_y = len(y_pts)
-
-    tau = sig_t_g[:, None] * chords
-
-    bnd_pos = np.zeros((N + 1, n_y))
-    for k in range(N):
-        bnd_pos[k + 1, :] = bnd_pos[k, :] + tau[k, :]
-
-    ki4_0 = _ki4_lookup(np.zeros(n_y), ki_x, ki4_v)
-
-    rcp = np.zeros((N, N))
-
-    for i in range(N):
-        tau_i = tau[i, :]
-        sti = sig_t_g[i]
-        if sti == 0:
-            continue
-
-        self_same = 2.0 * chords[i, :] - (2.0 / sti) * (
-            ki4_0 - _ki4_lookup(tau_i, ki_x, ki4_v)
-        )
-        rcp[i, i] += 2.0 * sti * np.dot(y_wts, self_same)
-
-        for j in range(N):
-            tau_j = tau[j, :]
-
-            if j > i:
-                gap_d = bnd_pos[j, :] - bnd_pos[i + 1, :]
-            elif j < i:
-                gap_d = bnd_pos[i, :] - bnd_pos[j + 1, :]
-            else:
-                gap_d = None
-
-            if gap_d is not None:
-                gap_d = np.maximum(gap_d, 0.0)
-                dd = (_ki4_lookup(gap_d, ki_x, ki4_v)
-                      - _ki4_lookup(gap_d + tau_i, ki_x, ki4_v)
-                      - _ki4_lookup(gap_d + tau_j, ki_x, ki4_v)
-                      + _ki4_lookup(gap_d + tau_i + tau_j, ki_x, ki4_v))
-            else:
-                dd = np.zeros(n_y)
-
-            gap_c = bnd_pos[i, :] + bnd_pos[j, :]
-            dc = (_ki4_lookup(gap_c, ki_x, ki4_v)
-                  - _ki4_lookup(gap_c + tau_i, ki_x, ki4_v)
-                  - _ki4_lookup(gap_c + tau_j, ki_x, ki4_v)
-                  + _ki4_lookup(gap_c + tau_i + tau_j, ki_x, ki4_v))
-
-            rcp[i, j] += 2.0 * np.dot(y_wts, dd + dc)
-
-    P_cell = np.zeros((N, N))
-    for i in range(N):
-        if sig_t_g[i] * V[i] > 0:
-            P_cell[i, :] = rcp[i, :] / (sig_t_g[i] * V[i])
-
-    P_out = np.maximum(1.0 - P_cell.sum(axis=1), 0.0)
-    S_cell = mesh.surfaces[-1]  # 2*pi*r_cell for cylindrical
-    P_in = sig_t_g * V * P_out / S_cell
-    P_inout = max(1.0 - P_in.sum(), 0.0)
-
-    P_inf = P_cell.copy()
-    if P_inout < 1.0:
-        P_inf += np.outer(P_out, P_in) / (1.0 - P_inout)
-
-    return P_inf
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Public API: thin wrappers
-# ═══════════════════════════════════════════════════════════════════════
-
-def solve_cp_slab(
-    materials: dict[int, Mixture],
-    mesh: Mesh1D | None = None,
-    max_outer: int = 500,
-    keff_tol: float = 1e-6,
-    flux_tol: float = 1e-5,
-) -> CPResult:
-    """Solve the slab collision probability eigenvalue problem.
-
-    Parameters
-    ----------
-    materials : dict[int, Mixture]
-        Macroscopic cross sections keyed by material ID.
-    mesh : Mesh1D, optional
-        Cartesian 1-D mesh (half-cell).  Defaults to a standard PWR
-        slab half-cell via :func:`geometry.factories.pwr_slab_half_cell`.
-    """
-    t_start = time.perf_counter()
-
-    if mesh is None:
-        from geometry import pwr_slab_half_cell
-        mesh = pwr_slab_half_cell()
-
-    if mesh.coord != CoordSystem.CARTESIAN:
-        raise ValueError(
-            f"CP slab solver requires CARTESIAN mesh, got {mesh.coord}"
-        )
-
-    _any_mat = next(iter(materials.values()))
-    eg = _any_mat.eg
-    ng = _any_mat.ng
-    N = mesh.N
-
-    xs = assemble_cell_xs(materials, mesh.mat_ids)
-
-    # Build CP matrices using slab E₃ kernel
-    print(f"  Computing slab CP matrices for {ng} groups, {N} regions ...")
-    P_inf = np.empty((N, N, ng))
-    for g in range(ng):
-        P_inf[:, :, g] = _compute_slab_cp_group(xs.sig_t[:, g], mesh)
-        if (g + 1) % 100 == 0:
-            print(f"    group {g + 1}/{ng}")
-    print("  CP matrices done.")
-
-    # Eigenvalue solve
-    print("  Starting power iteration ...")
-    solver = CPSolver(P_inf, xs, mesh.volumes, mesh.mat_ids, materials,
-                      keff_tol=keff_tol, flux_tol=flux_tol)
-    keff, keff_history, phi = power_iteration(solver, max_iter=max_outer)
-
-    flux_fuel, flux_clad, flux_cool = _volume_averaged_fluxes(
-        phi, mesh.volumes, mesh.mat_ids)
-
-    elapsed = time.perf_counter() - t_start
-    print(f"  Elapsed: {elapsed:.1f}s")
-
-    return CPResult(
-        keff=keff, keff_history=keff_history, flux=phi,
-        flux_fuel=flux_fuel, flux_clad=flux_clad, flux_cool=flux_cool,
-        geometry=mesh, eg=eg, elapsed_seconds=elapsed,
-    )
-
-
-def solve_cp_concentric(
+def solve_cp(
     materials: dict[int, Mixture],
     mesh: Mesh1D | None = None,
     params: CPParams | None = None,
 ) -> CPResult:
-    """Solve the cylindrical collision probability eigenvalue problem.
+    """Solve the CP eigenvalue problem for any supported geometry.
+
+    The kernel is selected automatically based on ``mesh.coord``:
+    Cartesian (slab E₃), Cylindrical (Ki₄), or Spherical (exp).
 
     Parameters
     ----------
     materials : dict[int, Mixture]
         Macroscopic cross sections keyed by material ID.
     mesh : Mesh1D, optional
-        Cylindrical 1-D mesh (Wigner-Seitz equivalent cell).
-        Defaults to a standard PWR pin via
+        1-D mesh.  Defaults to a cylindrical PWR pin cell via
         :func:`geometry.factories.pwr_pin_equivalent`.
     params : CPParams, optional
-        Solver parameters (Ki table size, quadrature order, etc.).
+        Solver parameters (tolerances, Ki table size, quadrature order).
+
+    Returns
+    -------
+    CPResult
     """
     t_start = time.perf_counter()
 
@@ -512,42 +563,22 @@ def solve_cp_concentric(
     if params is None:
         params = CPParams()
 
-    if mesh.coord != CoordSystem.CYLINDRICAL:
-        raise ValueError(
-            f"CP concentric solver requires CYLINDRICAL mesh, got {mesh.coord}"
-        )
-
     _any_mat = next(iter(materials.values()))
     eg = _any_mat.eg
     ng = _any_mat.ng
     N = mesh.N
 
-    print("  Building Ki3/Ki4 lookup tables ...")
-    ki_x, _, ki4_v = _build_ki_tables(params.n_ki_table, params.ki_max)
+    # Build augmented geometry (sets up kernel + quadrature)
+    cp_mesh = CPMesh(mesh, params)
 
     xs = assemble_cell_xs(materials, mesh.mat_ids)
 
-    # y-quadrature (composite Gauss-Legendre over annular breakpoints)
-    radii = mesh.edges[1:]  # outer radius of each annulus
-    breakpoints = mesh.edges  # includes 0 at start
-    gl_pts, gl_wts = np.polynomial.legendre.leggauss(params.n_quad_y)
-    y_all, w_all = [], []
-    for seg in range(len(breakpoints) - 1):
-        a, b = breakpoints[seg], breakpoints[seg + 1]
-        y_all.append(0.5 * (b - a) * gl_pts + 0.5 * (b + a))
-        w_all.append(0.5 * (b - a) * gl_wts)
-    y_pts = np.concatenate(y_all)
-    y_wts = np.concatenate(w_all)
-
-    chords = _chord_half_lengths(radii, y_pts)
-
-    # Build CP matrices using cylindrical Ki₃/Ki₄ kernel
-    print(f"  Computing CP matrices for {ng} groups, {N} regions ...")
+    # Build CP matrices for all energy groups
+    print(f"  Computing CP matrices for {ng} groups, {N} regions "
+          f"({mesh.coord.value}) ...")
     P_inf = np.empty((N, N, ng))
     for g in range(ng):
-        P_inf[:, :, g] = _compute_cp_group(
-            xs.sig_t[:, g], mesh, chords, y_pts, y_wts, ki_x, ki4_v,
-        )
+        P_inf[:, :, g] = cp_mesh.compute_pinf_group(xs.sig_t[:, g])
         if (g + 1) % 100 == 0:
             print(f"    group {g + 1}/{ng}")
     print("  CP matrices done.")
