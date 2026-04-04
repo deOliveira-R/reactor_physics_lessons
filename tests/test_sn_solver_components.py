@@ -397,6 +397,45 @@ class TestSolveFixedSource:
         assert not np.allclose(phi, phi_new), "No update from solve_fixed_source"
         assert np.all(np.isfinite(phi_new)), "NaN/Inf in solve output"
 
+    def test_bicgstab_matches_source_iteration(self, solver_2g):
+        """BiCGSTAB and source iteration must converge to the same keff."""
+        from derivations import get
+
+        case = get("sn_slab_2eg_1rg")
+        mix = next(iter(case.materials.values()))
+        mesh = CartesianMesh.uniform_2d(2, 2, 0.5, np.zeros((2, 2), dtype=int))
+        quad = LebedevSphere.create(order=17)
+
+        # Source iteration
+        solver_si = SNSolver({0: mix}, mesh, quad,
+                             inner_solver="source_iteration",
+                             max_inner=500, inner_tol=1e-10)
+        phi = solver_si.initial_flux_distribution()
+        keff = 1.0
+        for _ in range(50):
+            fs = solver_si.compute_fission_source(phi, keff)
+            phi = solver_si.solve_fixed_source(fs, phi)
+            keff = solver_si.compute_keff(phi)
+            phi /= np.linalg.norm(phi)
+        keff_si = keff
+
+        # BiCGSTAB
+        solver_bc = SNSolver({0: mix}, mesh, quad,
+                             inner_solver="bicgstab",
+                             max_inner=2000, inner_tol=1e-6)
+        phi = solver_bc.initial_flux_distribution()
+        keff = 1.0
+        for _ in range(50):
+            fs = solver_bc.compute_fission_source(phi, keff)
+            phi = solver_bc.solve_fixed_source(fs, phi)
+            keff = solver_bc.compute_keff(phi)
+            phi /= np.linalg.norm(phi)
+        keff_bc = keff
+
+        assert abs(keff_si - keff_bc) < 1e-5, (
+            f"BiCGSTAB keff={keff_bc:.8f} vs SI keff={keff_si:.8f}"
+        )
+
 
 # ── Profiling ────────────────────────────────────────────────────────
 

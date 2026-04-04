@@ -205,40 +205,66 @@ class SNSolver:
     def _solve_bicgstab(
         self, fission_source: np.ndarray, flux_distribution: np.ndarray,
     ) -> np.ndarray:
-        """BiCGSTAB solve of (T - S)φ = F.
+        """Direct Krylov solve of the angular transport equation.
 
-        Uses the transport sweep as the matvec for the streaming+collision
-        operator, with scattering on the RHS.
+        Solves  T·ψ = b  via BiCGSTAB where T = μ·∇ + Σ_t is the
+        streaming + collision operator (formed explicitly via finite
+        differences) and b = fission + scattering + (n,2n) sources.
+
+        Returns the updated scalar flux (nx, ny, ng).
         """
-        from scipy.sparse.linalg import LinearOperator, bicgstab
-
-        phi = flux_distribution.copy()
-        shape_flat = phi.size
-
-        # RHS: fission + scattering + (n,2n) from current phi
-        rhs = fission_source.copy()
-        self._add_scattering_source(rhs, phi)
-        self._add_n2n_source(rhs, phi)
-
-        def matvec(x_flat):
-            """Apply transport operator: T·φ (streaming + collision)."""
-            x = x_flat.reshape(phi.shape)
-            # Sweep with x as source, return Σ_t·φ_sweep (the LHS of the DD eq)
-            _, phi_sweep = transport_sweep(
-                x, self.sig_t, self.mesh.dx, self.mesh.dy,
-                self.quad, self._psi_bc,
-            )
-            return phi_sweep.ravel()
-
-        A_op = LinearOperator((shape_flat, shape_flat), matvec=matvec)
-        rhs_flat = rhs.ravel()
-
-        solution, info = bicgstab(
-            A_op, rhs_flat, x0=phi.ravel(),
-            rtol=self.inner_tol, maxiter=self.max_inner,
+        from scipy.sparse.linalg import bicgstab
+        from sn_operator import (
+            build_equation_map,
+            build_transport_linear_operator,
+            build_rhs,
+            solution_to_angular_flux,
+            angular_flux_to_scalar,
         )
 
-        return solution.reshape(phi.shape)
+        nx, ny, ng = self.mesh.nx, self.mesh.ny, self.ng
+        four_pi = 4.0 * np.pi
+
+        # Build equation map and operator (could be cached, but clarity first)
+        if not hasattr(self, '_eq_map'):
+            self._eq_map = build_equation_map(nx, ny, self.quad, ng)
+            self._T_op = build_transport_linear_operator(
+                self._eq_map, self.quad, self.sig_t,
+                nx, ny, ng, self.mesh.dx, self.mesh.dy,
+            )
+
+        eq_map = self._eq_map
+        T_op = self._T_op
+
+        # Scalar flux from previous iterate (for scattering RHS)
+        phi = flux_distribution
+
+        # Fission source: divide by 4π for angular equation
+        fission_src_4pi = fission_source / four_pi
+
+        # Build full RHS (fission + scatter + n2n, all / 4π)
+        rhs = build_rhs(
+            fission_src_4pi, phi, eq_map, self.quad,
+            self.sig_s0, self.sig2, self.mesh.mat_map,
+            nx, ny, ng,
+        )
+
+        # Initial guess: convert previous angular flux or use zero
+        if hasattr(self, '_psi_solution'):
+            x0 = self._psi_solution
+        else:
+            x0 = np.ones(eq_map.n_unknowns)
+
+        # Solve T·ψ = b
+        solution, info = bicgstab(
+            T_op, rhs, x0=x0,
+            rtol=self.inner_tol, maxiter=self.max_inner,
+        )
+        self._psi_solution = solution
+
+        # Extract scalar flux from angular flux
+        fi = solution_to_angular_flux(solution, eq_map, self.quad, nx, ny, ng)
+        return angular_flux_to_scalar(fi, self.quad, nx, ny, ng)
 
     # ── Source computation helpers ────────────────────────────────────
 
