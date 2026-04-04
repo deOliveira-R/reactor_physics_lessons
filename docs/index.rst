@@ -6,8 +6,7 @@ ORPHEUS — Open Reactor Physics Educational University System
    :caption: Theory & Derivations
 
    theory/homogeneous
-   theory/discrete_ordinates
-   theory/collision_probability
+   theory/transport_methods
    theory/verification
 
 .. toctree::
