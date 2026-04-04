@@ -1,7 +1,7 @@
 .. _theory-collision-probability:
 
 ====================================
-The Collision Probability Method
+Collision Probability Method
 ====================================
 
 .. contents:: Contents

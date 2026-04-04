@@ -1,7 +1,7 @@
 .. _theory-discrete-ordinates:
 
 ====================================
-The Discrete Ordinates Method (SN)
+Discrete Ordinates Method (SN)
 ====================================
 
 .. contents:: Contents
@@ -27,8 +27,7 @@ heterogeneous geometry — fuel, cladding, and coolant zones with distinct
 cross sections.
 
 The treatment follows [LewisMiller1984]_, with cross-section data and
-geometry from the MORPHEUS educational framework [Mikityuk2015]_.
-This chapter covers:
+prototypical geometries. This chapter covers:
 
 - The 1D slab transport equation and its multi-group generalisation
 - Angular quadrature: Gauss–Legendre (1D) and Lebedev (sphere)
@@ -614,7 +613,3 @@ References
 .. [Lebedev1999] V.I. Lebedev and D.N. Laikov,
    "A quadrature formula for the sphere of the 131st algebraic order
    of accuracy," *Doklady Mathematics*, 59(3):477–481, 1999.
-
-.. [Mikityuk2015] K. Mikityuk,
-   *Matlab-based Open-source Reactor Physics Education System (MORPHEUS)*,
-   Paul Scherrer Institute, 2015–2017.
