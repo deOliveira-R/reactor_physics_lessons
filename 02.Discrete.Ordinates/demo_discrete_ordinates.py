@@ -34,7 +34,7 @@ def main():
     materials = {2: fuel, 1: clad, 0: cool}
 
     # 2. Set up geometry and angular quadrature
-    mesh = CartesianMesh.default_pwr_2d(nx=10, ny=10, delta=0.2)
+    mesh = CartesianMesh.default_pwr_2d(nx=10, ny=2, delta=0.2)
     quad = LebedevSphere.create(order=17)
 
     print(f"\n  Mesh: {mesh.nx} x {mesh.ny}, delta = {mesh.dx[0]:.2f} cm")
@@ -45,8 +45,10 @@ def main():
     # 3. Solve
     result = solve_sn(
         materials, mesh, quad,
-        inner_solver="source_iteration",
-        max_outer=200,
+        inner_solver="bicgstab",
+        max_outer=500,
+        max_inner=2000,
+        inner_tol=1e-4,
     )
 
     # 4. Report
