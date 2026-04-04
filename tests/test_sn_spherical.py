@@ -311,3 +311,67 @@ class TestSphericalSweepRegression:
         assert np.all(psi_center > 0), (
             f"Zero or negative angular flux at centre: {psi_center}"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# BiCGSTAB inner solver (spherical transport operator)
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestSphericalBicgstab:
+    """Tests for the BiCGSTAB inner solver on spherical geometry."""
+
+    def test_bicgstab_1g_homogeneous_exact(self):
+        """BiCGSTAB on 1G homogeneous sphere must match analytical k_inf."""
+        case = get("sn_slab_1eg_1rg")
+        mix = next(iter(case.materials.values()))
+        mesh = homogeneous_1d(10, 2.0, mat_id=0, coord=CoordSystem.SPHERICAL)
+        quad = GaussLegendre1D.create(8)
+        result = solve_sn({0: mix}, mesh, quad,
+                          inner_solver="bicgstab",
+                          max_inner=2000, inner_tol=1e-6)
+
+        assert abs(result.keff - case.k_inf) < 1e-4, (
+            f"BiCGSTAB keff={result.keff:.8f} vs analytical={case.k_inf:.8f}"
+        )
+
+    def test_bicgstab_matches_source_iteration(self):
+        """BiCGSTAB and source iteration must agree on spherical geometry."""
+        case = get("sn_slab_1eg_1rg")
+        mix = next(iter(case.materials.values()))
+
+        keffs = {}
+        for label, solver_type in [("SI", "source_iteration"),
+                                    ("BC", "bicgstab")]:
+            mesh = homogeneous_1d(10, 2.0, mat_id=0,
+                                  coord=CoordSystem.SPHERICAL)
+            quad = GaussLegendre1D.create(8)
+            result = solve_sn(
+                {0: mix}, mesh, quad,
+                inner_solver=solver_type,
+                max_inner=500 if solver_type == "SI" else 2000,
+                inner_tol=1e-10 if solver_type == "SI" else 1e-6,
+            )
+            keffs[label] = result.keff
+
+        assert abs(keffs["SI"] - keffs["BC"]) < 1e-4, (
+            f"SI keff={keffs['SI']:.8f} vs BC keff={keffs['BC']:.8f}"
+        )
+
+    def test_bicgstab_finite_result(self):
+        """BiCGSTAB on 1G spherical must produce finite flux and keff.
+
+        Note: multi-group BiCGSTAB on spherical geometry is unstable
+        (the explicit FD operator for angular redistribution is less
+        accurate than the DD sweep's implicit treatment). Only 1G is
+        expected to converge reliably.
+        """
+        case = get("sn_slab_1eg_1rg")
+        mix = next(iter(case.materials.values()))
+        mesh = homogeneous_1d(10, 2.0, mat_id=0, coord=CoordSystem.SPHERICAL)
+        quad = GaussLegendre1D.create(8)
+        result = solve_sn({0: mix}, mesh, quad,
+                          inner_solver="bicgstab",
+                          max_inner=2000, inner_tol=1e-6)
+
+        assert np.isfinite(result.keff), f"keff is not finite: {result.keff}"
+        assert np.all(np.isfinite(result.scalar_flux)), "Non-finite scalar flux"

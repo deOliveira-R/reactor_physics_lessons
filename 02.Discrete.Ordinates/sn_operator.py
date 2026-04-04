@@ -1,8 +1,12 @@
 """Direct transport operator for Krylov inner solves.
 
-Provides the explicit operator T: ψ → μ·∇ψ + Σ_t·ψ  via finite
-differences on a 2D Cartesian mesh with reflective BCs and Lebedev
-quadrature.  Used by the ``bicgstab`` inner solver path in SNSolver.
+Provides the explicit operator T: ψ → T·ψ via finite differences, used
+by the ``bicgstab`` inner solver path in :class:`SNSolver`.
+
+Two geometries are supported:
+
+* **Cartesian 2D** — ``T = μ_x ∂/∂x + μ_y ∂/∂y + Σ_t``
+* **Spherical 1D** — ``T = μ (A ∂/∂r)/V + (α ∂/∂μ)/V + Σ_t``
 
 The sweep-based solver (source iteration) inverts T implicitly via
 diamond-difference sweeps.  This module forms T explicitly so that
@@ -340,5 +344,201 @@ def build_rhs(
 
                 rhs[:, eq_idx] = qF + q2 + qS
                 eq_idx += 1
+
+    return rhs.ravel(order='F')
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Spherical 1D operator: T = μ(A∂/∂r)/V + (α∂/∂μ)/V + Σ_t
+# ═══════════════════════════════════════════════════════════════════════
+
+def build_equation_map_spherical(
+    nx: int, quad: AngularQuadrature, ng: int,
+) -> EquationMap:
+    """Equation map for spherical 1D: all (ordinate, cell) pairs except
+    incoming directions at the outer reflective boundary."""
+    mu_x = quad.mu_x
+    ords, ixs, iys = [], [], []
+    for ix in range(nx):
+        for n in range(quad.N):
+            # Skip incoming at outer boundary (reflective BC)
+            if ix == nx - 1 and mu_x[n] < -1e-15:
+                continue
+            ords.append(n)
+            ixs.append(ix)
+            iys.append(0)  # always iy=0 for 1D
+
+    n_eq = len(ords)
+    return EquationMap(
+        n_eq=n_eq,
+        n_unknowns=n_eq * ng,
+        ordinate=np.array(ords, dtype=int),
+        ix=np.array(ixs, dtype=int),
+        iy=np.array(iys, dtype=int),
+    )
+
+
+def solution_to_angular_flux_spherical(
+    solution: np.ndarray,
+    eq_map: EquationMap,
+    quad: AngularQuadrature,
+    nx: int, ng: int,
+) -> np.ndarray:
+    """Convert 1D solution vector to angular flux array (ng, N, nx, 1).
+
+    Applies reflective BC at the outer boundary.
+    """
+    ref_x = quad.reflection_index("x")
+    fi = np.zeros((ng, quad.N, nx, 1))
+
+    flux = solution.reshape(ng, eq_map.n_eq, order='F')
+    for k in range(eq_map.n_eq):
+        fi[:, eq_map.ordinate[k], eq_map.ix[k], 0] = flux[:, k]
+
+    # Reflective BC at outer boundary: incoming (μ<0) = reflected partner
+    for n in range(quad.N):
+        if quad.mu_x[n] < -1e-15:
+            fi[:, n, -1, 0] = fi[:, ref_x[n], -1, 0]
+
+    return fi
+
+
+def transport_operator_matvec_spherical(
+    solution: np.ndarray,
+    eq_map: EquationMap,
+    quad: AngularQuadrature,
+    sig_t: np.ndarray,
+    nx: int, ng: int,
+    face_areas: np.ndarray,
+    volumes: np.ndarray,
+    alpha_half: np.ndarray,
+) -> np.ndarray:
+    r"""Apply the spherical transport operator T·ψ.
+
+    .. math::
+
+        (T\psi)_{n,i} = \frac{\mu_n}{V_i}
+          \bigl[A_{i+\frac12}\psi_{i+\frac12} - A_{i-\frac12}\psi_{i-\frac12}\bigr]
+        + \frac{1}{V_i}
+          \bigl[\alpha_{n+\frac12}\psi_{n+\frac12} - \alpha_{n-\frac12}\psi_{n-\frac12}\bigr]
+        + \Sigma_t \psi_{n,i}
+
+    Face fluxes are approximated by arithmetic averages of cell-centre values.
+    """
+    fi = solution_to_angular_flux_spherical(solution, eq_map, quad, nx, ng)
+    ref_x = quad.reflection_index("x")
+    A = face_areas       # (nx+1,)
+    V = volumes[:, 0]    # (nx,)
+    alpha = alpha_half   # (N+1,)
+    N = quad.N
+    mu = quad.mu_x
+
+    lhs = np.empty((ng, eq_map.n_eq))
+    for k in range(eq_map.n_eq):
+        n = eq_map.ordinate[k]
+        i = eq_map.ix[k]
+        psi_ni = fi[:, n, i, 0]
+
+        # ── Spatial streaming: μ (A ∂ψ/∂r) / V ──────────────────────
+        # Face flux at i+1/2: average of cell i and cell i+1 (or BC)
+        if i < nx - 1:
+            psi_right = 0.5 * (fi[:, n, i, 0] + fi[:, n, i + 1, 0])
+        else:
+            # Outer boundary: for outgoing (μ>0), use extrapolation;
+            # for incoming (μ<0), reflective BC already applied in fi
+            if mu[n] > 1e-15:
+                psi_right = fi[:, n, i, 0]  # extrapolate (flat)
+            else:
+                psi_right = fi[:, ref_x[n], i, 0]
+
+        # Face flux at i-1/2
+        if i > 0:
+            psi_left = 0.5 * (fi[:, n, i - 1, 0] + fi[:, n, i, 0])
+        else:
+            # r=0: A[0]=0 so this term vanishes regardless
+            psi_left = 0.0
+
+        streaming = mu[n] * (A[i + 1] * psi_right - A[i] * psi_left) / V[i]
+
+        # ── Angular redistribution: (α ∂ψ/∂μ) / V ──────────────────
+        # Angular face flux at n+1/2: average of ordinate n and n+1
+        if n < N - 1:
+            psi_angle_right = 0.5 * (fi[:, n, i, 0] + fi[:, n + 1, i, 0])
+        else:
+            psi_angle_right = fi[:, n, i, 0]  # α_{N+1/2}=0 kills this
+
+        # Angular face flux at n-1/2
+        if n > 0:
+            psi_angle_left = 0.5 * (fi[:, n - 1, i, 0] + fi[:, n, i, 0])
+        else:
+            psi_angle_left = fi[:, n, i, 0]  # α_{1/2}=0 kills this
+
+        redistribution = (alpha[n + 1] * psi_angle_right
+                          - alpha[n] * psi_angle_left) / V[i]
+
+        # ── Collision ────────────────────────────────────────────────
+        collision = sig_t[i, 0, :] * psi_ni
+
+        lhs[:, k] = streaming + redistribution + collision
+
+    return lhs.ravel(order='F')
+
+
+def build_transport_linear_operator_spherical(
+    eq_map: EquationMap,
+    quad: AngularQuadrature,
+    sig_t: np.ndarray,
+    nx: int, ng: int,
+    face_areas: np.ndarray,
+    volumes: np.ndarray,
+    alpha_half: np.ndarray,
+) -> LinearOperator:
+    """Build scipy LinearOperator for spherical T."""
+    def matvec(x):
+        return transport_operator_matvec_spherical(
+            x, eq_map, quad, sig_t, nx, ng,
+            face_areas, volumes, alpha_half,
+        )
+
+    n = eq_map.n_unknowns
+    return LinearOperator((n, n), matvec=matvec, dtype=float)
+
+
+def build_rhs_spherical(
+    fission_source: np.ndarray,
+    scalar_flux: np.ndarray,
+    eq_map: EquationMap,
+    quad: AngularQuadrature,
+    sig_s: dict[int, list[np.ndarray]],
+    sig2: dict[int, np.ndarray],
+    mat_map: np.ndarray,
+    nx: int, ng: int,
+    scattering_order: int = 0,
+    angular_flux: np.ndarray | None = None,
+) -> np.ndarray:
+    """Build the RHS source vector for spherical T·ψ = b.
+
+    Same structure as Cartesian ``build_rhs`` but with spherical
+    equation map (no y-direction, no z-reflection filtering).
+    """
+    sum_w = float(quad.weights.sum())
+    L = scattering_order
+
+    rhs = np.zeros((ng, eq_map.n_eq))
+    eq_idx = 0
+    for ix in range(nx):
+        mid = int(mat_map[ix, 0])
+        phi_cell = scalar_flux[ix, 0, :]
+
+        qF = fission_source[ix, 0, :]
+        q2 = 2.0 * (sig2[mid].T @ phi_cell) / sum_w
+
+        for n in range(quad.N):
+            if ix == nx - 1 and quad.mu_x[n] < -1e-15:
+                continue
+
+            qS = sig_s[mid][0].T @ phi_cell / sum_w
+            rhs[:, eq_idx] = qF + q2 + qS
+            eq_idx += 1
 
     return rhs.ravel(order='F')

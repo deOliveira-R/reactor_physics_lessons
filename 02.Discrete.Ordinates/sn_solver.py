@@ -233,6 +233,22 @@ class SNSolver:
         Returns the updated scalar flux (nx, ny, ng).
         """
         from scipy.sparse.linalg import bicgstab
+
+        nx, ny, ng = self.sn_mesh.nx, self.sn_mesh.ny, self.ng
+        sum_w = float(self.quad.weights.sum())
+        phi = flux_distribution
+        fission_src_norm = fission_source / sum_w
+
+        if self.sn_mesh.curvature == "spherical":
+            return self._solve_bicgstab_spherical(fission_src_norm, phi)
+        else:
+            return self._solve_bicgstab_cartesian(fission_src_norm, phi)
+
+    def _solve_bicgstab_cartesian(
+        self, fission_src_norm: np.ndarray, phi: np.ndarray,
+    ) -> np.ndarray:
+        """BiCGSTAB for Cartesian geometry."""
+        from scipy.sparse.linalg import bicgstab
         from sn_operator import (
             build_equation_map,
             build_transport_linear_operator,
@@ -242,9 +258,7 @@ class SNSolver:
         )
 
         nx, ny, ng = self.sn_mesh.nx, self.sn_mesh.ny, self.ng
-        sum_w = float(self.quad.weights.sum())
 
-        # Build equation map and operator (could be cached, but clarity first)
         if not hasattr(self, '_eq_map'):
             self._eq_map = build_equation_map(nx, ny, self.quad, ng)
             self._T_op = build_transport_linear_operator(
@@ -255,20 +269,12 @@ class SNSolver:
         eq_map = self._eq_map
         T_op = self._T_op
 
-        # Scalar flux from previous iterate (for scattering RHS)
-        phi = flux_distribution
-
-        # Fission source: divide by sum(weights) for angular equation
-        fission_src_norm = fission_source / sum_w
-
-        # Angular flux for Pn moment computation (from previous BiCGSTAB solve)
         angular = None
         if self.scattering_order > 0 and hasattr(self, '_psi_solution'):
             angular = solution_to_angular_flux(
                 self._psi_solution, eq_map, self.quad, nx, ny, ng,
             )
 
-        # Build full RHS (fission + scatter + n2n, all / sum(w))
         rhs = build_rhs(
             fission_src_norm, phi, eq_map, self.quad,
             self.sig_s, self.sig2, self.sn_mesh.mat_map,
@@ -277,22 +283,69 @@ class SNSolver:
             angular_flux=angular,
         )
 
-        # Initial guess: convert previous angular flux or use zero
         if hasattr(self, '_psi_solution'):
             x0 = self._psi_solution
         else:
             x0 = np.ones(eq_map.n_unknowns)
 
-        # Solve T·ψ = b
         solution, info = bicgstab(
             T_op, rhs, x0=x0,
             rtol=self.inner_tol, maxiter=self.max_inner,
         )
         self._psi_solution = solution
 
-        # Extract scalar flux from angular flux
         fi = solution_to_angular_flux(solution, eq_map, self.quad, nx, ny, ng)
         return angular_flux_to_scalar(fi, self.quad, nx, ny, ng)
+
+    def _solve_bicgstab_spherical(
+        self, fission_src_norm: np.ndarray, phi: np.ndarray,
+    ) -> np.ndarray:
+        """BiCGSTAB for spherical 1D geometry."""
+        from scipy.sparse.linalg import bicgstab
+        from sn_operator import (
+            build_equation_map_spherical,
+            build_transport_linear_operator_spherical,
+            build_rhs_spherical,
+            solution_to_angular_flux_spherical,
+            angular_flux_to_scalar,
+        )
+
+        nx, ng = self.sn_mesh.nx, self.ng
+
+        if not hasattr(self, '_eq_map'):
+            self._eq_map = build_equation_map_spherical(nx, self.quad, ng)
+            self._T_op = build_transport_linear_operator_spherical(
+                self._eq_map, self.quad, self.sig_t,
+                nx, ng,
+                self.sn_mesh.face_areas,
+                self.sn_mesh.volumes,
+                self.sn_mesh.alpha_half,
+            )
+
+        eq_map = self._eq_map
+        T_op = self._T_op
+
+        rhs = build_rhs_spherical(
+            fission_src_norm, phi, eq_map, self.quad,
+            self.sig_s, self.sig2, self.sn_mesh.mat_map,
+            nx, ng,
+        )
+
+        if hasattr(self, '_psi_solution'):
+            x0 = self._psi_solution
+        else:
+            x0 = np.ones(eq_map.n_unknowns)
+
+        solution, info = bicgstab(
+            T_op, rhs, x0=x0,
+            rtol=self.inner_tol, maxiter=self.max_inner,
+        )
+        self._psi_solution = solution
+
+        fi = solution_to_angular_flux_spherical(
+            solution, eq_map, self.quad, nx, ng,
+        )
+        return angular_flux_to_scalar(fi, self.quad, nx, 1, ng)
 
     # ── Source computation helpers ────────────────────────────────────
 
