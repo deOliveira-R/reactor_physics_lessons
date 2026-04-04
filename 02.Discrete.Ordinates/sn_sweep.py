@@ -43,9 +43,9 @@ def transport_sweep(
     scalar_flux : (nx, ny, ng) = Σ_n w_n ψ_n.
     """
     ny = len(mesh_dy)
-    is_1d = (ny == 1 and np.all(np.abs(quad.mu_y) < 1e-15))
+    is_gl_1d = (ny == 1 and np.all(np.abs(quad.mu_y) < 1e-15))
 
-    if is_1d:
+    if is_gl_1d:
         return _sweep_1d_cumprod(Q, sig_t, mesh_dx, quad, psi_bc)
     else:
         return _sweep_2d_wavefront(Q, sig_t, mesh_dx, mesh_dy, quad, psi_bc)
