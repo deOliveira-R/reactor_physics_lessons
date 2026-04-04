@@ -214,3 +214,100 @@ def test_flux_non_negative():
     assert np.all(result.scalar_flux >= 0), (
         f"Negative flux: min={result.scalar_flux.min():.4e}"
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Sweep-level regression tests (from debugging this implementation)
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestSphericalSweepRegression:
+    """Tests targeting specific issues found during implementation."""
+
+    def test_uniform_source_converges_to_Q_over_sigt(self):
+        """Repeated sweeps with uniform Q and Σ_t must converge to φ = Q/Σ_t.
+
+        This caught the missing weight_norm (1/sum_w) normalization in
+        the spherical sweep source term.
+        """
+        from sn_sweep import _sweep_1d_spherical
+
+        mesh = homogeneous_1d(10, 1.0, mat_id=0, coord=CoordSystem.SPHERICAL)
+        quad = GaussLegendre1D.create(8)
+        sn_mesh = SNMesh(mesh, quad)
+
+        sig_t = np.ones((10, 1, 1))
+        Q = np.ones((10, 1, 1))
+
+        psi_bc = {}
+        for _ in range(200):
+            _, phi = _sweep_1d_spherical(Q, sig_t, sn_mesh, psi_bc)
+
+        # Volume-weighted average must converge to Q/Σ_t = 1.0.
+        # Individual cells near r=0 have large DD error due to extreme
+        # aspect ratios on equal-volume spherical meshes.
+        V = sn_mesh.volumes[:, 0]
+        phi_avg = np.sum(phi[:, 0, 0] * V) / V.sum()
+        np.testing.assert_allclose(phi_avg, 1.0, rtol=0.10,
+                                   err_msg="Volume-avg φ ≠ Q/Σ_t for uniform source")
+
+    def test_single_sweep_all_finite(self):
+        """A single sweep must produce finite (non-NaN, non-Inf) fluxes.
+
+        This catches the negative-denominator bug from using signed α
+        instead of |α| at the innermost cell where A=0.
+        """
+        from sn_sweep import _sweep_1d_spherical
+
+        mesh = homogeneous_1d(10, 2.0, mat_id=0, coord=CoordSystem.SPHERICAL)
+        quad = GaussLegendre1D.create(8)
+        sn_mesh = SNMesh(mesh, quad)
+
+        sig_t = np.full((10, 1, 1), 0.5)
+        Q = np.ones((10, 1, 1))
+
+        psi_bc = {}
+        ang, phi = _sweep_1d_spherical(Q, sig_t, sn_mesh, psi_bc)
+
+        assert np.all(np.isfinite(ang)), "Non-finite angular flux in first sweep"
+        assert np.all(np.isfinite(phi)), "Non-finite scalar flux in first sweep"
+
+    def test_inner_loop_bounded_multigroup(self):
+        """Inner scattering iteration must stay bounded for multi-group.
+
+        On a homogeneous sphere, one outer iteration (fission source →
+        solve_fixed_source) must produce finite flux with bounded norm.
+        """
+        mix = get_mixture("A", "2g")
+        mesh = homogeneous_1d(20, 2.0, mat_id=0, coord=CoordSystem.SPHERICAL)
+        quad = GaussLegendre1D.create(8)
+        sn_mesh = SNMesh(mesh, quad)
+        solver = SNSolver({0: mix}, sn_mesh, max_inner=500, inner_tol=1e-10)
+
+        phi = solver.initial_flux_distribution()
+        fission = solver.compute_fission_source(phi, 1.0)
+        phi_new = solver.solve_fixed_source(fission, phi)
+
+        assert np.all(np.isfinite(phi_new)), "Non-finite flux after solve_fixed_source"
+        assert phi_new.max() < 1e6, (
+            f"Flux blew up to {phi_new.max():.2e} — inner loop may diverge"
+        )
+
+    def test_angular_flux_at_center_all_positive(self):
+        """All ordinate angular fluxes at the centre must be positive.
+
+        This tests that the angular redistribution correctly couples
+        inward and outward ordinates at r≈0, where A=0 and the spatial
+        streaming vanishes.  Without redistribution, outward ordinates
+        would have zero flux at the centre.
+        """
+        mix = get_mixture("A", "1g")
+        mesh = homogeneous_1d(20, 2.0, mat_id=0, coord=CoordSystem.SPHERICAL)
+        quad = GaussLegendre1D.create(8)
+        result = solve_sn({0: mix}, mesh, quad, max_inner=500, inner_tol=1e-10)
+
+        # Angular flux at the innermost cell (closest to r=0)
+        psi_center = result.angular_flux[:, 0, 0, 0]  # (N_ord,) for group 0
+
+        assert np.all(psi_center > 0), (
+            f"Zero or negative angular flux at centre: {psi_center}"
+        )
