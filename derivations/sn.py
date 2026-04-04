@@ -85,7 +85,9 @@ def _derive_sn_heterogeneous(ng_key: str, n_regions: int) -> VerificationCase:
     Runs the SN solver at 4 mesh refinements with S16 GL quadrature,
     then extrapolates to h→0 assuming O(h²) convergence.
     """
-    from sn_1d import GaussLegendreQuadrature, Slab1DGeometry, solve_sn_1d
+    from sn_geometry import CartesianMesh
+    from sn_quadrature import GaussLegendre1D
+    from sn_solver import solve_sn
 
     layout = LAYOUTS[n_regions]
     mat_ids = _MAT_IDS[n_regions]
@@ -98,13 +100,13 @@ def _derive_sn_heterogeneous(ng_key: str, n_regions: int) -> VerificationCase:
         materials[mat_ids[i]] = get_mixture(region, ng_key)
 
     # Richardson extrapolation from 4 mesh levels
-    quad = GaussLegendreQuadrature.gauss_legendre(16)
+    quad = GaussLegendre1D.create(16)
     cells_per_region = [5, 10, 20, 40]
     keffs = []
     for n_per in cells_per_region:
-        geom = Slab1DGeometry.from_regions(thicknesses, mat_ids, n_per)
-        result = solve_sn_1d(
-            materials, geom, quad,
+        mesh = CartesianMesh.from_regions(thicknesses, mat_ids, n_per)
+        result = solve_sn(
+            materials, mesh, quad,
             max_outer=500, max_inner=500, inner_tol=1e-10,
             keff_tol=1e-8,
         )

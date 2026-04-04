@@ -4,7 +4,9 @@ import pytest
 
 from derivations import get
 from derivations._xs_library import get_mixture
-from sn_1d import GaussLegendreQuadrature, Slab1DGeometry, solve_sn_1d
+from sn_geometry import CartesianMesh
+from sn_quadrature import GaussLegendre1D
+from sn_solver import solve_sn
 
 
 @pytest.mark.slow
@@ -20,12 +22,12 @@ def test_sn_approaches_cp_reference():
     mod = get_mixture("B", "1g")
     materials = {2: fuel, 0: mod}
 
-    geom = Slab1DGeometry.from_benchmark(
+    mesh = CartesianMesh.from_benchmark(
         n_fuel=40, n_mod=40, t_fuel=0.5, t_mod=0.5,
     )
-    quad = GaussLegendreQuadrature.gauss_legendre(32)
-    result = solve_sn_1d(
-        materials, geom, quad,
+    quad = GaussLegendre1D.create(32)
+    result = solve_sn(
+        materials, mesh, quad,
         max_outer=300, max_inner=500, inner_tol=1e-10,
     )
 

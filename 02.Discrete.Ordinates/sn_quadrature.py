@@ -75,6 +75,11 @@ class GaussLegendre1D:
     weights: np.ndarray
     N: int
 
+    @property
+    def mu(self) -> np.ndarray:
+        """Alias for mu_x (the 1D direction cosines)."""
+        return self.mu_x
+
     @classmethod
     def create(cls, n_ordinates: int = 16) -> GaussLegendre1D:
         """Build N-point GL quadrature (must be even for SN)."""

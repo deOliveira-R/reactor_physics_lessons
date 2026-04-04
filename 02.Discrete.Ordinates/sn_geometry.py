@@ -93,6 +93,28 @@ class CartesianMesh:
         mids = np.full(n_cells, mat_id, dtype=int)
         return cls.from_slab_1d(dx, mids)
 
+    @classmethod
+    def from_benchmark(
+        cls,
+        n_fuel: int,
+        n_mod: int,
+        t_fuel: float,
+        t_mod: float,
+    ) -> CartesianMesh:
+        """Build a 1D fuel + moderator benchmark slab.
+
+        Material IDs: 2 = fuel, 0 = moderator.
+        """
+        dx = np.concatenate([
+            np.full(n_fuel, t_fuel / n_fuel),
+            np.full(n_mod, t_mod / n_mod),
+        ])
+        mids = np.concatenate([
+            np.full(n_fuel, 2, dtype=int),
+            np.full(n_mod, 0, dtype=int),
+        ])
+        return cls.from_slab_1d(dx, mids)
+
     # ── 2D factories ──────────────────────────────────────────────────
 
     @classmethod

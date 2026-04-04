@@ -11,13 +11,15 @@ import numpy as np
 import pytest
 
 from derivations import get
-from sn_1d import GaussLegendreQuadrature, Slab1DGeometry, solve_sn_1d
+from sn_geometry import CartesianMesh
+from sn_quadrature import GaussLegendre1D
+from sn_solver import solve_sn
 
 
 def test_gl_weights_sum():
     """Gauss-Legendre weights on [-1,1] must sum to 2."""
     for N in [4, 8, 16, 32]:
-        quad = GaussLegendreQuadrature.gauss_legendre(N)
+        quad = GaussLegendre1D.create(N)
         np.testing.assert_allclose(
             quad.weights.sum(), 2.0, atol=1e-14,
             err_msg=f"GL({N}) weights sum to {quad.weights.sum()}, expected 2.0",
@@ -26,7 +28,7 @@ def test_gl_weights_sum():
 
 def test_gl_symmetry():
     """GL quadrature points must be symmetric: μ[i] = -μ[N-1-i]."""
-    quad = GaussLegendreQuadrature.gauss_legendre(16)
+    quad = GaussLegendre1D.create(16)
     np.testing.assert_allclose(
         quad.mu, -quad.mu[::-1], atol=1e-14,
     )
@@ -44,20 +46,22 @@ def test_flux_symmetry():
     materials = {2: fuel, 0: mod}
 
     # Symmetric layout: 10 fuel | 10 mod (half-cell with reflective BCs)
-    geom = Slab1DGeometry.from_benchmark(
+    mesh = CartesianMesh.from_benchmark(
         n_fuel=10, n_mod=10, t_fuel=0.5, t_mod=0.5,
     )
-    quad = GaussLegendreQuadrature.gauss_legendre(8)
-    result = solve_sn_1d(materials, geom, quad, max_outer=200)
+    quad = GaussLegendre1D.create(8)
+    result = solve_sn(materials, mesh, quad, max_outer=200,
+                      max_inner=500, inner_tol=1e-10)
 
     # With reflective BCs at both ends, a half-cell geometry is symmetric
     # about its midpoint only if the materials are arranged symmetrically.
     # Here fuel|mod is NOT symmetric about the center, but the flux
     # should still be smooth and monotonic from fuel to moderator.
     # A stronger test: a homogeneous slab must have exactly flat flux.
-    geom_homo = Slab1DGeometry.homogeneous(20, 2.0, mat_id=0)
-    result_homo = solve_sn_1d({0: mix}, geom_homo, quad, max_outer=200)
-    flux = result_homo.flux[:, 0]
+    mesh_homo = CartesianMesh.homogeneous_1d(20, 2.0, mat_id=0)
+    result_homo = solve_sn({0: mix}, mesh_homo, quad, max_outer=200,
+                           max_inner=500, inner_tol=1e-10)
+    flux = result_homo.scalar_flux[:, 0, 0]  # (nx,) for group 0
     np.testing.assert_allclose(
         flux, flux[0], rtol=1e-6,
         err_msg="Homogeneous slab flux is not flat",
@@ -69,13 +73,14 @@ def test_particle_balance():
     case = get("sn_slab_2eg_1rg")
     mix = next(iter(case.materials.values()))
     materials = {0: mix}
-    geom = Slab1DGeometry.homogeneous(20, 2.0, mat_id=0)
-    quad = GaussLegendreQuadrature.gauss_legendre(8)
-    result = solve_sn_1d(materials, geom, quad)
+    mesh = CartesianMesh.homogeneous_1d(20, 2.0, mat_id=0)
+    quad = GaussLegendre1D.create(8)
+    result = solve_sn(materials, mesh, quad,
+                      max_inner=500, inner_tol=1e-10)
 
     # Volume-weighted production and absorption rates
-    dx = geom.cell_widths
-    flux = result.flux  # (N_cells, ng)
+    dx = mesh.dx
+    flux = result.scalar_flux[:, 0, :]  # (nx, ng)
     sig_p = mix.SigP
     sig_a = mix.SigC + mix.SigF
 

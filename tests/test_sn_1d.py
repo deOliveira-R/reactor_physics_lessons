@@ -5,7 +5,9 @@ import pytest
 
 from derivations import get
 from derivations._xs_library import get_mixture
-from sn_1d import GaussLegendreQuadrature, Slab1DGeometry, solve_sn_1d
+from sn_geometry import CartesianMesh
+from sn_quadrature import GaussLegendre1D
+from sn_solver import solve_sn
 
 
 # ─── Homogeneous infinite medium (SN with reflective BCs) ────────────
@@ -21,9 +23,10 @@ def test_homogeneous_exact(case_name):
     case = get(case_name)
     mix = next(iter(case.materials.values()))
     materials = {0: mix}
-    geom = Slab1DGeometry.homogeneous(20, 2.0, mat_id=0)
-    quad = GaussLegendreQuadrature.gauss_legendre(8)
-    result = solve_sn_1d(materials, geom, quad)
+    mesh = CartesianMesh.homogeneous_1d(20, 2.0, mat_id=0)
+    quad = GaussLegendre1D.create(8)
+    result = solve_sn(materials, mesh, quad,
+                      max_inner=500, inner_tol=1e-10)
 
     assert abs(result.keff - case.k_inf) < 1e-8, (
         f"keff={result.keff:.8f} vs analytical={case.k_inf:.8f}"
@@ -45,12 +48,12 @@ def test_heterogeneous_convergence(case_name):
     """SN on heterogeneous slab must converge to the Richardson reference."""
     case = get(case_name)
     gp = case.geom_params
-    geom = Slab1DGeometry.from_regions(
+    mesh = CartesianMesh.from_regions(
         gp["thicknesses"], gp["mat_ids"], n_cells_per_region=20,
     )
-    quad = GaussLegendreQuadrature.gauss_legendre(16)
-    result = solve_sn_1d(
-        case.materials, geom, quad,
+    quad = GaussLegendre1D.create(16)
+    result = solve_sn(
+        case.materials, mesh, quad,
         max_outer=500, max_inner=500, inner_tol=1e-10, keff_tol=1e-8,
     )
 
@@ -86,12 +89,12 @@ def test_spatial_convergence():
     keffs = []
     dxs = []
     for n_per in [5, 10, 20, 40]:
-        geom = Slab1DGeometry.from_benchmark(
+        mesh = CartesianMesh.from_benchmark(
             n_fuel=n_per, n_mod=n_per, t_fuel=t_fuel, t_mod=t_mod,
         )
-        quad = GaussLegendreQuadrature.gauss_legendre(16)
-        result = solve_sn_1d(
-            materials, geom, quad,
+        quad = GaussLegendre1D.create(16)
+        result = solve_sn(
+            materials, mesh, quad,
             max_outer=300, max_inner=500, inner_tol=1e-10,
         )
         keffs.append(result.keff)
@@ -117,12 +120,12 @@ def test_angular_convergence():
     keffs = []
     n_ords = [4, 8, 16, 32]
     for N in n_ords:
-        geom = Slab1DGeometry.from_benchmark(
+        mesh = CartesianMesh.from_benchmark(
             n_fuel=40, n_mod=40, t_fuel=0.5, t_mod=0.5,
         )
-        quad = GaussLegendreQuadrature.gauss_legendre(N)
-        result = solve_sn_1d(
-            materials, geom, quad,
+        quad = GaussLegendre1D.create(N)
+        result = solve_sn(
+            materials, mesh, quad,
             max_outer=300, max_inner=500, inner_tol=1e-10,
         )
         keffs.append(result.keff)
