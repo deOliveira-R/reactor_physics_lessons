@@ -272,6 +272,79 @@ diagonal of the CP matrix.
 
 ---
 
+## ERR-010 — pyXSteam viscosity cutoff at 900 °C causes NaN cascade
+
+**Failure mode:** #4 Factor error — library-imposed validity limit  
+**Date:** 2026-04-05  
+**Solver:** Thermal Hydraulics (Module 07)
+
+**Bug:** pyXSteam's `my_AllRegions_ph` returns NaN for T > 900 °C due
+to an artificial guard (`if T > 900 + 273.15: return NaN`).  The IAPWS
+2008 viscosity correlation itself is well-defined beyond this limit.
+During post-failure LOCA blowdown, coolant reaches ~901 °C in the
+outlet node.  NaN viscosity → NaN kinematic viscosity → NaN friction
+factor → NaN pressure → solver crash.
+
+**Impact:** Integration stopped at t ≈ 395 s (of 600 s target).
+
+**How it hid from higher-level tests:**
+- Pre-failure phase (t < 287 s) coolant stays well below 900 °C
+- Post-failure code path was never exercised until event detection was
+  implemented (TH-20260401-001)
+- The NaN manifested as `cool_p = [NaN, NaN]`, suggesting a pressure
+  bug rather than a viscosity bug — required tracing through two levels
+  of function calls to find the root cause
+
+**L0 test that catches it:** Direct property evaluation:
+`assert not np.isnan(h2o_properties(0.33, 4399e3)[0].mu)` — tests
+that viscosity is returned for high-enthalpy states reachable during
+LOCA.
+
+**Fix:** `_iapws_viscosity(T_K, rho)` — same formula without cutoff.
+
+**Lesson:** Third-party library validity limits are not always physical
+limits.  When a library returns NaN, check whether the underlying
+correlation is actually invalid or just conservatively guarded.
+
+---
+
+## ERR-011 — MATLAB gap geometry mixes radius with axial height
+
+**Failure mode:** #2 Variable swap — `fuel.r` vs `fuel.dz`  
+**Date:** 2026-04-05  
+**Solver:** Thermal Hydraulics (MATLAB reference, `funRHS.m` line 272)
+
+**Bug:** `gap.r_ = (clad.r(1) + fuel.dz)/2` adds a cladding inner
+radius (~4.22 mm) to the fuel axial node height (~1.5 m), producing a
+"gap radius" of 0.752 m instead of the correct ~4.17 mm.  The gap heat
+transfer area becomes 180× too large.
+
+**Impact:** MATLAB fuel centre temperature is 808 °C instead of the
+correct 1140 °C at steady state.  This artificially keeps coolant below
+pyXSteam's 900 °C viscosity limit and delays clad failure by ~138 s.
+
+**How it hid:**
+- MATLAB ran to completion because the wrong gap area prevented the
+  coolant from ever reaching the viscosity cutoff
+- All MATLAB results are self-consistent — temperatures, stresses, and
+  failure time are plausible for a LOCA scenario, just based on wrong
+  gap thermal resistance
+- The bug is in a deformable geometry update section where `clad.r`,
+  `fuel.r`, `fuel.dz`, `clad.dz` all appear nearby — easy to grab the
+  wrong variable
+
+**L0 test that catches it:** Steady-state fuel centre temperature check:
+at 69 kW total power, T_fuel_centre should be ~1100-1200 °C, not ~800 °C.
+A simple analytical estimate: ΔT ≈ LHGR/(4πk) ≈ 567 °C above the fuel
+surface.
+
+**Lesson:** Variable names that differ only in the last character
+(`fuel.r` vs `fuel.dz`) are a maintenance hazard, especially in code
+with mixed scalar/vector indexing (MATLAB's `fuel.dz` is a vector, but
+`clad.r(1)` extracts a scalar via linear indexing of a 2D array).
+
+---
+
 ## Meta-Lessons
 
 1. **1-group is degenerate.** k = νΣ_f/Σ_a regardless of flux shape.

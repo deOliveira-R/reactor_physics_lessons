@@ -76,14 +76,17 @@ Should use production-weighted average:
 Currently acceptable for single-fissile problems (UO2) but incorrect
 for MOX or mixed assemblies.
 
-### DA-20260405-005 — h2o_properties viscosity TODO untracked
+### DA-20260405-005 — Replace pyXSteam viscosity entirely with IAPWS
 
 **Priority**: Low | **Effort**: Small
 
-`data/materials/h2o_properties.py:38` has an untracked TODO about using
-IAPWS viscosity for all calls instead of pyXSteam.  Related to the NaN
-fix via IAPWS fallback documented in memory.  Should decide: either
-switch entirely to IAPWS or keep pyXSteam as primary with IAPWS fallback.
+`data/materials/h2o_properties.py` line 38 has a TODO: consider using
+`_iapws_viscosity()` for ALL viscosity calls instead of `_st.my_ph()`.
+The IAPWS function is bit-identical to pyXSteam below 900 °C (validated
+at 8 temperature points, ratio = 1.000000) and works above 900 °C where
+pyXSteam returns NaN.  It also avoids pyXSteam's region dispatch overhead
+since T and rho are already available at the call sites.  Currently used
+only as a NaN fallback (TH-20260405-001).
 
 ### DA-20260405-006 — Scattering matrix Legendre order consistency
 

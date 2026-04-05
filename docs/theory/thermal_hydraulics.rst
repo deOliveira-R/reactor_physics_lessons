@@ -112,7 +112,7 @@ for node :math:`j` is:
 where :math:`m_j = \rho_f V_j` is the ring mass and
 :math:`V_j = \pi(r_{j+1}^2 - r_j^2) \Delta z` is the ring volume.
 
-**Material properties** (MATPRO correlations in ``matpro.py``):
+**Material properties** (MATPRO correlations [MATPRO2003]_ in ``matpro.py``):
 
 .. math::
 
@@ -288,9 +288,7 @@ at each RHS evaluation.  For each axial node, a linear system of
 
    - Outer surface: :math:`\sigma_r(r_{\text{out}}) = -p_{\text{cool}}`
    - Inner surface (gap open): :math:`\sigma_r(r_{\text{in}}) = -p_{\text{gas}}`
-   - Axial force balance:
-     :math:`\int \sigma_z \, r \, dr = p_{\text{gas}} r_{\text{in}}^2
-       - p_{\text{cool}} r_{\text{out}}^2`
+   - Axial force balance: :math:`\int \sigma_z \, r \, dr = p_{\text{gas}} r_{\text{in}}^2 - p_{\text{cool}} r_{\text{out}}^2`
 
 **Strain decomposition:**
 
@@ -487,10 +485,101 @@ unphysical water property values (NaN from pyXSteam) because the interpolant
 does not enforce thermodynamic consistency.
 
 **Post-failure integration** also uses chunked integration with
-``try/except ValueError`` for graceful NaN handling.  The Jacobian numerical
-differencing can push water/steam properties out of their valid range during
-extreme LOCA conditions (coolant T > 900 °C).  The simulation stops cleanly
-at the NaN boundary (typically t ≈ 395 s).
+``try/except ValueError`` for graceful degradation if any residual NaN
+issues arise.
+
+
+IAPWS Viscosity Fallback
+-------------------------
+
+.. admonition:: TH-20260405-001
+
+   **Problem:** During post-failure LOCA blowdown, coolant temperature in the
+   outlet node exceeds 900 °C.  pyXSteam's viscosity function
+   (``my_AllRegions_ph``) has an artificial cutoff:
+
+   .. code-block:: matlab
+
+      % XSteam.m line 3410
+      if T > 900 + 273.15
+          my_AllRegions_ph = NaN;
+          return
+      end
+
+   This is a conservative validity bound, not a physical singularity.  The
+   NaN viscosity propagates: ``nu = mu/rho`` → NaN → Churchill friction
+   factor → NaN → ``_compute_pressure`` returns NaN pressures → solver crash.
+
+   **Fix:** ``_iapws_viscosity(T_K, rho)`` in ``h2o_properties.py``
+   implements the **same IAPWS 2008 correlation** without the cutoff.
+   The formula has two parts:
+
+   .. math::
+
+      \mu = \mu_0(\bar{T}) \cdot \mu_1(\bar{T}, \bar{\rho}) \cdot 55.071 \times 10^{-6} \;\text{Pa·s}
+
+   where :math:`\bar{T} = T / 647.226` and :math:`\bar{\rho} = \rho / 317.763`.
+
+   **Dilute-gas contribution** (kinetic theory):
+
+   .. math::
+
+      \mu_0 = \frac{\bar{T}^{1/2}}{1 + 0.978197/\bar{T}
+        + 0.579829/\bar{T}^2 - 0.202354/\bar{T}^3}
+
+   **Finite-density correction:**
+
+   .. math::
+
+      \mu_1 = \exp\!\left(\bar{\rho} \sum_{i=0}^{6}\sum_{j=0}^{5}
+        H_{ij}\,(1/\bar{T} - 1)^j\,(\bar{\rho} - 1)^i\right)
+
+   The :math:`H_{ij}` coefficient matrix (7 × 6, mostly sparse) is from
+   the IAPWS release [IAPWS2008]_.  At low pressures (< 1 MPa) and high
+   temperatures, :math:`\bar{\rho} \ll 1` so :math:`\mu_1 \approx 1` and the
+   viscosity is dominated by the dilute-gas term.
+
+   **Validation:**
+
+   .. list-table::
+      :header-rows: 1
+      :widths: 15 20 20 20
+
+      * - T (°C)
+        - pyXSteam μ (Pa·s)
+        - IAPWS μ (Pa·s)
+        - Ratio
+      * - 500
+        - 2.858e-5
+        - 2.858e-5
+        - 1.000000
+      * - 700
+        - 3.656e-5
+        - 3.656e-5
+        - 1.000000
+      * - 899
+        - 4.405e-5
+        - 4.405e-5
+        - 1.000000
+      * - 900
+        - 4.409e-5
+        - 4.409e-5
+        - 1.000000
+      * - 950
+        - NaN
+        - 4.590e-5
+        - — (fallback)
+      * - 1000
+        - NaN
+        - 4.767e-5
+        - — (fallback)
+      * - 1200
+        - NaN
+        - 5.450e-5
+        - — (fallback)
+
+   Bit-identical below 900 °C; smooth, physically reasonable above.  The
+   function could replace pyXSteam's viscosity entirely (DA-20260405-005).
 
 
 Validation
@@ -498,112 +587,272 @@ Validation
 
 The MATLAB reference is in ``matlab_archive/09.Thermal.Hydraulics/results.m``.
 
-Temperature Evolution
----------------------
+.. _th-matlab-gap-bug:
 
-Fuel centre (outlet node) temperature at selected times, showing the
-approach to steady state and the LOCA transient:
+MATLAB Gap Geometry Bug
+-----------------------
+
+.. admonition:: TH-20260405-002
+
+   MATLAB's ``funRHS.m`` line 272 contains a bug:
+
+   .. code-block:: matlab
+
+      gap.r_ = (clad.r(1) + fuel.dz)/2;
+
+   This adds a cladding inner radius (``clad.r(1)`` ≈ 4.22 mm) to the fuel
+   axial node height (``fuel.dz`` ≈ 1.5 m), producing ``gap.r_`` ≈ 0.752 m
+   instead of the correct mid-gap radius ≈ 4.17 mm.  The intended code was
+   likely ``(clad.r(:,1) + fuel.r)/2``.
+
+   The gap heat transfer area is then:
+
+   .. math::
+
+      A_{\text{gap}}^{\text{MATLAB}} = 2\pi \times 0.752 \times 1.5
+        \approx 7.09 \;\text{m}^2
+
+   versus the correct value:
+
+   .. math::
+
+      A_{\text{gap}}^{\text{correct}} = 2\pi \times 4.17{\times}10^{-3} \times 1.5
+        \approx 0.039 \;\text{m}^2
+
+   A factor of **180×** difference.  This massively enhances gap heat transfer,
+   keeping the fuel 332 °C cooler at steady state (808 °C vs 1140 °C).
+
+   **Consequence for validation:** Direct comparison of Python and MATLAB is
+   only meaningful using ``thermal_hydraulics_dae.py`` which replicates the
+   MATLAB gap geometry.  The "correct physics" version (``thermal_hydraulics.py``)
+   has no MATLAB reference — it represents the physically correct solution.
+
+
+Two Versions
+------------
+
+Two solver files are maintained for comparison:
 
 .. list-table::
    :header-rows: 1
-   :widths: 15 20 20 20 25
+   :widths: 25 38 37
+
+   * - Property
+     - ``thermal_hydraulics.py``
+     - ``thermal_hydraulics_dae.py``
+   * - Gap geometry
+     - Correct: :math:`r_{\text{mid}} = (r_{c,\text{in}} + r_f)/2`
+     - MATLAB match: :math:`r_{\text{mid}} = (r_{c,\text{in}} + \Delta z_f)/2`
+   * - Pressure
+     - Algebraic (computed in RHS)
+     - State variable with relaxation
+   * - Fuel centre (SS)
+     - 1140 °C
+     - 808 °C (matches MATLAB)
+   * - Clad failure
+     - 287 s
+     - 379 s (MATLAB: 425 s)
+   * - Runs to t = 600 s
+     - Yes
+     - Yes
+
+
+MATLAB Parity (DAE Version)
+----------------------------
+
+Comparison of ``thermal_hydraulics_dae.py`` against
+``matlab_archive/09.Thermal.Hydraulics/results.m`` at key time points.
+All values for outlet node (axial node 2):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 18 18 18 18 18
 
    * - Time (s)
-     - Fuel centre (°C)
-     - Clad outer (°C)
-     - Coolant (°C)
-     - Phase
+     - Python h (kJ/kg)
+     - MATLAB h (kJ/kg)
+     - Python T_cool (°C)
+     - MATLAB T_cool (°C)
+     - Python fuel_T (°C)
    * - 1
-     - 429.5
-     - 290.8
-     - 285.7
-     - Initial transient
-   * - 10
-     - 1050.8
-     - 334.0
-     - 315.2
-     - Developing profile
-   * - 100
-     - 1160.5
-     - 338.8
-     - 318.4
-     - Steady state
+     - 1299
+     - 1300
+     - 292.8
+     - 292.9
+     - 426.6
    * - 200
-     - 1160.5
-     - 338.8
+     - 1443
+     - 1443
      - 318.4
-     - Pre-LOCA (steady)
+     - 318.4
+     - 808.2
+   * - 210
+     - 2357
+     - 2357
+     - 283.0
+     - 283.0
+     - 368.1
+   * - 250
+     - 3356
+     - 3358
+     - 438.9
+     - 440.0
+     - 462.4
    * - 287
-     - —
-     - —
-     - —
-     - Clad failure
-   * - 395
-     - 1288.5
-     - —
-     - —
-     - NaN boundary
+     - 3528
+     - 3527
+     - 519.5
+     - 518.9
+     - 523.0
 
-**Comparison with MATLAB at t = 1 s** (BDF solver, outlet node):
+Pre-LOCA steady state and early blowdown match to within 1–2 kJ/kg in
+coolant enthalpy and 1–2 °C in temperature.
+
+
+Correct-Physics Steady-State Check
+------------------------------------
+
+The correct-physics version (``thermal_hydraulics.py``) has no MATLAB
+reference, but the steady-state fuel centre temperature can be checked
+against an analytical estimate.  For a solid cylindrical pellet with
+uniform volumetric heating:
+
+.. math::
+
+   T_{\text{centre}} - T_{\text{surface}} = \frac{\dot{q}'''}{4\,k}
+     = \frac{\text{LHGR}}{4\pi\,k}
+
+With LHGR = 69 141 / 3.0 = 23 047 W/m and :math:`k_{\text{UO}_2}` ≈ 3.0 W/m-K
+(average over the 300–1100 °C range), this gives:
+
+.. math::
+
+   \Delta T_{\text{fuel}} \approx \frac{23047}{4\pi \times 3.0} \approx 612\;°\text{C}
+
+Adding the gap + clad + coolant resistance (~320 °C above coolant at 300 °C):
+
+.. math::
+
+   T_{\text{centre}} \approx 300 + 320 + 612 \approx 1232\;°\text{C}
+
+The Python solver gives 1140 °C, which is lower than this simple estimate
+because the actual :math:`k(T)` increases at lower temperatures (the
+conductivity-averaged ΔT is smaller than the constant-k estimate).  The
+agreement within ~8% confirms the correct-physics version is physically
+reasonable (TH-20260405-006).
+
+The clad failure timing difference (Python 379 s vs MATLAB 425.3 s) is
+traced to MATLAB's additional indexing quirk in the gap temperature
+calculation: ``gap.T = (fuel.T(fuel.nr) + clad.T(1))/2`` with
+``fuel.nr = 20`` returns element 20 of the column-major flattened
+``(2, 20)`` array — i.e., axial node 2, radial node 10 — not the fuel
+surface temperature at each axial level.  This produces a different inner
+gas pressure (MATLAB ~2.9 MPa vs Python ~4.5 MPa at t = 400 s), which
+changes the engineering stress and delays failure.
+
+
+Investigation History
+=====================
+
+The NaN at t ≈ 395 s during post-failure LOCA integration was investigated
+in three phases over sessions 2026-04-01 and 2026-04-05.
+
+Phase 1 — Initial Diagnosis (2026-04-01)
+-----------------------------------------
+
+- Identified that post-failure Phase 2 integration crashed with ``ValueError``
+- Traced to pyXSteam returning NaN for water/steam properties
+- **Hypothesis:** BDF Jacobian numerical differencing perturbs the state
+  vector, pushing enthalpy/pressure outside pyXSteam's valid range
+- **Mitigation:** Chunked integration with ``try/except`` for graceful stop
+- **Result:** Simulation runs to t = 395 s, stops cleanly
+
+Phase 2 — Root Cause Chain (2026-04-05)
+-----------------------------------------
+
+Systematic investigation revealed the full causal chain:
+
+1. **Added diagnostics** to the RHS function to print state values at
+   NaN occurrence:
+
+   - Coolant enthalpy at failure: h = [3172, 4399] kJ/kg — **valid** for
+     pyXSteam at this pressure
+   - Pressure at failure: ``cool_p = [NaN, NaN]`` — the NaN comes from
+     ``_compute_pressure``, not from pyXSteam directly
+
+2. **Traced NaN through pressure computation:** First-pass water properties
+   showed ``nu = [1.93e-5, NaN]``.  Node 2 kinematic viscosity was NaN.
+   Density and temperature were valid.
+
+3. **Identified pyXSteam viscosity cutoff:**
+
+   .. code-block:: python
+
+      p_bar, h_kJ = 3.31, 4399.0
+      T = st.t_ph(p_bar, h_kJ)    # 900.7 °C — works fine
+      rho = st.rho_ph(p_bar, h_kJ) # 0.611 kg/m³ — works fine
+      mu = st.my_ph(p_bar, h_kJ)   # NaN — 900 °C cutoff!
+
+   The cutoff is exactly 900 °C.  All other properties (T, ρ, k, c_p) work
+   to well above 1000 °C.
+
+4. **Why Python reaches 900 °C but MATLAB doesn't:** Compared fuel centre
+   temperatures:
+
+   - **Python:** 1140 °C at steady state (correct physics)
+   - **MATLAB:** 808 °C at steady state
+
+   The 332 °C difference comes from the gap geometry bug (see
+   :ref:`th-matlab-gap-bug`).  The hotter fuel stores more energy; during
+   LOCA blowdown this energy heats the coolant past 900 °C.
+
+Phase 3 — Approaches Tried and Outcome
+----------------------------------------
 
 .. list-table::
    :header-rows: 1
-   :widths: 30 20 20 20
+   :widths: 5 30 20 45
 
-   * - Quantity
-     - Python
-     - MATLAB
-     - Difference
-   * - Fuel centre
-     - 429.5 °C
-     - 428.0 °C
-     - 0.3%
-   * - Fuel surface
-     - 376.3 °C
-     - 312.5 °C
-     - 20% (developing)
-   * - Clad outer
-     - 290.8 °C
-     - 298.4 °C
-     - 2.5%
-   * - Coolant
-     - 285.7 °C
-     - 287.8 °C
-     - 0.7%
+   * - #
+     - Approach
+     - Result
+     - Why
+   * - 1
+     - Reduce ``max_step`` to 1e-3 (match MATLAB)
+     - Failed
+     - Coolant genuinely reaches >900 °C; smaller steps don't prevent it
+   * - 2
+     - DAE with pressure as state variable + relaxation
+     - NaN persisted
+     - Pressure relaxation doesn't prevent viscosity NaN
+   * - 3
+     - Replicate MATLAB gap geometry
+     - NaN eliminated
+     - Fuel stays at 808 °C; coolant never reaches 900 °C
+   * - 4
+     - IAPWS viscosity fallback
+     - **NaN eliminated**
+     - Addresses root cause; both versions run to 600 s
 
-The fuel surface temperature difference at t = 1 s reflects the BDF solver
-startup transient — the radial profile is still developing.  By t = 10 s
-the profile is fully established and at t = 100 s the steady state matches.
-
-Clad Failure Timing
--------------------
-
-**Python:** Clad failure at t = 287 s.
-
-**MATLAB:** Clad failure at t ≈ 425 s.
-
-The 138 s discrepancy is due to a **known bug in the MATLAB gap geometry**
-(``funRHS.m`` line 272): ``gap.r_ = (clad.r(1) + fuel.dz)/2`` mixes a
-radius (~4 mm) with an axial height (~1.5 m), making the gap heat transfer
-area 180× too large.  This keeps MATLAB's fuel 332 °C cooler (808 °C vs
-1140 °C at steady state), delaying the clad failure.
-
-A ``thermal_hydraulics_dae.py`` variant replicates MATLAB's gap bug for
-direct comparison — see TH-20260402-001 in the data module improvements.
+Approach 4 was adopted as the primary fix because it preserves correct
+physics without replicating the MATLAB bug.  Approach 3 is retained
+in ``thermal_hydraulics_dae.py`` for parity comparison.
 
 
 Known Limitations
 =================
 
-1. **Post-failure NaN (TH-20260401-004):** Integration stops at t ≈ 395 s
-   due to pyXSteam property limits during Jacobian evaluation.
-
-2. **Clad failure time resolution:** 1 s (chunk size).  Could be refined
+1. **Clad failure time resolution:** 1 s (chunk size).  Could be refined
    via re-integration bisection but not implemented (TH-20260401-006).
 
-3. **No radiation heat transfer** across the gap (gas conduction only).
+2. **No radiation heat transfer** across the gap (gas conduction only).
 
-4. **Axial mesh coarse:** Only :math:`n_z = 2` nodes; no axial conduction.
+3. **Axial mesh coarse:** Only :math:`n_z = 2` nodes; no axial conduction.
+
+4. **DAE clad failure timing:** ``thermal_hydraulics_dae.py`` fails at
+   379 s vs MATLAB's 425.3 s.  The remaining 46 s gap is due to MATLAB
+   indexing quirks in gap temperature and inner gas pressure (not worth
+   replicating further).
 
 
 References
@@ -612,3 +861,7 @@ References
 .. [MATPRO2003] D.L. Hagrman et al., *MATPRO — A Library of Materials
    Properties for Light-Water-Reactor Accident Analysis*, NUREG/CR-6150,
    Idaho National Laboratory, 2003.
+
+.. [IAPWS2008] IAPWS, *Release on the IAPWS Formulation 2008 for the
+   Viscosity of Ordinary Water Substance*, 2008.  The correlation
+   implemented in ``_iapws_viscosity`` and in XSteam/pyXSteam.
