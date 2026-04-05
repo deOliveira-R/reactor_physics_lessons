@@ -170,19 +170,27 @@ def _sweep_1d_spherical(
     sn_mesh: SNMesh,
     psi_bc: dict,
 ) -> tuple[np.ndarray, np.ndarray]:
-    r"""Spherical 1-D sweep with diamond-difference in space and angle.
+    r"""Spherical 1-D sweep with geometry-weighted angular redistribution.
 
     Processes ordinates sequentially from most negative :math:`\mu` to
     most positive, applying angular redistribution via the :math:`\alpha`
     coefficients at each cell.
 
-    The DD equation at cell *i*, ordinate *n* is:
+    The balance equation includes a geometry factor
+    :math:`\Delta A_i / w_n` on the redistribution term
+    (Bailey et al. 2009), ensuring per-ordinate flat-flux consistency:
 
     .. math::
 
-        \psi_{n,i} = \frac{Q V + |\mu|(A_{\rm in}+A_{\rm out})\psi_{\rm in}
-            + (\alpha_{\rm out}+\alpha_{\rm in})\psi_{n-\frac12}}
-            {2|\mu| A_{\rm out} + 2\alpha_{\rm out} + \Sigma_t V}
+        \psi_{n,i} = \frac{S_i V_i + |\mu_n|(A_{\rm in}+A_{\rm out})
+            \psi^s_{\rm in} + \frac{\Delta A_i}{w_n}
+            (\alpha_{n+\frac12}+\alpha_{n-\frac12})\psi_{n-\frac12}}
+            {2|\mu_n| A^s_{\rm out}
+            + 2\frac{\Delta A_i}{w_n}\alpha_{n+\frac12} + \Sigma_t V_i}
+
+    The :math:`\alpha` coefficients are computed as
+    :math:`\alpha_{n+1/2} = \alpha_{n-1/2} - w_n \mu_n` and form a
+    non-negative dome for μ-sorted ordinates.
     """
     nx = sn_mesh.nx
     ng = Q.shape[2]
@@ -197,7 +205,8 @@ def _sweep_1d_spherical(
 
     A = sn_mesh.face_areas     # (nx+1,) surface areas at cell faces
     V = sn_mesh.volumes[:, 0]  # (nx,) cell volumes
-    alpha = sn_mesh.alpha_half  # (N+1,) angular redistribution coefficients
+    dA = sn_mesh.delta_A       # (nx,) = A[i+1] - A[i], cell property
+    alpha = sn_mesh.alpha_half  # (N+1,) non-negative dome
 
     # Persistent boundary flux at the outer face (per ordinate)
     if "bc_sph" not in psi_bc:
@@ -220,30 +229,30 @@ def _sweep_1d_spherical(
         mu_n = mu[n]
         abs_mu = abs(mu_n)
         w_n = weights[n]
-        abs_alpha_in = abs(alpha[n])      # |α_{n-1/2}|
-        abs_alpha_out = abs(alpha[n + 1])  # |α_{n+1/2}|
+        alpha_in = alpha[n]       # α_{n-1/2} ≥ 0 (dome)
+        alpha_out = alpha[n + 1]  # α_{n+1/2} ≥ 0 (dome)
 
         if mu_n < 0:
             # Inward sweep: outer boundary → centre
-            # Incoming flux at outer boundary from reflected partner
             psi_spatial_in = bc_outer[ref[n]].copy()
 
             for i in range(nx - 1, -1, -1):
                 A_in = A[i + 1]   # incoming face (outer)
                 A_out = A[i]      # outgoing face (inner)
+                dA_w = dA[i] / w_n  # ΔA_i / w_n geometry factor
 
                 denom = (2.0 * abs_mu * A_out
-                         + 2.0 * abs_alpha_out
+                         + 2.0 * dA_w * alpha_out
                          + sig_t_1d[i] * V[i])
                 numer = (QV[i]
                          + abs_mu * (A_in + A_out) * psi_spatial_in
-                         + (abs_alpha_out + abs_alpha_in) * psi_angle[i])
+                         + dA_w * (alpha_out + alpha_in) * psi_angle[i])
 
                 psi = numer / denom
 
                 # DD closures
                 psi_spatial_out = 2.0 * psi - psi_spatial_in
-                psi_angle[i] = 2.0 * psi - psi_angle[i]  # becomes ψ_{n+1/2,i}
+                psi_angle[i] = 2.0 * psi - psi_angle[i]
 
                 angular_flux[n, i, 0, :] = psi
                 scalar_flux[i] += w_n * psi
@@ -258,19 +267,20 @@ def _sweep_1d_spherical(
             for i in range(nx):
                 A_in = A[i]       # incoming face (inner)
                 A_out = A[i + 1]  # outgoing face (outer)
+                dA_w = dA[i] / w_n
 
                 denom = (2.0 * abs_mu * A_out
-                         + 2.0 * abs_alpha_out
+                         + 2.0 * dA_w * alpha_out
                          + sig_t_1d[i] * V[i])
                 numer = (QV[i]
                          + abs_mu * (A_in + A_out) * psi_spatial_in
-                         + (abs_alpha_out + abs_alpha_in) * psi_angle[i])
+                         + dA_w * (alpha_out + alpha_in) * psi_angle[i])
 
                 psi = numer / denom
 
                 # DD closures
                 psi_spatial_out = 2.0 * psi - psi_spatial_in
-                psi_angle[i] = 2.0 * psi - psi_angle[i]  # becomes ψ_{n+1/2,i}
+                psi_angle[i] = 2.0 * psi - psi_angle[i]
 
                 angular_flux[n, i, 0, :] = psi
                 scalar_flux[i] += w_n * psi

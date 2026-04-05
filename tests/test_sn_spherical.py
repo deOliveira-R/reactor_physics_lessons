@@ -93,7 +93,7 @@ class TestAlphaCoefficients:
         np.testing.assert_allclose(sn_mesh.alpha_half[-1], 0.0, atol=1e-14)
 
     def test_alpha_recursion(self):
-        """α_{n+1/2} = α_{n-1/2} + w_n μ_n."""
+        """α_{n+1/2} = α_{n-1/2} − w_n μ_n (Bailey et al. 2009 Eq. 50)."""
         mesh = Mesh1D(edges=np.array([0.0, 1.0]), mat_ids=np.array([0]),
                       coord=CoordSystem.SPHERICAL)
         quad = GaussLegendre1D.create(8)
@@ -101,7 +101,7 @@ class TestAlphaCoefficients:
 
         alpha = sn_mesh.alpha_half
         for n in range(quad.N):
-            expected = alpha[n] + quad.weights[n] * quad.mu_x[n]
+            expected = alpha[n] - quad.weights[n] * quad.mu_x[n]
             np.testing.assert_allclose(alpha[n + 1], expected, rtol=1e-14)
 
     def test_alpha_symmetric(self):
@@ -485,4 +485,54 @@ class TestMultiGroupMultiRegionSpherical:
         np.testing.assert_allclose(
             k_balance, keff, rtol=1e-4,
             err_msg=f"Heterogeneous balance: {k_balance:.6f} ≠ {keff:.6f}",
+        )
+
+    def test_fixed_source_flux_bounded(self):
+        """Fixed-source flux range must be bounded near r=0.
+
+        Without the ΔA/w geometry factor, the flux spikes to ~5x at
+        the origin.  With the fix, the range should be bounded.
+        """
+        from sn_sweep import _sweep_1d_spherical
+
+        mesh = homogeneous_1d(40, 1.0, mat_id=0, coord=CoordSystem.SPHERICAL)
+        quad = GaussLegendre1D.create(8)
+        sn_mesh = SNMesh(mesh, quad)
+
+        Q = np.ones((40, 1, 1))
+        sig_t = np.ones((40, 1, 1))
+        psi_bc = {}
+        for _ in range(50):
+            _, phi = _sweep_1d_spherical(Q, sig_t, sn_mesh, psi_bc)
+
+        phi_avg = np.average(phi[:, 0, 0], weights=mesh.volumes)
+        np.testing.assert_allclose(phi_avg, 1.0, rtol=0.01,
+                                   err_msg="Volume-avg φ ≠ Q/Σ_t")
+        assert phi[:, 0, 0].max() < 2.0, (
+            f"Flux spike at origin: max={phi[:, 0, 0].max():.4f}"
+        )
+
+    def test_heterogeneous_1g_spatial_convergence(self):
+        """keff must converge with mesh refinement for fuel+moderator."""
+        mix_fuel = get_mixture("A", "1g")
+        mix_mod = get_mixture("B", "1g")
+        materials = {2: mix_fuel, 0: mix_mod}
+        quad = GaussLegendre1D.create(8)
+
+        keffs = []
+        for n_cells in [5, 10, 20]:
+            zones = [
+                Zone(outer_edge=0.5, mat_id=2, n_cells=n_cells),
+                Zone(outer_edge=1.0, mat_id=0, n_cells=n_cells),
+            ]
+            mesh = mesh1d_from_zones(zones, coord=CoordSystem.SPHERICAL)
+            result = solve_sn(materials, mesh, quad,
+                              max_inner=500, inner_tol=1e-10)
+            keffs.append(result.keff)
+
+        diff_1 = abs(keffs[1] - keffs[0])
+        diff_2 = abs(keffs[2] - keffs[1])
+        assert diff_2 < diff_1, (
+            f"keff not converging: Δ(10−5)={diff_1:.6f}, Δ(20−10)={diff_2:.6f}, "
+            f"keffs={[f'{k:.6f}' for k in keffs]}"
         )

@@ -164,3 +164,77 @@ class TestReflectionIndices:
             ref = quad.reflection_index(axis)
             np.testing.assert_array_equal(ref[ref], np.arange(quad.N),
                                           err_msg=f"{axis}-reflection not involution")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Alpha redistribution coefficient properties
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestAlphaRedistribution:
+    """Verify α coefficient properties required for curvilinear SN sweeps.
+
+    The α recursion (Bailey et al. 2009, Eq. 50) uses the radial
+    direction cosine η (mu_x): α_{m+1/2} = α_{m-1/2} − w_m · η_m.
+    The resulting dome must be non-negative with α[0] = α[M] = 0.
+    """
+
+    @pytest.mark.parametrize("QuadClass,kwargs", [
+        (ProductQuadrature, {"n_mu": 4, "n_phi": 8}),
+        (ProductQuadrature, {"n_mu": 8, "n_phi": 16}),
+        (LevelSymmetricSN, {"sn_order": 4}),
+        (LevelSymmetricSN, {"sn_order": 6}),
+    ])
+    def test_alpha_dome_non_negative(self, QuadClass, kwargs):
+        """α values must form a non-negative dome on each level."""
+        from geometry import CoordSystem, Mesh1D
+        from sn_geometry import SNMesh
+
+        quad = QuadClass.create(**kwargs)
+        mesh = Mesh1D(
+            edges=np.array([0.0, 1.0]), mat_ids=np.array([0]),
+            coord=CoordSystem.CYLINDRICAL,
+        )
+        sn_mesh = SNMesh(mesh, quad)
+
+        for p, alpha in enumerate(sn_mesh.alpha_per_level):
+            assert np.all(alpha >= -1e-14), (
+                f"Level {p}: negative α = {alpha.min():.2e}"
+            )
+
+    @pytest.mark.parametrize("QuadClass,kwargs", [
+        (ProductQuadrature, {"n_mu": 4, "n_phi": 8}),
+        (LevelSymmetricSN, {"sn_order": 4}),
+    ])
+    def test_alpha_boundary_zero(self, QuadClass, kwargs):
+        """α must be zero at both dome boundaries (conservation)."""
+        from geometry import CoordSystem, Mesh1D
+        from sn_geometry import SNMesh
+
+        quad = QuadClass.create(**kwargs)
+        mesh = Mesh1D(
+            edges=np.array([0.0, 1.0]), mat_ids=np.array([0]),
+            coord=CoordSystem.CYLINDRICAL,
+        )
+        sn_mesh = SNMesh(mesh, quad)
+
+        for p, alpha in enumerate(sn_mesh.alpha_per_level):
+            np.testing.assert_allclose(alpha[0], 0.0,
+                                       err_msg=f"Level {p}: α[0] ≠ 0")
+            np.testing.assert_allclose(alpha[-1], 0.0, atol=1e-13,
+                                       err_msg=f"Level {p}: α[-1] ≠ 0")
+
+    def test_spherical_alpha_dome_non_negative(self):
+        """Spherical α (cumsum(−w·μ)) must be non-negative for GL quadrature."""
+        from geometry import CoordSystem, Mesh1D
+        from sn_geometry import SNMesh
+
+        quad = GaussLegendre1D.create(8)
+        mesh = Mesh1D(
+            edges=np.array([0.0, 1.0]), mat_ids=np.array([0]),
+            coord=CoordSystem.SPHERICAL,
+        )
+        sn_mesh = SNMesh(mesh, quad)
+
+        assert np.all(sn_mesh.alpha_half >= -1e-14), (
+            f"Negative spherical α: min = {sn_mesh.alpha_half.min():.2e}"
+        )

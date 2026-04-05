@@ -119,25 +119,30 @@ class SNMesh:
     def _setup_spherical(self) -> None:
         r"""Precompute spherical streaming stencil and angular redistribution.
 
-        The 1-D spherical transport equation for ordinate *n*, cell *i* is:
+        The 1-D spherical balance equation for ordinate *n*, cell *i* is
+        (Bailey et al. 2009, Eq. 7–10):
 
         .. math::
 
-            \frac{\mu_n}{V_i}
+            \mu_n
             \bigl[A_{i+\frac12}\psi_{i+\frac12}
                 - A_{i-\frac12}\psi_{i-\frac12}\bigr]
-            + \frac{1}{V_i}
+            + \frac{\Delta A_i}{w_n}
             \bigl[\alpha_{n+\frac12}\psi_{n+\frac12}
                 - \alpha_{n-\frac12}\psi_{n-\frac12}\bigr]
-            + \Sigma_t \psi_{n,i} = Q_{n,i}
+            + \Sigma_t V_i \psi_{n,i} = Q_{n,i} V_i
+
+        The :math:`\Delta A / w` geometry factor ensures per-ordinate
+        flat-flux consistency.
 
         Precomputed quantities:
 
         * ``face_areas`` — :math:`A_{i+1/2} = 4\pi r_{i+1/2}^2`
-        * ``alpha_half`` — :math:`\alpha_{n+1/2} = \sum_{m=0}^{n} w_m \mu_m`
+        * ``delta_A`` — :math:`\Delta A_i = A_{i+1/2} - A_{i-1/2}`
+        * ``alpha_half`` — :math:`\alpha_{n+1/2} = -\sum_{m=0}^{n} w_m \mu_m`
 
-        The :math:`\alpha` coefficients satisfy :math:`\alpha_{1/2} = 0`
-        and :math:`\alpha_{N+1/2} = 0` (by Gauss–Legendre antisymmetry).
+        The :math:`\alpha` coefficients form a non-negative dome
+        (0 → peak → 0) when ordinates are μ-sorted.
         """
         mu = self.quad.mu_x
         w = self.quad.weights
@@ -146,11 +151,17 @@ class SNMesh:
         # Cell face areas: A_{i+1/2} = 4πr² at each edge
         self.face_areas: np.ndarray = self.mesh.surfaces  # (nx+1,)
 
+        # Cell face-area differences: ΔA_i = A_{i+1/2} − A_{i-1/2}
+        self.delta_A: np.ndarray = self.face_areas[1:] - self.face_areas[:-1]
+
         # Angular redistribution coefficients
-        # α_{n+1/2} = Σ_{m=0}^{n} w_m μ_m
+        # α_{n+1/2} = α_{n-1/2} − w_n μ_n  (Bailey et al. Eq. 50 convention)
+        # For GL quadrature (μ sorted from −1 to +1), this gives a
+        # non-negative dome: α rises while μ < 0, peaks near μ = 0,
+        # falls back to 0 as μ → +1.
         alpha = np.zeros(N + 1)
         for n in range(N):
-            alpha[n + 1] = alpha[n] + w[n] * mu[n]
+            alpha[n + 1] = alpha[n] - w[n] * mu[n]
         self.alpha_half: np.ndarray = alpha  # (N+1,)
 
         # Verify GL antisymmetry: α_{N+1/2} ≈ 0

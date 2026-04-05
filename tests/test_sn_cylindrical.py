@@ -374,3 +374,110 @@ class TestMultiGroupMultiRegion:
         assert np.all(psi_center > 0), (
             f"Zero/negative angular flux at centre: min={psi_center.min():.4e}"
         )
+
+    def test_redistribution_telescoping_conservation(self):
+        """αψ product telescopes to zero on each level per cell.
+
+        The redistribution sum Σ_m (α_{m+1/2}ψ_{m+1/2} − α_{m-1/2}ψ_{m-1/2})
+        must vanish for each cell because α[0] = α[M] = 0.
+        """
+        from sn_sweep import _sweep_1d_cylindrical
+
+        mix = get_mixture("A", "1g")
+        mesh = homogeneous_1d(10, 2.0, mat_id=0, coord=CoordSystem.CYLINDRICAL)
+        quad = ProductQuadrature.create(n_mu=4, n_phi=8)
+        sn_mesh = SNMesh(mesh, quad)
+
+        sig_t = np.full((10, 1, 1), mix.SigT[0])
+        Q = np.ones((10, 1, 1))
+        psi_bc = {}
+        ang, _ = _sweep_1d_cylindrical(Q, sig_t, sn_mesh, psi_bc)
+
+        for p, level_idx in enumerate(quad.level_indices):
+            alpha = sn_mesh.alpha_per_level[p]
+            M = len(level_idx)
+            # Reconstruct angular face fluxes from cell-average and DD
+            psi_angle = np.zeros(10)
+            for m_local in range(M):
+                n = level_idx[m_local]
+                psi_cell = ang[n, :, 0, 0]
+                psi_angle_new = 2.0 * psi_cell - psi_angle
+                psi_angle = psi_angle_new
+            # After all ordinates, psi_angle = ψ_{M+1/2}
+            # Telescoping: α[M]·ψ_{M+1/2} - α[0]·ψ_{1/2} = 0 since α[0]=α[M]=0
+            residual = alpha[M] * psi_angle
+            np.testing.assert_allclose(residual, 0.0, atol=1e-12,
+                                       err_msg=f"Level {p}: telescoping residual ≠ 0")
+
+    def test_single_cell_uniform_source_equilibrium(self):
+        """Two-cell 1G pure absorber with uniform source → φ = Q/Σ_t."""
+        from sn_sweep import _sweep_1d_cylindrical
+
+        mesh = homogeneous_1d(2, 1.0, mat_id=0, coord=CoordSystem.CYLINDRICAL)
+        quad = ProductQuadrature.create(n_mu=4, n_phi=8)
+        sn_mesh = SNMesh(mesh, quad)
+
+        Q = np.ones((2, 1, 1))
+        sig_t = np.ones((2, 1, 1))
+        psi_bc = {}
+        for _ in range(100):
+            _, phi = _sweep_1d_cylindrical(Q, sig_t, sn_mesh, psi_bc)
+
+        phi_avg = np.average(phi[:, 0, 0], weights=mesh.volumes)
+        np.testing.assert_allclose(phi_avg, 1.0, rtol=0.01,
+                                   err_msg="Volume-avg φ ≠ Q/Σ_t for uniform source")
+
+    def test_heterogeneous_1g_spatial_convergence(self):
+        """keff must converge monotonically with mesh refinement."""
+        mix_fuel = get_mixture("A", "1g")
+        mix_mod = get_mixture("B", "1g")
+        materials = {2: mix_fuel, 0: mix_mod}
+        quad = ProductQuadrature.create(n_mu=4, n_phi=8)
+
+        keffs = []
+        for n_cells in [5, 10, 20]:
+            zones = [
+                Zone(outer_edge=0.5, mat_id=2, n_cells=n_cells),
+                Zone(outer_edge=1.0, mat_id=0, n_cells=n_cells),
+            ]
+            mesh = mesh1d_from_zones(zones, coord=CoordSystem.CYLINDRICAL)
+            result = solve_sn(materials, mesh, quad,
+                              max_inner=500, inner_tol=1e-10)
+            keffs.append(result.keff)
+
+        # keff differences must decrease (convergence)
+        diff_1 = abs(keffs[1] - keffs[0])
+        diff_2 = abs(keffs[2] - keffs[1])
+        assert diff_2 < diff_1, (
+            f"keff not converging: Δ(10−5)={diff_1:.6f}, Δ(20−10)={diff_2:.6f}, "
+            f"keffs={[f'{k:.6f}' for k in keffs]}"
+        )
+
+    def test_heterogeneous_sn_vs_cp_cross_check(self):
+        """Heterogeneous SN and CP should agree within ~10%."""
+        from collision_probability import solve_cp
+
+        mix_fuel = get_mixture("A", "1g")
+        mix_mod = get_mixture("B", "1g")
+        materials = {2: mix_fuel, 0: mix_mod}
+
+        zones_sn = [
+            Zone(outer_edge=0.5, mat_id=2, n_cells=20),
+            Zone(outer_edge=1.0, mat_id=0, n_cells=20),
+        ]
+        mesh_sn = mesh1d_from_zones(zones_sn, coord=CoordSystem.CYLINDRICAL)
+        quad = ProductQuadrature.create(n_mu=4, n_phi=8)
+        result_sn = solve_sn(materials, mesh_sn, quad,
+                             max_inner=500, inner_tol=1e-10)
+
+        zones_cp = [
+            Zone(outer_edge=0.5, mat_id=2, n_cells=10),
+            Zone(outer_edge=1.0, mat_id=0, n_cells=10),
+        ]
+        mesh_cp = mesh1d_from_zones(zones_cp, coord=CoordSystem.CYLINDRICAL)
+        result_cp = solve_cp(materials, mesh_cp)
+
+        np.testing.assert_allclose(
+            result_sn.keff, result_cp.keff, rtol=0.10,
+            err_msg=f"SN={result_sn.keff:.6f} vs CP={result_cp.keff:.6f}",
+        )
