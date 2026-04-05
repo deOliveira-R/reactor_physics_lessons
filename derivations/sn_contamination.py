@@ -50,30 +50,45 @@ def _cell_edge_cosines(
 ) -> np.ndarray:
     """Compute cell-edge direction cosines μ_{m+1/2}.
 
-    Bailey et al. (2009) Eq. 52: μ_{m+1/2} = μ_{m-1/2} + w̃_m.
-
     Parameters
     ----------
-    mu : (M,) ordinate direction cosines (μ for spherical, η for cylindrical).
+    mu : (M,) ordinate direction cosines (μ for spherical, η for cylindrical),
+         sorted in increasing order.
     w : (M,) quadrature weights.
     geometry : "spherical" or "cylindrical".
     mu_z_level : axial cosine of this level (only for cylindrical).
 
-    For spherical: μ_{1/2} = −1, μ_{M+1/2} = +1.
-    For cylindrical: η_{1/2} = −sin θ, η_{M+1/2} = +sin θ
-    where sin θ = √(1 − μ_z²).
+    For **spherical** (Bailey Eq. 52): edges from weight-sum starting
+    at μ_{1/2} = −1. This is exact for GL quadrature.
+
+    For **cylindrical**: edges at midpoints of consecutive η values
+    with endpoints at ±sin θ.  The weight-sum approach is wrong for
+    cylindrical because weights are uniform in φ-space, not η-space.
     """
     M = len(mu)
     mu_edge = np.zeros(M + 1)
+
     if geometry == "spherical":
+        # Weight-sum: exact for GL quadrature
         mu_edge[0] = -1.0
+        for m in range(M):
+            mu_edge[m + 1] = mu_edge[m] + w[m]
+
     elif geometry == "cylindrical":
+        # Midpoint edges: correct for η-sorted ordinates with
+        # potential duplicate η values (from paired ±ξ ordinates).
         sin_theta = np.sqrt(1.0 - mu_z_level**2)
         mu_edge[0] = -sin_theta
+        for m in range(M - 1):
+            mu_edge[m + 1] = 0.5 * (mu[m] + mu[m + 1])
+        mu_edge[M] = sin_theta
+
     else:
-        mu_edge[0] = mu[0] - w[0] / 2  # fallback
-    for m in range(M):
-        mu_edge[m + 1] = mu_edge[m] + w[m]
+        # Fallback: approximate
+        mu_edge[0] = mu[0] - w[0] / 2
+        for m in range(M):
+            mu_edge[m + 1] = mu_edge[m] + w[m]
+
     return mu_edge
 
 

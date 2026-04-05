@@ -266,17 +266,29 @@ class SNMesh:
 
         # Morel–Montry angular closure weights (Bailey et al. Eq. 74).
         # τ_m = (η_m − η_{m-1/2}) / (η_{m+1/2} − η_{m-1/2})
-        # For cylindrical: η_{1/2} = −sin θ, η_{M+1/2} = +sin θ.
+        #
+        # For cylindrical, ordinates are η-sorted but weights come from
+        # φ-space (not η-space), so the weight-sum edge approach is wrong.
+        # Instead, cell edges are at midpoints of consecutive η values
+        # with endpoints at ±sin θ.  This gives a proper η-partition.
+        #
+        # TODO: for non-product quadratures where η values are distinct,
+        # a φ-based edge computation (transforming actual φ cell
+        # boundaries to η-space) could give more accurate τ values.
+        # TODO: the equally-spaced ProductQuadrature gives duplicate η
+        # values (paired ±ξ), producing alternating τ = [0.5, 1, 0.5, 1, ...].
+        # A Gauss-type azimuthal quadrature (non-uniform φ) with distinct η
+        # would give smoothly varying τ and potentially better angular accuracy.
         self.tau_mm_per_level: list[np.ndarray] = []
         for level_idx in self.quad.level_indices:
             eta = self.quad.mu_x[level_idx]
-            w_level = self.quad.weights[level_idx]
             M = len(level_idx)
             sin_theta = np.sqrt(1.0 - self.quad.mu_z[level_idx[0]]**2)
             eta_edge = np.zeros(M + 1)
             eta_edge[0] = -sin_theta
-            for m in range(M):
-                eta_edge[m + 1] = eta_edge[m] + w_level[m]
+            for m in range(M - 1):
+                eta_edge[m + 1] = 0.5 * (eta[m] + eta[m + 1])
+            eta_edge[M] = sin_theta
             tau = np.empty(M)
             for m in range(M):
                 deta = eta_edge[m + 1] - eta_edge[m]
