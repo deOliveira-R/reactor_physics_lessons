@@ -320,6 +320,7 @@ class SNSolver:
                 self.sn_mesh.face_areas,
                 self.sn_mesh.volumes,
                 self.sn_mesh.alpha_half,
+                self.sn_mesh.delta_A,
             )
 
         eq_map = self._eq_map

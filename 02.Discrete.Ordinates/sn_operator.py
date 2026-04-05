@@ -412,6 +412,7 @@ def transport_operator_matvec_spherical(
     face_areas: np.ndarray,
     volumes: np.ndarray,
     alpha_half: np.ndarray,
+    delta_A: np.ndarray,
 ) -> np.ndarray:
     r"""Apply the spherical transport operator T·ψ.
 
@@ -419,9 +420,12 @@ def transport_operator_matvec_spherical(
 
         (T\psi)_{n,i} = \frac{\mu_n}{V_i}
           \bigl[A_{i+\frac12}\psi_{i+\frac12} - A_{i-\frac12}\psi_{i-\frac12}\bigr]
-        + \frac{1}{V_i}
+        + \frac{\Delta A_i}{w_n V_i}
           \bigl[\alpha_{n+\frac12}\psi_{n+\frac12} - \alpha_{n-\frac12}\psi_{n-\frac12}\bigr]
         + \Sigma_t \psi_{n,i}
+
+    The :math:`\Delta A / w` geometry factor ensures per-ordinate
+    flat-flux consistency (Bailey et al. 2009).
 
     Face fluxes are approximated by arithmetic averages of cell-centre values.
     """
@@ -429,9 +433,11 @@ def transport_operator_matvec_spherical(
     ref_x = quad.reflection_index("x")
     A = face_areas       # (nx+1,)
     V = volumes[:, 0]    # (nx,)
-    alpha = alpha_half   # (N+1,)
+    dA = delta_A         # (nx,) = A[i+1] - A[i]
+    alpha = alpha_half   # (N+1,) non-negative dome
     N = quad.N
     mu = quad.mu_x
+    weights = quad.weights
 
     lhs = np.empty((ng, eq_map.n_eq))
     for k in range(eq_map.n_eq):
@@ -444,10 +450,8 @@ def transport_operator_matvec_spherical(
         if i < nx - 1:
             psi_right = 0.5 * (fi[:, n, i, 0] + fi[:, n, i + 1, 0])
         else:
-            # Outer boundary: for outgoing (μ>0), use extrapolation;
-            # for incoming (μ<0), reflective BC already applied in fi
             if mu[n] > 1e-15:
-                psi_right = fi[:, n, i, 0]  # extrapolate (flat)
+                psi_right = fi[:, n, i, 0]
             else:
                 psi_right = fi[:, ref_x[n], i, 0]
 
@@ -455,26 +459,25 @@ def transport_operator_matvec_spherical(
         if i > 0:
             psi_left = 0.5 * (fi[:, n, i - 1, 0] + fi[:, n, i, 0])
         else:
-            # r=0: A[0]=0 so this term vanishes regardless
             psi_left = 0.0
 
         streaming = mu[n] * (A[i + 1] * psi_right - A[i] * psi_left) / V[i]
 
-        # ── Angular redistribution: (α ∂ψ/∂μ) / V ──────────────────
-        # Angular face flux at n+1/2: average of ordinate n and n+1
+        # ── Angular redistribution: (ΔA/w) (α ∂ψ/∂μ) / V ──────────
+        dA_w = dA[i] / weights[n]  # geometry factor
+
         if n < N - 1:
             psi_angle_right = 0.5 * (fi[:, n, i, 0] + fi[:, n + 1, i, 0])
         else:
-            psi_angle_right = fi[:, n, i, 0]  # α_{N+1/2}=0 kills this
+            psi_angle_right = fi[:, n, i, 0]
 
-        # Angular face flux at n-1/2
         if n > 0:
             psi_angle_left = 0.5 * (fi[:, n - 1, i, 0] + fi[:, n, i, 0])
         else:
-            psi_angle_left = fi[:, n, i, 0]  # α_{1/2}=0 kills this
+            psi_angle_left = fi[:, n, i, 0]
 
-        redistribution = (alpha[n + 1] * psi_angle_right
-                          - alpha[n] * psi_angle_left) / V[i]
+        redistribution = dA_w * (alpha[n + 1] * psi_angle_right
+                                 - alpha[n] * psi_angle_left) / V[i]
 
         # ── Collision ────────────────────────────────────────────────
         collision = sig_t[i, 0, :] * psi_ni
@@ -492,12 +495,13 @@ def build_transport_linear_operator_spherical(
     face_areas: np.ndarray,
     volumes: np.ndarray,
     alpha_half: np.ndarray,
+    delta_A: np.ndarray,
 ) -> LinearOperator:
     """Build scipy LinearOperator for spherical T."""
     def matvec(x):
         return transport_operator_matvec_spherical(
             x, eq_map, quad, sig_t, nx, ng,
-            face_areas, volumes, alpha_half,
+            face_areas, volumes, alpha_half, delta_A,
         )
 
     n = eq_map.n_unknowns
