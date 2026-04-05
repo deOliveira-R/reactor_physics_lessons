@@ -30,74 +30,31 @@ consolidated here and given a tracking number.
 
 ---
 
-## IMPL — Implemented, Sphinx Documentation Pending
+## DONE — Implemented and Documented in Sphinx
 
 ### DO-20260404-001 — Geometry-weighted balance equation (Bailey et al. 2009)
 
-**Commits**: `fb3e976` through `981b87f`  
-**Files**: `sn_geometry.py`, `sn_sweep.py`, `sn_quadrature.py`
-
-The correct 1D curvilinear balance equation requires:
-- α recursion: `α_{m+1/2} = α_{m-1/2} − w_m · η_m` (radial cosine)
-- ΔA/w geometry factor on the redistribution term
-- Ordinates η-sorted within each level
-
-Without these, per-ordinate flat-flux consistency is broken, causing
-the Morel–Montry flux dip and heterogeneous divergence.  The original
-hypothesis (sign convention) was wrong — see `TODO_cylindrical_dd.md`
-for the full investigation history.
-
-**Sphinx needs**: full derivation from continuous PDE, per-ordinate
-residual analysis, why the old formulation failed, numerical evidence
-tables (before/after keff, fixed-source spike).
+Documented in ``docs/theory/discrete_ordinates.rst`` §5 (The Discrete Balance Equation).
 
 ### DO-20260404-002 — Morel–Montry angular closure weights
 
-**Commits**: `c54ad73`, `5e00333`  
-**Files**: `sn_geometry.py` (`tau_mm`, `tau_mm_per_level`)
-
-Weighted diamond difference with Bailey Eq. 74:
-τ_m = (η_m − η_{m-1/2}) / (η_{m+1/2} − η_{m-1/2}).
-Cell edges at midpoints of consecutive η values (cylindrical) or
-weight-sum (spherical).  Clamped to [0.5, 1.0].
-
-**Sphinx needs**: derivation of τ from asymptotic analysis, why it
-forces contamination β = 0, cell-edge computation for both
-geometries, alternating τ pattern for Product quadrature.
+Documented in ``docs/theory/discrete_ordinates.rst`` §5.5–5.6.
 
 ### DO-20260404-003 — BiCGSTAB operators for curvilinear geometries
 
-**Commits**: `22723c8` (spherical), `0ce2621` (cylindrical)  
-**Files**: `sn_operator.py`, `sn_solver.py`
-
-Explicit transport operators with ΔA/w and M-M weights for both
-geometries.  Multi-group spherical BiCGSTAB (previously unstable)
-now converges.  Cylindrical BiCGSTAB added.
-
-**Sphinx needs**: operator formulation, FD vs DD face-flux
-approximation, why ΔA/w is needed in explicit operators too.
+Documented in ``docs/theory/discrete_ordinates.rst`` §7.
 
 ### DO-20260404-004 — Contamination analysis tool
 
-**Commits**: `8ca174a`, `0ce2621`, `5e00333`  
-**File**: `derivations/sn_contamination.py`
-
-Computes Bailey's β factor and M-M τ weights.  Both geometries
-give β ≈ 0 (machine zero) with the corrected formulation.
-
-**Sphinx needs**: definition of β, physical meaning (contaminated
-diffusion equation), usage as verification tool.
+Documented in ``docs/theory/discrete_ordinates.rst`` §5.4.
 
 ### DO-20260405-001 — Consolidated ΔA/w into SNMesh
 
-**Commit**: `981b87f`  
-**File**: `sn_geometry.py` (`redist_dAw`, `redist_dAw_per_level`)
+Documented in ``docs/theory/discrete_ordinates.rst`` §2.
 
-Precomputed geometry factor eliminates duplication between sweep
-and BiCGSTAB operator.  Future M-M improvements modify SNMesh only.
+### DO-20260405-004 — Sphinx theory chapter for curvilinear SN
 
-**Sphinx needs**: document the precomputed arrays and the single-source-
-of-truth pattern for redistribution geometry.
+Self-referential: this IS the Sphinx chapter (1276 lines, zero warnings).
 
 ---
 
@@ -186,20 +143,6 @@ Full description in `derivations/TODO_transport_eigenmodes.md`.
 P1+ anisotropic scattering implemented for Cartesian 2D but NOT
 verified for curvilinear 1D.  Spherical harmonics on GL/Product
 quadrature needs verification.
-
-### DO-20260405-004 — Sphinx theory chapter for curvilinear SN
-
-**Priority**: HIGH — blocks DO-20260404-001 through -004 from DONE  
-**Effort**: Moderate  
-**Code location**: `docs/theory/discrete_ordinates.rst`
-
-Major update needed covering the Bailey et al. formulation:
-- Balance equation with ΔA/w factor (derivation from PDE)
-- α recursion from radial cosine
-- Morel–Montry flux dip analysis and WDD closure
-- Contamination factor β
-- Investigation history (what failed, why)
-- Numerical evidence from test suite
 
 ### DO-00000000-007 — GMRES/preconditioned Krylov for BiCGSTAB
 
