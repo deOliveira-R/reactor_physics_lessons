@@ -7,6 +7,8 @@ ORPHEUS — Open Reactor Physics Educational University System
 
    theory/homogeneous
    theory/transport_methods
+   theory/thermal_hydraulics
+   theory/reactor_kinetics
    theory/verification
 
 .. toctree::
