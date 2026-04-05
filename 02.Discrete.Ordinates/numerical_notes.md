@@ -249,16 +249,12 @@ cylindrical operators now read `redist_dAw` and `tau_mm` from SNMesh.
 2G and 4G spherical BiCGSTAB converge to < 1e-6 of analytical.
 Cylindrical BiCGSTAB matches source iteration to machine precision.
 
-### Remaining TODO: acceleration techniques
+### Remaining improvements
 
-DSA (Diffusion Synthetic Acceleration) remains the highest-value
-improvement for overall solver performance — it reduces outer
-iterations from ~200 to ~20 for many-group problems.  Other options:
-
-- **DSA**: diffusion-based correction per inner iteration (standard)
-- **TSA**: coarse-angle transport acceleration (for anisotropic media)
-- **Preconditioning**: use DD sweep as preconditioner for BiCGSTAB
-- **GMRES(m)**: may be more robust than BiCGSTAB for non-normal operators
+See `IMPROVEMENTS.md` for the central tracker.  Related items:
+- DO-00000000-001 — DSA (highest-value performance improvement)
+- DO-00000000-002 — TSA (for anisotropic media)
+- DO-00000000-007 — GMRES/preconditioned Krylov
 
 ---
 

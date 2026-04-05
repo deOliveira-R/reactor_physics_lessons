@@ -272,13 +272,15 @@ class SNMesh:
         # Instead, cell edges are at midpoints of consecutive η values
         # with endpoints at ±sin θ.  This gives a proper η-partition.
         #
-        # TODO: for non-product quadratures where η values are distinct,
-        # a φ-based edge computation (transforming actual φ cell
-        # boundaries to η-space) could give more accurate τ values.
-        # TODO: the equally-spaced ProductQuadrature gives duplicate η
-        # values (paired ±ξ), producing alternating τ = [0.5, 1, 0.5, 1, ...].
-        # A Gauss-type azimuthal quadrature (non-uniform φ) with distinct η
-        # would give smoothly varying τ and potentially better angular accuracy.
+        # TODO DO-20260405-003: for non-product quadratures where η
+        # values are distinct, a φ-based edge computation (transforming
+        # actual φ cell boundaries to η-space) could give more accurate
+        # τ values.  See IMPROVEMENTS.md.
+        # TODO DO-20260405-002: the equally-spaced ProductQuadrature
+        # gives duplicate η values (paired ±ξ), producing alternating
+        # τ = [0.5, 1, 0.5, 1, ...].  A Gauss-type azimuthal quadrature
+        # with distinct η would give smoothly varying τ.
+        # See IMPROVEMENTS.md.
         self.tau_mm_per_level: list[np.ndarray] = []
         for level_idx in self.quad.level_indices:
             eta = self.quad.mu_x[level_idx]

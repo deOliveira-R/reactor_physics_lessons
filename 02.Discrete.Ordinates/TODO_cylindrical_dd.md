@@ -80,17 +80,11 @@ with `α_{m+1/2} = α_{m-1/2} − w_m · η_m` and ordinates η-sorted.
 | Fixed-source flux range (40 cells) | [0.59, 5.09] (spike) | [0.51, 1.12] (bounded) |
 | Contamination β (cylindrical) | ~2.0 | ~1e-16 (machine zero) |
 
-## Remaining TODOs
+## Remaining improvements
 
-- **Gauss-type azimuthal quadrature**: the equally-spaced Product
-  quadrature gives duplicate η values (paired ±ξ), producing
-  alternating M-M weights τ = [0.5, 1.0, ...].  A non-uniform φ
-  quadrature with distinct η would give smoothly varying τ and
-  potentially better angular accuracy.
-
-- **φ-based cell-edge computation**: for non-product quadratures,
-  transforming actual φ cell boundaries to η-space (instead of
-  midpoint interpolation) could give more accurate M-M weights.
+See `IMPROVEMENTS.md` for the central tracker.  Related items:
+- DO-20260405-002 — Gauss-type azimuthal quadrature
+- DO-20260405-003 — φ-based cell-edge computation
 
 ## References
 
