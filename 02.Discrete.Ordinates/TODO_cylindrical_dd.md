@@ -1,253 +1,100 @@
-# TODO: Fix Cylindrical 1D SN Azimuthal Diamond-Difference
+# Cylindrical 1D SN Azimuthal Diamond-Difference
 
-## Status: BROKEN for heterogeneous problems
+## Status: RESOLVED
 
-The cylindrical 1D SN sweep produces **exact eigenvalues for homogeneous problems** (all groups, both quadratures) but **wildly wrong and divergent eigenvalues for heterogeneous problems** (keff oscillates with mesh refinement instead of converging).
+Fixed in commits `fb3e976` through `5e00333` on branch `feature/geometry-module`.
+25 cylindrical tests pass, 0 xfail.
 
-Spherical 1D SN works correctly for both homogeneous and heterogeneous.
-Cartesian SN works correctly for both.
+## Root Cause (discovered through investigation)
 
-## Architecture
+The original diagnosis (sign convention / αψ tracking) was **wrong**.
+The actual root cause was two bugs in the balance equation:
 
-### Files involved
+### Bug 1: Wrong α recursion
 
-| File | Role |
-|------|------|
-| `02.Discrete.Ordinates/sn_sweep.py` | `_sweep_1d_cylindrical()` — the broken function |
-| `02.Discrete.Ordinates/sn_geometry.py` | `SNMesh._setup_cylindrical()` — computes per-level α |
-| `02.Discrete.Ordinates/sn_quadrature.py` | `ProductQuadrature`, `LevelSymmetricSN` — provide level structure |
-| `tests/test_sn_cylindrical.py` | Tests — 20 pass, 1 xfail (heterogeneous) |
+The code used `α = cumsum(+w·ξ)` with the azimuthal cosine ξ (`mu_y`).
+The correct recursion (Bailey et al. 2009, Eq. 50) is
+`α = cumsum(−w·η)` with the radial cosine η (`mu_x`), and ordinates
+must be sorted by increasing η within each level.
 
-### How the cylindrical sweep works
+### Bug 2: Missing ΔA/w geometry factor
 
-The 1D cylindrical transport equation (per unit axial height) is:
+The redistribution term in the balance equation must include
+`ΔA_i / w_m` where `ΔA_i = A_{i+1/2} − A_{i-1/2}`.  Without this
+factor, the streaming and redistribution do NOT cancel per-ordinate
+for a spatially flat flux, creating artificial angular anisotropy
+that worsens with mesh refinement near r = 0.
 
-```
-(η/r) ∂(rψ)/∂r  −  (1/r) ∂(ξψ)/∂φ  +  Σ_t ψ  =  Q / sum(w)
-```
+### Why the original hypothesis was wrong
 
-where:
-- η = sin(θ)cos(φ) — radial direction cosine (= `mu_x`)
-- ξ = sin(θ)sin(φ) — azimuthal direction cosine (= `mu_y`)
-- μ = cos(θ) — axial direction cosine (= `mu_z`)
-- A = 2πr — cylindrical face area per unit height
-- V = π(r²_out − r²_in) — cylindrical cell volume per unit height
+The sign convention (`−` vs `+` before the redistribution) is absorbed
+into the α definition: `cumsum(−η·w)` with `+` sign gives the same
+physics as `cumsum(+ξ·w)` with `−` sign for symmetric quadratures.
+The real issue was the missing geometry factor `ΔA/w` that ensures
+per-ordinate flat-flux consistency.
 
-The angular quadrature is organized by **μ-level**: on each level (fixed μ_z), there are M azimuthal ordinates at angles φ_0, φ_1, ..., φ_{M-1}.
+Six approaches were tested before the correct fix was found:
+reverse sweep, step closure, L&M starting direction, bidirectional
+sweep, scaled α, and zero redistribution.  All failed because they
+addressed symptoms, not the root cause.
 
-**Azimuthal redistribution**: the `−∂(ξψ)/∂φ` term couples successive azimuthal ordinates on each level. The standard discretization uses:
+## The Fix (Bailey et al. 2009 formulation)
 
-```
-α_{m+1/2} = α_{m-1/2} + w_m · ξ_m
-```
-
-with boundary conditions α_{1/2} = 0, α_{M+1/2} = 0 (by azimuthal symmetry of ξ).
-
-**The discrete balance equation** (integrated over cell i, ordinate m):
+The correct 1D cylindrical balance equation:
 
 ```
-η_m [A_{i+1/2} ψ_{i+1/2,m} − A_{i-1/2} ψ_{i-1/2,m}]
-  − [α_{m+1/2} ψ_{i,m+1/2} − α_{m-1/2} ψ_{i,m-1/2}]
+η_m [A_{i+1/2} ψ_{i+1/2} − A_{i-1/2} ψ_{i-1/2}]
+  + (ΔA_i / w_m) [α_{m+1/2} ψ_{m+1/2} − α_{m-1/2} ψ_{m-1/2}]
   + Σ_t V_i ψ_{i,m}
-  = Q V_i / sum(w)
+  = S_i V_i
 ```
 
-**NOTE THE MINUS SIGN** before the α terms. This is the key difference from spherical, which has a plus sign.
-
-### Current implementation (in `_sweep_1d_cylindrical`)
-
-The sweep currently uses `|α|` (absolute values) with a **positive** sign convention — identical to the spherical sweep. This is **wrong** for the cylindrical equation which has a negative sign.
-
-The DD closures are:
-- Spatial: `ψ_{i+1/2} = 2ψ − ψ_{i-1/2}` (standard diamond-difference)
-- Angular: `ψ_{m+1/2} = 2ψ − ψ_{m-1/2}` (standard diamond-difference)
-
-After substitution, the current code solves:
-```
-ψ = [QV/sum_w + |η|(A_in+A_out)·ψ_in + (|α_out|+|α_in|)·ψ_angle] / [2|η|A_out + 2|α_out| + Σ_t V]
-```
-
-**This has the WRONG sign on the α terms** — it should be minus, not plus.
-
-## The problem
-
-### Symptom
-
-| Test | Result |
-|------|--------|
-| Homogeneous 1G/2G/4G, Product quad | **Exact** to machine precision |
-| Homogeneous 1G/2G/4G, LS S4 quad | **Exact** to machine precision |
-| Heterogeneous 1G, 5 cells/region | keff = 1.14 (CP ref: 0.99) |
-| Heterogeneous 1G, 10 cells/region | keff = 0.88 (CP ref: 1.00) |
-| Heterogeneous 1G, 20 cells/region | keff = 0.47 (CP ref: 1.00) |
-| Heterogeneous 1G, 40 cells/region | keff = 0.22 (diverging!) |
-| Heterogeneous 2G, Product 4×8 | keff = 0.52 (CP ref: 0.74) |
-| Heterogeneous 2G, Product 8×8 | keff = 0.90 (oscillates!) |
-
-Homogeneous works because the spatial flux is flat — no net streaming, so the redistribution term vanishes (αψ cancels in the balance). The bug only manifests when there are spatial gradients.
-
-### Root cause: sign convention
-
-The cylindrical azimuthal redistribution has a **minus** sign:
-
-```
-−[α_{m+1/2} ψ_{m+1/2} − α_{m-1/2} ψ_{m-1/2}] / V
-```
-
-After DD substitution `ψ_{m+1/2} = 2ψ − ψ_{m-1/2}`:
-
-```
-−[α_{m+1/2}(2ψ − ψ_{m-1/2}) − α_{m-1/2} ψ_{m-1/2}] / V
-= −2α_{m+1/2}ψ/V + (α_{m+1/2} + α_{m-1/2})ψ_{m-1/2}/V
-```
-
-The correct DD equation is:
-```
-denom = 2|η|A_out − 2α_out + Σ_t V
-numer = QV/sum_w + |η|(A_in+A_out)ψ_in − (α_out+α_in)·ψ_angle
-```
-
-Note: **signed α values** (not |α|), with minus sign.
-
-### Why the correct sign doesn't work
-
-When α_{m+1/2} is positive and large (middle of the azimuthal sweep), the denominator `2|η|A_out − 2α_out + Σ_t V` can become **zero or negative**, causing overflow. This happens particularly at inner cells where A_out is small and α is large.
-
-The α values for a Product(2,4) quadrature are:
-```
-Level 0: α = [0.00, 0.00, 1.28, 1.28, 0.00]
-```
-
-At α_out = 1.28: `denom = 2(0.82)(0) − 2(1.28) + 0.5(0.79) = −2.16`, which is negative.
-
-### What the spherical sweep does differently
-
-In the spherical sweep (`_sweep_1d_spherical`), the angular redistribution has a **positive** sign:
-
-```
-+[α_{n+1/2} ψ_{n+1/2} − α_{n-1/2} ψ_{n-1/2}] / V
-```
-
-After DD substitution:
-```
-denom = 2|μ|A_out + 2|α_out| + Σ_t V
-```
-
-The denominator is always positive (all terms positive), so the scheme is unconditionally stable. This is why spherical works but cylindrical doesn't — the opposite sign makes the denominator potentially negative.
-
-## Solutions attempted
-
-### 1. Use |α| with positive sign (current code)
-**Result**: Stable but wrong for heterogeneous. Exact for homogeneous.
-**Problem**: Wrong sign convention; effectively treats cylindrical like spherical.
-
-### 2. Use signed α with correct minus sign
-**Result**: Overflow/NaN — denominator goes negative.
-**Problem**: Standard DD is not positive-definite with the correct sign.
-
-### 3. Skip angular DD update at level boundaries (α_out = 0)
-**Result**: No improvement — same wrong keff.
-**Problem**: The issue is at interior ordinates (large α), not boundaries.
-
-### 4. Clamp angular face flux to non-negative (np.maximum)
-**Result**: No improvement — same keff values as pure DD.
-**Problem**: The face fluxes aren't negative; the ψ values themselves are wrong.
-
-### 5. Step method for angular variable (ψ_{m+1/2} = ψ)
-**Result**: Converges with refinement (1.21→1.13→1.05) but slowly (first-order in angle). Still ~5% error at 20 cells/region. 2G gives 0.49 vs CP 0.74.
-**Problem**: First-order accuracy in angle is insufficient.
-
-### 6. Zero redistribution (α = 0 manually)
-**Result**: Smooth spatial convergence (1.38→1.39→1.39). Wrong keff (no angular physics) but stable.
-**Problem**: Proves the spatial streaming is correct; the redistribution is what breaks things.
-
-## Hypothesis for the fix
-
-The standard solution in the nuclear engineering literature is the **Lewis & Miller starting-direction treatment** (§4.5.4 in "Computational Methods of Neutron Transport", 1984). The key ideas:
-
-### Track αψ instead of ψ
-
-Instead of updating `psi_angle = 2ψ − psi_angle` (which is ψ_{m+1/2}), track the **product** `Φ = α·ψ`:
-
-```
-Φ_{m+1/2} = α_{m+1/2} · ψ_{m+1/2}
-```
-
-The balance equation in terms of Φ:
-```
-η streaming − [Φ_{m+1/2} − Φ_{m-1/2}]/V + Σ_t V ψ = QV/sum_w
-```
-
-With the DD closure `ψ = ½(ψ_{m-1/2} + ψ_{m+1/2})`:
-
-```
-ψ_{m+1/2} = Φ_{m+1/2} / α_{m+1/2}  (when α ≠ 0)
-ψ_{m-1/2} = Φ_{m-1/2} / α_{m-1/2}  (when α ≠ 0)
-ψ = ½(Φ_{m-1/2}/α_{m-1/2} + Φ_{m+1/2}/α_{m+1/2})
-```
-
-At the boundaries (α = 0), Φ = 0 regardless of ψ, so the boundary condition is naturally satisfied.
-
-### The "starting direction" pseudo-ordinate
-
-At the first ordinate on each level (α_{1/2} = 0), the incoming angular flux is determined by conservation rather than DD extrapolation. Lewis & Miller defines a "starting direction" flux:
-
-```
-ψ_{start} = (total source into this direction) / (total removal from this direction)
-```
-
-This provides the initial Φ_{1/2} for the azimuthal sweep.
-
-### Reference
-
-- Lewis, E.E. and Miller, W.F. Jr., *Computational Methods of Neutron Transport*, §4.5 "Curvilinear Coordinates", Wiley, 1984.
-- Morel, J.E. and Montry, G.R., "Analysis and Elimination of the Discrete Ordinates Flux Dip", *Transport Theory and Statistical Physics*, 13:5, 1984.
-- Alcouffe, R.E. et al., "PARTISN: A Time-Dependent, Parallel Neutral Particle Transport Code System", LA-UR-05-3925, Los Alamos, 2005.
-
-## Testing regime for the fix
-
-Run these in order. Each must pass before proceeding to the next:
-
-### 1. Unit test: αψ product conservation
-Verify that Σ (α_{m+1/2} ψ_{m+1/2} − α_{m-1/2} ψ_{m-1/2}) over all m on a level = 0 (telescoping sum with α boundary = 0).
-
-### 2. Single-cell uniform source
-Two cells, 1G, Σ_t=1, Q=1. After many sweeps, volume-averaged φ → Q/Σ_t = 1.
-
-### 3. Homogeneous 1G exact
-20 cells, S4 product quadrature. Must match analytical k_inf to < 1e-6.
-
-### 4. Homogeneous 2G/4G exact
-Same mesh. Must match analytical k_inf.
-
-### 5. Heterogeneous 1G convergence
-Fuel (r<0.5) + moderator (r<1.0), 5/10/20/40 cells per region.
-keff must converge monotonically with refinement.
-Compare with CP reference (should differ by ~1-5% from white-BC approximation).
-
-### 6. Heterogeneous 2G resolution independence
-Product(4×8) and Product(8×8) must agree to < 5%.
-Product(4×8) and Product(8×16) must agree to < 3%.
-
-### 7. Particle balance heterogeneous
-Production / absorption = keff for 2G fuel+moderator.
-
-### 8. Cross-check with CP cylindrical
-1G heterogeneous: SN and CP should agree to ~5% (white-BC vs reflective difference).
-
-### 9. Both quadratures agree
-Product and Level-Symmetric S_N (once LS is fixed) must give close keff on heterogeneous.
-
-## Additional known issue: Level-Symmetric S_N structure
-
-The `LevelSymmetricSN` quadrature groups ±μ_z hemispheres on the same level (level 0 has 16 ordinates with both μ_z = +0.41 and μ_z = −0.41). The cylindrical sweep needs each level to have a SINGLE μ_z value. This is a separate bug from the DD sign issue.
-
-**Fix**: In `_build_level_symmetric()`, create separate levels for +μ_z and −μ_z instead of grouping by |μ_z|. Or restructure `level_indices` to split mixed-hemisphere levels.
-
-The `ProductQuadrature` does not have this issue — each level has exactly one μ_z value.
-
-## Files to modify for the fix
-
-1. `02.Discrete.Ordinates/sn_sweep.py` — rewrite `_sweep_1d_cylindrical()` with αψ tracking
-2. `02.Discrete.Ordinates/sn_quadrature.py` — fix LS level structure (separate issue)
-3. `tests/test_sn_cylindrical.py` — remove xfail once tests pass
+with `α_{m+1/2} = α_{m-1/2} − w_m · η_m` and ordinates η-sorted.
+
+### Additional improvements applied
+
+1. **Morel–Montry angular closure weights** (Bailey Eq. 74):
+   τ_m replaces the standard DD weight (0.5) with position-dependent
+   values, forcing the contamination factor β to zero.  Eliminates
+   the Morel–Montry flux dip at r = 0.
+
+2. **Consolidated ΔA/w into SNMesh**: `redist_dAw` (spherical) and
+   `redist_dAw_per_level` (cylindrical) precomputed once, used by
+   both the DD sweep and the BiCGSTAB operator.
+
+3. **Same fix applied to spherical**: the spherical sweep had the same
+   missing ΔA/w factor.  Fixed-source flux spike at r = 0 reduced
+   from 5.1× to 1.1×.
+
+4. **BiCGSTAB operators**: both spherical and cylindrical explicit
+   transport operators updated with ΔA/w and M-M weights.
+   Multi-group spherical BiCGSTAB (previously unstable) now converges.
+
+## Results
+
+| Test | Before | After |
+|------|--------|-------|
+| Homogeneous 1G/2G/4G (Product + LS) | Exact | Exact |
+| Heterogeneous 1G, 5→10→20 cells | 1.15→0.90→0.52 (diverges) | 0.977→0.984→0.987 (converges) |
+| Heterogeneous 2G, 4×8 vs 8×8 | 0.54 vs 0.91 (67% gap) | 0.723 vs 0.723 (<0.01%) |
+| Fixed-source flux range (40 cells) | [0.59, 5.09] (spike) | [0.51, 1.12] (bounded) |
+| Contamination β (cylindrical) | ~2.0 | ~1e-16 (machine zero) |
+
+## Remaining TODOs
+
+- **Gauss-type azimuthal quadrature**: the equally-spaced Product
+  quadrature gives duplicate η values (paired ±ξ), producing
+  alternating M-M weights τ = [0.5, 1.0, ...].  A non-uniform φ
+  quadrature with distinct η would give smoothly varying τ and
+  potentially better angular accuracy.
+
+- **φ-based cell-edge computation**: for non-product quadratures,
+  transforming actual φ cell boundaries to η-space (instead of
+  midpoint interpolation) could give more accurate M-M weights.
+
+## References
+
+- Bailey, Morel & Chang (2009) NSE — Eq. 50 (α), Eq. 53–54 (WDD), Eq. 74 (M-M weights)
+- Morel & Montry (1984) Transport Theory & Stat. Physics, 13:5
+- Lewis & Miller (1984) §4.5 — starting direction treatment
+- Carlson & Lathrop (1965) — α coefficient conservation property

@@ -224,81 +224,50 @@ The BiCGSTAB path would extend `build_rhs` to include the `l=1` term.
 
 ---
 
-## TODO: BiCGSTAB convergence on curvilinear geometries
+## RESOLVED: BiCGSTAB convergence on curvilinear geometries
 
-### Problem
+**Status**: Fixed in commit `22723c8` (spherical) and `0ce2621` (cylindrical).
 
-The explicit FD transport operator for spherical 1D geometry diverges
-on multi-group problems.  The 1G homogeneous case converges to machine
-precision, but 2G shows keff oscillations → NaN within ~50 outer
-iterations.  Source iteration (DD sweep) converges reliably for the
-same problems.
+### Original problem
 
-### Root cause
+Multi-group BiCGSTAB on spherical geometry diverged (keff → NaN).
 
-The explicit matvec `transport_operator_matvec_spherical` approximates
-face fluxes by arithmetic averaging of cell-centre values:
+### Root cause (corrected)
 
-```
-ψ_{i+1/2} ≈ 0.5 * (ψ_i + ψ_{i+1})
-ψ_{n+1/2} ≈ 0.5 * (ψ_n + ψ_{n+1})
-```
+The original hypothesis (central vs upwind inconsistency) was only
+partially right.  The deeper issue was the **missing ΔA/w geometry
+factor** in the explicit FD operator.  Without it, the angular
+redistribution lacked per-ordinate flat-flux consistency, causing
+the outer iteration to amplify errors.
 
-This is a **central-difference** approximation, which is inconsistent
-with the **upwind diamond-difference** used in the sweep.  For
-multi-group, the scattering source iteration amplifies the discrepancy
-between BiCGSTAB (central) and sweep (upwind), causing the outer
-iteration to oscillate.
+### Fix applied
 
-### Potential fixes (ordered by expected impact)
+Added the same ΔA/w factor and Morel–Montry angular closure weights
+to the BiCGSTAB operator that the sweep uses.  Both spherical and
+cylindrical operators now read `redist_dAw` and `tau_mm` from SNMesh.
 
-1. **Upwind-consistent operator**: Replace the arithmetic average with
-   the DD-consistent face flux: `ψ_{i+1/2} = 2ψ_i - ψ_{i-1/2}`
-   (the same closure as the sweep).  This makes `T` consistent with
-   `T⁻¹` and should restore convergence.
+2G and 4G spherical BiCGSTAB converge to < 1e-6 of analytical.
+Cylindrical BiCGSTAB matches source iteration to machine precision.
 
-2. **Preconditioning**: Use the DD sweep as a preconditioner for
-   BiCGSTAB (i.e., solve `T⁻¹_DD · T_FD · ψ = T⁻¹_DD · b`).
-   The preconditioned system has a spectral radius close to 1,
-   eliminating the oscillation.  This is standard in transport codes
-   (DSA — Diffusion Synthetic Acceleration — is a simpler variant).
+### Remaining TODO: acceleration techniques
 
-3. **GMRES instead of BiCGSTAB**: BiCGSTAB can stagnate on non-normal
-   operators.  GMRES(m) with restart may be more robust, at the cost
-   of memory (m Krylov vectors stored).
+DSA (Diffusion Synthetic Acceleration) remains the highest-value
+improvement for overall solver performance — it reduces outer
+iterations from ~200 to ~20 for many-group problems.  Other options:
 
-4. **Diffusion Synthetic Acceleration (DSA)**: Rather than solving the
-   full transport equation with BiCGSTAB, use source iteration (sweep)
-   with a diffusion-based correction per inner iteration.  This is the
-   standard acceleration technique for SN solvers and reduces the
-   spectral radius from ~0.97 to ~0.1.
-
-5. **Transport Synthetic Acceleration (TSA)**: Use a coarse-angle
-   transport solve to accelerate the fine-angle source iteration.
-   More complex than DSA but applicable to problems where diffusion
-   is a poor approximation (strong anisotropy, voids).
-
-### Priority
-
-The sweep-based source iteration works correctly for all geometries
-and group counts.  BiCGSTAB is an alternative inner solver, primarily
-useful for Cartesian 2D where it fully converges the inner problem in
-fewer iterations.  The spherical BiCGSTAB fix is **low priority** —
-source iteration is the reliable path for curvilinear geometries.
-
-DSA is the highest-value improvement for overall solver performance
-(reduces outer iterations from ~200 to ~20 for 421-group problems)
-and is geometry-agnostic.
+- **DSA**: diffusion-based correction per inner iteration (standard)
+- **TSA**: coarse-angle transport acceleration (for anisotropic media)
+- **Preconditioning**: use DD sweep as preconditioner for BiCGSTAB
+- **GMRES(m)**: may be more robust than BiCGSTAB for non-normal operators
 
 ---
 
-## TODO: Cylindrical azimuthal DD sign convention
+## RESOLVED: Cylindrical azimuthal DD
 
-See `TODO_cylindrical_dd.md` for full details.
+**Status**: Fixed.  See `TODO_cylindrical_dd.md` for full details.
 
-**Summary**: The cylindrical sweep uses `|α|` with a positive sign
-(same as spherical), but the cylindrical azimuthal redistribution term
-has a **negative** sign (`−∂(ξψ)/∂φ/r`). This makes the scheme exact
-for homogeneous but wrong for heterogeneous (keff diverges with mesh
-refinement). The fix requires the Lewis & Miller §4.5 starting-direction
-treatment (track αψ product instead of ψ).
+The root cause was NOT the sign convention as originally hypothesized.
+It was a wrong α recursion (`cumsum(+w·ξ)` instead of `cumsum(−w·η)`)
+combined with a missing ΔA/w geometry factor in the balance equation.
+Both bugs broke per-ordinate flat-flux consistency.  Fixed using the
+Bailey et al. (2009) formulation.
