@@ -5,6 +5,7 @@ ORPHEUS — Open Reactor Physics Educational University System
    :maxdepth: 2
    :caption: Theory & Derivations
 
+   theory/cross_section_data
    theory/homogeneous
    theory/transport_methods
    theory/fuel_behaviour
