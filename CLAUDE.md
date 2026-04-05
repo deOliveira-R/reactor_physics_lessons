@@ -10,7 +10,7 @@ The `docs/` directory contains theory, derivations, and equations that explain t
 - **Before implementing or modifying a solver**: read the relevant theory page in `docs/theory/` to understand the physics, equations, and design decisions.
 - **Before implementing a new module**: check if a theory page exists. If not, write one as part of the implementation — document the equations and derivations alongside the code.
 - **After modifying equations or algorithms**: update the corresponding Sphinx page. Build with `python -m sphinx -b html docs docs/_build/html` and verify zero warnings.
-- **Subagents**: when briefing a subagent on physics-heavy work, point it to the specific RST file (e.g., `docs/theory/collision_probability.rst`) so it has the full mathematical context.
+- **Documentation tasks**: use the **archivist** agent (`.claude/agents/archivist/`) for all Sphinx work. It knows the project conventions, quality standards, and derivation source-of-truth rules.
 
 ### GitNexus Knowledge Graph
 GitNexus indexes the code structure (1000+ nodes, 2400+ edges). It knows what calls what, but NOT the physics. Use it for:
@@ -31,17 +31,36 @@ GitNexus indexes the code structure (1000+ nodes, 2400+ edges). It knows what ca
 - If something breaks → STOP and re-plan
 - Write detailed specs to remove ambiguity
 
-### 2. Subagent Strategy
-- Use subagents aggressively for complex problems
-- Split tasks: research, execution, analysis
-- One task per agent for clarity
-- Parallelize thinking, not just execution
+### 2. Specialized Agent Fleet
 
-### 3. Self-Improvement Loop
-- After ANY mistake → log it in gotchas.md
-- Convert mistakes into rules
-- Review past lessons before starting
-- Iterate until error rate drops
+Five custom agents in `.claude/agents/` — use them instead of generic subagents for their domains. Each has a `lessons.md` that compounds across sessions.
+
+| Agent | Invoke when | Key rule |
+|-------|-------------|----------|
+| **archivist** | Writing/reviewing Sphinx docs | Sphinx-as-brain: full derivations, not summaries. Demands derivation scripts before archiving. |
+| **qa** | Reviewing code, validating claims | 6 AI failure modes checklist. Demands multi-group + heterogeneous tests. |
+| **numerics-investigator** | Solver gives wrong answers | 7-step diagnostic cascade. Writes scripts in `derivations/diagnostics/`. Promotes to tests. |
+| **literature-researcher** | Need equations from papers | Source priority by topic. Maps notation to ORPHEUS. Never references export-controlled codes. |
+| **test-architect** | Planning verification BEFORE implementation | Analytical solution catalog. Failure mode coverage matrix. 1-group is degenerate. |
+
+**Dispatch rules:**
+- Documentation tasks → **archivist** (not generic subagent)
+- "Is this correct?" → **qa**
+- "Why is this broken?" → **numerics-investigator**
+- "What does Bailey Eq. 50 say?" → **literature-researcher**
+- "What tests do we need for feature X?" → **test-architect**
+- Routine code search / exploration → built-in Explore agent (lightweight)
+
+**After every specialized agent invocation**: the main agent must review the output with full session context before committing. Sub-agents lack conversation history.
+
+### 3. Improvement Tracking and Self-Improvement
+
+- Every module has an `IMPROVEMENTS.md` with tracked items (`XX-YYYYMMDD-NNN`)
+- TODOs exist in exactly TWO places: the tracker AND the code location (with matching tracking number)
+- After ANY bug or improvement discovery → add to IMPROVEMENTS.md immediately
+- Items flow: OPEN → IMPL → DONE (DONE requires Sphinx documentation)
+- At session start: read IMPROVEMENTS.md for context
+- At session end: verify no orphan TODOs exist outside the tracker
 
 ### 4. Verification Before Done
 - Never mark done without proof
@@ -103,7 +122,7 @@ GitNexus indexes the code structure (1000+ nodes, 2400+ edges). It knows what ca
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ReactorPhysics_MATLAB** (1053 symbols, 2487 relationships, 84 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ReactorPhysics_MATLAB** (1531 symbols, 4434 relationships, 122 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
