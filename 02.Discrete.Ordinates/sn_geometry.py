@@ -169,6 +169,15 @@ class SNMesh:
             f"GL antisymmetry violated: α_{{N+1/2}} = {alpha[N]:.2e}"
         )
 
+        # Precompute redistribution geometry factor ΔA_i / w_n.
+        # Shape (nx, N).  Both the DD sweep and the BiCGSTAB operator
+        # use this to weight the angular redistribution term.
+        # If Morel–Montry angular closure weights are implemented,
+        # they should be folded into this array (multiply by τ_m/0.5).
+        self.redist_dAw: np.ndarray = (
+            self.delta_A[:, None] / w[None, :]
+        )
+
         # Cartesian stencil not used for spherical
         self.streaming_x = None
         self.streaming_y = None
@@ -231,6 +240,17 @@ class SNMesh:
             for m in range(M):
                 alpha[m + 1] = alpha[m] - w[m] * eta[m]
             self.alpha_per_level.append(alpha)
+
+        # Precompute redistribution geometry factor ΔA_i / w_m per level.
+        # Each entry has shape (nx, M) for M ordinates on that level.
+        # Both the DD sweep and any future BiCGSTAB cylindrical operator
+        # use this to weight the angular redistribution term.
+        self.redist_dAw_per_level: list[np.ndarray] = []
+        for level_idx in self.quad.level_indices:
+            w_level = self.quad.weights[level_idx]  # (M,)
+            self.redist_dAw_per_level.append(
+                self.delta_A[:, None] / w_level[None, :]  # (nx, M)
+            )
 
         self.streaming_x = None
         self.streaming_y = None

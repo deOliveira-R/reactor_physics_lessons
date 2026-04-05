@@ -412,7 +412,7 @@ def transport_operator_matvec_spherical(
     face_areas: np.ndarray,
     volumes: np.ndarray,
     alpha_half: np.ndarray,
-    delta_A: np.ndarray,
+    redist_dAw: np.ndarray,
 ) -> np.ndarray:
     r"""Apply the spherical transport operator T·ψ.
 
@@ -424,8 +424,9 @@ def transport_operator_matvec_spherical(
           \bigl[\alpha_{n+\frac12}\psi_{n+\frac12} - \alpha_{n-\frac12}\psi_{n-\frac12}\bigr]
         + \Sigma_t \psi_{n,i}
 
-    The :math:`\Delta A / w` geometry factor ensures per-ordinate
-    flat-flux consistency (Bailey et al. 2009).
+    The :math:`\Delta A / w` geometry factor (``redist_dAw``, precomputed
+    in :class:`SNMesh`) ensures per-ordinate flat-flux consistency
+    (Bailey et al. 2009).
 
     Face fluxes are approximated by arithmetic averages of cell-centre values.
     """
@@ -433,11 +434,10 @@ def transport_operator_matvec_spherical(
     ref_x = quad.reflection_index("x")
     A = face_areas       # (nx+1,)
     V = volumes[:, 0]    # (nx,)
-    dA = delta_A         # (nx,) = A[i+1] - A[i]
+    dAw = redist_dAw     # (nx, N) precomputed ΔA_i/w_n
     alpha = alpha_half   # (N+1,) non-negative dome
     N = quad.N
     mu = quad.mu_x
-    weights = quad.weights
 
     lhs = np.empty((ng, eq_map.n_eq))
     for k in range(eq_map.n_eq):
@@ -446,7 +446,6 @@ def transport_operator_matvec_spherical(
         psi_ni = fi[:, n, i, 0]
 
         # ── Spatial streaming: μ (A ∂ψ/∂r) / V ──────────────────────
-        # Face flux at i+1/2: average of cell i and cell i+1 (or BC)
         if i < nx - 1:
             psi_right = 0.5 * (fi[:, n, i, 0] + fi[:, n, i + 1, 0])
         else:
@@ -455,7 +454,6 @@ def transport_operator_matvec_spherical(
             else:
                 psi_right = fi[:, ref_x[n], i, 0]
 
-        # Face flux at i-1/2
         if i > 0:
             psi_left = 0.5 * (fi[:, n, i - 1, 0] + fi[:, n, i, 0])
         else:
@@ -464,7 +462,7 @@ def transport_operator_matvec_spherical(
         streaming = mu[n] * (A[i + 1] * psi_right - A[i] * psi_left) / V[i]
 
         # ── Angular redistribution: (ΔA/w) (α ∂ψ/∂μ) / V ──────────
-        dA_w = dA[i] / weights[n]  # geometry factor
+        dA_w = dAw[i, n]  # precomputed geometry factor
 
         if n < N - 1:
             psi_angle_right = 0.5 * (fi[:, n, i, 0] + fi[:, n + 1, i, 0])
@@ -495,13 +493,13 @@ def build_transport_linear_operator_spherical(
     face_areas: np.ndarray,
     volumes: np.ndarray,
     alpha_half: np.ndarray,
-    delta_A: np.ndarray,
+    redist_dAw: np.ndarray,
 ) -> LinearOperator:
     """Build scipy LinearOperator for spherical T."""
     def matvec(x):
         return transport_operator_matvec_spherical(
             x, eq_map, quad, sig_t, nx, ng,
-            face_areas, volumes, alpha_half, delta_A,
+            face_areas, volumes, alpha_half, redist_dAw,
         )
 
     n = eq_map.n_unknowns

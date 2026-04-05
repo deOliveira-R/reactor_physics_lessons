@@ -205,8 +205,8 @@ def _sweep_1d_spherical(
 
     A = sn_mesh.face_areas     # (nx+1,) surface areas at cell faces
     V = sn_mesh.volumes[:, 0]  # (nx,) cell volumes
-    dA = sn_mesh.delta_A       # (nx,) = A[i+1] - A[i], cell property
     alpha = sn_mesh.alpha_half  # (N+1,) non-negative dome
+    dAw = sn_mesh.redist_dAw   # (nx, N) precomputed ΔA_i/w_n
 
     # Persistent boundary flux at the outer face (per ordinate)
     if "bc_sph" not in psi_bc:
@@ -239,7 +239,7 @@ def _sweep_1d_spherical(
             for i in range(nx - 1, -1, -1):
                 A_in = A[i + 1]   # incoming face (outer)
                 A_out = A[i]      # outgoing face (inner)
-                dA_w = dA[i] / w_n  # ΔA_i / w_n geometry factor
+                dA_w = dAw[i, n]  # precomputed geometry factor
 
                 denom = (2.0 * abs_mu * A_out
                          + 2.0 * dA_w * alpha_out
@@ -267,7 +267,7 @@ def _sweep_1d_spherical(
             for i in range(nx):
                 A_in = A[i]       # incoming face (inner)
                 A_out = A[i + 1]  # outgoing face (outer)
-                dA_w = dA[i] / w_n
+                dA_w = dAw[i, n]
 
                 denom = (2.0 * abs_mu * A_out
                          + 2.0 * dA_w * alpha_out
@@ -339,7 +339,6 @@ def _sweep_1d_cylindrical(
 
     A = sn_mesh.face_areas     # (nx+1,) = 2πr at edges
     V = sn_mesh.volumes[:, 0]  # (nx,) cell volumes
-    dA = sn_mesh.delta_A       # (nx,) = A[i+1] - A[i], cell property
 
     # Persistent boundary flux at the outer face (per ordinate)
     if "bc_cyl" not in psi_bc:
@@ -356,6 +355,7 @@ def _sweep_1d_cylindrical(
     # Process each μ-level independently
     for p, level_idx in enumerate(quad.level_indices):
         alpha = sn_mesh.alpha_per_level[p]  # (M+1,) non-negative dome
+        dAw = sn_mesh.redist_dAw_per_level[p]  # (nx, M) precomputed
         M = len(level_idx)
 
         # Azimuthal "face flux" between successive ordinates on this level.
@@ -377,7 +377,7 @@ def _sweep_1d_cylindrical(
                 for i in range(nx - 1, -1, -1):
                     A_in = A[i + 1]
                     A_out = A[i]
-                    dA_w = dA[i] / w_n  # ΔA_i / w_m geometry factor
+                    dA_w = dAw[i, m_local]  # precomputed geometry factor
 
                     denom = (2.0 * abs_eta * A_out
                              + 2.0 * dA_w * alpha_out
@@ -399,7 +399,7 @@ def _sweep_1d_cylindrical(
             elif abs_eta < 1e-15:
                 # Pure azimuthal ordinate (η≈0): no radial streaming.
                 for i in range(nx):
-                    dA_w = dA[i] / w_n
+                    dA_w = dAw[i, m_local]
 
                     denom = 2.0 * dA_w * alpha_out + sig_t_1d[i] * V[i]
                     numer = (QV[i]
@@ -418,7 +418,7 @@ def _sweep_1d_cylindrical(
                 for i in range(nx):
                     A_in = A[i]
                     A_out = A[i + 1]
-                    dA_w = dA[i] / w_n
+                    dA_w = dAw[i, m_local]
 
                     denom = (2.0 * abs_eta * A_out
                              + 2.0 * dA_w * alpha_out
