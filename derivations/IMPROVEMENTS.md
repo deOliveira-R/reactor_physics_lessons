@@ -16,6 +16,22 @@ RST generation).
 
 ---
 
+## DONE — Implemented and Documented
+
+### DV-20260403-008 — Spherical CP derivation cases
+
+`derivations/cp_sphere.py` exists and is registered in
+`reference_values.py`.  9 verification cases ({1,2,4}eg × {1,2,4}rg)
+with exponential kernel.  Created in session 2026-04-04.
+
+### DV-20260403-009 — Documentation: regenerate RST with all current cases
+
+`generate_rst.py` runs and produces 8 RST fragments covering all
+registered cases.  Sortable HTML table in `verification.rst`.
+Rebuilt in session 2026-04-05.
+
+---
+
 ## IMPL — Implemented, Sphinx Documentation Pending
 
 ### DV-20260403-001 — XS library with P1 scattering anisotropy
@@ -93,22 +109,3 @@ transport operator is tested independently of the eigenvalue by:
 2. Computing the source Q from the solver's own equations
 3. Feeding Q into the solver's fixed-source sweep
 4. Verifying O(h²) convergence to the prescribed flux
-
-### DV-20260403-008 — Spherical CP derivation cases
-
-**Priority**: Low | **Effort**: Small
-**Code location**: `derivations/cp_sphere.py` (may already exist)
-
-The CP solver supports spherical geometry (from session 2026-04-04)
-but the derivation module created in session 2026-04-03 only covers
-slab and cylindrical.  Need to verify `cp_sphere.py` exists and is
-registered.
-
-### DV-20260403-009 — Documentation: regenerate RST with all current cases
-
-**Priority**: HIGH | **Effort**: Small
-**Code location**: `derivations/generate_rst.py`
-
-The generated RST and sortable table need to be rebuilt after the
-geometry refactoring (Mesh1D/Mesh2D) done in session 2026-04-04/05.
-The table should show all ~45+ cases across all solvers.
