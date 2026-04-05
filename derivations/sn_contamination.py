@@ -42,18 +42,36 @@ def _alpha_dome(mu: np.ndarray, w: np.ndarray) -> np.ndarray:
     return alpha
 
 
-def _cell_edge_cosines(mu: np.ndarray, w: np.ndarray) -> np.ndarray:
+def _cell_edge_cosines(
+    mu: np.ndarray,
+    w: np.ndarray,
+    geometry: str = "spherical",
+    mu_z_level: float = 0.0,
+) -> np.ndarray:
     """Compute cell-edge direction cosines μ_{m+1/2}.
 
-    Bailey et al. (2009) Eq. 52: μ_{m+1/2} = μ_{m-1/2} + w̃_m,
-    with μ_{1/2} = −√(1 − ξ²) and μ_{M+1/2} = +√(1 − ξ²) for
-    cylindrical, or μ_{1/2} = −1 and μ_{M+1/2} = +1 for spherical.
+    Bailey et al. (2009) Eq. 52: μ_{m+1/2} = μ_{m-1/2} + w̃_m.
 
-    For equally-weighted ordinates within a level, w̃_m = w_m.
+    Parameters
+    ----------
+    mu : (M,) ordinate direction cosines (μ for spherical, η for cylindrical).
+    w : (M,) quadrature weights.
+    geometry : "spherical" or "cylindrical".
+    mu_z_level : axial cosine of this level (only for cylindrical).
+
+    For spherical: μ_{1/2} = −1, μ_{M+1/2} = +1.
+    For cylindrical: η_{1/2} = −sin θ, η_{M+1/2} = +sin θ
+    where sin θ = √(1 − μ_z²).
     """
     M = len(mu)
     mu_edge = np.zeros(M + 1)
-    mu_edge[0] = mu[0] - w[0] / 2  # approximate left edge
+    if geometry == "spherical":
+        mu_edge[0] = -1.0
+    elif geometry == "cylindrical":
+        sin_theta = np.sqrt(1.0 - mu_z_level**2)
+        mu_edge[0] = -sin_theta
+    else:
+        mu_edge[0] = mu[0] - w[0] / 2  # fallback
     for m in range(M):
         mu_edge[m + 1] = mu_edge[m] + w[m]
     return mu_edge
@@ -88,7 +106,7 @@ def contamination_beta(
         mu = quad.mu_x
         w = quad.weights
         alpha = _alpha_dome(mu, w)
-        mu_edge = _cell_edge_cosines(mu, w)
+        mu_edge = _cell_edge_cosines(mu, w, geometry="spherical")
 
         beta = 0.0
         for m in range(len(mu)):
@@ -102,8 +120,11 @@ def contamination_beta(
         for level_idx in quad.level_indices:
             eta = quad.mu_x[level_idx]
             w = quad.weights[level_idx]
+            mu_z_level = quad.mu_z[level_idx[0]]
             alpha = _alpha_dome(eta, w)
-            eta_edge = _cell_edge_cosines(eta, w)
+            eta_edge = _cell_edge_cosines(
+                eta, w, geometry="cylindrical", mu_z_level=mu_z_level,
+            )
 
             beta = 0.0
             for m in range(len(eta)):
@@ -141,7 +162,7 @@ def morel_montry_weights(
     if geometry == "spherical":
         mu = quad.mu_x
         w = quad.weights
-        mu_edge = _cell_edge_cosines(mu, w)
+        mu_edge = _cell_edge_cosines(mu, w, geometry="spherical")
         tau = np.empty(len(mu))
         for m in range(len(mu)):
             denom = mu_edge[m + 1] - mu_edge[m]
@@ -153,7 +174,10 @@ def morel_montry_weights(
         for level_idx in quad.level_indices:
             eta = quad.mu_x[level_idx]
             w = quad.weights[level_idx]
-            eta_edge = _cell_edge_cosines(eta, w)
+            mu_z_level = quad.mu_z[level_idx[0]]
+            eta_edge = _cell_edge_cosines(
+                eta, w, geometry="cylindrical", mu_z_level=mu_z_level,
+            )
             tau = np.empty(len(eta))
             for m in range(len(eta)):
                 denom = eta_edge[m + 1] - eta_edge[m]

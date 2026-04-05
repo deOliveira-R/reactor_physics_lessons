@@ -548,3 +548,130 @@ def build_rhs_spherical(
             eq_idx += 1
 
     return rhs.ravel(order='F')
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Cylindrical 1D operator: T = η(A∂/∂r)/V + (ΔA/w)(α∂/∂φ)/V + Σ_t
+# ═══════════════════════════════════════════════════════════════════════
+
+# Equation map and solution-to-flux reuse the spherical versions
+# (both are 1D with reflective BC at the outer boundary).
+build_equation_map_cylindrical = build_equation_map_spherical
+solution_to_angular_flux_cylindrical = solution_to_angular_flux_spherical
+
+
+def transport_operator_matvec_cylindrical(
+    solution: np.ndarray,
+    eq_map: EquationMap,
+    quad: AngularQuadrature,
+    sig_t: np.ndarray,
+    nx: int, ng: int,
+    face_areas: np.ndarray,
+    volumes: np.ndarray,
+    alpha_per_level: list[np.ndarray],
+    redist_dAw_per_level: list[np.ndarray],
+    tau_mm_per_level: list[np.ndarray],
+) -> np.ndarray:
+    r"""Apply the cylindrical transport operator T·ψ.
+
+    Per-level azimuthal redistribution with geometry-weighted
+    :math:`\Delta A / w` factor and Morel–Montry angular closure.
+    """
+    fi = solution_to_angular_flux_cylindrical(solution, eq_map, quad, nx, ng)
+    ref_x = quad.reflection_index("x")
+    A = face_areas       # (nx+1,)
+    V = volumes[:, 0]    # (nx,)
+    N = quad.N
+    mu = quad.mu_x
+
+    # Build reverse map: global ordinate → (level, local index)
+    ord_to_level = np.empty(N, dtype=int)
+    ord_to_local = np.empty(N, dtype=int)
+    for p, level_idx in enumerate(quad.level_indices):
+        for m_local, n in enumerate(level_idx):
+            ord_to_level[n] = p
+            ord_to_local[n] = m_local
+
+    lhs = np.empty((ng, eq_map.n_eq))
+    for k in range(eq_map.n_eq):
+        n = eq_map.ordinate[k]
+        i = eq_map.ix[k]
+        psi_ni = fi[:, n, i, 0]
+
+        p = ord_to_level[n]
+        m_local = ord_to_local[n]
+        alpha = alpha_per_level[p]
+        dAw = redist_dAw_per_level[p]
+        tau_level = tau_mm_per_level[p]
+        level_idx = quad.level_indices[p]
+        M = len(level_idx)
+
+        # ── Spatial streaming: η (A ∂ψ/∂r) / V ─────────────────────
+        if i < nx - 1:
+            psi_right = 0.5 * (fi[:, n, i, 0] + fi[:, n, i + 1, 0])
+        else:
+            if mu[n] > 1e-15:
+                psi_right = fi[:, n, i, 0]
+            else:
+                psi_right = fi[:, ref_x[n], i, 0]
+
+        if i > 0:
+            psi_left = 0.5 * (fi[:, n, i - 1, 0] + fi[:, n, i, 0])
+        else:
+            psi_left = 0.0
+
+        streaming = mu[n] * (A[i + 1] * psi_right - A[i] * psi_left) / V[i]
+
+        # ── Angular redistribution: (ΔA/w)(α ∂ψ/∂φ) / V ───────────
+        dA_w = dAw[i, m_local]
+        tau_m = tau_level[m_local]
+
+        if m_local < M - 1:
+            n_next = level_idx[m_local + 1]
+            psi_angle_right = tau_m * fi[:, n_next, i, 0] + (1.0 - tau_m) * fi[:, n, i, 0]
+        else:
+            psi_angle_right = fi[:, n, i, 0]
+
+        if m_local > 0:
+            n_prev = level_idx[m_local - 1]
+            tau_prev = tau_level[m_local - 1]
+            psi_angle_left = tau_prev * fi[:, n, i, 0] + (1.0 - tau_prev) * fi[:, n_prev, i, 0]
+        else:
+            psi_angle_left = fi[:, n, i, 0]
+
+        redistribution = dA_w * (alpha[m_local + 1] * psi_angle_right
+                                 - alpha[m_local] * psi_angle_left) / V[i]
+
+        # ── Collision ────────────────────────────────────────────────
+        collision = sig_t[i, 0, :] * psi_ni
+
+        lhs[:, k] = streaming + redistribution + collision
+
+    return lhs.ravel(order='F')
+
+
+def build_transport_linear_operator_cylindrical(
+    eq_map: EquationMap,
+    quad: AngularQuadrature,
+    sig_t: np.ndarray,
+    nx: int, ng: int,
+    face_areas: np.ndarray,
+    volumes: np.ndarray,
+    alpha_per_level: list[np.ndarray],
+    redist_dAw_per_level: list[np.ndarray],
+    tau_mm_per_level: list[np.ndarray],
+) -> LinearOperator:
+    """Build scipy LinearOperator for cylindrical T."""
+    def matvec(x):
+        return transport_operator_matvec_cylindrical(
+            x, eq_map, quad, sig_t, nx, ng,
+            face_areas, volumes,
+            alpha_per_level, redist_dAw_per_level, tau_mm_per_level,
+        )
+
+    n = eq_map.n_unknowns
+    return LinearOperator((n, n), matvec=matvec, dtype=float)
+
+
+# RHS builder reuses the spherical version (same 1D isotropic structure).
+build_rhs_cylindrical = build_rhs_spherical

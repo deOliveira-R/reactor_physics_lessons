@@ -241,6 +241,8 @@ class SNSolver:
 
         if self.sn_mesh.curvature == "spherical":
             return self._solve_bicgstab_spherical(fission_src_norm, phi)
+        elif self.sn_mesh.curvature == "cylindrical":
+            return self._solve_bicgstab_cylindrical(fission_src_norm, phi)
         else:
             return self._solve_bicgstab_cartesian(fission_src_norm, phi)
 
@@ -345,6 +347,58 @@ class SNSolver:
         self._psi_solution = solution
 
         fi = solution_to_angular_flux_spherical(
+            solution, eq_map, self.quad, nx, ng,
+        )
+        return angular_flux_to_scalar(fi, self.quad, nx, 1, ng)
+
+    def _solve_bicgstab_cylindrical(
+        self, fission_src_norm: np.ndarray, phi: np.ndarray,
+    ) -> np.ndarray:
+        """BiCGSTAB for cylindrical 1D geometry."""
+        from scipy.sparse.linalg import bicgstab
+        from sn_operator import (
+            build_equation_map_cylindrical,
+            build_transport_linear_operator_cylindrical,
+            build_rhs_cylindrical,
+            solution_to_angular_flux_cylindrical,
+            angular_flux_to_scalar,
+        )
+
+        nx, ng = self.sn_mesh.nx, self.ng
+
+        if not hasattr(self, '_eq_map'):
+            self._eq_map = build_equation_map_cylindrical(nx, self.quad, ng)
+            self._T_op = build_transport_linear_operator_cylindrical(
+                self._eq_map, self.quad, self.sig_t,
+                nx, ng,
+                self.sn_mesh.face_areas,
+                self.sn_mesh.volumes,
+                self.sn_mesh.alpha_per_level,
+                self.sn_mesh.redist_dAw_per_level,
+                self.sn_mesh.tau_mm_per_level,
+            )
+
+        eq_map = self._eq_map
+        T_op = self._T_op
+
+        rhs = build_rhs_cylindrical(
+            fission_src_norm, phi, eq_map, self.quad,
+            self.sig_s, self.sig2, self.sn_mesh.mat_map,
+            nx, ng,
+        )
+
+        if hasattr(self, '_psi_solution'):
+            x0 = self._psi_solution
+        else:
+            x0 = np.ones(eq_map.n_unknowns)
+
+        solution, info = bicgstab(
+            T_op, rhs, x0=x0,
+            rtol=self.inner_tol, maxiter=self.max_inner,
+        )
+        self._psi_solution = solution
+
+        fi = solution_to_angular_flux_cylindrical(
             solution, eq_map, self.quad, nx, ng,
         )
         return angular_flux_to_scalar(fi, self.quad, nx, 1, ng)
