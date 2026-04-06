@@ -559,6 +559,84 @@ tautological check.  Distinguish the two by testing with a problem that
 
 ---
 
+## ERR-017 — Wigner-Seitz pitch formula doubled in MC heterogeneous tests
+
+**Failure mode:** #3 Missing factor — extra factor of 2  
+**Date:** 2026-04-06  
+**Solver:** Monte Carlo (test suite)
+
+**Bug:** The MC heterogeneous test computed the square unit cell pitch as
+`pitch = r_cell * sqrt(pi) * 2` instead of `pitch = r_cell * sqrt(pi)`.
+The correct formula equates the square cell area to the Wigner-Seitz
+circle area: `pitch^2 = pi * r_cell^2`, giving `pitch = r_cell * sqrt(pi)`.
+The factor of 2 quadrupled the cell area.
+
+**Impact:** The extra area was all moderator, which drastically changed the
+neutron economy.  For the 1G 2-region case: k_mc = 0.757 vs k_ref = 0.990
+(24% systematic error).  For the 2G 2-region case, the population collapsed
+to zero (NaN) because the subcritical system with 4× moderator couldn't
+sustain a neutron population at 200 neutrons/cycle.
+
+**How it hid from higher-level tests:**
+- All homogeneous tests passed (single material everywhere — pitch is
+  irrelevant for delta-tracking in a homogeneous medium)
+- The tests were all marked `@pytest.mark.slow` and may not have been
+  run regularly
+- The z-scores were NaN (0/0 from collapsed population) which fails
+  the `< 5.0` assertion but doesn't indicate which direction the error is
+- The error looked like "MC can't handle subcritical systems" rather than
+  "the geometry is wrong"
+
+**L0 test that catches it:** Direct comparison of pitch against the factory
+convention: `pwr_pin_equivalent` uses `r_cell = pitch / sqrt(pi)`, so
+inverting gives `pitch = r_cell * sqrt(pi)`.  A unit test asserting
+`pitch**2 == pi * r_cell**2` would immediately flag the factor of 2.
+
+**Lesson:** When constructing geometry for cross-method comparison, verify
+the cell area/volume matches between the two methods.  A factor-of-2 error
+in a linear dimension is a factor-of-4 in area — large enough to change
+the qualitative physics (supercritical → subcritical), yet small enough to
+be invisible in the code review because `* 2` looks like it "corrects for
+a half-cell to full-cell conversion" or "accounts for the diameter vs
+radius convention".
+
+---
+
+## ERR-018 — Direction sampling uses uniform theta instead of isotropic
+
+**Failure mode:** #4 Factor error — wrong PDF for spherical sampling  
+**Date:** 2026-04-06 (identified during L0 test design)  
+**Solver:** Monte Carlo
+
+**Bug:** The solver samples the polar angle as `theta = pi * rng.random()`
+(uniform in [0, π]) instead of `theta = arccos(1 - 2*xi)` (uniform on the
+unit sphere).  True isotropic sampling requires the PDF `p(theta) =
+sin(theta)/2` to account for the solid angle Jacobian.
+
+**Impact:** The uniform-theta sampling overweights the poles (theta ≈ 0 and
+theta ≈ π) where `sin(theta)` is small.  For the 2D projection used by the
+solver: `E[sin^2(theta)] = 1/2` (uniform) vs `2/3` (isotropic).  This
+systematically shortens the average 2D step length by ~19%.
+
+**Classification:** Known simplification, not a bug to fix.  The formula
+matches the original MATLAB `monteCarloPWR.m` implementation.  Since the
+solver only tracks 2D projections (x, y) and uses periodic BCs on a square
+cell, the non-isotropic sampling affects the effective mean free path but
+does not invalidate the eigenvalue calculation (it changes the effective
+geometry scaling, which is absorbed into the keff estimate).
+
+**L0 test that documents it:** `test_mc_properties.py::test_direction_sampling`
+verifies `E[dir_x^2] = 1/4` (the formula's prediction, not the isotropic
+1/3), confirming the code matches the INTENDED formula.
+
+**Lesson:** When porting from MATLAB, document which simplifications are
+intentional vs accidental.  A sampling formula that "looks wrong" may be
+a deliberate approximation that the original author validated empirically.
+The L0 test should verify the INTENDED formula, not the physically correct
+one, and the documentation should explain the distinction.
+
+---
+
 ## Meta-Lessons
 
 1. **1-group is degenerate.** k = νΣ_f/Σ_a regardless of flux shape.
@@ -587,6 +665,18 @@ tautological check.  Distinguish the two by testing with a problem that
 
 7. **A tautological residual proves nothing.** If the convergence
    check computes `f(x) - g(f(x))` where `g` is the inverse of the
+   step that produced `f(x)`, the residual is identically zero.
+   ERR-016 survived because "all inner iterations = 1" was mistaken
+   for fast convergence.  Always verify with a problem that SHOULD
+   require multiple iterations.
+
+8. **Geometry area/volume must match across methods.** When
+   comparing solvers with different geometry representations (e.g.,
+   MC square cell vs CP Wigner-Seitz cylinder), verify that the
+   cell area/volume is equal.  A factor-of-2 in a linear dimension
+   is a factor-of-4 in area — enough to change supercritical to
+   subcritical.  ERR-017 survived because all homogeneous tests
+   passed and the heterogeneous tests were `@pytest.mark.slow`.
    step that produced `f(x)`, the residual is identically zero.
    ERR-016 survived because "all inner iterations = 1" was mistaken
    for fast convergence.  Always verify with a problem that SHOULD

@@ -133,7 +133,10 @@ def _derive_mc_heterogeneous(ng_key: str, n_regions: int) -> VerificationCase:
 
 
 def all_cases() -> list[VerificationCase]:
-    """Return all MC verification cases: {1,2,4}eg × {1,2,4}rg."""
+    """Return all MC verification cases: {1,2,4}eg × {1,2,4}rg.
+
+    Full matrix: 3 homogeneous + 6 heterogeneous = 9 cases.
+    """
     cases = []
     for ng_key in ["1g", "2g", "4g"]:
         cases.append(_derive_mc_homogeneous(ng_key))

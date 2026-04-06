@@ -16,6 +16,7 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 
 from data.macro_xs.mixture import Mixture
+from geometry import CoordSystem, Mesh1D
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +118,50 @@ class SlabPinCell:
             mat_ids=[0, 1, 2, 1, 0],
             pitch=pitch,
         )
+
+
+class MCMesh:
+    """Augmented geometry for Monte Carlo delta-tracking.
+
+    Wraps a :class:`~geometry.mesh.Mesh1D` and provides point-wise material
+    lookup, following the same pattern as ``CPMesh`` and ``SNMesh``.
+
+    Supported coordinate systems:
+
+    * **Cartesian** — 1-D slab embedded in a 2-D square cell.
+      Material determined by x-coordinate only.
+    * **Cylindrical** — concentric annuli (Wigner-Seitz pin cell).
+      Material determined by radial distance from cell centre.
+
+    Parameters
+    ----------
+    mesh : Mesh1D
+        Base geometry (from :mod:`geometry.factories`).
+    pitch : float
+        Unit cell side length (cm) for periodic boundary conditions.
+    """
+
+    def __init__(self, mesh: Mesh1D, pitch: float) -> None:
+        if mesh.coord not in (CoordSystem.CARTESIAN, CoordSystem.CYLINDRICAL):
+            raise ValueError(
+                f"MCMesh supports CARTESIAN or CYLINDRICAL, got {mesh.coord}"
+            )
+        self.mesh = mesh
+        self.pitch = pitch
+        self._edges = mesh.edges
+        self._mat_ids = mesh.mat_ids
+        self._center = pitch / 2.0
+
+    def material_id_at(self, x: float, y: float) -> int:
+        """Return the material ID at position (x, y)."""
+        if self.mesh.coord is CoordSystem.CARTESIAN:
+            pos = x
+        else:
+            pos = np.sqrt((x - self._center)**2 + (y - self._center)**2)
+
+        idx = np.searchsorted(self._edges, pos, side="right") - 1
+        idx = max(0, min(idx, len(self._mat_ids) - 1))
+        return int(self._mat_ids[idx])
 
 
 @dataclass
