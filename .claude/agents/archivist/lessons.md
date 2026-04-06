@@ -288,3 +288,24 @@ N/A -- audit, not documentation creation.
 N/A -- this was a verification audit, not documentation creation.
 
 ---
+
+## 2026-04-06 — Re-review of monte_carlo.rst after solver restructuring (MT-20260406-008)
+
+- **What worked**: Collecting actual test counts via `--collect-only` immediately caught the inflated "55 tests" claim. Checking the autodoc path (`docs/api/`) for `monte_carlo` confirmed that all ~40 cross-references render as plain text. Reading IMPROVEMENTS.md alongside the RST revealed multiple stale statuses (OPEN items that are now IMPL or DONE).
+- **What was missing**: The previous review's "3 blocking fixes" were not explicitly listed in a machine-readable format -- I had to infer them from context. Future reviews should record blocking fixes as a numbered checklist in the lessons file for easy re-verification.
+- **Convention discovered**: The test count in RST documentation is a high-risk claim because tests get added/removed/reorganized independently of the RST. Any test count claim should cite the specific test files and use `--collect-only` to verify before documenting.
+- **Improvement for next time**: Always run `pytest --collect-only` as the FIRST step when reviewing any RST that claims a test count. This takes 1 second and catches inflated numbers immediately.
+
+### Quality Score (for monte_carlo.rst)
+
+| Dimension | Score | Notes |
+|-----------|-------|-------|
+| Derivation depth | 4 | Delta-tracking proof, weight conservation proofs, splitting derivation -- all present but hand-written |
+| Cross-references | 4 | ~40 :class:/:func: refs added for architecture, but none resolve (no autodoc) |
+| Numerical evidence | 4 | Homogeneous + heterogeneous tables, tolerance analysis, specific XS values |
+| Failed approaches | 5 | ERR-017 (24% error, NaN collapse), ERR-018 (13% step shortening) -- exemplary |
+| Code traceability | 4 | Architecture pseudocode, annotated code snippets for all 5 layers |
+| Derivation source | 3 | Eigenvalue refs to derivations/ good. Proofs hand-written (no derivations/mc_proofs.py) |
+| **Overall** | **4.0** | Up from previous 4.2 (recalculated). Blocking: test count factual error. |
+
+---
