@@ -637,6 +637,59 @@ one, and the documentation should explain the distinction.
 
 ---
 
+## ERR-019 — Missing 4π·sin(θ) weight factor in MOC scalar flux update
+
+**Failure mode:** #3 Missing factor — incomplete angular integration weight  
+**Date:** 2026-04-06  
+**Solver:** MOC (2D pin cell)
+
+**Bug:** The MOC transport sweep accumulated `delta_phi` with weight
+`omega_a * omega_p * t_s` instead of the correct
+`4*pi * omega_a * omega_p * t_s * sin(theta_p)`.  Two factors were
+missing: (1) the `4*pi` from the angular flux → scalar flux integral
+(`phi = integral_{4pi} psi dOmega`), and (2) the `sin(theta_p)` that
+arises because the 2D segment-averaged angular flux `bar_psi` relates
+to the 3D path integral via `bar_psi = Q/Sig_t + delta_psi * sin(theta) / (Sig_t * ell)`.
+
+The scalar flux update formula (Boyd et al. 2014, Eq. 45) is:
+
+    phi_i = (4*pi / Sig_t_i) * [Q_i + (1/A_i) * sum omega_a * omega_p * t_s * sin(theta_p) * delta_psi]
+
+The `4*pi` factor multiplies the entire bracket. When delta_phi is defined
+as `sum(4*pi * omega_a * omega_p * t_s * sin_p * delta_psi)`, the update
+becomes `phi = (4*pi*Q + delta_phi/A) / Sig_t`.
+
+**Impact:** Heterogeneous keff was completely wrong: MOC gave 1.344 vs
+CP reference of 0.902 for a 2-region fuel+coolant pin cell (1G).  The
+homogeneous case was UNAFFECTED because `delta_psi = 0` when the angular
+flux is spatially uniform (all boundary fluxes equal `Q/Sig_t`).
+
+**How it hid from homogeneous tests:**
+- For homogeneous material with converged boundary fluxes,
+  `psi_in = Q/Sig_t` everywhere → `delta_psi = 0` → `delta_phi = 0`
+- `phi = 4*pi*Q/Sig_t` regardless of the weight factor
+- 1G: k = nu*SigF/SigA (weight-independent)
+- 2G/4G: matrix eigenvalue (still weight-independent for uniform medium)
+- All 3 homogeneous eigenvalue tests passed to machine precision
+
+**L0 test that catches it:** `test_moc_verification.py::TestL0EquilibriumFlux::
+test_pure_scatterer_equilibrium_single_sweep` — injects a non-trivial
+boundary flux and checks that the resulting scalar flux matches the
+analytical value.  With wrong weights, the correction term `delta_phi/A`
+has the wrong magnitude and the flux deviates.  The heterogeneous
+particle balance test also catches it immediately (production/absorption ≠ keff).
+
+**Lesson:** The angular integration weight in MOC contains problem-specific
+factors (`4*pi` from the full-sphere integral, `sin(theta_p)` from the
+2D→3D projection) that cancel out for spatially uniform solutions.  This
+makes the missing factor invisible to homogeneous tests.  ALWAYS test the
+transport sweep with a heterogeneous problem before declaring the weight
+formula correct.  The Boyd Eq. 45 formula should be verified term-by-term
+against the derivation, not just checked for self-consistency on the
+homogeneous case.
+
+---
+
 ## Meta-Lessons
 
 1. **1-group is degenerate.** k = νΣ_f/Σ_a regardless of flux shape.
@@ -677,7 +730,14 @@ one, and the documentation should explain the distinction.
    is a factor-of-4 in area — enough to change supercritical to
    subcritical.  ERR-017 survived because all homogeneous tests
    passed and the heterogeneous tests were `@pytest.mark.slow`.
-   step that produced `f(x)`, the residual is identically zero.
-   ERR-016 survived because "all inner iterations = 1" was mistaken
-   for fast convergence.  Always verify with a problem that SHOULD
-   require multiple iterations.
+
+9. **Angular integration weights have hidden factors.** In MOC,
+   the weight `omega_a * omega_p * t_s` is the spatial/angular
+   discretization weight, but the scalar flux integral also requires
+   `4*pi` (full-sphere normalization) and `sin(theta_p)` (2D→3D
+   projection).  These factors cancel for spatially uniform solutions,
+   making them invisible to homogeneous tests.  ERR-019 survived
+   three homogeneous tests at machine precision because delta_psi = 0
+   for uniform media.  Derive the weight formula from first principles
+   and verify against a heterogeneous problem BEFORE trusting the
+   homogeneous result.

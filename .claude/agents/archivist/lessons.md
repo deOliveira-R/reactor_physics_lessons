@@ -309,3 +309,95 @@ N/A -- this was a verification audit, not documentation creation.
 | **Overall** | **4.0** | Up from previous 4.2 (recalculated). Blocking: test count factual error. |
 
 ---
+
+## 2026-04-06 — Review of method_of_characteristics.rst (new chapter)
+
+- **What worked**: Running `pytest --collect-only` first (per lesson from MC review) confirmed the 102-test claim is accurate. Building Sphinx first confirmed zero warnings. Comparing directive counts against CP/DO reference chapters immediately quantified the depth gap. Reading `derivations/moc.py` revealed it only provides eigenvalue references, not equation verification -- this is the same pattern as MC.
+- **What was missing**: I did not check for an IMPROVEMENTS.md for the MOC module. Future reviews should always check for tracked items. I also did not verify whether the `:func:` references to private functions (`_ray_box_intersections`, `_ray_circle_intersections`) actually resolve in autodoc.
+- **Convention discovered**: Dead citations (referenced in bibliography but never cited in body text) are a recurring pattern. [Askew1972] and [KnottYamamoto2010] are defined but never referenced. This was also flagged in the DO review for [Bailey2009].
+- **Improvement for next time**: Add a "dead citation check" to the review checklist: grep for `[Name20XX]_` in body text and verify each bibliography entry has at least one citation. This is trivially automatable.
+
+### Quality Score (for method_of_characteristics.rst)
+
+| Dimension | Score | Notes |
+|-----------|-------|-------|
+| Derivation depth | 7 | Core chain solid (PDE->ODE->attenuation->boyd-eq-45). bar-psi not derived. keff-update not derived. |
+| Cross-references | 7 | 26 directives, good class/func coverage. Zero :ref: to other pages. Dead citations. |
+| Numerical evidence | 6 | Homogeneous + heterogeneous tables present. Angular/polar convergence qualitative only. No convergence rates. |
+| Failed approaches | 9 | ERR-019 exemplary: symptoms, root cause, degeneracy explanation, lesson. Minor: no rejected hypotheses. |
+| Code traceability | 7 | Key classes/methods linked. Missing _is_vertical, derivations.moc module ref. |
+| Derivation source | 5 | derivations/moc.py exists but only does eigenvalue refs. Core equations hand-written in RST. |
+| **Overall** | **6.9** | Solid first draft. Strongest: ERR-019. Weakest: numerical evidence, depth. |
+
+### Blocking fixes (numbered for re-verification)
+
+1. Add angular convergence table (n_azi sweep with keff values) -- DONE (lines 972-1003)
+2. Add polar convergence table (TY-1/TY-2/TY-3 with keff values) -- DONE (lines 1007-1035)
+3. Derive bar-psi from integral of ODE solution -- DONE (lines 535-598, excellent)
+4. Add :ref: cross-references to CP, DO, verification pages -- PARTIAL (CP+DO done, verification missing)
+5. Remove or cite [Askew1972] and [KnottYamamoto2010] in body text -- DONE (cited in overview, line 40-41)
+
+---
+
+## 2026-04-06 — Round 2 review of method_of_characteristics.rst (1274 lines)
+
+- **What worked**: Checking for duplicate labels via `grep :label: | sort | uniq -d` immediately caught two collisions (keff-update, wigner-seitz) that Sphinx does not warn about. Verifying autodoc path existence before assessing cross-reference quality (per lesson from MC review) correctly identified the 35 non-resolving directives. Running `pytest --collect-only` first (per lesson from previous review) confirmed the 102-test claim.
+- **What was missing**: I did not verify whether the convergence table values match what the actual tests produce. The numbers in the RST could be stale if the solver changed since the tables were written. Future reviews should run at least one convergence point to spot-check.
+- **Convention discovered**: Math label collisions across RST files are silent in Sphinx (no warning). The previous lesson (CP review) established page-prefixed labels (e.g., `cp-keff-update`). This MOC page introduces two new collisions. This class of bug must be caught by manual `grep | uniq -d` since the build does not flag it.
+- **Improvement for next time**: Add duplicate label check to the standard review checklist as step 0 (before even reading the file). It takes 1 second and catches a class of bug the build misses.
+
+### Round 1 blocking fix verification
+
+| # | Fix | Status |
+|---|-----|--------|
+| 1 | Angular convergence table | DONE |
+| 2 | Polar convergence table | DONE |
+| 3 | bar-psi derivation | DONE |
+| 4 | :ref: cross-references | PARTIAL (CP+DO done, verification missing) |
+| 5 | Dead citations | DONE |
+
+### Quality Score (round 2)
+
+| Dimension | R1 | R2 | Notes |
+|-----------|----|----|-------|
+| Derivation depth | 7 | 8.5 | bar-psi from first principles, keff-update with (n,2n). Missing: ODE integrating factor, angular discretization step. |
+| Cross-references | 7 | 7.5 | 3 :ref: added, dead citations fixed. Blocking: no autodoc page (35 directives non-resolving). |
+| Numerical evidence | 6 | 8.5 | 3 convergence tables with real numbers. Missing: theoretical order discussion, flux shape column. |
+| Failed approaches | 9 | 9 | ERR-019 exemplary. Missing: rejected hypotheses during investigation. |
+| Code traceability | 7 | 7.5 | Code snippet + variable mapping good. Blocked by autodoc gap. |
+| Derivation source | 5 | 5 | derivations/moc.py only does eigenvalue refs. Core equations (bar-psi, Boyd-45, keff) all hand-written. |
+| **Overall** | **6.9** | **7.7** | |
+
+### Round 2 blocking fixes
+
+1. Rename `keff-update` to `moc-keff-update` and `wigner-seitz` to `moc-wigner-seitz` (duplicate labels)
+2. Create `docs/api/moc.rst` with automodule directives (activates 35 cross-refs)
+3. Update IMPROVEMENTS.md: MC-20260406-005 should be DONE (ERR-019 fully documented)
+
+---
+
+## 2026-04-06 — Round 3 review of MOC theory chapter (8.3/10)
+
+- **What worked**: Running Sphinx with `-W` (warnings-as-errors) confirmed zero build warnings. Running the derivation script confirmed all 3 proofs pass. Checking for `nitpicky` mode in conf.py revealed that unresolved cross-refs are silently swallowed -- critical finding for cross-reference scoring.
+- **What was missing**: `nitpicky = True` in conf.py would have caught the `MoCGeometry` dead reference and unqualified `pwr_pin_equivalent` automatically. Without it, manual grep of `:func:/:class:/:meth:` against actual code symbols is required.
+- **Convention discovered**: Private functions (`_ray_box_intersections`, etc.) referenced via `:func:` don't resolve unless `:private-members:` is added to the automodule directive. Best practice for private implementation details is to use code literals instead.
+- **Improvement for next time**: Always check whether `nitpicky = True` is set. If not, manually verify every cross-reference against the codebase. The zero-warnings build gives false confidence about cross-ref resolution.
+
+### Quality scores (round 3)
+
+| Dimension | Score |
+|-----------|-------|
+| Derivation depth | 9 |
+| Cross-references | 7 |
+| Numerical evidence | 9 |
+| Failed approaches | 9 |
+| Code traceability | 8 |
+| Derivation source | 8 |
+
+### Round 3 fixes needed (cross-refs only)
+
+1. `MoCGeometry` on line 1168 -> code literal (class no longer exists)
+2. `_ray_box_intersections`, `_ray_circle_intersections`, `_is_vertical` -> code literals (private, won't resolve)
+3. `pwr_pin_equivalent` on line 102 -> fully qualified `:func:`~geometry.factories.pwr_pin_equivalent``
+
+---

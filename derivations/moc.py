@@ -3,14 +3,13 @@ r"""MOC (Method of Characteristics) eigenvalue derivations.
 Homogeneous: derived analytically from the characteristic ODE.
 
 Heterogeneous: Richardson-extrapolated reference from the MOC solver
-at multiple mesh refinements. The reference is the converged limit
+at multiple ray spacing refinements.  The reference is the converged limit
 of the MOC equations themselves.
 """
 
 from __future__ import annotations
 
 import numpy as np
-import sympy as sp
 
 from ._eigenvalue import kinf_homogeneous
 from ._types import VerificationCase
@@ -72,8 +71,9 @@ def _derive_moc_homogeneous(ng_key: str) -> VerificationCase:
 
 
 def _derive_moc_heterogeneous(ng_key: str, n_regions: int) -> VerificationCase:
-    """Derive MOC eigenvalue via Richardson extrapolation of mesh refinement."""
-    from method_of_characteristics import MoCGeometry, solve_moc
+    """Derive MOC eigenvalue via Richardson extrapolation of ray spacing."""
+    from geometry import CoordSystem, Mesh1D
+    from method_of_characteristics import solve_moc
 
     layout = LAYOUTS[n_regions]
     mat_ids = _MAT_IDS[n_regions]
@@ -84,26 +84,36 @@ def _derive_moc_heterogeneous(ng_key: str, n_regions: int) -> VerificationCase:
     for i, region in enumerate(layout):
         materials[mat_ids[i]] = get_mixture(region, ng_key)
 
-    r_cell = radii[-1]
-    pitch = r_cell * np.sqrt(np.pi) * 2  # large enough to contain the pin
+    # Build Wigner-Seitz mesh
+    pitch = 2.0 * radii[-1]
+    ws_r = pitch / np.sqrt(np.pi)
+    edges = [0.0] + radii[:-1] + [ws_r]
+    mesh = Mesh1D(
+        edges=np.array(edges),
+        mat_ids=np.array(mat_ids),
+        coord=CoordSystem.CYLINDRICAL,
+    )
 
-    # Run at 3 mesh refinements (MOC is slow, use coarser sequence)
-    n_cells_list = [8, 12, 16]
+    # Richardson extrapolation over ray spacing refinements
+    spacings = [0.06, 0.03, 0.015]
     keffs = []
-    for nc in n_cells_list:
-        geom = MoCGeometry.from_annular(radii, mat_ids, pitch=pitch, n_cells=nc)
-        result = solve_moc(materials, geom, max_outer=300)
+    for sp in spacings:
+        result = solve_moc(
+            materials, mesh,
+            n_azi=32, n_polar=3, ray_spacing=sp,
+            max_outer=500, n_inner_sweeps=20,
+        )
         keffs.append(result.keff)
 
-    # Richardson extrapolation (O(h²), ratio from 12→16)
-    h_ratio = n_cells_list[-2] / n_cells_list[-1]
+    # Richardson extrapolation (O(h²), ratio from spacing[1] → spacing[2])
+    h_ratio = spacings[-2] / spacings[-1]
     k_ref = keffs[-1] + (keffs[-1] - keffs[-2]) / (h_ratio**2 - 1)
 
     latex = (
         rf"Richardson-extrapolated MOC eigenvalue for {ng}G, "
         rf"{n_regions}-region cylindrical pin cell."
         "\n\n"
-        rf"Mesh sequence: {n_cells_list} cells/side. "
+        rf"Ray spacings: {spacings} cm. "
         rf"Extrapolated :math:`k_\infty = {k_ref:.10f}`."
     )
 

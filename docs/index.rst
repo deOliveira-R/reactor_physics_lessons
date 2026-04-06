@@ -22,6 +22,7 @@ ORPHEUS — Open Reactor Physics Educational University System
    api/homogeneous
    api/discrete_ordinates
    api/collision_probability
+   api/method_of_characteristics
    api/derivations
 
 

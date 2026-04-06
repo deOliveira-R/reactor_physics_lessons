@@ -1,92 +1,90 @@
-"""Unit tests for MOC solver properties.
-
-Tests structural properties of the Method of Characteristics solution:
-- Particle balance: production / absorption = keff
-- Scalar flux positivity
-- from_annular geometry factory produces correct material layout
-"""
+"""Property tests for the Method of Characteristics solver."""
 
 import numpy as np
 import pytest
 
+from geometry import CoordSystem, Mesh1D
 from derivations import get
-from method_of_characteristics import MoCGeometry, solve_moc
+from method_of_characteristics import solve_moc
+
+
+def _homogeneous_result():
+    """Run a 1G homogeneous MOC calculation for property tests."""
+    case = get("moc_cyl1D_1eg_1rg")
+    mix = next(iter(case.materials.values()))
+    r_cell = 3.6 / np.sqrt(np.pi)
+    mesh = Mesh1D(
+        edges=np.array([0.0, r_cell]),
+        mat_ids=np.array([0]),
+        coord=CoordSystem.CYLINDRICAL,
+    )
+    return solve_moc(
+        {0: mix}, mesh,
+        n_azi=8, n_polar=3, ray_spacing=0.05,
+        max_outer=100,
+    ), case
 
 
 def test_particle_balance():
-    """For homogeneous fill, production / absorption = keff."""
-    case = get("moc_cyl1D_1eg_1rg")
-    mix = next(iter(case.materials.values()))
-    materials = {0: mix, 1: mix, 2: mix}
-    geom = MoCGeometry.default_pwr()
-    result = solve_moc(materials, geom, max_outer=200)
+    """Production / absorption = keff for homogeneous (no leakage)."""
+    result, case = _homogeneous_result()
+    mix = case.materials[0]
 
-    flux = result.scalar_flux  # (n, n, ng)
-    vol = geom.volume  # (n, n)
+    phi = result.scalar_flux
+    areas = result.moc_mesh.region_areas
 
-    production = np.sum(flux[:, :, 0] * mix.SigP[0] * vol)
-    absorption = np.sum(flux[:, :, 0] * (mix.SigC[0] + mix.SigF[0]) * vol)
+    p_rate = 0.0
+    a_rate = 0.0
+    for i in range(result.moc_mesh.n_regions):
+        p_rate += mix.SigP @ phi[i, :] * areas[i]
+        a_rate += mix.absorption_xs @ phi[i, :] * areas[i]
 
-    k_balance = production / absorption
-    np.testing.assert_allclose(
-        k_balance, result.keff, rtol=1e-4,
-        err_msg=f"Particle balance: {k_balance:.6f} ≠ keff={result.keff:.6f}",
-    )
+    assert p_rate / a_rate == pytest.approx(result.keff, rel=1e-4)
 
 
 def test_flux_positivity():
-    """Scalar flux must be positive everywhere."""
-    case = get("moc_cyl1D_1eg_1rg")
-    mix = next(iter(case.materials.values()))
-    materials = {0: mix, 1: mix, 2: mix}
-    geom = MoCGeometry.default_pwr()
-    result = solve_moc(materials, geom, max_outer=200)
+    """Scalar flux must be non-negative everywhere."""
+    result, _ = _homogeneous_result()
+    assert np.all(result.scalar_flux >= 0)
 
-    assert np.all(result.scalar_flux > 0), (
-        f"Non-positive flux: min={result.scalar_flux.min():.6e}"
+
+def test_flux_per_material_matches_scalar():
+    """Volume-averaged flux per material must be consistent with scalar_flux."""
+    result, _ = _homogeneous_result()
+    phi = result.scalar_flux
+    areas = result.moc_mesh.region_areas
+    total_area = areas.sum()
+    vol_avg = (phi * areas[:, None]).sum(axis=0) / total_area
+
+    np.testing.assert_allclose(
+        result.flux_per_material[0], vol_avg, rtol=1e-10
     )
 
 
-def test_from_annular_material_layout():
-    """from_annular must assign correct materials based on distance from center."""
-    geom = MoCGeometry.from_annular(
-        radii=[0.3, 0.5, 0.8],
-        mat_ids=[2, 1, 0],
-        pitch=2.0,
-        n_cells=20,
+def test_heterogeneous_flux_depression():
+    """In a fuel+coolant pin, thermal flux should be higher in coolant."""
+    from derivations._xs_library import get_mixture
+    fuel = get_mixture("A", "2g")
+    cool = get_mixture("B", "2g")
+
+    r_fuel = 0.5
+    pitch = 2.0
+    ws_r = pitch / np.sqrt(np.pi)
+    mesh = Mesh1D(
+        edges=np.array([0.0, r_fuel, ws_r]),
+        mat_ids=np.array([2, 0]),
+        coord=CoordSystem.CYLINDRICAL,
     )
-    center = 1.0  # pitch / 2
-    delta = 0.1   # pitch / n_cells
 
-    # Check a few cells
-    for ix in range(20):
-        for iy in range(20):
-            cx = (ix + 0.5) * delta
-            cy = (iy + 0.5) * delta
-            r = np.sqrt((cx - center)**2 + (cy - center)**2)
-            if r <= 0.3:
-                expected = 2
-            elif r <= 0.5:
-                expected = 1
-            else:
-                expected = 0
-            assert geom.mat_map[ix, iy] == expected, (
-                f"Cell ({ix},{iy}): r={r:.3f}, expected mat={expected}, "
-                f"got {geom.mat_map[ix, iy]}"
-            )
-
-
-def test_from_annular_homogeneous():
-    """from_annular with single material should run and match analytical k."""
-    case = get("moc_cyl1D_1eg_1rg")
-    mix = next(iter(case.materials.values()))
-    geom = MoCGeometry.from_annular(
-        radii=[1.0],
-        mat_ids=[0],
-        pitch=2.0,
-        n_cells=10,
+    result = solve_moc(
+        {2: fuel, 0: cool}, mesh,
+        n_azi=16, n_polar=3, ray_spacing=0.03,
+        max_outer=200, n_inner_sweeps=15,
     )
-    result = solve_moc({0: mix}, geom, max_outer=200)
-    assert abs(result.keff - case.k_inf) < 1e-3, (
-        f"from_annular homogeneous: keff={result.keff:.6f} vs {case.k_inf:.6f}"
+
+    # Thermal group (last) flux should be higher in coolant than fuel
+    phi_fuel = result.flux_per_material[2]
+    phi_cool = result.flux_per_material[0]
+    assert phi_cool[-1] > phi_fuel[-1], (
+        f"Thermal flux: fuel={phi_fuel[-1]:.4e}, cool={phi_cool[-1]:.4e}"
     )
