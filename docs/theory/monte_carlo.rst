@@ -45,42 +45,60 @@ are computed independently by the derivation scripts.  These are the
 Every numerical value cited in this chapter was produced by these scripts.
 
 
-Architecture: Base Geometry and Augmented Geometry
-===================================================
+Solver Architecture
+====================
 
-The MC solver follows the same three-layer geometry pattern as the CP
-(:class:`CPMesh`) and SN (:class:`SNMesh`) solvers:
+The MC solver is structured as a modular pipeline with five layers
+(MT-20260406-008), following the same separation-of-concerns pattern as
+the CP (:class:`CPMesh` → :class:`CPSolver` → :func:`solve_cp`) and
+SN (:class:`SNMesh` → :class:`SNSolver` → :func:`solve_sn`) solvers.
+
+.. code-block:: text
+
+   Mesh1D (edges, mat_ids, coord)          ← base geometry
+       |
+       v
+   MCMesh (point-wise material_id_at)      ← augmented geometry
+       |
+       v
+   Particle → Neutron                      ← per-particle state
+       |
+       v
+   NeutronBank                             ← population management
+       |
+       v
+   solve_monte_carlo()                     ← orchestrator
+   ├── _precompute_xs()                       XS cache
+   ├── for cycle:
+   │   ├── _random_walk()                     transport kernel
+   │   ├── _russian_roulette()                population control
+   │   └── _split_heavy()                     population control
+   └── MCResult
+
+
+Layer 1: Geometry
+------------------
+
+The MC solver follows the same three-layer geometry pattern as CP and SN:
 
 1. **Base geometry** --- :class:`~geometry.mesh.Mesh1D` stores cell edges,
-   material IDs, and the coordinate system.  It computes volumes and
-   surfaces via :func:`~geometry.coord.compute_volumes_1d`.
+   material IDs, and the coordinate system.
 
 2. **Augmented geometry** --- :class:`MCMesh` wraps a ``Mesh1D`` and adds
    the MC-specific **point-wise material lookup** needed by delta-tracking.
-   The lookup is selected automatically from the mesh's coordinate system:
 
    - **Cartesian** --- ``x`` position mapped to cell index via
      ``np.searchsorted(edges, x, side="right") - 1``.
    - **Cylindrical** --- radial distance
-     :math:`r = \sqrt{(x - x_c)^2 + (y - y_c)^2}` from the cell centre
-     (:math:`x_c = y_c = \text{pitch}/2`), then mapped to cell index.
+     :math:`r = \sqrt{(x - x_c)^2 + (y - y_c)^2}` from the cell centre,
+     then mapped to cell index.
 
 3. **Solver** --- :func:`solve_monte_carlo` receives an :class:`MCGeometry`
    protocol object (satisfied by :class:`MCMesh`, :class:`ConcentricPinCell`,
-   or :class:`SlabPinCell`) and runs the power iteration.
+   or :class:`SlabPinCell`).
 
-.. code-block:: text
-
-   Mesh1D (edges, mat_ids, coord)
-       |
-       v
-   MCMesh (point-wise material_id_at + pitch)
-       |
-       v
-   solve_monte_carlo() -> MCResult
-
-**Design rationale (MT-20260406-001).**  Delta-tracking only needs to know
-the material at the collision point --- no distance-to-surface calculation.
+**Design rationale (MT-20260406-001).**  Delta-tracking only needs the
+material at the collision point --- no distance-to-surface calculation.
 This makes the geometry interface minimal:
 
 .. code-block:: python
@@ -103,6 +121,129 @@ same ``Mesh1D`` factories used by CP and SN (e.g.,
 comparisons on identical base geometry.  Verified:
 ``test_mc_properties.py::test_mcmesh_cylindrical_matches_concentric``
 shows zero mismatches over 10,000 random sample points.
+
+
+Layer 2: Particle Hierarchy
+----------------------------
+
+Each transported particle carries its own phase-space state.  The two-level
+hierarchy separates particle-type-independent state (position, weight) from
+neutron-specific state (energy group):
+
+.. code-block:: python
+
+   @dataclass
+   class Particle:
+       """Base class for transported particles."""
+       x: float
+       y: float
+       weight: float
+       alive: bool = True
+
+   @dataclass
+   class Neutron(Particle):
+       """A neutron with discrete energy group."""
+       group: int = 0
+
+**Extensibility.**  Future gamma-ray transport would subclass
+:class:`Particle` without ``group`` (photons may use continuous energy or
+a different discretization).  The :class:`NeutronBank` and population
+control functions operate on the particle arrays, so generalizing to a
+``ParticleBank`` would require minimal changes.
+
+
+Layer 3: NeutronBank
+---------------------
+
+:class:`NeutronBank` encapsulates the neutron population as **parallel
+arrays** (``x``, ``y``, ``weight``, ``group``) with an integer ``n``
+tracking the number of live particles.  This design balances two goals:
+
+1. **Clean API** --- methods like :meth:`~NeutronBank.normalize_weights`,
+   :meth:`~NeutronBank.compact`, :meth:`~NeutronBank.grow` replace inline
+   array manipulation scattered throughout the solver.
+2. **Performance** --- the inner transport loop accesses ``bank.x[i_n]``,
+   ``bank.weight[i_n]`` directly (same speed as raw array indexing).
+   Per-particle object creation is avoided in the hot path.
+
+.. code-block:: python
+
+   class NeutronBank:
+       x: np.ndarray           # positions
+       y: np.ndarray
+       weight: np.ndarray      # statistical weights
+       group: np.ndarray       # energy group indices
+       n: int                  # number of live neutrons
+
+       @classmethod
+       def initialize(cls, n_neutrons, pitch, chi_cum, ng, rng): ...
+       def normalize_weights(self, target): ...
+       def save_start_weights(self) -> np.ndarray: ...
+       def compact(self): ...           # remove dead (w=0) neutrons
+       def grow(self, n_extra): ...     # extend arrays for splitting
+
+
+Layer 4: Cross-Section Cache
+------------------------------
+
+:class:`_PrecomputedXS` groups data that is constant across cycles::
+
+    @dataclass
+    class _PrecomputedXS:
+        sig_t_max: np.ndarray       # (ng,) majorant per group
+        sig_s_dense: dict           # mat_id -> (ng, ng) dense P0 scattering
+        chi_cum: np.ndarray         # cumulative fission spectrum
+        ng: int
+        eg: np.ndarray              # energy group boundaries
+        eg_mid: np.ndarray          # mid-group energies
+        du: np.ndarray              # lethargy widths
+
+Built by :func:`_precompute_xs`, which:
+
+- Computes the **majorant** :math:`\Sigma_{\text{maj},g} = \max_m
+  \Sigma_{t,m,g}` (verified by ``test_majorant_computation``).
+- Converts sparse ``SigS[0]`` to dense arrays (P0 isotropic scattering
+  only).
+- Builds the cumulative fission spectrum for group sampling.
+
+
+Layer 5: Orchestrator
+----------------------
+
+:func:`solve_monte_carlo` is a ~60-line orchestrator that wires the
+layers together:
+
+.. code-block:: python
+
+   def solve_monte_carlo(materials, params) -> MCResult:
+       xs = _precompute_xs(materials)
+       bank = NeutronBank.initialize(...)
+
+       for i_cycle in range(total_cycles):
+           bank.normalize_weights(params.n_neutrons)
+           w0 = bank.save_start_weights()
+
+           for i_n in range(bank.n):
+               _random_walk(bank, i_n, geom, materials, xs, rng, tally)
+
+           _russian_roulette(bank, w0, rng)
+           bank.compact()
+           _split_heavy(bank, rng)
+           keff_cycle = bank.weight[:bank.n].sum() / w0.sum()
+           # ... accumulate statistics ...
+
+       return MCResult(...)
+
+**Comparison with deterministic solvers.**  The CP and SN solvers use a
+shared :func:`~numerics.eigenvalue.power_iteration` loop that calls the
+:class:`~numerics.eigenvalue.EigenvalueSolver` protocol (five methods:
+``initial_flux_distribution``, ``compute_fission_source``,
+``solve_fixed_source``, ``compute_keff``, ``converged``).  The MC solver
+**cannot** satisfy this protocol because :math:`k_{\text{eff}}` emerges
+stochastically from cycle-to-cycle weight ratios, not from a deterministic
+flux/source iteration.  Instead, the MC orchestrator implements its own
+cycle loop with population control (roulette, splitting) that has no
+deterministic analogue.
 
 
 .. _mc-geometry-mismatch:
@@ -962,6 +1103,25 @@ MATLAB original.  See :ref:`mc-direction-sampling-err018`.
 **1-group is degenerate.** :math:`k = \nu\Sigma_f/\Sigma_a` regardless of
 code correctness.  The suite tests at 1, 2, AND 4 groups.
 
+**Particle/Neutron/Bank decomposition (MT-20260406-008).**  The solver was
+originally a single monolithic function (~220 lines).  The restructuring
+separates concerns into five layers (see :ref:`theory-monte-carlo`
+architecture section) following the same pattern as the CP and SN solvers.
+The :class:`Particle` → :class:`Neutron` hierarchy enables future
+gamma-ray transport without modifying the bank or population control code.
+The :class:`NeutronBank` uses parallel arrays (not per-particle objects)
+in the hot path for performance parity with the original implementation.
+Verified: ``test_seed_reproducibility`` proves identical RNG sequences
+before and after restructuring.
+
+**Array-backed bank vs object-per-neutron.**  Each neutron's random walk
+is inherently serial (next collision depends on current outcome), so
+per-particle Python overhead matters.  The bank stores parallel arrays and
+the inner loop indexes them directly (``bank.x[i_n]``), giving the same
+performance as raw arrays.  The :class:`Particle`/:class:`Neutron`
+dataclasses serve as the conceptual model and API documentation, not as
+the runtime representation in the hot path.
+
 
 Limitations and Future Work
 =============================
@@ -984,6 +1144,13 @@ Limitations and Future Work
      - Direction sampling not isotropic (ERR-018)
    * - MT-20260406-007
      - Flux tally is not a proper estimator
+   * - MT-20260406-009
+     - Event-based vectorised transport (process all neutrons per
+       collision step using numpy batch operations; expected 10--50×
+       speedup)
+   * - MT-20260406-010
+     - Parallel neutron transport (``multiprocessing`` with per-worker
+       RNG via ``SeedSequence.spawn``)
 
 
 References
