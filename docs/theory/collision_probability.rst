@@ -28,6 +28,14 @@ Key Facts
 - Gauss-Seidel update uses latest flux immediately; Jacobi uses previous iteration
 - Verification uses :ref:`synthetic cross sections <synthetic-xs-library>`, not real nuclear data
 
+.. admonition:: Conventions
+
+   - Scattering matrix: :ref:`scattering-matrix-convention` — ``SigS[g_from, g_to]``, source uses transpose
+   - Multi-group balance: :eq:`mg-balance` in :ref:`theory-homogeneous`
+   - Cross sections: :ref:`theory-cross-section-data`
+   - Verification: :ref:`synthetic-xs-library` — regions A/B/C/D
+   - Eigenvalue: :ref:`power-iteration-algorithm` shared with all deterministic solvers
+
 
 Overview
 ========

@@ -27,6 +27,14 @@ Key Facts
 - Weight ratio keff = ``sum(w_end) / sum(w_start)`` must equal cycle keff (consistency check)
 - Verification uses :ref:`synthetic cross sections <synthetic-xs-library>`, not real nuclear data
 
+.. admonition:: Conventions
+
+   - Scattering matrix: :ref:`scattering-matrix-convention` — ``SigS[g_from, g_to]``
+   - Multi-group balance: :eq:`mg-balance` in :ref:`theory-homogeneous`
+   - Cross sections: :ref:`theory-cross-section-data`
+   - Verification: :ref:`synthetic-xs-library` — regions A/B/C/D
+   - Eigenvalue: stochastic :ref:`power iteration <power-iteration-algorithm>` (distinct from deterministic)
+
 
 Overview
 ========
