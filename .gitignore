@@ -6,7 +6,10 @@ results/
 docs/_build/
 docs/_generated/
 derivations/_richardson_cache.json
-graphify-out/
+graphify-out/graph.html
+graphify-out/cost.json
+graphify-out/obsidian/
+graphify-out/cache/
 .graphify_*
 tools/research/elsevier.toml
 

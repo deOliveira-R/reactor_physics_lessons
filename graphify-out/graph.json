@@ -1,0 +1,865 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {
+    "hyperedges": [
+      {
+        "id": "hyp_deterministic_transport_solvers",
+        "label": "Deterministic Transport Solvers sharing EigenvalueSolver protocol",
+        "nodes": [
+          "collision_probability",
+          "discrete_ordinates",
+          "method_of_characteristics",
+          "homogeneous"
+        ],
+        "relation": "participate_in",
+        "confidence": "EXTRACTED",
+        "confidence_score": 0.9,
+        "source_file": "docs/theory/transport_methods.rst"
+      },
+      {
+        "id": "hyp_bdf_modules",
+        "label": "Modules sharing BDF time integration",
+        "nodes": [
+          "thermal_hydraulics",
+          "fuel_behaviour",
+          "reactor_kinetics"
+        ],
+        "relation": "participate_in",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": "docs/theory/thermal_hydraulics.rst"
+      },
+      {
+        "id": "hyp_all_solvers_xs_pipeline",
+        "label": "All solvers consuming Mixture from XS pipeline",
+        "nodes": [
+          "collision_probability",
+          "discrete_ordinates",
+          "method_of_characteristics",
+          "monte_carlo",
+          "homogeneous"
+        ],
+        "relation": "participate_in",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": "docs/theory/cross_section_data.rst"
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "label": "Collision Probability Method",
+      "file_type": "document",
+      "source_file": "docs/theory/collision_probability.rst",
+      "source_location": null,
+      "id": "collision_probability",
+      "community": 0
+    },
+    {
+      "label": "Fuel Behaviour \u2014 1-D Radial Thermo-Mechanics",
+      "file_type": "document",
+      "source_file": "docs/theory/fuel_behaviour.rst",
+      "source_location": null,
+      "id": "fuel_behaviour",
+      "community": 2
+    },
+    {
+      "label": "Verification Suite",
+      "file_type": "document",
+      "source_file": "docs/theory/verification.rst",
+      "source_location": null,
+      "id": "verification",
+      "community": 1
+    },
+    {
+      "label": "Method of Characteristics (MOC)",
+      "file_type": "document",
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "source_location": null,
+      "id": "method_of_characteristics",
+      "community": 0
+    },
+    {
+      "label": "Monte Carlo Neutron Transport",
+      "file_type": "document",
+      "source_file": "docs/theory/monte_carlo.rst",
+      "source_location": null,
+      "id": "monte_carlo",
+      "community": 1
+    },
+    {
+      "label": "Reactor Kinetics \u2014 0-D Point Kinetics + TH",
+      "file_type": "document",
+      "source_file": "docs/theory/reactor_kinetics.rst",
+      "source_location": null,
+      "id": "reactor_kinetics",
+      "community": 2
+    },
+    {
+      "label": "Thermal Hydraulics \u2014 Single-Channel LOCA",
+      "file_type": "document",
+      "source_file": "docs/theory/thermal_hydraulics.rst",
+      "source_location": null,
+      "id": "thermal_hydraulics",
+      "community": 2
+    },
+    {
+      "label": "Homogeneous Infinite-Medium Reactor",
+      "file_type": "document",
+      "source_file": "docs/theory/homogeneous.rst",
+      "source_location": null,
+      "id": "homogeneous",
+      "community": 1
+    },
+    {
+      "label": "Cross-Section Data Pipeline",
+      "file_type": "document",
+      "source_file": "docs/theory/cross_section_data.rst",
+      "source_location": null,
+      "id": "cross_section_data",
+      "community": 1
+    },
+    {
+      "label": "Transport Methods",
+      "file_type": "document",
+      "source_file": "docs/theory/transport_methods.rst",
+      "source_location": null,
+      "id": "transport_methods",
+      "community": 0
+    },
+    {
+      "label": "Discrete Ordinates Method (SN)",
+      "file_type": "document",
+      "source_file": "docs/theory/discrete_ordinates.rst",
+      "source_location": null,
+      "id": "discrete_ordinates",
+      "community": 0
+    },
+    {
+      "label": "Scattering Matrix Convention",
+      "file_type": "concept",
+      "source_file": "docs/theory/homogeneous.rst",
+      "source_location": "line 231",
+      "id": "concept_scattering_matrix_convention",
+      "community": 0
+    },
+    {
+      "label": "Multi-Group Eigenvalue Problem",
+      "file_type": "concept",
+      "source_file": "docs/theory/homogeneous.rst",
+      "source_location": "line 160",
+      "id": "concept_mg_eigenvalue_problem",
+      "community": 0
+    },
+    {
+      "label": "Power Iteration Algorithm",
+      "file_type": "concept",
+      "source_file": "docs/theory/homogeneous.rst",
+      "source_location": "line 763",
+      "id": "concept_power_iteration_algorithm",
+      "community": 0
+    },
+    {
+      "label": "Synthetic Cross-Section Library",
+      "file_type": "concept",
+      "source_file": "docs/theory/verification.rst",
+      "source_location": "line 43",
+      "id": "concept_synthetic_xs_library",
+      "community": 1
+    },
+    {
+      "label": "Richardson Extrapolation",
+      "file_type": "concept",
+      "source_file": "docs/theory/verification.rst",
+      "source_location": "line 158",
+      "id": "concept_richardson_extrapolation",
+      "community": 1
+    },
+    {
+      "label": "Flat-Source Approximation (CP)",
+      "file_type": "concept",
+      "source_file": "docs/theory/collision_probability.rst",
+      "source_location": "line 158",
+      "id": "concept_flat_source_cp",
+      "community": 3
+    },
+    {
+      "label": "Flat-Source Approximation (MOC)",
+      "file_type": "concept",
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "source_location": "line 209",
+      "id": "concept_flat_source_moc",
+      "community": 3
+    },
+    {
+      "label": "BDF Time Integration",
+      "file_type": "concept",
+      "source_file": "docs/theory/thermal_hydraulics.rst",
+      "source_location": "line 476",
+      "id": "concept_bdf_integration",
+      "community": 2
+    },
+    {
+      "label": "Angular Quadrature Types",
+      "file_type": "concept",
+      "source_file": "docs/theory/discrete_ordinates.rst",
+      "source_location": "line 246",
+      "id": "concept_quadrature_types",
+      "community": 0
+    },
+    {
+      "label": "White BC Quality",
+      "file_type": "concept",
+      "source_file": "docs/theory/collision_probability.rst",
+      "source_location": "line 1875",
+      "id": "concept_white_bc_quality",
+      "community": 0
+    },
+    {
+      "label": "Boundary Conditions",
+      "file_type": "concept",
+      "source_file": "docs/theory/discrete_ordinates.rst",
+      "source_location": "line 1071",
+      "id": "concept_boundary_conditions",
+      "community": 0
+    },
+    {
+      "label": "Sigma-Zero Self-Shielding",
+      "file_type": "concept",
+      "source_file": "docs/theory/homogeneous.rst",
+      "source_location": "line 536",
+      "id": "concept_sigma_zero_iteration",
+      "community": 1
+    }
+  ],
+  "links": [
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/collision_probability.rst",
+      "weight": 1.0,
+      "_src": "collision_probability",
+      "_tgt": "concept_scattering_matrix_convention",
+      "source": "collision_probability",
+      "target": "concept_scattering_matrix_convention"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/collision_probability.rst",
+      "weight": 1.0,
+      "_src": "collision_probability",
+      "_tgt": "homogeneous",
+      "source": "collision_probability",
+      "target": "homogeneous"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/cross_section_data.rst",
+      "weight": 1.0,
+      "_src": "cross_section_data",
+      "_tgt": "collision_probability",
+      "source": "collision_probability",
+      "target": "cross_section_data"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/collision_probability.rst",
+      "weight": 1.0,
+      "_src": "collision_probability",
+      "_tgt": "concept_synthetic_xs_library",
+      "source": "collision_probability",
+      "target": "concept_synthetic_xs_library"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/collision_probability.rst",
+      "weight": 1.0,
+      "_src": "collision_probability",
+      "_tgt": "concept_power_iteration_algorithm",
+      "source": "collision_probability",
+      "target": "concept_power_iteration_algorithm"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/collision_probability.rst",
+      "weight": 1.0,
+      "_src": "collision_probability",
+      "_tgt": "concept_mg_eigenvalue_problem",
+      "source": "collision_probability",
+      "target": "concept_mg_eigenvalue_problem"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/collision_probability.rst",
+      "weight": 1.0,
+      "_src": "collision_probability",
+      "_tgt": "concept_flat_source_moc",
+      "source": "collision_probability",
+      "target": "concept_flat_source_moc"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/collision_probability.rst",
+      "weight": 1.0,
+      "_src": "collision_probability",
+      "_tgt": "concept_white_bc_quality",
+      "source": "collision_probability",
+      "target": "concept_white_bc_quality"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/discrete_ordinates.rst",
+      "weight": 1.0,
+      "_src": "discrete_ordinates",
+      "_tgt": "collision_probability",
+      "source": "collision_probability",
+      "target": "discrete_ordinates"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "weight": 0.8,
+      "_src": "collision_probability",
+      "_tgt": "method_of_characteristics",
+      "source": "collision_probability",
+      "target": "method_of_characteristics"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/transport_methods.rst",
+      "weight": 1.0,
+      "_src": "transport_methods",
+      "_tgt": "collision_probability",
+      "source": "collision_probability",
+      "target": "transport_methods"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/verification.rst",
+      "weight": 1.0,
+      "_src": "verification",
+      "_tgt": "collision_probability",
+      "source": "collision_probability",
+      "target": "verification"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/fuel_behaviour.rst",
+      "weight": 1.0,
+      "_src": "fuel_behaviour",
+      "_tgt": "concept_bdf_integration",
+      "source": "fuel_behaviour",
+      "target": "concept_bdf_integration"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/thermal_hydraulics.rst",
+      "weight": 1.0,
+      "_src": "thermal_hydraulics",
+      "_tgt": "fuel_behaviour",
+      "source": "fuel_behaviour",
+      "target": "thermal_hydraulics"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "docs/theory/fuel_behaviour.rst",
+      "weight": 0.8,
+      "_src": "fuel_behaviour",
+      "_tgt": "reactor_kinetics",
+      "source": "fuel_behaviour",
+      "target": "reactor_kinetics"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/verification.rst",
+      "weight": 1.0,
+      "_src": "verification",
+      "_tgt": "homogeneous",
+      "source": "verification",
+      "target": "homogeneous"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/verification.rst",
+      "weight": 1.0,
+      "_src": "verification",
+      "_tgt": "discrete_ordinates",
+      "source": "verification",
+      "target": "discrete_ordinates"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/verification.rst",
+      "weight": 1.0,
+      "_src": "verification",
+      "_tgt": "method_of_characteristics",
+      "source": "verification",
+      "target": "method_of_characteristics"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/verification.rst",
+      "weight": 1.0,
+      "_src": "verification",
+      "_tgt": "monte_carlo",
+      "source": "verification",
+      "target": "monte_carlo"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/cross_section_data.rst",
+      "weight": 1.0,
+      "_src": "cross_section_data",
+      "_tgt": "verification",
+      "source": "verification",
+      "target": "cross_section_data"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/verification.rst",
+      "weight": 1.0,
+      "_src": "verification",
+      "_tgt": "concept_richardson_extrapolation",
+      "source": "verification",
+      "target": "concept_richardson_extrapolation"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "weight": 1.0,
+      "_src": "method_of_characteristics",
+      "_tgt": "discrete_ordinates",
+      "source": "method_of_characteristics",
+      "target": "discrete_ordinates"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "weight": 1.0,
+      "_src": "method_of_characteristics",
+      "_tgt": "concept_scattering_matrix_convention",
+      "source": "method_of_characteristics",
+      "target": "concept_scattering_matrix_convention"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "weight": 1.0,
+      "_src": "method_of_characteristics",
+      "_tgt": "homogeneous",
+      "source": "method_of_characteristics",
+      "target": "homogeneous"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/cross_section_data.rst",
+      "weight": 1.0,
+      "_src": "cross_section_data",
+      "_tgt": "method_of_characteristics",
+      "source": "method_of_characteristics",
+      "target": "cross_section_data"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "weight": 1.0,
+      "_src": "method_of_characteristics",
+      "_tgt": "concept_synthetic_xs_library",
+      "source": "method_of_characteristics",
+      "target": "concept_synthetic_xs_library"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "weight": 1.0,
+      "_src": "method_of_characteristics",
+      "_tgt": "concept_power_iteration_algorithm",
+      "source": "method_of_characteristics",
+      "target": "concept_power_iteration_algorithm"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "weight": 1.0,
+      "_src": "method_of_characteristics",
+      "_tgt": "concept_mg_eigenvalue_problem",
+      "source": "method_of_characteristics",
+      "target": "concept_mg_eigenvalue_problem"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "weight": 1.0,
+      "_src": "method_of_characteristics",
+      "_tgt": "concept_flat_source_cp",
+      "source": "method_of_characteristics",
+      "target": "concept_flat_source_cp"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "weight": 1.0,
+      "_src": "method_of_characteristics",
+      "_tgt": "concept_richardson_extrapolation",
+      "source": "method_of_characteristics",
+      "target": "concept_richardson_extrapolation"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/method_of_characteristics.rst",
+      "weight": 1.0,
+      "_src": "method_of_characteristics",
+      "_tgt": "concept_quadrature_types",
+      "source": "method_of_characteristics",
+      "target": "concept_quadrature_types"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/transport_methods.rst",
+      "weight": 1.0,
+      "_src": "transport_methods",
+      "_tgt": "method_of_characteristics",
+      "source": "method_of_characteristics",
+      "target": "transport_methods"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/monte_carlo.rst",
+      "weight": 1.0,
+      "_src": "monte_carlo",
+      "_tgt": "concept_scattering_matrix_convention",
+      "source": "monte_carlo",
+      "target": "concept_scattering_matrix_convention"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/monte_carlo.rst",
+      "weight": 1.0,
+      "_src": "monte_carlo",
+      "_tgt": "homogeneous",
+      "source": "monte_carlo",
+      "target": "homogeneous"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/cross_section_data.rst",
+      "weight": 1.0,
+      "_src": "cross_section_data",
+      "_tgt": "monte_carlo",
+      "source": "monte_carlo",
+      "target": "cross_section_data"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/monte_carlo.rst",
+      "weight": 1.0,
+      "_src": "monte_carlo",
+      "_tgt": "concept_synthetic_xs_library",
+      "source": "monte_carlo",
+      "target": "concept_synthetic_xs_library"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/monte_carlo.rst",
+      "weight": 1.0,
+      "_src": "monte_carlo",
+      "_tgt": "concept_power_iteration_algorithm",
+      "source": "monte_carlo",
+      "target": "concept_power_iteration_algorithm"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/transport_methods.rst",
+      "weight": 1.0,
+      "_src": "transport_methods",
+      "_tgt": "monte_carlo",
+      "source": "monte_carlo",
+      "target": "transport_methods"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/reactor_kinetics.rst",
+      "weight": 1.0,
+      "_src": "reactor_kinetics",
+      "_tgt": "concept_bdf_integration",
+      "source": "reactor_kinetics",
+      "target": "concept_bdf_integration"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/thermal_hydraulics.rst",
+      "weight": 1.0,
+      "_src": "thermal_hydraulics",
+      "_tgt": "reactor_kinetics",
+      "source": "reactor_kinetics",
+      "target": "thermal_hydraulics"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/discrete_ordinates.rst",
+      "weight": 1.0,
+      "_src": "discrete_ordinates",
+      "_tgt": "homogeneous",
+      "source": "homogeneous",
+      "target": "discrete_ordinates"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/cross_section_data.rst",
+      "weight": 1.0,
+      "_src": "cross_section_data",
+      "_tgt": "homogeneous",
+      "source": "homogeneous",
+      "target": "cross_section_data"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/homogeneous.rst",
+      "weight": 1.0,
+      "_src": "homogeneous",
+      "_tgt": "concept_sigma_zero_iteration",
+      "source": "homogeneous",
+      "target": "concept_sigma_zero_iteration"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/cross_section_data.rst",
+      "weight": 1.0,
+      "_src": "cross_section_data",
+      "_tgt": "discrete_ordinates",
+      "source": "cross_section_data",
+      "target": "discrete_ordinates"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/cross_section_data.rst",
+      "weight": 1.0,
+      "_src": "cross_section_data",
+      "_tgt": "concept_synthetic_xs_library",
+      "source": "cross_section_data",
+      "target": "concept_synthetic_xs_library"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/transport_methods.rst",
+      "weight": 1.0,
+      "_src": "transport_methods",
+      "_tgt": "discrete_ordinates",
+      "source": "transport_methods",
+      "target": "discrete_ordinates"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/discrete_ordinates.rst",
+      "weight": 1.0,
+      "_src": "discrete_ordinates",
+      "_tgt": "concept_scattering_matrix_convention",
+      "source": "discrete_ordinates",
+      "target": "concept_scattering_matrix_convention"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/discrete_ordinates.rst",
+      "weight": 1.0,
+      "_src": "discrete_ordinates",
+      "_tgt": "concept_synthetic_xs_library",
+      "source": "discrete_ordinates",
+      "target": "concept_synthetic_xs_library"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/discrete_ordinates.rst",
+      "weight": 1.0,
+      "_src": "discrete_ordinates",
+      "_tgt": "concept_power_iteration_algorithm",
+      "source": "discrete_ordinates",
+      "target": "concept_power_iteration_algorithm"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/discrete_ordinates.rst",
+      "weight": 1.0,
+      "_src": "discrete_ordinates",
+      "_tgt": "concept_mg_eigenvalue_problem",
+      "source": "discrete_ordinates",
+      "target": "concept_mg_eigenvalue_problem"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/discrete_ordinates.rst",
+      "weight": 1.0,
+      "_src": "discrete_ordinates",
+      "_tgt": "concept_white_bc_quality",
+      "source": "discrete_ordinates",
+      "target": "concept_white_bc_quality"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/collision_probability.rst",
+      "weight": 1.0,
+      "_src": "concept_flat_source_cp",
+      "_tgt": "concept_flat_source_moc",
+      "source": "concept_flat_source_cp",
+      "target": "concept_flat_source_moc"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/collision_probability.rst",
+      "weight": 1.0,
+      "_src": "concept_white_bc_quality",
+      "_tgt": "concept_boundary_conditions",
+      "source": "concept_white_bc_quality",
+      "target": "concept_boundary_conditions"
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "hyp_deterministic_transport_solvers",
+      "label": "Deterministic Transport Solvers sharing EigenvalueSolver protocol",
+      "nodes": [
+        "collision_probability",
+        "discrete_ordinates",
+        "method_of_characteristics",
+        "homogeneous"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "docs/theory/transport_methods.rst"
+    },
+    {
+      "id": "hyp_bdf_modules",
+      "label": "Modules sharing BDF time integration",
+      "nodes": [
+        "thermal_hydraulics",
+        "fuel_behaviour",
+        "reactor_kinetics"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/thermal_hydraulics.rst"
+    },
+    {
+      "id": "hyp_all_solvers_xs_pipeline",
+      "label": "All solvers consuming Mixture from XS pipeline",
+      "nodes": [
+        "collision_probability",
+        "discrete_ordinates",
+        "method_of_characteristics",
+        "monte_carlo",
+        "homogeneous"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/theory/cross_section_data.rst"
+    }
+  ]
+}
