@@ -638,7 +638,7 @@ def main() -> None:
     print(f"  Wall time: {result.elapsed_seconds:.1f}s")
 
     # 5. Plots
-    output = Path("results")
+    output = Path("09_results")
     output.mkdir(parents=True, exist_ok=True)
     plot_cp_geometry(geom, output)
     plot_cp_convergence(result, output)

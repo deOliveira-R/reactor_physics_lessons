@@ -623,7 +623,7 @@ def plot_moc_spatial_flux(
 # Demo run
 # ===========================================================================
 
-OUTPUT = Path("results")
+OUTPUT = Path("03_results")
 
 
 def main():

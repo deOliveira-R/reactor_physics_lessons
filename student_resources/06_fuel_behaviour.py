@@ -1380,7 +1380,7 @@ def solve_fuel_behaviour(
 # Plotting and main
 # ============================================================================
 
-OUTPUT = Path("results")
+OUTPUT = Path("06_results")
 
 
 def main():

@@ -1271,7 +1271,7 @@ def solve_reactor_kinetics(
 # Plotting and main
 # ============================================================================
 
-OUTPUT = Path("results")
+OUTPUT = Path("08_results")
 
 
 def main():

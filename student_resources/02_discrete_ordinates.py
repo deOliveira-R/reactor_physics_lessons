@@ -699,7 +699,7 @@ def plot_do_spatial_flux(
 # Demo run
 # ===========================================================================
 
-OUTPUT = Path("results")
+OUTPUT = Path("02_results")
 
 
 def main():

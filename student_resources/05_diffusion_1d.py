@@ -323,7 +323,7 @@ def main() -> None:
     print(f"  Match: {match}")
 
     # Plots
-    output = Path("results")
+    output = Path("05_results")
     output.mkdir(parents=True, exist_ok=True)
 
     plot_flux(result, output)

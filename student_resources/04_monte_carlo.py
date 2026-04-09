@@ -361,7 +361,7 @@ def plot_mc_spectrum(
 # Demo run
 # ===========================================================================
 
-OUTPUT = Path("results")
+OUTPUT = Path("04_results")
 
 
 def main():

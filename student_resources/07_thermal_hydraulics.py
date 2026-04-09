@@ -1172,7 +1172,7 @@ def solve_thermal_hydraulics(params: THParams | None = None) -> THResult:
 # Plotting and main
 # ============================================================================
 
-OUTPUT = Path("results")
+OUTPUT = Path("07_results")
 
 
 def main():

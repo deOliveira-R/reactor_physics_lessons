@@ -168,7 +168,7 @@ def plot_spectrum(
 # Demo runs
 # ===========================================================================
 
-OUTPUT = Path("results")
+OUTPUT = Path("01_results")
 
 
 def run_aqueous():
