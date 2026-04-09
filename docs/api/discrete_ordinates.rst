@@ -4,7 +4,7 @@ Discrete Ordinates Solvers
 Solver
 ------
 
-.. automodule:: sn_solver
+.. automodule:: orpheus.sn.solver
    :members:
    :undoc-members:
    :show-inheritance:
@@ -13,7 +13,7 @@ Solver
 Geometry
 --------
 
-.. automodule:: sn_geometry
+.. automodule:: orpheus.sn.geometry
    :members:
    :undoc-members:
    :show-inheritance:
@@ -22,7 +22,7 @@ Geometry
 Angular Quadrature
 ------------------
 
-.. automodule:: sn_quadrature
+.. automodule:: orpheus.sn.quadrature
    :members:
    :undoc-members:
    :show-inheritance:
@@ -31,7 +31,7 @@ Angular Quadrature
 Transport Sweep
 ---------------
 
-.. automodule:: sn_sweep
+.. automodule:: orpheus.sn.sweep
    :members:
    :undoc-members:
    :show-inheritance:
@@ -40,7 +40,7 @@ Transport Sweep
 Direct Transport Operator
 -------------------------
 
-.. automodule:: sn_operator
+.. automodule:: orpheus.sn.operator
    :members:
    :undoc-members:
    :show-inheritance:

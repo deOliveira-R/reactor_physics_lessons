@@ -19,10 +19,10 @@ Impact: scattering source iteration diverged for multi-group problems
 import numpy as np
 import pytest
 
-from geometry import Mesh1D, Mesh2D, homogeneous_1d
-from sn_geometry import SNMesh
-from sn_quadrature import GaussLegendre1D, LebedevSphere
-from sn_sweep import _solve_recurrence, _outgoing, transport_sweep
+from orpheus.geometry import Mesh1D, Mesh2D, homogeneous_1d
+from orpheus.sn.geometry import SNMesh
+from orpheus.sn.quadrature import GaussLegendre1D, LebedevSphere
+from orpheus.sn.sweep import _solve_recurrence, _outgoing, transport_sweep
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -92,8 +92,8 @@ class TestSolveRecurrence:
         Gotcha #5: an algebraically-equivalent rewrite of _solve_recurrence
         caused the inner loop to diverge for 2+ groups while 1-group worked.
         """
-        from derivations._xs_library import get_mixture
-        from sn_solver import SNSolver
+        from orpheus.derivations._xs_library import get_mixture
+        from orpheus.sn.solver import SNSolver
 
         mix = get_mixture("A", "2g")
         mesh = homogeneous_1d(20, 2.0, mat_id=0)
@@ -186,7 +186,7 @@ class TestSNMesh:
 
     def test_cylindrical_requires_level_quadrature(self):
         """Cylindrical coords require a quadrature with level structure."""
-        from geometry import CoordSystem
+        from orpheus.geometry import CoordSystem
 
         mesh = Mesh1D(edges=np.array([0.0, 1.0]), mat_ids=np.array([0]),
                       coord=CoordSystem.CYLINDRICAL)
@@ -196,7 +196,7 @@ class TestSNMesh:
 
     def test_spherical_setup(self):
         """Spherical SNMesh must precompute face areas and α coefficients."""
-        from geometry import CoordSystem
+        from orpheus.geometry import CoordSystem
 
         mesh = Mesh1D(edges=np.array([0.0, 0.5, 1.0]), mat_ids=np.array([0, 1]),
                       coord=CoordSystem.SPHERICAL)
@@ -217,8 +217,8 @@ class TestSNMesh:
         A Mesh1D slab and a Mesh2D with ny=1 must give comparable results
         when using the same quadrature (Lebedev can handle ny=1).
         """
-        from derivations._xs_library import get_mixture
-        from sn_solver import SNSolver
+        from orpheus.derivations._xs_library import get_mixture
+        from orpheus.sn.solver import SNSolver
 
         mix = get_mixture("A", "1g")
 
@@ -251,7 +251,7 @@ class TestSNMesh:
             keff_2d = solver_2d.compute_keff(phi)
 
         # Both must match the analytical k_inf (homogeneous, 1G)
-        from derivations import get
+        from orpheus.derivations import get
         k_ref = get("sn_slab_1eg_1rg").k_inf
         assert abs(keff_1d - k_ref) < 1e-8
         assert abs(keff_2d - k_ref) < 1e-8

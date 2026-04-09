@@ -1,8 +1,10 @@
 # ORPHEUS — Open Reactor Physics Educational University System
 
-Provides practical tasks covering the main steps of nuclear reactor analysis:
-cross section processing, neutron transport, diffusion, fuel behaviour,
-thermal hydraulics, and reactor kinetics.
+A rigorous Python implementation of reactor physics solvers with a
+comprehensive verification suite, backed by an educational example collection
+covering the main steps of nuclear reactor analysis: cross section processing,
+neutron transport, diffusion, fuel behaviour, thermal hydraulics, and reactor
+kinetics.
 
 ## Getting Started
 
@@ -11,7 +13,6 @@ thermal hydraulics, and reactor kinetics.
 - Python 3.11+ (3.14 recommended)
 - git-lfs (for nuclear data files)
 - [GitHub CLI](https://cli.github.com/) (`gh`) — for issue tracking
-- Node.js 18+ (for GitNexus code intelligence)
 
 ### Installation
 
@@ -23,24 +24,13 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-### External tools (for Claude Code / AI-assisted development)
-
-```bash
-# GitNexus — code structure knowledge graph
-npm install -g gitnexus
-npx gitnexus analyze          # index the codebase
-
-# GitHub CLI — issue tracking
-gh auth login                 # authenticate once
-```
-
 ### Convert nuclear data
 
 The repository ships GENDF (.GXS) cross section files via git-lfs.
 Convert them to HDF5 before running any calculations:
 
 ```bash
-cd data/micro_xs
+cd orpheus/data/micro_xs
 .venv/bin/python convert_gxs_to_hdf5.py
 ```
 
@@ -55,95 +45,86 @@ cd data/micro_xs
 ### Build documentation
 
 ```bash
-.venv/bin/python -m derivations.generate_rst
+.venv/bin/python -m orpheus.derivations.generate_rst
 .venv/bin/python -m sphinx -b html docs docs/_build/html
 open docs/_build/html/index.html
 ```
 
-## Architecture
+## Project Structure
+
+The project is organized into two main areas:
+
+### `orpheus/` — The Python Package
+
+Importable, testable, pip-installable solver library.
 
 ```
-numerics/
-    eigenvalue.py        EigenvalueSolver protocol + power_iteration()
+orpheus/
+    __init__.py
+    plotting.py              Shared plotting utilities
 
-data/
-    micro_xs/            421-group microscopic XS (GENDF/HDF5), Isotope dataclass
-    macro_xs/
-        mixture.py       Mixture dataclass (SigT, SigS, absorption_xs, ...)
-        cell_xs.py       CellXS dataclass + assemble_cell_xs()
-        recipes.py       Material recipes (UO2, Zircaloy, borated water)
-        sigma_zeros.py   Sigma-zero self-shielding iteration
-        interpolation.py XS interpolation at converged background XS
-    materials/           MATPRO correlations + water/steam properties (pyXSteam)
+    # ── Solvers ──────────────────────────────────────────────
+    homogeneous/             Infinite medium eigenvalue problem (421 groups)
+    sn/                      Discrete ordinates (SN) transport
+        solver.py            Unified SN: 2D native (Lebedev), 1D degenerate (GL)
+        sweep.py             Diamond-difference spatial discretization
+        geometry.py          Augmented mesh for SN
+        quadrature.py        Angular quadratures (GL, Lebedev, level-symmetric)
+        operator.py          Transport operator for BiCGSTAB
+    moc/                     Method of characteristics (2D)
+    mc/                      Monte Carlo with Woodcock delta tracking
+    cp/                      Collision probability (slab + cylindrical)
+    diffusion/               Two-group 1D axial diffusion
+    fuel/                    1D radial thermo-mechanical fuel rod analysis
+    thermal_hydraulics/      Coupled TH + fuel mechanics (ODE + DAE)
+    kinetics/                Point kinetics + TH + fuel mechanics
 
-derivations/             SymPy analytical derivations (verification single source of truth)
-    _xs_library.py       4 abstract regions × {1G,2G,4G} cross sections
-    homogeneous.py       Infinite medium eigenvalues
-    sn.py                SN transport equation derivation
-    cp_slab.py           E₃ collision probability eigenvalues
-    cp_cylinder.py       Ki₄ collision probability eigenvalues
-    moc.py               Method of characteristics derivation
-    mc.py                Monte Carlo random walk derivation
-    diffusion.py         Diffusion buckling eigenvalue
-    reference_values.py  Unified registry of all verification cases
-    generate_rst.py      Generates RST fragments for Sphinx documentation
-
-tests/                   pytest verification suite (~290 tests)
-    test_*_properties.py Unit tests (conservation, reciprocity, symmetry)
-    test_*.py            Eigenvalue verification against analytical references
-
-tools/
-    plotting.py          Shared plotting utilities
-
-01-08.*                  Lecture modules (one per physics domain)
-09.Collision.Probability Collision probability solvers (slab + cylindrical)
+    # ── Infrastructure ───────────────────────────────────────
+    numerics/
+        eigenvalue.py        EigenvalueSolver protocol + power_iteration()
+    data/
+        micro_xs/            421-group microscopic XS (GENDF/HDF5), Isotope dataclass
+        macro_xs/            Mixture, CellXS, recipes, self-shielding
+        materials/           MATPRO correlations + water/steam properties
+    geometry/                Mesh1D/Mesh2D, coordinate systems, factory functions
+    derivations/             SymPy analytical derivations (verification truth)
 ```
 
 All deterministic eigenvalue solvers satisfy the `EigenvalueSolver`
-protocol defined in `numerics/eigenvalue.py` and share a generic
+protocol defined in `orpheus.numerics.eigenvalue` and share a generic
 `power_iteration()` function.
 
-## Modules
+### `examples/` — Educational Entry Points
 
-Each numbered folder is a self-contained lecture module with a demo script:
+Demo scripts that teach reactor physics concepts. Each subdirectory is a
+self-contained lesson:
 
 ```bash
-python 01.Homogeneous.Reactors/demo_homogeneous.py
+cd examples/homogeneous
+python demo_homogeneous.py
 ```
 
-| Module | Description | Solver | Demo script |
-|--------|-------------|--------|-------------|
-| **00.Demo** | Central Limit Theorem and spherical harmonics demos | — | `central_limit_theorem.py` |
-| **01.Homogeneous.Reactors** | Infinite medium eigenvalue problem (421 groups) | `HomogeneousSolver` | `demo_homogeneous.py` |
-| **02.Discrete.Ordinates** | Unified SN transport: 2D native (Lebedev), 1D degenerate (GL) | `SNSolver` | `demo_discrete_ordinates.py` |
-| **03.Method.Of.Characteristics** | 2D MoC transport with 8 ray directions | `MoCSolver` | `demo_moc.py` |
-| **04.Monte.Carlo** | Monte Carlo with Woodcock delta tracking | — | `demo_monte_carlo.py` |
-| **05.Diffusion.1D** | Two-group 1D axial diffusion for a PWR subassembly | `DiffusionSolver` | `demo_diffusion_1d.py` |
-| **06.Fuel.Behaviour** | 1D radial thermo-mechanical fuel rod analysis | — | `demo_fuel_behaviour.py` |
-| **07.Thermal.Hydraulics** | Coupled TH + fuel mechanics under LOCA conditions | — | `demo_thermal_hydraulics.py` |
-| **08.Reactor.Kinetics.0D** | Point kinetics + TH + fuel mechanics under RIA | — | `demo_reactor_kinetics.py` |
-| **09.Collision.Probability** | CP method for slab and cylindrical geometries | `CPSolver` | `demo_cp_slab.py` |
+| Example | Description | Solver |
+|---------|-------------|--------|
+| `demo/` | Central Limit Theorem, spherical harmonics | — |
+| `homogeneous/` | Infinite medium eigenvalue | `orpheus.homogeneous` |
+| `discrete_ordinates/` | SN transport (1D slab, 2D Cartesian) | `orpheus.sn` |
+| `method_of_characteristics/` | 2D MoC with ray tracing | `orpheus.moc` |
+| `monte_carlo/` | Delta tracking, pluggable geometry | `orpheus.mc` |
+| `diffusion/` | 1D axial diffusion for PWR subassembly | `orpheus.diffusion` |
+| `fuel_behaviour/` | Fuel rod thermo-mechanics | `orpheus.fuel` |
+| `thermal_hydraulics/` | LOCA transient analysis | `orpheus.thermal_hydraulics` |
+| `reactor_kinetics/` | RIA transient (kinetics + TH + fuel) | `orpheus.kinetics` |
+| `collision_probability/` | CP method (slab + cylindrical) | `orpheus.cp` |
 
-### Discrete Ordinates
+### Other directories
 
-The unified SN solver (`02.Discrete.Ordinates/sn_solver.py`) supports:
-- **1D slab** (ny=1, Gauss-Legendre quadrature) and **2D Cartesian** (Lebedev)
-- Selectable inner solver: source iteration or BiCGSTAB
-- Diamond-difference spatial discretization (wavefront sweep in 2D, cumprod in 1D)
-- (n,2n) reactions and P_L scattering anisotropy
-
-### Collision Probability
-
-Module 09 provides two CP solvers sharing a single `CPSolver` class:
-- **Slab** (`solve_cp_slab`) — 1D half-cell with E₃ exponential-integral kernel
-- **Concentric** (`solve_cp_concentric`) — Wigner-Seitz cylindrical cell with Ki₃/Ki₄ Bickley-Naylor kernel
-
-### Monte Carlo
-
-Delta-tracking with `MCGeometry` protocol for pluggable geometry:
-- `ConcentricPinCell` — concentric cylindrical regions
-- `SlabPinCell` — 1D slab regions
-- Future: constructive solid geometry (CSG)
+```
+tests/               pytest verification suite (~500 tests)
+tools/research/      Literature search utilities (arXiv, OSTI, Scopus, ...)
+matlab_archive/      Original MATLAB code by K. Mikityuk (PSI)
+docs/                Sphinx documentation (theory + API)
+```
 
 ## Verification
 

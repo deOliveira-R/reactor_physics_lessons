@@ -22,9 +22,9 @@ Gap analysis summary:
 import numpy as np
 import pytest
 
-from derivations import get
-from derivations._xs_library import get_xs, get_mixture
-from monte_carlo import (
+from orpheus.derivations import get
+from orpheus.derivations._xs_library import get_xs, get_mixture
+from orpheus.mc.solver import (
     MCParams, SlabPinCell, ConcentricPinCell, MCMesh,
     solve_monte_carlo,
 )
@@ -546,7 +546,7 @@ def test_mcmesh_vs_concentric_keff():
     Same physics, same seed, different geometry implementation.
     Any difference reveals a bug in MCMesh.material_id_at.
     """
-    from geometry.factories import pwr_pin_equivalent
+    from orpheus.geometry.factories import pwr_pin_equivalent
 
     case = get("mc_cyl1D_2eg_2rg")
     gp = case.geom_params
@@ -564,7 +564,7 @@ def test_mcmesh_vs_concentric_keff():
     result1 = solve_monte_carlo(case.materials, params1)
 
     # MCMesh geometry (same radii)
-    from geometry import Mesh1D, CoordSystem
+    from orpheus.geometry import Mesh1D, CoordSystem
     edges = np.array([0.0] + list(radii))
     mesh = Mesh1D(
         edges=edges,

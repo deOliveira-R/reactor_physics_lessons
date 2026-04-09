@@ -9,8 +9,8 @@ Verifies theoretical convergence behavior:
 import numpy as np
 import pytest
 
-from derivations import get
-from monte_carlo import MCParams, SlabPinCell, ConcentricPinCell, solve_monte_carlo
+from orpheus.derivations import get
+from orpheus.mc.solver import MCParams, SlabPinCell, ConcentricPinCell, solve_monte_carlo
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -1,23 +1,17 @@
 """Tests for MOC ray tracing geometry (MOCMesh, tracks, segments)."""
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "03.Method.Of.Characteristics"))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from geometry import CoordSystem, Mesh1D
-from moc_geometry import (
+from orpheus.geometry import CoordSystem, Mesh1D
+from orpheus.moc.geometry import (
     MOCMesh,
     Track,
     _identify_region,
     _ray_circle_intersections,
     _trace_single_ray,
 )
-from moc_quadrature import MOCQuadrature
+from orpheus.moc.quadrature import MOCQuadrature
 
 
 # ── Helpers ──────────────────────────────────────────────────────────

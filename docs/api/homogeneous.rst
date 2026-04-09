@@ -1,7 +1,7 @@
 Homogeneous Infinite-Medium Solver
 ====================================
 
-.. automodule:: homogeneous
+.. automodule:: orpheus.homogeneous.solver
    :members:
    :undoc-members:
    :show-inheritance:

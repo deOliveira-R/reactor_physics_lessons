@@ -1,7 +1,7 @@
 Monte Carlo Neutron Transport
 ==============================
 
-.. automodule:: monte_carlo
+.. automodule:: orpheus.mc.solver
    :members:
    :undoc-members:
    :show-inheritance:

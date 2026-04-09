@@ -1,7 +1,7 @@
 Numerical Methods (``numerics``)
 ================================
 
-.. automodule:: numerics.eigenvalue
+.. automodule:: orpheus.numerics.eigenvalue
    :members:
    :undoc-members:
    :show-inheritance:

@@ -11,12 +11,12 @@ Tests cover:
 import numpy as np
 import pytest
 
-from derivations import get
-from derivations._xs_library import get_mixture
-from geometry import CoordSystem, Mesh1D, homogeneous_1d, mesh1d_from_zones, Zone
-from sn_geometry import SNMesh
-from sn_quadrature import GaussLegendre1D
-from sn_solver import SNSolver, solve_sn
+from orpheus.derivations import get
+from orpheus.derivations._xs_library import get_mixture
+from orpheus.geometry import CoordSystem, Mesh1D, homogeneous_1d, mesh1d_from_zones, Zone
+from orpheus.sn.geometry import SNMesh
+from orpheus.sn.quadrature import GaussLegendre1D
+from orpheus.sn.solver import SNSolver, solve_sn
 
 
 # ── Homogeneous infinite medium (geometry-independent k_inf) ─────────
@@ -179,7 +179,7 @@ def test_cross_check_with_cp_1g():
     The white-BC (CP) vs reflective-BC (SN) difference vanishes for
     homogeneous infinite medium.
     """
-    from collision_probability import solve_cp
+    from orpheus.cp.solver import solve_cp
 
     mix = get_mixture("A", "1g")
     materials_sn = {0: mix}
@@ -229,7 +229,7 @@ class TestSphericalSweepRegression:
         This caught the missing weight_norm (1/sum_w) normalization in
         the spherical sweep source term.
         """
-        from sn_sweep import _sweep_1d_spherical
+        from orpheus.sn.sweep import _sweep_1d_spherical
 
         mesh = homogeneous_1d(10, 1.0, mat_id=0, coord=CoordSystem.SPHERICAL)
         quad = GaussLegendre1D.create(8)
@@ -256,7 +256,7 @@ class TestSphericalSweepRegression:
         This catches the negative-denominator bug from using signed α
         instead of |α| at the innermost cell where A=0.
         """
-        from sn_sweep import _sweep_1d_spherical
+        from orpheus.sn.sweep import _sweep_1d_spherical
 
         mesh = homogeneous_1d(10, 2.0, mat_id=0, coord=CoordSystem.SPHERICAL)
         quad = GaussLegendre1D.create(8)
@@ -493,7 +493,7 @@ class TestMultiGroupMultiRegionSpherical:
         Without the ΔA/w geometry factor, the flux spikes to ~5x at
         the origin.  With the fix, the range should be bounded.
         """
-        from sn_sweep import _sweep_1d_spherical
+        from orpheus.sn.sweep import _sweep_1d_spherical
 
         mesh = homogeneous_1d(40, 1.0, mat_id=0, coord=CoordSystem.SPHERICAL)
         quad = GaussLegendre1D.create(8)

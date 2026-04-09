@@ -2,8 +2,8 @@
 
 import pytest
 
-from derivations import get
-from homogeneous import solve_homogeneous_infinite
+from orpheus.derivations import get
+from orpheus.homogeneous.solver import solve_homogeneous_infinite
 
 
 @pytest.mark.parametrize("case_name", [

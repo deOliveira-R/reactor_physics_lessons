@@ -6,7 +6,7 @@ results_dae/
 results_geometry/
 docs/_build/
 docs/_generated/
-derivations/_richardson_cache.json
+orpheus/derivations/_richardson_cache.json
 tools/research/elsevier.toml
 matlab_archive/
 orpheus.egg-info/

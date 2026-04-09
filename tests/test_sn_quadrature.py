@@ -12,8 +12,8 @@ Tests verify mathematical properties that any valid quadrature must satisfy.
 import numpy as np
 import pytest
 
-from geometry import CoordSystem
-from sn_quadrature import (
+from orpheus.geometry import CoordSystem
+from orpheus.sn.quadrature import (
     GaussLegendre1D,
     LebedevSphere,
     LevelSymmetricSN,
@@ -187,8 +187,8 @@ class TestAlphaRedistribution:
     ])
     def test_alpha_dome_non_negative(self, QuadClass, kwargs):
         """α values must form a non-negative dome on each level."""
-        from geometry import CoordSystem, Mesh1D
-        from sn_geometry import SNMesh
+        from orpheus.geometry import CoordSystem, Mesh1D
+        from orpheus.sn.geometry import SNMesh
 
         quad = QuadClass.create(**kwargs)
         mesh = Mesh1D(
@@ -208,8 +208,8 @@ class TestAlphaRedistribution:
     ])
     def test_alpha_boundary_zero(self, QuadClass, kwargs):
         """α must be zero at both dome boundaries (conservation)."""
-        from geometry import CoordSystem, Mesh1D
-        from sn_geometry import SNMesh
+        from orpheus.geometry import CoordSystem, Mesh1D
+        from orpheus.sn.geometry import SNMesh
 
         quad = QuadClass.create(**kwargs)
         mesh = Mesh1D(
@@ -226,8 +226,8 @@ class TestAlphaRedistribution:
 
     def test_spherical_alpha_dome_non_negative(self):
         """Spherical α (cumsum(−w·μ)) must be non-negative for GL quadrature."""
-        from geometry import CoordSystem, Mesh1D
-        from sn_geometry import SNMesh
+        from orpheus.geometry import CoordSystem, Mesh1D
+        from orpheus.sn.geometry import SNMesh
 
         quad = GaussLegendre1D.create(8)
         mesh = Mesh1D(
@@ -258,8 +258,8 @@ class TestL0TermVerification:
         The fundamental correctness criterion for curvilinear SN.
         The ΔA/w factor ensures exact per-ordinate cancellation.
         """
-        from geometry import CoordSystem, homogeneous_1d
-        from sn_geometry import SNMesh
+        from orpheus.geometry import CoordSystem, homogeneous_1d
+        from orpheus.sn.geometry import SNMesh
 
         if coord == CoordSystem.SPHERICAL:
             quad = GaussLegendre1D.create(8)
@@ -300,8 +300,8 @@ class TestL0TermVerification:
     ])
     def test_delta_A_magnitude(self, coord):
         """L0-SN-004: ΔA = A[i+1] − A[i], hand-computed for known mesh."""
-        from geometry import homogeneous_1d
-        from sn_geometry import SNMesh
+        from orpheus.geometry import homogeneous_1d
+        from orpheus.sn.geometry import SNMesh
 
         mesh = homogeneous_1d(5, 1.0, mat_id=0, coord=coord)
         if coord == CoordSystem.SPHERICAL:
@@ -319,14 +319,14 @@ class TestL0TermVerification:
 
     def test_contamination_beta_spherical(self):
         """L0-SN-008: Contamination β ≈ 0 (machine zero) for spherical."""
-        from derivations.sn_contamination import contamination_beta
+        from orpheus.derivations.sn_contamination import contamination_beta
         quad = GaussLegendre1D.create(8)
         beta = contamination_beta(quad, "spherical")
         assert abs(beta) < 1e-14, f"Spherical β = {beta:.2e}"
 
     def test_contamination_beta_cylindrical(self):
         """L0-SN-008: Contamination β ≈ 0 (machine zero) for cylindrical."""
-        from derivations.sn_contamination import contamination_beta
+        from orpheus.derivations.sn_contamination import contamination_beta
         quad = ProductQuadrature.create(n_mu=4, n_phi=8)
         betas = contamination_beta(quad, "cylindrical")
         assert np.all(np.abs(betas) < 1e-14), (
@@ -335,7 +335,7 @@ class TestL0TermVerification:
 
     def test_scattering_source_magnitude(self):
         """L0-SN-009: Scattering source = SigS^T @ φ, hand-calculated."""
-        from derivations._xs_library import get_mixture
+        from orpheus.derivations._xs_library import get_mixture
         mix = get_mixture("A", "2g")
         phi = np.array([1.0, 2.0])
         sig_s = mix.SigS[0]

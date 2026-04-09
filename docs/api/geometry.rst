@@ -4,7 +4,7 @@ Geometry Infrastructure
 Mesh
 ----
 
-.. automodule:: geometry.mesh
+.. automodule:: orpheus.geometry.mesh
    :members:
    :undoc-members:
    :show-inheritance:
@@ -13,7 +13,7 @@ Mesh
 Coordinate Systems
 ------------------
 
-.. automodule:: geometry.coord
+.. automodule:: orpheus.geometry.coord
    :members:
    :undoc-members:
    :show-inheritance:
@@ -22,7 +22,7 @@ Coordinate Systems
 Factories
 ---------
 
-.. automodule:: geometry.factories
+.. automodule:: orpheus.geometry.factories
    :members:
    :undoc-members:
    :show-inheritance:

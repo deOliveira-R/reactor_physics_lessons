@@ -10,12 +10,12 @@ import numpy as np
 import pytest
 import time
 
-from derivations._xs_library import get_mixture
-from geometry import Mesh1D, Mesh2D
-from sn_geometry import SNMesh
-from sn_quadrature import GaussLegendre1D, LebedevSphere
-from sn_solver import SNSolver, solve_sn
-from sn_sweep import transport_sweep
+from orpheus.derivations._xs_library import get_mixture
+from orpheus.geometry import Mesh1D, Mesh2D
+from orpheus.sn.geometry import SNMesh
+from orpheus.sn.quadrature import GaussLegendre1D, LebedevSphere
+from orpheus.sn.solver import SNSolver, solve_sn
+from orpheus.sn.sweep import transport_sweep
 
 
 def _uniform_2d(nx, ny, delta, mat_map):
@@ -160,7 +160,7 @@ class TestTransportSweep:
         np.random.seed(7)
         Q = np.random.rand(sn_mesh.nx, sn_mesh.ny, solver.ng) + 0.01
 
-        _, phi = transport_sweep(Q, solver.sig_t, sn_mesh, {})
+        _, phi = transport_sweep(Q, solver.sig_t, solver.sn_mesh, {})
         ref = np.load(Path(__file__).parent / "sweep_ref_2g.npy")
 
         np.testing.assert_allclose(phi, ref, rtol=1e-14,
@@ -171,7 +171,7 @@ class TestTransportSweep:
         solver, _, sn_mesh, quad = solver_2g
         Q = np.ones((sn_mesh.nx, sn_mesh.ny, solver.ng))
 
-        _, phi = transport_sweep(Q, solver.sig_t, sn_mesh, {})
+        _, phi = transport_sweep(Q, solver.sig_t, solver.sn_mesh, {})
 
         assert np.all(phi >= 0), "Negative flux from positive source"
 
@@ -180,7 +180,7 @@ class TestTransportSweep:
         solver, _, sn_mesh, quad = solver_2g
         Q = np.ones((sn_mesh.nx, sn_mesh.ny, solver.ng))
 
-        ang, phi = transport_sweep(Q, solver.sig_t, sn_mesh, {})
+        ang, phi = transport_sweep(Q, solver.sig_t, solver.sn_mesh, {})
 
         assert ang.shape == (quad.N, sn_mesh.nx, sn_mesh.ny, solver.ng)
         assert phi.shape == (sn_mesh.nx, sn_mesh.ny, solver.ng)
@@ -199,7 +199,7 @@ class TestQuadratureWeightConservation:
         solver, _, sn_mesh, quad = solver_2g
         Q = np.ones((sn_mesh.nx, sn_mesh.ny, solver.ng))
 
-        ang, phi = transport_sweep(Q, solver.sig_t, sn_mesh, {})
+        ang, phi = transport_sweep(Q, solver.sig_t, solver.sn_mesh, {})
 
         # Reconstruct scalar flux from angular flux manually
         phi_manual = np.zeros_like(phi)
@@ -214,7 +214,7 @@ class TestQuadratureWeightConservation:
         solver, _, sn_mesh, quad = solver_2g
         Q = np.ones((sn_mesh.nx, sn_mesh.ny, solver.ng))
 
-        ang, _ = transport_sweep(Q, solver.sig_t, sn_mesh, {})
+        ang, _ = transport_sweep(Q, solver.sig_t, solver.sn_mesh, {})
 
         for n in range(quad.N):
             if abs(quad.mu_x[n]) < 1e-15 and abs(quad.mu_y[n]) < 1e-15:
@@ -229,7 +229,7 @@ class TestQuadratureWeightConservation:
         equation gives ψ = Q/(4π·Σ_t) per ordinate.
         Then φ = Σ w_n ψ_n = sum(w) · Q/(4π·Σ_t) = Q/Σ_t.
         """
-        from derivations._xs_library import get_mixture
+        from orpheus.derivations._xs_library import get_mixture
 
         mix = get_mixture("A", "2g")
         materials = {0: mix}
@@ -259,7 +259,7 @@ class TestAbsorptionXS:
     """
 
     def test_absorption_xs_includes_fission(self):
-        from derivations._xs_library import get_mixture
+        from orpheus.derivations._xs_library import get_mixture
 
         mix = get_mixture("A", "2g")
         sig_a = mix.absorption_xs
@@ -269,7 +269,7 @@ class TestAbsorptionXS:
 
     def test_absorption_equals_removal(self):
         """absorption_xs must equal Σ_t - rowsum(Σ_s) (total removal)."""
-        from derivations._xs_library import get_mixture
+        from orpheus.derivations._xs_library import get_mixture
 
         mix = get_mixture("A", "2g")
         removal = np.array(mix.SigT) - np.asarray(mix.SigS[0].sum(axis=1)).ravel()
@@ -285,7 +285,7 @@ class TestMultiGroupEigenvector:
     """
 
     def test_2g_eigenvector(self):
-        from derivations import get
+        from orpheus.derivations import get
 
         case = get("sn_slab_2eg_1rg")
         mix = next(iter(case.materials.values()))
@@ -330,7 +330,7 @@ class TestBicgstabNormalization:
 
     def test_1d_gl_homogeneous_exact(self):
         """BiCGSTAB with GL quadrature on 1D slab must match analytical k_inf."""
-        from derivations import get
+        from orpheus.derivations import get
 
         case = get("sn_slab_2eg_1rg")
         mix = next(iter(case.materials.values()))
@@ -355,7 +355,7 @@ class TestBicgstabNormalization:
 
     def test_2d_lebedev_homogeneous_exact(self):
         """BiCGSTAB with Lebedev quadrature on 2D mesh must match analytical k_inf."""
-        from derivations import get
+        from orpheus.derivations import get
 
         case = get("sn_slab_2eg_1rg")
         mix = next(iter(case.materials.values()))
@@ -384,7 +384,7 @@ class TestBicgstabNormalization:
         Both GL (sum(w)=2) and Lebedev (sum(w)=4π) must produce the same
         eigenvalue for the same homogeneous problem.
         """
-        from derivations import get
+        from orpheus.derivations import get
 
         case = get("sn_slab_2eg_1rg")
         mix = next(iter(case.materials.values()))
@@ -418,7 +418,7 @@ class TestAnisotropicScattering:
 
     def test_p0_gives_identical_keff(self):
         """scattering_order=0 must give the exact same keff as the default."""
-        from derivations import get
+        from orpheus.derivations import get
 
         case = get("sn_slab_2eg_1rg")
         mix = next(iter(case.materials.values()))
@@ -461,7 +461,7 @@ class TestAnisotropicScattering:
         The P1 moments are zero for isotropic flux (the current φ·Y_1^m
         integrates to zero by symmetry), so P1 adds nothing.
         """
-        from derivations._xs_library import get_mixture
+        from orpheus.derivations._xs_library import get_mixture
 
         # Use the 421-group library which has P1 data
         fuel = get_mixture("A", "2g")  # only has P0
@@ -472,7 +472,7 @@ class TestAnisotropicScattering:
 
     def test_p1_request_limited_by_data(self):
         """If scattering_order > available data, it must be clamped."""
-        from derivations._xs_library import make_mixture
+        from orpheus.derivations._xs_library import make_mixture
 
         # Build a mixture with P0 data only (no P1)
         mix_p0_only = make_mixture(
@@ -518,7 +518,7 @@ class TestAnisotropicScattering:
     def test_p1_changes_heterogeneous_keff(self):
         """P1 scattering must produce a different keff than P0 on a
         heterogeneous problem where anisotropy matters at interfaces."""
-        from derivations._xs_library import get_mixture
+        from orpheus.derivations._xs_library import get_mixture
 
         fuel = get_mixture("A", "2g")
         mod = get_mixture("B", "2g")  # B has mu_bar=0.6, strongly anisotropic
@@ -549,7 +549,7 @@ class TestAnisotropicScattering:
 
     def test_aniso_source_zero_for_isotropic_flux(self):
         """For isotropic angular flux (all ordinates equal), P1+ source = 0."""
-        from derivations._xs_library import get_mixture
+        from orpheus.derivations._xs_library import get_mixture
 
         mix = get_mixture("A", "2g")
         if len(mix.SigS) < 2:
@@ -574,7 +574,7 @@ class TestBicgstabPnScattering:
 
     def test_bicgstab_p0_matches_si_p0(self):
         """BiCGSTAB and source iteration must agree at P0."""
-        from derivations import get
+        from orpheus.derivations import get
 
         case = get("sn_slab_2eg_1rg")
         mix = next(iter(case.materials.values()))
@@ -602,7 +602,7 @@ class TestBicgstabPnScattering:
 
     def test_bicgstab_p1_homogeneous_same_as_p0(self):
         """BiCGSTAB with P1 on homogeneous must match P0 (isotropic flux)."""
-        from derivations._xs_library import get_mixture
+        from orpheus.derivations._xs_library import get_mixture
 
         mix = get_mixture("A", "2g")
         mesh = _uniform_2d(2, 2, 0.5, np.zeros((2, 2), dtype=int))
@@ -629,7 +629,7 @@ class TestBicgstabPnScattering:
 
     def test_bicgstab_p1_matches_si_p1_homogeneous(self):
         """BiCGSTAB and source iteration must agree at P1 on homogeneous."""
-        from derivations._xs_library import get_mixture
+        from orpheus.derivations._xs_library import get_mixture
 
         mix = get_mixture("A", "2g")
         mesh = _uniform_2d(2, 2, 0.5, np.zeros((2, 2), dtype=int))
@@ -707,7 +707,7 @@ class TestHomogeneousExact:
 
     @pytest.mark.parametrize("ng_key,label", [("1g", "1G"), ("2g", "2G"), ("4g", "4G")])
     def test_homogeneous_exact(self, ng_key, label):
-        from derivations import get
+        from orpheus.derivations import get
 
         case = get(f"sn_slab_{ng_key[0]}eg_1rg")
         mix = next(iter(case.materials.values()))
@@ -746,7 +746,7 @@ class TestSolveFixedSource:
 
     def test_bicgstab_matches_source_iteration(self, solver_2g):
         """BiCGSTAB and source iteration must converge to the same keff."""
-        from derivations import get
+        from orpheus.derivations import get
 
         case = get("sn_slab_2eg_1rg")
         mix = next(iter(case.materials.values()))
@@ -789,9 +789,7 @@ class TestSolveFixedSource:
 @pytest.fixture
 def solver_421g():
     """Build the full 421-group 10x10 solver for profiling."""
-    import sys
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from data.macro_xs.recipes import borated_water, uo2_fuel, zircaloy_clad
+    from orpheus.data.macro_xs.recipes import borated_water, uo2_fuel, zircaloy_clad
 
     fuel = uo2_fuel(temp_K=900)
     clad = zircaloy_clad(temp_K=600)
@@ -844,7 +842,7 @@ class TestPerformanceBaseline:
         n_sweep = 5
         t0 = time.perf_counter()
         for _ in range(n_sweep):
-            transport_sweep(Q, solver.sig_t, sn_mesh, {})
+            transport_sweep(Q, solver.sig_t, solver.sn_mesh, {})
         t_sweep = (time.perf_counter() - t0) / n_sweep * 1000
         print(f"  transport_sweep: {t_sweep:.1f} ms")
 
@@ -885,6 +883,6 @@ class TestPerformanceBaseline:
         n_sweep = 3
         t0 = time.perf_counter()
         for _ in range(n_sweep):
-            transport_sweep(Q, solver.sig_t, sn_mesh, {})
+            transport_sweep(Q, solver.sig_t, solver.sn_mesh, {})
         t_sweep = (time.perf_counter() - t0) / n_sweep * 1000
         print(f"  [421g] transport_sweep: {t_sweep:.1f} ms")

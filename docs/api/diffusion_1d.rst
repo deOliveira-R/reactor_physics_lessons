@@ -1,7 +1,7 @@
 1-D Two-Group Diffusion Solver
 ================================
 
-.. automodule:: diffusion_1d
+.. automodule:: orpheus.diffusion.solver
    :members:
    :undoc-members:
    :show-inheritance:

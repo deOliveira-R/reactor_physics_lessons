@@ -1,25 +1,25 @@
 Method of Characteristics Solvers
 ==================================
 
-.. automodule:: method_of_characteristics
+.. automodule:: orpheus.moc.solver
    :members:
    :undoc-members:
    :show-inheritance:
    :noindex:
 
-.. automodule:: moc_quadrature
+.. automodule:: orpheus.moc.quadrature
    :members:
    :undoc-members:
    :show-inheritance:
    :noindex:
 
-.. automodule:: moc_geometry
+.. automodule:: orpheus.moc.geometry
    :members:
    :undoc-members:
    :show-inheritance:
    :noindex:
 
-.. automodule:: moc_solver
+.. automodule:: orpheus.moc.core
    :members:
    :undoc-members:
    :show-inheritance:

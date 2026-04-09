@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from derivations import get
-from geometry import CoordSystem, Mesh1D
-from collision_probability import solve_cp
+from orpheus.derivations import get
+from orpheus.geometry import CoordSystem, Mesh1D
+from orpheus.cp.solver import CPParams, solve_cp
 
 
 @pytest.mark.parametrize("case_name", [
@@ -31,7 +31,7 @@ def test_slab_cp_eigenvalue(case_name):
         coord=CoordSystem.CARTESIAN,
     )
     result = solve_cp(case.materials, mesh,
-                      params=__import__('collision_probability').CPParams(
+                      params=CPParams(
                           keff_tol=1e-7, flux_tol=1e-6))
 
     err = abs(result.keff - case.k_inf)

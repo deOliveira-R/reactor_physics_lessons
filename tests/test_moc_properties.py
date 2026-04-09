@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from geometry import CoordSystem, Mesh1D
-from derivations import get
-from method_of_characteristics import solve_moc
+from orpheus.geometry import CoordSystem, Mesh1D
+from orpheus.derivations import get
+from orpheus.moc.solver import solve_moc
 
 
 def _homogeneous_result():
@@ -63,7 +63,7 @@ def test_flux_per_material_matches_scalar():
 
 def test_heterogeneous_flux_depression():
     """In a fuel+coolant pin, thermal flux should be higher in coolant."""
-    from derivations._xs_library import get_mixture
+    from orpheus.derivations._xs_library import get_mixture
     fuel = get_mixture("A", "2g")
     cool = get_mixture("B", "2g")
 

@@ -1,13 +1,9 @@
 """Tests for the MOC angular quadrature (azimuthal x Tabuchi-Yamamoto polar)."""
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "03.Method.Of.Characteristics"))
-from moc_quadrature import MOCQuadrature
+from orpheus.moc.quadrature import MOCQuadrature
 
 
 # ── TY polar weight sums ────────────────────────────────────────────

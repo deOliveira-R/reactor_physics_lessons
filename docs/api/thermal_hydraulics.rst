@@ -1,7 +1,7 @@
 Thermal Hydraulics — Single-Channel LOCA
 ==========================================
 
-.. automodule:: thermal_hydraulics
+.. automodule:: orpheus.thermal_hydraulics.solver
    :members:
    :undoc-members:
    :show-inheritance:

@@ -23,15 +23,15 @@ import numpy as np
 import pytest
 from scipy.sparse import csr_matrix
 
-from geometry import CoordSystem, Mesh1D, Zone, mesh1d_from_zones
-from collision_probability import CPMesh, CPParams, CPSolver, solve_cp
-from data.macro_xs.mixture import Mixture
-from data.macro_xs.cell_xs import CellXS, assemble_cell_xs
-from derivations._xs_library import (
+from orpheus.geometry import CoordSystem, Mesh1D, Zone, mesh1d_from_zones
+from orpheus.cp.solver import CPMesh, CPParams, CPSolver, solve_cp
+from orpheus.data.macro_xs.mixture import Mixture
+from orpheus.data.macro_xs.cell_xs import CellXS, assemble_cell_xs
+from orpheus.derivations._xs_library import (
     XS, get_xs, get_mixture, get_materials, make_mixture,
 )
-from derivations._eigenvalue import kinf_from_cp
-from derivations.cp_slab import _slab_cp_matrix
+from orpheus.derivations._eigenvalue import kinf_from_cp
+from orpheus.derivations.cp_slab import _slab_cp_matrix
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -222,7 +222,7 @@ class TestDirectPinfComparison:
         errors that happen to cancel in eigenvalue but not in matrix.
         Closes: G-1.
         """
-        from derivations._xs_library import LAYOUTS
+        from orpheus.derivations._xs_library import LAYOUTS
         layout = LAYOUTS[n_regions]
         ng = int(ng_key[0])
 
@@ -649,7 +649,7 @@ class TestConvergenceRate:
         Catches: power iteration instability, wrong fission source assembly.
         Closes: G-5.
         """
-        from derivations import get
+        from orpheus.derivations import get
         case = get("cp_slab_2eg_2rg")
         gp = case.geom_params
         thicknesses = np.array(gp["thicknesses"])
@@ -691,7 +691,7 @@ class TestConvergenceRate:
         spectrum, this should be < 1.
         Closes: G-5.
         """
-        from derivations import get
+        from orpheus.derivations import get
         case = get("cp_slab_4eg_4rg")
         gp = case.geom_params
         thicknesses = np.array(gp["thicknesses"])
@@ -831,7 +831,7 @@ class TestGSInnerIterations:
         Expected: mean n_inner for g=3 > mean n_inner for g=0.
         Closes: G-9 (inner iterations reveal physics).
         """
-        from derivations import get
+        from orpheus.derivations import get
         case = get("cp_slab_4eg_4rg")
         gp = case.geom_params
         thicknesses = np.array(gp["thicknesses"])
@@ -865,7 +865,7 @@ class TestGSInnerIterations:
         Setup: 4G 4-region slab.
         Closes: eigenvalue consistency.
         """
-        from derivations import get
+        from orpheus.derivations import get
         case = get("cp_slab_4eg_4rg")
         gp = case.geom_params
         thicknesses = np.array(gp["thicknesses"])
@@ -958,7 +958,7 @@ class TestKi4Resolution:
         Catches: table resolution being the dominant error source.
         Closes: W-6.
         """
-        from derivations import get
+        from orpheus.derivations import get
         case = get("cp_cyl1D_2eg_2rg")
         gp = case.geom_params
         radii = np.array(gp["radii"])

@@ -11,12 +11,12 @@ Tests cover both quadrature types (LevelSymmetricSN and ProductQuadrature):
 import numpy as np
 import pytest
 
-from derivations import get
-from derivations._xs_library import get_mixture
-from geometry import CoordSystem, Mesh1D, homogeneous_1d, mesh1d_from_zones, Zone
-from sn_geometry import SNMesh
-from sn_quadrature import LevelSymmetricSN, ProductQuadrature
-from sn_solver import SNSolver, solve_sn
+from orpheus.derivations import get
+from orpheus.derivations._xs_library import get_mixture
+from orpheus.geometry import CoordSystem, Mesh1D, homogeneous_1d, mesh1d_from_zones, Zone
+from orpheus.sn.geometry import SNMesh
+from orpheus.sn.quadrature import LevelSymmetricSN, ProductQuadrature
+from orpheus.sn.solver import SNSolver, solve_sn
 
 
 # ── Homogeneous infinite medium ──────────────────────────────────────
@@ -81,7 +81,7 @@ def test_particle_balance(quad_factory):
 
 def test_cross_check_with_cp_1g():
     """SN and CP on the same cylindrical geometry should give close k_inf."""
-    from collision_probability import solve_cp
+    from orpheus.cp.solver import solve_cp
 
     mix = get_mixture("A", "1g")
 
@@ -119,7 +119,7 @@ class TestCylindricalSweepRegression:
 
     def test_single_sweep_all_finite(self):
         """A single sweep must produce finite fluxes."""
-        from sn_sweep import _sweep_1d_cylindrical
+        from orpheus.sn.sweep import _sweep_1d_cylindrical
 
         mesh = homogeneous_1d(10, 2.0, mat_id=0, coord=CoordSystem.CYLINDRICAL)
         quad = ProductQuadrature.create(n_mu=4, n_phi=8)
@@ -179,7 +179,7 @@ class TestCylindricalSweepRegression:
 
 
 # Need this import for the guard test
-from sn_quadrature import GaussLegendre1D
+from orpheus.sn.quadrature import GaussLegendre1D
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -381,7 +381,7 @@ class TestMultiGroupMultiRegion:
         The redistribution sum Σ_m (α_{m+1/2}ψ_{m+1/2} − α_{m-1/2}ψ_{m-1/2})
         must vanish for each cell because α[0] = α[M] = 0.
         """
-        from sn_sweep import _sweep_1d_cylindrical
+        from orpheus.sn.sweep import _sweep_1d_cylindrical
 
         mix = get_mixture("A", "1g")
         mesh = homogeneous_1d(10, 2.0, mat_id=0, coord=CoordSystem.CYLINDRICAL)
@@ -411,7 +411,7 @@ class TestMultiGroupMultiRegion:
 
     def test_single_cell_uniform_source_equilibrium(self):
         """Two-cell 1G pure absorber with uniform source → φ = Q/Σ_t."""
-        from sn_sweep import _sweep_1d_cylindrical
+        from orpheus.sn.sweep import _sweep_1d_cylindrical
 
         mesh = homogeneous_1d(2, 1.0, mat_id=0, coord=CoordSystem.CYLINDRICAL)
         quad = ProductQuadrature.create(n_mu=4, n_phi=8)
@@ -455,7 +455,7 @@ class TestMultiGroupMultiRegion:
 
     def test_heterogeneous_sn_vs_cp_cross_check(self):
         """Heterogeneous SN and CP should agree within ~10%."""
-        from collision_probability import solve_cp
+        from orpheus.cp.solver import solve_cp
 
         mix_fuel = get_mixture("A", "1g")
         mix_mod = get_mixture("B", "1g")

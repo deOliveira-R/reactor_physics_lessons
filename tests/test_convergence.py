@@ -2,11 +2,11 @@
 
 import pytest
 
-from derivations import get
-from derivations._xs_library import get_mixture
-from geometry import slab_fuel_moderator
-from sn_quadrature import GaussLegendre1D
-from sn_solver import solve_sn
+from orpheus.derivations import get
+from orpheus.derivations._xs_library import get_mixture
+from orpheus.geometry import slab_fuel_moderator
+from orpheus.sn.quadrature import GaussLegendre1D
+from orpheus.sn.solver import solve_sn
 
 
 @pytest.mark.slow

@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from geometry import CoordSystem, Mesh1D
-from derivations import get
-from method_of_characteristics import solve_moc
+from orpheus.geometry import CoordSystem, Mesh1D
+from orpheus.derivations import get
+from orpheus.moc.solver import solve_moc
 
 
 def _build_homogeneous_mesh(mix):

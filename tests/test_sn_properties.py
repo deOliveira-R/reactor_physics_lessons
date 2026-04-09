@@ -10,10 +10,10 @@ independent of the reference eigenvalue:
 import numpy as np
 import pytest
 
-from derivations import get
-from geometry import homogeneous_1d, slab_fuel_moderator
-from sn_quadrature import GaussLegendre1D
-from sn_solver import solve_sn
+from orpheus.derivations import get
+from orpheus.geometry import homogeneous_1d, slab_fuel_moderator
+from orpheus.sn.quadrature import GaussLegendre1D
+from orpheus.sn.solver import solve_sn
 
 
 def test_gl_weights_sum():
@@ -40,7 +40,7 @@ def test_flux_symmetry():
     mix = next(iter(case.materials.values()))
 
     # Build a symmetric 2-region slab: fuel | moderator | moderator | fuel
-    from derivations._xs_library import get_mixture
+    from orpheus.derivations._xs_library import get_mixture
     fuel = get_mixture("A", "1g")
     mod = get_mixture("B", "1g")
     materials = {2: fuel, 0: mod}

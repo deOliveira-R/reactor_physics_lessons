@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from derivations import get
-from geometry import CoordSystem, Mesh1D
-from collision_probability import solve_cp
+from orpheus.derivations import get
+from orpheus.geometry import CoordSystem, Mesh1D
+from orpheus.cp.solver import solve_cp
 
 
 @pytest.mark.parametrize("case_name", [

@@ -4,7 +4,7 @@ Data Package (``data``)
 Mixture
 -------
 
-.. automodule:: data.macro_xs.mixture
+.. automodule:: orpheus.data.macro_xs.mixture
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +12,7 @@ Mixture
 Cell Cross Sections
 -------------------
 
-.. automodule:: data.macro_xs.cell_xs
+.. automodule:: orpheus.data.macro_xs.cell_xs
    :members:
    :undoc-members:
    :show-inheritance:

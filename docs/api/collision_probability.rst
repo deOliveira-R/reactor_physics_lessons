@@ -1,7 +1,7 @@
 Collision Probability Solvers
 =============================
 
-.. automodule:: collision_probability
+.. automodule:: orpheus.cp.solver
    :members:
    :undoc-members:
    :show-inheritance:

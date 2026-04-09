@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from geometry import (
+from orpheus.geometry import (
     CoordSystem,
     Mesh1D,
     Mesh2D,

@@ -12,11 +12,11 @@ errors.
 import numpy as np
 import pytest
 
-from derivations import get
-from monte_carlo import MCParams, ConcentricPinCell, SlabPinCell, solve_monte_carlo
-from collision_probability import solve_cp, CPParams
-from geometry import CoordSystem
-from geometry.factories import mesh1d_from_zones, Zone
+from orpheus.derivations import get
+from orpheus.mc.solver import MCParams, ConcentricPinCell, SlabPinCell, solve_monte_carlo
+from orpheus.cp.solver import solve_cp, CPParams
+from orpheus.geometry import CoordSystem
+from orpheus.geometry.factories import mesh1d_from_zones, Zone
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -78,7 +78,7 @@ def test_mc_vs_cp_slab():
     infinite lattice that CP computes.
     """
     # Use the same 2G cross sections as the cylindrical case
-    from derivations._xs_library import get_mixture, get_xs
+    from orpheus.derivations._xs_library import get_mixture, get_xs
 
     mix_fuel = get_mixture("A", "2g")
     mix_mod = get_mixture("B", "2g")

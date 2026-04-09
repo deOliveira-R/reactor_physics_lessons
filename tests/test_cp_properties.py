@@ -14,9 +14,9 @@ Cylindrical, and Spherical.
 import numpy as np
 import pytest
 
-from geometry import CoordSystem, Mesh1D, Zone, mesh1d_from_zones
-from collision_probability import CPMesh
-from derivations._xs_library import get_xs
+from orpheus.geometry import CoordSystem, Mesh1D, Zone, mesh1d_from_zones
+from orpheus.cp.solver import CPMesh
+from orpheus.derivations._xs_library import get_xs
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────

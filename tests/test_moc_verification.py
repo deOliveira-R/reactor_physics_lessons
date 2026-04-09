@@ -30,13 +30,13 @@ import numpy as np
 import pytest
 from scipy.sparse import csr_matrix
 
-from geometry import CoordSystem, Mesh1D
-from derivations._xs_library import make_mixture, get_mixture, get_xs
-from derivations._eigenvalue import kinf_homogeneous
-from moc_geometry import MOCMesh
-from moc_quadrature import MOCQuadrature
-from moc_solver import MOCSolver
-from method_of_characteristics import solve_moc
+from orpheus.geometry import CoordSystem, Mesh1D
+from orpheus.derivations._xs_library import make_mixture, get_mixture, get_xs
+from orpheus.derivations._eigenvalue import kinf_homogeneous
+from orpheus.moc.geometry import MOCMesh
+from orpheus.moc.quadrature import MOCQuadrature
+from orpheus.moc.core import MOCSolver
+from orpheus.moc.solver import solve_moc
 
 
 # =====================================================================
@@ -1032,7 +1032,7 @@ class TestXVCrossVerification:
 
         # CP solve
         try:
-            from collision_probability import solve_cp
+            from orpheus.cp.solver import solve_cp
             result_cp = solve_cp(materials, mesh)
             k_cp = result_cp.keff
         except ImportError:
@@ -1071,7 +1071,7 @@ class TestXVCrossVerification:
         )
 
         try:
-            from collision_probability import solve_cp
+            from orpheus.cp.solver import solve_cp
             result_cp = solve_cp(materials, mesh)
             k_cp = result_cp.keff
         except ImportError:

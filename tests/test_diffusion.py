@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from derivations import get
-from diffusion_1d import CoreGeometry, TwoGroupXS, solve_diffusion_1d
+from orpheus.derivations import get
+from orpheus.diffusion.solver import CoreGeometry, TwoGroupXS, solve_diffusion_1d
 
 
 def _make_xs(xs_dict) -> TwoGroupXS:

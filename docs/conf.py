@@ -4,12 +4,9 @@
 import sys
 from pathlib import Path
 
-# Add project root and numbered module directories to Python path
+# Add project root to Python path (orpheus package lives there)
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
-for d in sorted(project_root.iterdir()):
-    if d.is_dir() and d.name[0].isdigit():
-        sys.path.insert(0, str(d))
 
 # -- Project information -----------------------------------------------
 
@@ -39,6 +36,12 @@ html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 html_js_files = ['sortable.js']
 html_css_files = ['sortable.css']
+
+# -- Options for autodoc -----------------------------------------------
+
+# -- Options for Nexus knowledge graph ------------------------------------
+
+nexus_extra_source_dirs = ['tests']
 
 # -- Options for autodoc -----------------------------------------------
 

@@ -10,8 +10,8 @@ L1 eigenvalue tests:
 import numpy as np
 import pytest
 
-from derivations import get
-from monte_carlo import MCParams, ConcentricPinCell, SlabPinCell, solve_monte_carlo
+from orpheus.derivations import get
+from orpheus.mc.solver import MCParams, ConcentricPinCell, SlabPinCell, solve_monte_carlo
 
 
 # ═══════════════════════════════════════════════════════════════════════

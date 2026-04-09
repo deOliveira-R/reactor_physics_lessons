@@ -32,18 +32,10 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [
-    ".",
-    "01.Homogeneous.Reactors",
-    "02.Discrete.Ordinates",
-    "03.Method.Of.Characteristics",
-    "04.Monte.Carlo",
-    "05.Diffusion.1D",
-    "09.Collision.Probability",
-]
+pythonpath = ["."]
 markers = [
     "slow: long-running tests (MC, full convergence studies)",
 ]
 
 [tool.setuptools.packages.find]
-include = ["data*", "numerics*", "derivations*", "geometry*"]
+include = ["orpheus*"]

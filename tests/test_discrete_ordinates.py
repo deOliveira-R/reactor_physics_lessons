@@ -3,10 +3,10 @@
 import numpy as np
 import pytest
 
-from derivations._xs_library import get_mixture
-from geometry import Mesh2D
-from sn_quadrature import LebedevSphere
-from sn_solver import solve_sn
+from orpheus.derivations._xs_library import get_mixture
+from orpheus.geometry import Mesh2D
+from orpheus.sn.quadrature import LebedevSphere
+from orpheus.sn.solver import solve_sn
 
 
 @pytest.mark.slow

@@ -9,7 +9,7 @@ Tests structural properties:
 import numpy as np
 import pytest
 
-from diffusion_1d import CoreGeometry, TwoGroupXS, solve_diffusion_1d
+from orpheus.diffusion.solver import CoreGeometry, TwoGroupXS, solve_diffusion_1d
 
 
 def _default_xs():

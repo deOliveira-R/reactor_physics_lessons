@@ -3,11 +3,11 @@
 import numpy as np
 import pytest
 
-from derivations import get
-from derivations._xs_library import get_mixture
-from geometry import homogeneous_1d, slab_fuel_moderator, mesh1d_from_zones, Zone, CoordSystem
-from sn_quadrature import GaussLegendre1D
-from sn_solver import solve_sn
+from orpheus.derivations import get
+from orpheus.derivations._xs_library import get_mixture
+from orpheus.geometry import homogeneous_1d, slab_fuel_moderator, mesh1d_from_zones, Zone, CoordSystem
+from orpheus.sn.quadrature import GaussLegendre1D
+from orpheus.sn.solver import solve_sn
 
 
 # ─── Homogeneous infinite medium (SN with reflective BCs) ────────────
