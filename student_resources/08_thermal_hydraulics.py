@@ -28,7 +28,7 @@ Port of MATLAB Module 09 (``thermalHydraulics.m``, ``initializeFuelRod.m``,
 
 Usage
 -----
-    python 07_thermal_hydraulics.py
+    python 08_thermal_hydraulics.py
 
 Plots are saved to ``results/``.
 """
@@ -1172,7 +1172,7 @@ def solve_thermal_hydraulics(params: THParams | None = None) -> THResult:
 # Plotting and main
 # ============================================================================
 
-OUTPUT = Path("07_results")
+OUTPUT = Path("08_results")
 
 
 def main():

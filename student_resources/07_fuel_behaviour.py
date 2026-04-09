@@ -28,7 +28,7 @@ Port of MATLAB Module 08 (``fuelBehaviour.m``, ``initializeFuelRod.m``,
 
 Usage
 -----
-    python 06_fuel_behaviour.py
+    python 07_fuel_behaviour.py
 
 Plots are saved to ``results/``.
 """
@@ -1380,7 +1380,7 @@ def solve_fuel_behaviour(
 # Plotting and main
 # ============================================================================
 
-OUTPUT = Path("06_results")
+OUTPUT = Path("7_results")
 
 
 def main():

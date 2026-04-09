@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import lpmv
 
-OUTPUT = Path("results")
+OUTPUT = Path("02_results")
 
 
 def spherical_harmonic_surface(l: int, m: int, n: int = 50):

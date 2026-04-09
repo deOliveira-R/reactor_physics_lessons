@@ -29,7 +29,7 @@ Port of MATLAB Module 10 (``reactorKinetics.m``, ``initializeNeutronics.m``,
 
 Usage
 -----
-    python 08_reactor_kinetics.py
+    python 09_reactor_kinetics.py
 
 Plots are saved to ``results/``.
 """
@@ -351,7 +351,7 @@ def _solve_clad_stress(
 ) -> dict:
     """Solve for clad stress components at each axial level.
 
-    Uses the same algebraic approach as Module 08 (fuel_behaviour.py),
+    Uses the same algebraic approach as Module 07 (fuel_behaviour.py),
     but only for the cladding (fuel stress is not tracked in Modules 09/10).
     """
     nz, nc = p["nz"], p["nc"]
@@ -1271,7 +1271,7 @@ def solve_reactor_kinetics(
 # Plotting and main
 # ============================================================================
 
-OUTPUT = Path("08_results")
+OUTPUT = Path("09_results")
 
 
 def main():

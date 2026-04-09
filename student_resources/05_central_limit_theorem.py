@@ -14,7 +14,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-OUTPUT = Path("results")
+OUTPUT = Path("05_results")
 
 
 def main():

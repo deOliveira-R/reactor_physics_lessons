@@ -13,3 +13,4 @@ orpheus.egg-info/
 
 # Claude Code
 .claude/settings.local.json
+student_resources/*_results/
