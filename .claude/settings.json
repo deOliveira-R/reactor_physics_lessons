@@ -89,16 +89,6 @@
             "timeout": 2000
           }
         ]
-      },
-      {
-        "matcher": "Grep",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo 'Nexus-first: For code relationships (callers, dependents, test coverage, module structure), use a nexus skill instead. Grep is for literal text/regex patterns only.'",
-            "timeout": 1000
-          }
-        ]
       }
     ]
   }
