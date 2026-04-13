@@ -48,6 +48,31 @@ nexus_extra_source_dirs = ['tests']
 autodoc_member_order = 'bysource'
 autodoc_typehints = 'description'
 
+# -- Auto-generate verification matrix page ---------------------------
+#
+# Runs `python -m tools.verification.generate_matrix` before Sphinx
+# collects sources so `docs/verification/matrix.rst` is always in sync
+# with the pytest test registry. Closes ORPHEUS issue #79.
+
+def _regenerate_verification_matrix(app):
+    import subprocess
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "tools.verification.generate_matrix"],
+            cwd=project_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        app.warn(
+            f"verification matrix regeneration failed: {e.stderr}"
+        )
+
+
+def setup(app):
+    app.connect("builder-inited", _regenerate_verification_matrix)
+
 # -- Options for mathjax -----------------------------------------------
 
 mathjax3_config = {
