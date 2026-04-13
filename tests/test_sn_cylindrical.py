@@ -18,6 +18,24 @@ from orpheus.sn.geometry import SNMesh
 from orpheus.sn.quadrature import LevelSymmetricSN, ProductQuadrature
 from orpheus.sn.solver import SNSolver, solve_sn
 
+pytestmark = [
+    pytest.mark.l1,  # Default: eigenvalue / analytical comparison (L1).
+    # TestCylindricalSweepRegression overrides to L0 below.
+    pytest.mark.verifies(
+        "transport-cylindrical",
+        "alpha-cylindrical",
+        "alpha-recursion",
+        "wdd-closure",
+        "wdd-face",
+        "mm-weights",
+        "multigroup",
+        "reflective-bc",
+        "one-group-kinf",
+        "matrix-eigenvalue",
+        "mg-balance",
+    ),
+]
+
 
 # ── Homogeneous infinite medium ──────────────────────────────────────
 
@@ -114,6 +132,7 @@ def test_flux_non_negative():
 
 # ── Sweep regression ─────────────────────────────────────────────────
 
+@pytest.mark.l0
 class TestCylindricalSweepRegression:
     """Tests targeting issues found in spherical implementation."""
 
@@ -186,6 +205,7 @@ from orpheus.sn.quadrature import GaussLegendre1D
 # Multi-group / multi-region preemptive tests
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l2
 class TestMultiGroupMultiRegion:
     """Preemptive tests targeting error patterns that hide in simple problems.
 

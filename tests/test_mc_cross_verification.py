@@ -18,6 +18,18 @@ from orpheus.cp.solver import solve_cp, CPParams
 from orpheus.geometry import CoordSystem
 from orpheus.geometry.factories import mesh1d_from_zones, Zone
 
+# L2 cross-code MC ↔ CP consistency.
+pytestmark = [
+    pytest.mark.l2,
+    pytest.mark.verifies(
+        "keff-mean",
+        "sigma-keff",
+        "collision-rate",
+        "self-cyl",
+        "self-slab",
+    ),
+]
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # XV-MC-001: MC vs CP cylinder

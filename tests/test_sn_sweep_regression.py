@@ -24,6 +24,8 @@ from orpheus.sn.geometry import SNMesh
 from orpheus.sn.quadrature import GaussLegendre1D, LebedevSphere
 from orpheus.sn.sweep import _solve_recurrence, _outgoing, transport_sweep
 
+pytestmark = pytest.mark.l0  # SN sweep recurrence + SNMesh stencil regressions (gotcha #5)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # _solve_recurrence unit tests

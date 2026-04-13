@@ -12,6 +12,16 @@ import pytest
 from orpheus.derivations import get
 from orpheus.mc.solver import MCParams, SlabPinCell, ConcentricPinCell, solve_monte_carlo
 
+# L2 MC convergence tests (L2-MC-001..003 in docstrings).
+pytestmark = [
+    pytest.mark.l2,
+    pytest.mark.verifies(
+        "keff-mean",
+        "sigma-keff",
+        "free-flight",
+    ),
+]
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # L2-MC-001: Sigma scales as 1/sqrt(N)

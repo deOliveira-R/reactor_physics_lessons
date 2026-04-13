@@ -13,6 +13,22 @@ import pytest
 from orpheus.derivations import get
 from orpheus.mc.solver import MCParams, ConcentricPinCell, SlabPinCell, solve_monte_carlo
 
+pytestmark = pytest.mark.verifies(
+    "free-flight",
+    "decompose",
+    "scattering-cdf",
+    "keff-mean",
+    "sigma-keff",
+    "ws-pitch",
+    "periodic-bc",
+    "chi-sampling",
+    "kinf-1g",
+    "kinf-mg",
+    "one-group-kinf",
+    "matrix-eigenvalue",
+    "mg-balance",
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # L1 homogeneous: z-score tests
@@ -71,6 +87,7 @@ def test_mc_high_stats(case_name):
 
 
 @pytest.mark.slow
+@pytest.mark.l1
 def test_mc_high_stats_2g():
     """L1-MC-003: 2G high-stats — non-degenerate (flux shape matters).
 
@@ -180,6 +197,7 @@ def test_mc_heterogeneous_extended(case_name):
 # L1-MC-004: Weight ratio consistency
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l1
 def test_mc_weight_ratio_consistency():
     """L1-MC-004: keff_cycle = sum(w_end)/sum(w_start) is consistent.
 

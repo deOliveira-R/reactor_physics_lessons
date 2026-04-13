@@ -7,6 +7,19 @@ from orpheus.geometry import CoordSystem, Mesh1D
 from orpheus.derivations import get
 from orpheus.moc.solver import solve_moc
 
+pytestmark = pytest.mark.verifies(
+    "characteristic-ode",
+    "bar-psi",
+    "isotropic-source",
+    "moc-wigner-seitz",
+    "delta-psi",
+    "moc-keff-update",
+    "boyd-eq-45",
+    "one-group-kinf",
+    "matrix-eigenvalue",
+    "mg-balance",
+)
+
 
 def _build_homogeneous_mesh(mix):
     """Build a single-region Wigner-Seitz mesh for homogeneous tests."""

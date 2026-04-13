@@ -7,6 +7,21 @@ from orpheus.derivations import get
 from orpheus.geometry import CoordSystem, Mesh1D
 from orpheus.cp.solver import CPParams, solve_cp
 
+# Every test in this file exercises the slab CP pipeline end-to-end
+# against an analytical CPmatrix eigenvalue (see PR-2 derivations).
+pytestmark = pytest.mark.verifies(
+    "collision-rate",
+    "e3-def",
+    "self-slab",
+    "p-inf",
+    "dd-slab",
+    "dc-slab",
+    "second-diff-general",
+    "one-group-kinf",
+    "matrix-eigenvalue",
+    "mg-balance",
+)
+
 
 @pytest.mark.parametrize("case_name", [
     "cp_slab_1eg_1rg",

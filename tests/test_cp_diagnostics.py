@@ -148,6 +148,7 @@ def test_gauss_seidel_eigenvalue(case_name):
 # Phase 4: Thermal groups need more inner iterations than fast groups
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l1
 def test_thermal_group_needs_more_inner_iterations():
     """Thermal groups (high index) should need >= inner iterations than fast (low index).
 

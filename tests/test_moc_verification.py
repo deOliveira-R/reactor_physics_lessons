@@ -991,6 +991,7 @@ class TestL2PolarConvergence:
 # XV: CROSS-VERIFICATION — MOC vs CP
 # =====================================================================
 
+@pytest.mark.l2  # Code-to-code XV (MOC ↔ CP)
 class TestXVCrossVerification:
     """XV: MOC eigenvalue vs CP eigenvalue on identical geometry.
 

@@ -7,6 +7,16 @@ from orpheus.derivations import get
 from orpheus.geometry import CoordSystem, Mesh1D
 from orpheus.cp.solver import solve_cp
 
+pytestmark = pytest.mark.verifies(
+    "collision-rate",
+    "chord-length",
+    "self-sph",
+    "second-diff-sph",
+    "one-group-kinf",
+    "matrix-eigenvalue",
+    "mg-balance",
+)
+
 
 @pytest.mark.parametrize("case_name", [
     "cp_sph1D_1eg_1rg",

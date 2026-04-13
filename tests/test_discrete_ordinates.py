@@ -8,6 +8,16 @@ from orpheus.geometry import Mesh2D
 from orpheus.sn.quadrature import LebedevSphere
 from orpheus.sn.solver import solve_sn
 
+# 2D SN mesh convergence — L2 integration check.
+pytestmark = [
+    pytest.mark.l2,
+    pytest.mark.verifies(
+        "transport-cartesian-2d",
+        "dd-cartesian-2d",
+        "multigroup",
+    ),
+]
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize("ng_key,label", [("1g", "1G"), ("2g", "2G")])

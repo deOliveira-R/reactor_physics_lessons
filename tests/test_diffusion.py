@@ -6,6 +6,14 @@ import pytest
 from orpheus.derivations import get
 from orpheus.diffusion.solver import CoreGeometry, TwoGroupXS, solve_diffusion_1d
 
+# TODO: no diffusion theory page exists yet (issue #35).
+# Once docs/theory/diffusion.rst lands, populate pytest.mark.verifies(...)
+# with bare-slab-buckling / two-group-diffusion / flux-continuity /
+# current-continuity. For now only the V&V level is declared — the
+# graph will show 0 declared tests for diffusion equations until the
+# theory page is authored.
+pytestmark = pytest.mark.l1
+
 
 def _make_xs(xs_dict) -> TwoGroupXS:
     return TwoGroupXS(**xs_dict)

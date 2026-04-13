@@ -9,6 +9,18 @@ from orpheus.geometry import homogeneous_1d, slab_fuel_moderator, mesh1d_from_zo
 from orpheus.sn.quadrature import GaussLegendre1D
 from orpheus.sn.solver import solve_sn
 
+pytestmark = pytest.mark.verifies(
+    "transport-cartesian",
+    "dd-cartesian-1d",
+    "dd-solve",
+    "dd-recurrence",
+    "multigroup",
+    "reflective-bc",
+    "one-group-kinf",
+    "matrix-eigenvalue",
+    "mg-balance",
+)
+
 
 # ─── Homogeneous infinite medium (SN with reflective BCs) ────────────
 
@@ -82,6 +94,7 @@ def _convergence_order(values, spacings, reference):
     return orders
 
 
+@pytest.mark.l1
 def test_spatial_convergence():
     """Diamond-difference scheme must show O(h²) spatial convergence."""
     fuel = get_mixture("A", "1g")
@@ -114,6 +127,7 @@ def test_spatial_convergence():
 
 # ─── Angular spectral convergence ────────────────────────────────────
 
+@pytest.mark.l1
 def test_angular_convergence():
     """Gauss-Legendre quadrature must show spectral convergence in angle."""
     fuel = get_mixture("A", "1g")

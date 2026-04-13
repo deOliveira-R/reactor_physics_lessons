@@ -20,6 +20,22 @@ from orpheus.sn.quadrature import (
     ProductQuadrature,
 )
 
+# All quadrature tests are L0 term-verification (hand-computed weight
+# sums, moment conditions, alpha-recursion closure). TestL0TermVerification
+# already auto-tags via the TestL<N> class-name convention.
+pytestmark = [
+    pytest.mark.l0,
+    pytest.mark.verifies(
+        "mm-weights",
+        "alpha-recursion",
+        "alpha-cylindrical",
+        "wdd-closure",
+        "wdd-face",
+        "reflective-bc",
+        "flux-moments",
+    ),
+]
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Weight sums

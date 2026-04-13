@@ -17,6 +17,8 @@ from orpheus.sn.quadrature import GaussLegendre1D, LebedevSphere
 from orpheus.sn.solver import SNSolver, solve_sn
 from orpheus.sn.sweep import transport_sweep
 
+pytestmark = pytest.mark.l0  # SN solver method-in-isolation component checks
+
 
 def _uniform_2d(nx, ny, delta, mat_map):
     """Helper: build a uniform Mesh2D (replaces CartesianMesh.uniform_2d)."""

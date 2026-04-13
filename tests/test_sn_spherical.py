@@ -18,6 +18,23 @@ from orpheus.sn.geometry import SNMesh
 from orpheus.sn.quadrature import GaussLegendre1D
 from orpheus.sn.solver import SNSolver, solve_sn
 
+pytestmark = [
+    pytest.mark.l1,  # Default: eigenvalue / analytical comparison.
+    # TestAlphaCoefficients, TestSphericalSweepRegression, TestSphericalBicgstab
+    # override to L0 below; TestMultiGroupMultiRegionSpherical to L2.
+    pytest.mark.verifies(
+        "transport-spherical",
+        "alpha-recursion",
+        "wdd-closure",
+        "wdd-face",
+        "multigroup",
+        "reflective-bc",
+        "one-group-kinf",
+        "matrix-eigenvalue",
+        "mg-balance",
+    ),
+]
+
 
 # ── Homogeneous infinite medium (geometry-independent k_inf) ─────────
 
@@ -78,6 +95,7 @@ def test_particle_balance():
 
 # ── Angular redistribution properties ────────────────────────────────
 
+@pytest.mark.l0
 class TestAlphaCoefficients:
     """Properties of the angular redistribution coefficients."""
 
@@ -220,6 +238,7 @@ def test_flux_non_negative():
 # Sweep-level regression tests (from debugging this implementation)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l0
 class TestSphericalSweepRegression:
     """Tests targeting specific issues found during implementation."""
 
@@ -317,6 +336,7 @@ class TestSphericalSweepRegression:
 # BiCGSTAB inner solver (spherical transport operator)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l0
 class TestSphericalBicgstab:
     """Tests for the BiCGSTAB inner solver on spherical geometry."""
 
@@ -381,6 +401,7 @@ class TestSphericalBicgstab:
 # Multi-group / multi-region preemptive tests (spherical)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l2
 class TestMultiGroupMultiRegionSpherical:
     """Preemptive tests for error patterns that hide in simple problems.
 

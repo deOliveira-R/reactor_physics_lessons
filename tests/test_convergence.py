@@ -8,6 +8,18 @@ from orpheus.geometry import slab_fuel_moderator
 from orpheus.sn.quadrature import GaussLegendre1D
 from orpheus.sn.solver import solve_sn
 
+# L2 cross-solver consistency check (SN ↔ CP).
+pytestmark = [
+    pytest.mark.l2,
+    pytest.mark.verifies(
+        "transport-cartesian",
+        "dd-cartesian-1d",
+        "collision-rate",
+        "self-slab",
+        "reflective-bc",
+    ),
+]
+
 
 @pytest.mark.slow
 def test_sn_approaches_cp_reference():

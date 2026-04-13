@@ -13,6 +13,8 @@ from orpheus.moc.geometry import (
 )
 from orpheus.moc.quadrature import MOCQuadrature
 
+pytestmark = pytest.mark.l0  # MOC ray-tracing geometry primitives (MOCMesh, Track, ...)
+
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

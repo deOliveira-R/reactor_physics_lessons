@@ -23,6 +23,25 @@ import numpy as np
 import pytest
 
 from orpheus.derivations import get
+
+# Mixed L0/L1 file — tests are tagged per-function to avoid conflicts
+# between file-level defaults and function-level overrides. The
+# L0-MC-* / L1-MC-* IDs in each test's docstring match the marker.
+# Common verifies are declared at file level; individual tests may
+# narrow the list if it would be misleading.
+pytestmark = pytest.mark.verifies(
+    "free-flight",
+    "decompose",
+    "scattering-cdf",
+    "direction-sampling",
+    "roulette-prob",
+    "roulette-conservation",
+    "keff-cycle",
+    "keff-mean",
+    "sigma-keff",
+    "fission-weight",
+    "chi-sampling",
+)
 from orpheus.derivations._xs_library import get_xs, get_mixture
 from orpheus.mc.solver import (
     MCParams, SlabPinCell, ConcentricPinCell, MCMesh,
@@ -43,6 +62,7 @@ def _z_score(value, expected, sigma):
 # L0-MC-015: Free-path exponential distribution
 # =====================================================================
 
+@pytest.mark.l0
 def test_free_path_exponential():
     """L0-MC-015: Free path ~ Exp(sig_t_max), mean = 1/sig_t_max.
 
@@ -81,6 +101,7 @@ def test_free_path_exponential():
 # L0-MC-016: Real collision fraction in delta-tracking
 # =====================================================================
 
+@pytest.mark.l0
 def test_real_collision_fraction():
     """L0-MC-016: P(real collision) = sig_t / sig_t_max.
 
@@ -124,6 +145,7 @@ def test_real_collision_fraction():
 # L0-MC-017: Absorption in non-fissile material zeroes weight
 # =====================================================================
 
+@pytest.mark.l0
 def test_absorption_nonfissile_zeroes_weight():
     """L0-MC-017: Weight adjustment in non-fissile: w *= SigP/SigA = 0.
 
@@ -165,6 +187,7 @@ def test_absorption_nonfissile_zeroes_weight():
 # L0-MC-018: Roulette preserves supercritical weight
 # =====================================================================
 
+@pytest.mark.l0
 def test_roulette_supercritical_preserves_weight():
     """L0-MC-018: When w > w0, terminate_p < 0, weight is unchanged.
 
@@ -208,6 +231,7 @@ def test_roulette_supercritical_preserves_weight():
 # L0-MC-019: Virtual collision preserves direction
 # =====================================================================
 
+@pytest.mark.l0
 def test_virtual_collision_preserves_direction():
     """L0-MC-019: After a virtual collision, direction is NOT resampled.
 
@@ -276,6 +300,7 @@ def test_virtual_collision_preserves_direction():
 # L0-MC-020: keff cycle estimator consistency
 # =====================================================================
 
+@pytest.mark.l0
 def test_keff_cycle_estimator():
     """L0-MC-020: keff_cycle = sum(w_end)/sum(w_start) hand verification.
 
@@ -300,6 +325,7 @@ def test_keff_cycle_estimator():
 # L1-MC-005: 2G group flux ratio (non-degenerate spectral test)
 # =====================================================================
 
+@pytest.mark.l1
 def test_2g_flux_ratio_homogeneous():
     """L1-MC-005: 2G homogeneous flux ratio checks spectral correctness.
 
@@ -350,6 +376,7 @@ def test_2g_flux_ratio_homogeneous():
 # L1-MC-006: Seed reproducibility (determinism)
 # =====================================================================
 
+@pytest.mark.l1
 def test_seed_reproducibility():
     """L1-MC-006: Same seed gives identical keff and sigma.
 
@@ -385,6 +412,7 @@ def test_seed_reproducibility():
 # L1-MC-007: Different seeds give different histories
 # =====================================================================
 
+@pytest.mark.l1
 def test_different_seeds_differ():
     """L1-MC-007: Different seeds must produce different keff histories.
 
@@ -413,6 +441,7 @@ def test_different_seeds_differ():
 # L1-MC-008: 4G homogeneous (non-degenerate, fast)
 # =====================================================================
 
+@pytest.mark.l1
 def test_4g_homogeneous_fast():
     """L1-MC-008: 4G homogeneous within z < 5 (fast, non-degenerate).
 
@@ -444,6 +473,7 @@ def test_4g_homogeneous_fast():
 # L1-MC-009: Weight conservation across a complete cycle
 # =====================================================================
 
+@pytest.mark.l1
 def test_weight_normalization_consistency():
     """L1-MC-009: Weight normalization at cycle start is self-consistent.
 
@@ -473,6 +503,7 @@ def test_weight_normalization_consistency():
 # L1-MC-010: XS consistency check (sig_t = sig_a + sig_s_sum)
 # =====================================================================
 
+@pytest.mark.l1
 def test_xs_consistency_in_solver():
     """L1-MC-010: sig_t used in solver = SigF + SigC + SigL + sig_s_sum.
 
@@ -504,6 +535,7 @@ def test_xs_consistency_in_solver():
 # L1-MC-011: Splitting creates correct number of copies
 # =====================================================================
 
+@pytest.mark.l1
 def test_splitting_copy_count():
     """L1-MC-011: Splitting with w=3.7 creates 3 or 4 copies.
 
@@ -540,6 +572,7 @@ def test_splitting_copy_count():
 # =====================================================================
 
 @pytest.mark.slow
+@pytest.mark.l1
 def test_mcmesh_vs_concentric_keff():
     """L1-MC-012: MCMesh and ConcentricPinCell produce consistent keff.
 

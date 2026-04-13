@@ -27,6 +27,26 @@ from orpheus.geometry import CoordSystem, Mesh1D, Zone, mesh1d_from_zones
 from orpheus.cp.solver import CPMesh, CPParams, CPSolver, solve_cp
 from orpheus.data.macro_xs.mixture import Mixture
 from orpheus.data.macro_xs.cell_xs import CellXS, assemble_cell_xs
+
+# File-level verifies — every test in this file exercises the CP matrix
+# pipeline. Individual classes carry their own @pytest.mark.l0/l1/l2
+# marker for V&V level (mixed file).
+pytestmark = pytest.mark.verifies(
+    "collision-rate",
+    "p-inf",
+    "neutron-balance",
+    "matrix-A-def",
+    "matrix-B-def",
+    "cp-keff-update",
+    "e3-def",
+    "ki3-def",
+    "self-slab",
+    "self-cyl",
+    "self-sph",
+    "wigner-seitz",
+    "matrix-eigenvalue",
+    "mg-balance",
+)
 from orpheus.derivations._xs_library import (
     XS, get_xs, get_mixture, get_materials, make_mixture,
 )
@@ -201,6 +221,7 @@ def _compute_analytical_kinf_slab_with_n2n(
 # Section 1 — L0: Direct P_inf matrix comparison (G-1)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l1
 class TestDirectPinfComparison:
     """[G-1] Compare CPMesh.compute_pinf_group against derivation's
     _slab_cp_matrix element-by-element.
@@ -301,6 +322,7 @@ class TestDirectPinfComparison:
 # Section 2 — Multi-group CP matrix properties (G-6, W-2)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l1
 class TestMultiGroupProperties:
     """[G-6, W-2] Verify CP matrix properties at 2G and 4G, not just 1G.
 
@@ -378,6 +400,7 @@ class TestMultiGroupProperties:
 # Section 3 — Upscatter eigenvalue (G-2, W-1)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l1
 class TestUpscatter:
     """[G-2, W-1] Eigenvalue with nonzero upscatter.
 
@@ -435,6 +458,7 @@ class TestUpscatter:
 # Section 4 — (n,2n) eigenvalue and keff formula (C-2, G-3, W-3)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l1
 class TestN2N:
     """[C-2, G-3, W-3] Tests for (n,2n) reactions.
 
@@ -543,6 +567,7 @@ class TestN2N:
 # Section 5 — Optically thick / thin stress tests (G-4, G-7)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l1
 class TestOpticalLimits:
     """[G-4, G-7] Stress tests for extreme optical thicknesses.
 
@@ -633,6 +658,7 @@ class TestOpticalLimits:
 # Section 6 — Convergence rate of power iteration (G-5)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l1
 class TestConvergenceRate:
     """[G-5] Verify that the power iteration exhibits expected convergence.
 
@@ -722,6 +748,7 @@ class TestConvergenceRate:
 # Section 7 — Many-region refinement (G-8)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l2
 class TestManyRegions:
     """[G-8] Tests with more than 4 spatial regions.
 
@@ -808,6 +835,7 @@ class TestManyRegions:
 # Section 8 — GS inner iteration vacuousness (C-1, G-9)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l2
 class TestGSInnerIterations:
     """[C-1 fix, G-9] Verify GS inner iterations converge within-group self-scatter.
 
@@ -939,6 +967,7 @@ class TestGSInnerIterations:
 # Section 9 — Ki4 table resolution convergence (W-6)
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.l0
 class TestKi4Resolution:
     """[W-6] Verify that cylindrical/spherical tolerance is controlled
     by Ki4 table resolution, and that increasing resolution improves
