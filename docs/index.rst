@@ -15,6 +15,12 @@ ORPHEUS — Open Reactor Physics Educational University System
 
 .. toctree::
    :maxdepth: 2
+   :caption: Testing
+
+   testing/index
+
+.. toctree::
+   :maxdepth: 2
    :caption: API Reference
 
    api/numerics
