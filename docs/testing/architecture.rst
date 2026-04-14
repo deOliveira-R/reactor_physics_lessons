@@ -237,6 +237,75 @@ Flags:
     Used by CI in PR-final once migration is complete; **not** a CI
     gate in PR-1 so migration doesn't block merges.
 
+    The ``--strict`` gate ignores any theory label that is marked
+    :ref:`vv-status-documented` — those are deliberately excluded
+    from the orphan set because they cannot or should not be paired
+    with a test. A real gap (implemented-but-untested equation)
+    still fires the gate.
+
+.. _vv-status-documented:
+
+Documented-only equations (``:vv-status:``)
+-------------------------------------------
+
+Not every equation in ``docs/theory/*.rst`` can or should carry a
+verifying test. Three cases come up in practice:
+
+1. **Pure definitional labels.** ``boltzmann``, ``transport-equation``,
+   ``balance-general`` — these name the governing equation or a
+   mathematical identity. They have no single "implementing
+   function" to test against; the entire transport solver *is* the
+   verification, and the individual labelled test is exercised by
+   downstream equations like ``matrix-eigenvalue`` and ``mg-balance``.
+2. **Not-yet-implemented modules.** A theory page may document the
+   full equation set of a module whose Python port does not yet
+   exist (the TH / fuel-behaviour / reactor-kinetics modules are
+   currently in this state — they live in the ``docs/theory``
+   narrative but not in the ``orpheus/`` package tree). A
+   documented-but-not-implemented equation is a work-in-progress
+   marker, not a V&V gap.
+3. **Deliberately deferred tests.** When writing the catching test
+   requires infrastructure that does not exist yet (a new analytical
+   reference, a missing fixture, a dependency to land in a separate
+   issue), marking the label as documented-only is the escape hatch.
+   This should be rare and each case should reference a tracking
+   issue in the RST comment.
+
+The V&V harness recognises these via a plain RST comment of the
+form
+
+.. code-block:: rst
+
+   .. math::
+      :label: boltzmann
+
+      \partial_t \psi + \Omega \cdot \nabla \psi = S - \Sigma_t \psi
+
+   .. vv-status: boltzmann documented
+
+Because the line starts with ``.. `` followed by text that is **not**
+a registered Sphinx directive, Sphinx silently strips it from the
+rendered output — the sentinel lives only in the source file. The
+audit CLI parses these comments and excludes the named labels from
+the ``Orphan equations`` count and the ``--strict`` gate.
+
+Rules:
+
+- The ``vv-status:`` comment must appear in the same RST file as
+  the ``:label:`` it refers to. Cross-file sentinels are not
+  supported.
+- The recognised status is **documented** only. Other words
+  (``verified``, ``pending``, ...) are reserved for future use and
+  are silently ignored today — they do not exclude the label from
+  the orphan gate.
+- If the label named in the sentinel does not actually exist in
+  the RST (a typo), the sentinel is silently dropped and the real
+  orphan continues to fire. Failing closed keeps typos visible.
+- Do not use ``:vv-status: documented`` to paper over a genuine
+  gap. "The test is hard to write" is not a justification;
+  "the code does not exist yet" or "this is a definitional label"
+  are. If in doubt, open an issue referencing the label.
+
 The tool runs ``pytest --collect-only`` under the hood so the
 :data:`tests._harness.registry.TEST_REGISTRY` is populated, then
 queries it. No test code is executed.

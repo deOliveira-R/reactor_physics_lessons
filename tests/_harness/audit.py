@@ -98,6 +98,7 @@ def _render_text(
     items: list[TestMetadata],
     *,
     theory_labels: set[str],
+    documented_labels: set[str],
     err_tags: set[str],
 ) -> str:
     lines: list[str] = []
@@ -157,12 +158,17 @@ def _render_text(
             lines.append(f"  {eq:40} {len(coverage[eq]):>3} test(s)")
     lines.append("")
 
-    # Orphan equations (declared in theory pages, never referenced by any test)
-    orphans = sorted(theory_labels - coverage.keys())
+    # Orphan equations (declared in theory pages, never referenced by
+    # any test) — excluding labels explicitly marked `.. vv-status: X
+    # documented` as definitional or not-yet-implemented.
+    testable_labels = theory_labels - documented_labels
+    orphans = sorted(testable_labels - coverage.keys())
     if theory_labels:
         lines.append(
-            f"Orphan equations ({len(orphans)} of {len(theory_labels)} "
-            "theory labels have zero test coverage):"
+            f"Orphan equations ({len(orphans)} of {len(testable_labels)} "
+            "testable theory labels have zero test coverage; "
+            f"{len(documented_labels)} labels are :vv-status: documented "
+            "and excluded from the orphan gate):"
         )
         for eq in orphans:
             lines.append(f"  {eq}")
@@ -188,10 +194,12 @@ def _render_json(
     items: list[TestMetadata],
     *,
     theory_labels: set[str],
+    documented_labels: set[str],
     err_tags: set[str],
 ) -> str:
     coverage = _equation_coverage(items)
     caught = _caught_tags(items)
+    testable_labels = theory_labels - documented_labels
     payload: dict[str, Any] = {
         "total": len(items),
         "by_level": dict(Counter(m.level or "unmarked" for m in items)),
@@ -201,7 +209,8 @@ def _render_json(
             for module, counts in _group_by_module_level(items).items()
         },
         "equation_coverage": {eq: tests for eq, tests in coverage.items()},
-        "orphan_equations": sorted(theory_labels - coverage.keys()),
+        "orphan_equations": sorted(testable_labels - coverage.keys()),
+        "documented_equations": sorted(documented_labels),
         "err_coverage": {err: caught.get(err, []) for err in sorted(err_tags)},
         "untagged": [m.nodeid for m in items if m.level is None],
     }
@@ -213,11 +222,53 @@ def _render_json(
 # ---------------------------------------------------------------------------
 
 
-def _scan_theory_equation_labels(theory_dir: Path) -> set[str]:
-    """Grep ``.. math:: :label: foo`` blocks out of theory RST pages."""
+def _scan_theory_equations(theory_dir: Path) -> tuple[set[str], set[str]]:
+    """Scan theory RST pages for equation labels and documented-only markers.
+
+    Returns
+    -------
+    (all_labels, documented_labels)
+        ``all_labels`` is every ``.. math:: :label: foo`` found in
+        ``docs/theory/*.rst``. ``documented_labels`` is the subset of
+        those labels that carry the V&V-harness-specific sentinel
+
+            .. vv-status: <label> documented
+
+        anywhere in the same file. This is a plain RST comment — the
+        ``.. `` prefix followed by text that is not a known directive
+        is silently stripped by Sphinx, so the sentinel has no effect
+        on the rendered theory page. The audit tool uses it to exclude
+        three kinds of label from the orphan-equation gate:
+
+        1. **Pure definitional labels** — e.g. ``boltzmann``,
+           ``transport-equation``, ``balance-general``. These name the
+           governing equation or a mathematical identity that has no
+           single "implementing function" to test against. They
+           belong in the theory page for the narrative but cannot be
+           paired with a verifying test.
+        2. **Not-yet-implemented modules** — e.g. the 19 TH / FB / RK
+           equations whose Python ports do not exist yet. A real
+           orphan (implemented but untested) is a V&V gap; a
+           documented-but-not-implemented equation is a work-in-
+           progress marker, not a gap.
+        3. **Equations with a pending catching test** — when an
+           author deliberately wants to defer writing a test and
+           surface it as "acceptable gap" rather than "bug in audit",
+           marking ``documented`` is the escape hatch. This should
+           be rare and paired with a GitHub issue.
+
+        The orphan gate (and ``--strict``) only fires for labels that
+        are *not* in ``documented_labels``.
+    """
+    import re
+
     if not theory_dir.is_dir():
-        return set()
+        return set(), set()
+
     labels: set[str] = set()
+    documented: set[str] = set()
+    status_re = re.compile(r"^\.\.\s+vv-status:\s+(\S+)\s+documented\s*$")
+
     for rst in theory_dir.rglob("*.rst"):
         try:
             text = rst.read_text(encoding="utf-8")
@@ -227,7 +278,17 @@ def _scan_theory_equation_labels(theory_dir: Path) -> set[str]:
             stripped = line.strip()
             if stripped.startswith(":label:"):
                 labels.add(stripped.split(":", 2)[2].strip())
-    return labels
+                continue
+            m = status_re.match(stripped)
+            if m:
+                documented.add(m.group(1))
+
+    # A label may only be "documented" if it also exists as a real
+    # `:label:`. If someone writes `.. vv-status: foo documented` but
+    # `foo` is not actually a theory label, silently drop it — the
+    # sentinel has no effect and the typo is caught on the next audit.
+    documented &= labels
+    return labels, documented
 
 
 def _scan_err_catalog(catalog: Path) -> set[str]:
@@ -286,7 +347,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     items = sorted(registry.TEST_REGISTRY.values(), key=lambda m: m.nodeid)
-    theory_labels = _scan_theory_equation_labels(args.theory_dir)
+    theory_labels, documented_labels = _scan_theory_equations(args.theory_dir)
+    testable_labels = theory_labels - documented_labels
     err_tags = _scan_err_catalog(args.err_catalog)
 
     if args.untagged:
@@ -296,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.gaps:
         coverage = _equation_coverage(items)
         caught = _caught_tags(items)
-        orphans = sorted(theory_labels - coverage.keys())
+        orphans = sorted(testable_labels - coverage.keys())
         missing_err = sorted(err_tags - caught.keys())
         if orphans:
             print("# Orphan equations (no verifying tests)")
@@ -310,17 +372,27 @@ def main(argv: list[str] | None = None) -> int:
                 print(err)
     elif args.json:
         print(
-            _render_json(items, theory_labels=theory_labels, err_tags=err_tags)
+            _render_json(
+                items,
+                theory_labels=theory_labels,
+                documented_labels=documented_labels,
+                err_tags=err_tags,
+            )
         )
     else:
         print(
-            _render_text(items, theory_labels=theory_labels, err_tags=err_tags)
+            _render_text(
+                items,
+                theory_labels=theory_labels,
+                documented_labels=documented_labels,
+                err_tags=err_tags,
+            )
         )
 
     if args.strict:
         untagged = sum(1 for m in items if m.level is None)
         coverage = _equation_coverage(items)
-        orphans = theory_labels - coverage.keys()
+        orphans = testable_labels - coverage.keys()
         if untagged or orphans:
             return 1
     return 0
