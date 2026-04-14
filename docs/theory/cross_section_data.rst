@@ -350,14 +350,119 @@ The scattering matrix is built in four stages:
    sigma-zero-independent thermal kernel.
 
 
-Reactions Not Included
------------------------
+Reactions Not Included: :math:`(n,2n)`, :math:`(n,3n)`, :math:`(n,4n)`
+-----------------------------------------------------------------------
 
-The GENDF files for heavy isotopes (U-235, U-238) contain MF=6 entries
-for :math:`(n,3n)` (MT=17) and :math:`(n,4n)` (MT=37).  These are
-**not** extracted, matching the original MATLAB code which only processes
-MT=51–91.  The impact is negligible for thermal reactor applications
-(threshold energies are 6–15 MeV).
+The GENDF files for heavy isotopes (U-235, U-238, Pu-239, ...) contain
+MF=6 scattering entries for three multiplicity-changing reactions that
+ORPHEUS **does not extract** into the scattering matrix:
+
+.. csv-table::
+   :header: MT, Reaction, Threshold, ENDF name
+   :widths: 8, 15, 15, 62
+
+   16, ":math:`(n,2n)`", ~6–8 MeV, neutron-induced two-neutron emission
+   17, ":math:`(n,3n)`", ~11–14 MeV, neutron-induced three-neutron emission
+   37, ":math:`(n,4n)`", ~20 MeV+, neutron-induced four-neutron emission
+
+The current scattering-matrix assembly loop at
+``orpheus/data/micro_xs/gendf.py:281`` only iterates over
+MT=51..91 (discrete inelastic levels plus continuum inelastic at
+MT=91), matching the original MATLAB ``convertCSVtoM.m`` that ORPHEUS
+was ported from.
+
+Why this is (currently) acceptable
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Two reasons, physical and pragmatic:
+
+1. **Threshold energies are far above the thermal and epithermal
+   regime.** A thermal-spectrum reactor has almost no flux above
+   6 MeV (the fission spectrum rolls off as :math:`\chi(E) \propto
+   e^{-E/a}\sinh\sqrt{bE}`, effectively dead by 10 MeV). The rate
+   density for :math:`(n,xn)` at x≥2 is
+   :math:`\int_{E_{\mathrm{th}}}^\infty \phi(E)\,\sigma_{(n,xn)}(E)\,dE`
+   and both the flux and the cross section are negligible in the
+   integration window. Quantitatively, for a PWR-like spectrum, the
+   :math:`(n,2n)` rate on U-238 is below :math:`10^{-6}` of the
+   absorption rate — below the truncation noise of the 421-group
+   multi-group flux itself.
+
+2. **Neutron-multiplication accounting would need to change
+   consistently.** Including :math:`(n,xn)` correctly requires more
+   than adding an MF=6 block to the scattering matrix. Because these
+   reactions change neutron multiplicity, they must be accounted for
+   separately from fission in the balance equation (they are *not*
+   fission, so they do not carry :math:`\chi` or :math:`\nu`, but
+   they *do* produce excess neutrons). ORPHEUS's current balance
+   equation assumes a 1-in-1-out scattering model; retrofitting
+   :math:`(n,xn)` cleanly means either
+
+   - treating them as sources with a separate multiplicity factor
+     (the "``nu_n_xn``" convention in MCNP/Serpent/OpenMC), or
+   - folding them into the scattering matrix with an effective
+     :math:`\Sigma_{\mathrm{s}}^{(n,xn)}` that scales by the
+     multiplicity — which breaks the :math:`\Sigma_t`
+     consistency relation :math:`\Sigma_t = \Sigma_c + \Sigma_f +
+     \sum_{g'} \Sigma_{s,g\to g'}` unless :math:`\Sigma_c` is
+     simultaneously adjusted.
+
+   Doing either correctly is a data-pipeline-wide change, not a
+   localized extension.
+
+When this exclusion would matter
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Three application regimes **do** need :math:`(n,xn)`:
+
+- **Fast reactors** (SFR, LFR, GFR): fission spectrum is harder,
+  5–15 % of flux above 1 MeV, :math:`(n,2n)` on U-238 and Pu-240
+  contributes measurably to the fast-group balance.
+- **Fusion blankets**: 14 MeV D-T source neutrons sit directly in
+  the peak of the :math:`(n,2n)`/:math:`(n,3n)` cross section for
+  Li, Be, and Pb — these reactions are the *whole point* of a
+  breeding blanket.
+- **High-energy shielding / accelerator-driven systems**: spallation
+  neutron sources produce a significant population above 20 MeV,
+  where :math:`(n,4n)` on heavy targets is non-negligible.
+
+None of these are current ORPHEUS use cases. The V&V suite
+(:doc:`/verification/index`) exclusively verifies thermal-spectrum
+analytical benchmarks; synthetic cross sections in
+``orpheus/derivations/_xs_library.py`` do not include an
+:math:`(n,xn)` term.
+
+Implementation sketch (deferred)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If / when ORPHEUS expands to fast or fusion applications, the
+retrofit would touch:
+
+1. **``orpheus/data/micro_xs/gendf.py``** — extend the scattering
+   loop at line 281 to also iterate MT in ``(16, 17, 37)`` and stash
+   the extracted block with a ``multiplicity`` attribute (``2``,
+   ``3``, ``4`` respectively).
+
+2. **``orpheus/data/micro_xs/isotope.py``** — add a
+   ``sig_n_xn: dict[int, np.ndarray]`` field to ``Isotope``.
+
+3. **``orpheus/data/macro_xs/mixture.py``** — decide whether
+   :math:`(n,xn)` enters the ``SigS`` matrix (with a multiplicity
+   factor baked in, losing the :math:`\Sigma_t` check) or lives as
+   an explicit source term in the balance equation.
+
+4. **Every transport solver** (``cp``, ``sn``, ``moc``, ``mc``,
+   ``diffusion``) — the balance residual at the cell level must
+   account for the multiplicity.
+
+5. **V&V** — add an L2 benchmark against a published fast-reactor
+   eigenvalue (e.g., the GODIVA or Jezebel ICSBEP criticals) where
+   :math:`(n,xn)` measurably shifts :math:`k_{\mathrm{eff}}`.
+
+Tracked in GitHub issue `#63
+<https://github.com/deOliveira-R/ORPHEUS/issues/63>`_ as a
+"status: impl, intentional exclusion, documentation complete"
+line item.
 
 
 Total Cross Section
