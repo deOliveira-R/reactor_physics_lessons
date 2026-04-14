@@ -40,6 +40,55 @@ Three interlinked systems flow from one source:
         └──→ docs/_generated/    RST fragments with LaTeX + results tables
 
 
+.. _reference-values-lazy-registry:
+
+Reference-Values Registry (Eager vs Lazy)
+------------------------------------------
+
+``orpheus/derivations/reference_values.py`` is the central registry
+that every test and every Sphinx page reads from. Its loader is
+split into two tiers to avoid a circular import that would otherwise
+make ``import orpheus.derivations`` pull in the entire solver
+package:
+
+**Eager tier — analytical cases**
+   Loaded at import time by walking
+   ``homogeneous.py``, ``cp_slab.py``, ``cp_cylinder.py``,
+   ``cp_sphere.py``, and ``diffusion.py``. These modules use only
+   NumPy, SciPy, and SymPy — no solver imports — so loading them
+   is free and fast. The 9-case CP grids (:ref:`nine-case-cp-grid`),
+   the homogeneous matrix eigenvalues, and the diffusion buckling
+   cases all land here.
+
+**Lazy tier — Richardson-extrapolated cases**
+   Deferred until first ``get("case_name")`` call. These are the
+   SN heterogeneous slab, the MOC heterogeneous pin cell, and the
+   diffusion fuel + reflector reference — each of which requires
+   running the actual solver at four mesh levels to estimate a
+   converged :math:`k` (see :ref:`richardson-extrapolation`).
+   Loading them eagerly would force
+   ``import orpheus.derivations`` to transitively import
+   ``orpheus.sn``, ``orpheus.moc``, and ``orpheus.diffusion_1d``,
+   creating a circular dependency (because those modules, in turn,
+   import from ``orpheus.derivations`` to read their reference
+   values).
+
+The mechanism is a module-level dict ``_LAZY_LOADERS`` keyed by
+case name. ``get("case_name")`` checks the eager table first; if
+absent, it looks up a loader in ``_LAZY_LOADERS``, calls it once,
+caches the result, and returns it. Subsequent calls hit the cache.
+
+The practical effect is that **every test pays only for the
+reference values it actually uses**. Running ``pytest -m l0``
+(which uses only analytical cases) avoids the 15-minute Richardson
+recompute entirely; the lazy tier only activates when a test
+parametrizes over an SN / MOC / diffusion heterogeneous case.
+
+A JSON-backed cache on disk
+(``orpheus/derivations/_richardson_cache.json``) persists the
+lazy-tier results across sessions so the Richardson run happens
+at most once per clean checkout, not once per pytest invocation.
+
 .. _synthetic-xs-library:
 
 Cross-Section Library
@@ -297,6 +346,60 @@ The CP matrix is computed via y-quadrature (Gauss-Legendre with breakpoints
 at each radial boundary) and the Ki₄ second-difference formula.
 
 .. include:: ../_generated/cp_cylinder_derivation.rst
+
+
+.. _nine-case-cp-grid:
+
+The 9-Case Grid (per geometry)
+------------------------------
+
+Both slab and cylinder derivation modules populate a **3 × 3 grid**
+of verification cases, indexed by the number of energy groups and
+the number of spatial regions:
+
+.. csv-table::
+   :header: Case name, N_groups, N_regions, Layout
+   :widths: 25, 12, 12, 51
+
+   ``cp_slab_1eg_1rg``, 1, 1, A (homogeneous fissile)
+   ``cp_slab_1eg_2rg``, 1, 2, A + B (fuel + moderator)
+   ``cp_slab_1eg_4rg``, 1, 4, A + D + C + B (fuel + gap + clad + moderator)
+   ``cp_slab_2eg_1rg``, 2, 1, A
+   ``cp_slab_2eg_2rg``, 2, 2, A + B
+   ``cp_slab_2eg_4rg``, 2, 4, A + D + C + B
+   ``cp_slab_4eg_1rg``, 4, 1, A
+   ``cp_slab_4eg_2rg``, 4, 2, A + B
+   ``cp_slab_4eg_4rg``, 4, 4, A + D + C + B
+
+The cylinder set has the same structure with ``cp_slab`` replaced by
+``cp_cyl1D``. This is **9 + 9 = 18** semi-analytical cases per
+Sphinx build.
+
+The grid is deliberate, not incidental:
+
+- **N_groups × N_regions sweep** exposes the two independent failure
+  modes — matrix-eigenvalue assembly (groups) and collision-probability
+  quadrature (regions). A bug in one is uncovered by the other being
+  correct.
+- **1/2/4 chosen at each axis** spans the meaningful regimes: 1-group
+  is the degenerate :math:`k = \nu\Sigma_f/\Sigma_a` limit, 2-group is the smallest genuine multi-group
+  problem, and 4-group exercises the full :math:`\chi` spectrum
+  distribution across fast/resonance/thermal ranges.
+- **4-region layout A + D + C + B** is the minimal non-trivial
+  heterogeneous pin cell: it puts fuel (A), gap (D), clad (C), and
+  moderator (B) in the physically correct radial order and forces
+  every region-coupling term in the CP matrix to be non-zero.
+  Reducing to 2 regions (A + B) removes the gap and cladding; to
+  1 region removes heterogeneity entirely.
+
+The per-case ``VerificationCase`` records are populated by SymPy
+evaluation of the E\ :sub:`3` (slab) or Ki\ :sub:`4` (cylinder)
+second-difference formulas at build time — see
+``orpheus/derivations/cp_slab.py`` and
+``orpheus/derivations/cp_cylinder.py``. Each record carries:
+analytical :math:`k`, materials, geometry, matrix-eigenvalue
+context, and (since PR-2) the V&V level and equation-label list
+used by the test harness (see ``docs/testing/architecture.rst``).
 
 
 Method of Characteristics (MOC)
