@@ -9,10 +9,17 @@ from orpheus.diffusion.solver import CoreGeometry, TwoGroupXS, solve_diffusion_1
 # TODO: no diffusion theory page exists yet (issue #35).
 # Once docs/theory/diffusion.rst lands, populate pytest.mark.verifies(...)
 # with bare-slab-buckling / two-group-diffusion / flux-continuity /
-# current-continuity. For now only the V&V level is declared — the
-# graph will show 0 declared tests for diffusion equations until the
-# theory page is authored.
-pytestmark = pytest.mark.l1
+# current-continuity. The graph will show 0 declared tests for the
+# proper diffusion equations until the theory page is authored.
+#
+# richardson-diffusion (B.7, #87) lives in docs/theory/verification.rst,
+# not in a diffusion theory page, so it is declared here already: the
+# reflected-slab convergence test consumes the Richardson-extrapolated
+# reference k from the derivation registry and asserts O(h^2)
+# convergence — an indirect but sufficient L1 verification of the
+# extrapolation formula, since a broken Richardson reference would
+# produce a non-quadratic convergence pattern at the four mesh widths.
+pytestmark = [pytest.mark.l1, pytest.mark.verifies("richardson-diffusion")]
 
 
 def _make_xs(xs_dict) -> TwoGroupXS:

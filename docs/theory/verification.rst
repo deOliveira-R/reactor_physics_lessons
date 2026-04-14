@@ -512,7 +512,10 @@ This case is an L1 equation-verification per the V&V ladder —
 it proves that the solver converges at the expected order on a
 non-trivial heterogeneous problem, even though the "reference"
 is self-generated. The test carrying it is
-``tests/test_diffusion.py::test_richardson_keff_fuel_reflector``.
+``tests/test_diffusion.py::test_spatial_convergence_reflected``,
+which consumes the Richardson-extrapolated reference via
+``case.k_inf`` from the derivation registry and asserts O(h²)
+convergence of the diffusion solver across four mesh widths.
 
 .. include:: ../_generated/diffusion_derivation.rst
 

@@ -537,8 +537,17 @@ def test_weight_normalization_consistency():
 
 @pytest.mark.l1
 @pytest.mark.catches("ERR-014")
+@pytest.mark.verifies("sigT-computed")
 def test_xs_consistency_in_solver():
     """L1-MC-010: sig_t used in solver = SigF + SigC + SigL + sig_s_sum.
+
+    Also verifies :label:`sigT-computed` from
+    docs/theory/cross_section_data.rst for the Sig2 = 0 subset. The
+    theory-page formula additionally includes a rowsum(Sig_2n) term,
+    which is numerically zero for every current test material; when
+    issue #23 (MC (n,2n) support) lands with a nonzero-Sig2 material,
+    this decorator should be re-examined to confirm the coverage
+    still matches.
 
     The solver computes sig_t on line 296 as sig_a + sig_s_sum.
     If SigT from the mixture is inconsistent with the components,
