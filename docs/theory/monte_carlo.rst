@@ -885,17 +885,32 @@ at each **scattering** event in group :math:`g` (line 307).
 
 .. warning::
 
-   **This is not a proper flux estimator** (MT-20260406-007).  A correct
-   collision estimator would accumulate :math:`w / \Sigma_{t,g}` at every
-   **real** collision (both scattering and absorption).  The current tally:
+   **This is not a proper flux estimator** (MT-20260406-007 / issue #25).
+   A correct collision estimator would accumulate :math:`w / \Sigma_{t,g}`
+   at every **real** collision (both scattering and absorption). The
+   current tally:
 
    - Misses absorption events entirely
    - Weights by :math:`1/\Sigma_s` instead of :math:`1/\Sigma_t`
-   - Produces negative ``flux_per_lethargy`` values because the energy grid
-     is high-to-low (:math:`\Delta u = \ln(E_{g+1}/E_g) < 0`)
 
-   The eigenvalue :math:`k_{\text{eff}}` is computed from the weight ratio
-   :eq:`keff-cycle` and is **not affected** by this tally.
+   The eigenvalue :math:`k_{\text{eff}}` is computed from the weight
+   ratio :eq:`keff-cycle` and is **not affected** by this tally.
+
+.. note::
+
+   A separate sign-of-:math:`\Delta u` bug used to flip every
+   ``flux_per_lethargy`` entry through :math:`y = 0` (because nuclear-
+   data group grids are descending, so
+   :math:`\Delta u_g = \ln(E_{g+1}/E_g) < 0` and dividing a non-negative
+   tally by a signed :math:`\Delta u` produced uniformly negative
+   spectra). That bug is documented as **ERR-022** in
+   ``tests/l0_error_catalog.md`` and was fixed by taking
+   :math:`|\Delta u|` at the definition site in ``orpheus.mc.solver``,
+   ``orpheus.homogeneous.solver``, and ``orpheus.plotting``. The
+   regression test
+   ``tests/test_mc_gaps.py::test_flux_per_lethargy_nonnegative``
+   pins the invariant. The collision-estimator design question above
+   is the *separate* and still-open part of issue #25.
 
 
 Solver Parameters and Results
@@ -948,7 +963,8 @@ Solver Parameters and Results
      - Cumulative sigma at each active cycle
    * - ``flux_per_lethargy``
      - ``(ng,)``
-     - Scattering detector / :math:`\Delta u` (see limitation above)
+     - Scattering detector / :math:`|\Delta u|` (non-negative; see
+       collision-estimator limitation above)
    * - ``eg_mid``
      - ``(ng,)``
      - Mid-group energies (eV)

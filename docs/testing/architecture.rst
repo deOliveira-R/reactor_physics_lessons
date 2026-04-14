@@ -258,8 +258,8 @@ The audit CLI
    Total tests collected: 519
 
    By V&V level:
-     L0           250   (48.2%)
-     L1           163   (31.4%)
+     L0           267   (51.4%)
+     L1           146   (28.1%)
      L2            45   ( 8.7%)
      L3             0   ( 0.0%)
      foundation    61   (11.8%)

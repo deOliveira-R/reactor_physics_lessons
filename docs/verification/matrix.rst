@@ -16,8 +16,8 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 250, 48.2%
-   L1, 163, 31.4%
+   L0, 267, 51.4%
+   L1, 146, 28.1%
    L2, 45, 8.7%
    L3, 0, 0.0%
    foundation, 61, 11.8%
@@ -71,11 +71,11 @@ Module × level grid
    test_monte_carlo, 0, 12, 0, 0, 0, 0
    test_pending_ports, 5, 0, 0, 0, 0, 0
    test_sn_1d, 0, 5, 6, 0, 0, 0
-   test_sn_cylindrical, 0, 14, 11, 0, 0, 0
+   test_sn_cylindrical, 4, 10, 11, 0, 0, 0
    test_sn_properties, 4, 0, 0, 0, 0, 0
    test_sn_quadrature, 49, 0, 0, 0, 0, 0
    test_sn_solver_components, 35, 0, 0, 0, 0, 0
-   test_sn_spherical, 0, 20, 6, 0, 0, 0
+   test_sn_spherical, 13, 7, 6, 0, 0, 0
    test_sn_sweep_regression, 12, 0, 0, 0, 0, 0
    test_vv_harness_audit, 9, 0, 0, 0, 0, 0
 
