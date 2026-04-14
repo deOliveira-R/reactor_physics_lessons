@@ -281,6 +281,45 @@ closed-gap stress solver.
 Numerical Methods
 =================
 
+Solver Choice: Radau → BDF
+--------------------------
+
+All three ``solve_ivp`` calls in the kinetics driver (steady-state
+bias locking, transient RIA, closed-gap continuation) use
+``method='BDF'`` (Backward Differentiation Formula). An earlier
+port used ``method='Radau'`` — the BDF switch was made to match
+MATLAB's ``ode15s``, which is a variable-order BDF (NDF) method.
+
+**Why this matters.** The point kinetics + feedback system is
+stiff in a distinctive way: the prompt-neutron time constant
+:math:`\Lambda \sim 10^{-5}` s is five orders of magnitude
+faster than the fuel thermal time constant
+:math:`\tau_{\text{feedback}} \sim 1` s, and both are active
+simultaneously during the RIA peak. Both Radau (implicit RK) and
+BDF (linear multistep) handle stiffness correctly, but their
+step-size adaptation heuristics differ enough to produce slightly
+different trajectories on this specific problem.
+
+**Validation** (against ``matlab_archive/10.Reactor.Kinetics.0D/results.m``,
+247 time steps):
+
+- :math:`t = 100.0` s: power exact match
+- :math:`t = 100.1` s: 0.1 %
+- :math:`t = 100.2` s: 0.2 %
+- Peak power: MATLAB 25.3× at :math:`t = 100.6` s, Python 24.0× at
+  :math:`t = 100.4` s — same magnitude, slight timing offset from
+  different BDF implementations
+
+The residual 0.2 s timing offset is listed under "Known
+Limitations" below (RK-20260401-005) and attributed to BDF
+Jacobian numerical differencing differences; it is an accepted
+implementation-level discrepancy, not a bug.
+
+See also: :ref:`bdf-integration` in the thermal hydraulics chapter
+for the full tolerance/max-step recipe, which is shared across the
+kinetics, thermal-hydraulics, and fuel-behaviour modules.
+
+
 Event Detection via Chunked Integration
 -----------------------------------------
 
