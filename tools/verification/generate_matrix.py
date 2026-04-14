@@ -4,12 +4,21 @@ Runs ``python -m tests._harness.audit --json`` under the hood to
 populate :data:`tests._harness.registry.TEST_REGISTRY`, then emits a
 Sphinx RST page with:
 
-- Overall V&V level distribution (L0/L1/L2/L3/unmarked counts)
+- Overall V&V level distribution (L0/L1/L2/L3/foundation/unmarked counts)
 - Per-module level × count grid
 - Equation coverage table (label → number of declared tests)
-- Orphan equations (`.. math:: :label:` blocks with zero declared tests)
+- Orphan equations (`.. math:: :label:` blocks with zero declared tests,
+  excluding ``:vv-status: documented`` labels)
+- Documented-only labels (excluded from the orphan gate)
 - ERR-NNN catalog cross-check (from ``tests/l0_error_catalog.md``)
 - Unmarked tests listing
+
+The ``foundation`` bucket is orthogonal to the L0..L3 physics ladder
+— foundation tests verify software invariants (data-structure
+contracts, numerical primitives, factory outputs) rather than physics
+equations. They appear in their own column in the module grid and
+never contribute to the equation-coverage or orphan-equation tables.
+See ``docs/testing/architecture.rst``:ref:`vv-foundation-tests`.
 
 The page is built every time Sphinx rebuilds (the generator is
 invoked as a ``pre-build`` step, see ``docs/conf.py`` and the
@@ -75,6 +84,10 @@ def _render(payload: dict) -> str:
     grid = payload["grid"]
     coverage = payload["equation_coverage"]
     orphans = payload["orphan_equations"]
+    # ``documented_equations`` was added by the :vv-status: directive
+    # work (Phase B.0 of issue #87). Older audit payloads may not
+    # include it, so fall back to an empty list for robustness.
+    documented = payload.get("documented_equations", [])
     err_coverage = payload["err_coverage"]
     untagged = payload["untagged"]
 
@@ -92,11 +105,12 @@ def _render(payload: dict) -> str:
 
     lines.append(f"Total tests collected: **{total}**\n\n")
 
-    # V&V level distribution
+    # V&V level distribution. ``foundation`` is orthogonal to the
+    # L0..L3 ladder and reported alongside it for visibility.
     lines.append("V&V level distribution\n")
     lines.append("----------------------\n\n")
     level_rows = []
-    for lvl in ("L0", "L1", "L2", "L3", "unmarked"):
+    for lvl in ("L0", "L1", "L2", "L3", "foundation", "unmarked"):
         count = by_level.get(lvl, 0)
         pct = f"{100 * count / total:.1f}%" if total else "0.0%"
         level_rows.append([lvl, str(count), pct])
@@ -132,7 +146,7 @@ def _render(payload: dict) -> str:
         lines.append(f"   {row[0]}, {row[1]}\n")
     lines.append("\n")
 
-    # Module × level grid
+    # Module × level grid. ``FD`` is the foundation column.
     lines.append("Module × level grid\n")
     lines.append("-------------------\n\n")
     mod_rows = []
@@ -145,12 +159,13 @@ def _render(payload: dict) -> str:
                 str(row.get("L1", 0)),
                 str(row.get("L2", 0)),
                 str(row.get("L3", 0)),
+                str(row.get("foundation", 0)),
                 str(row.get("unmarked", 0)),
             ]
         )
     lines.append(".. csv-table::\n")
-    lines.append("   :header: Module, L0, L1, L2, L3, ??\n")
-    lines.append("   :widths: 40, 6, 6, 6, 6, 6\n\n")
+    lines.append("   :header: Module, L0, L1, L2, L3, FD, ??\n")
+    lines.append("   :widths: 40, 6, 6, 6, 6, 6, 6\n\n")
     for row in mod_rows:
         lines.append(f"   {', '.join(row)}\n")
     lines.append("\n")
@@ -178,16 +193,39 @@ def _render(payload: dict) -> str:
     lines.append("----------------\n\n")
     lines.append(
         f"Equations with zero tests carrying "
-        f"``@pytest.mark.verifies(\"label\")``. "
-        f"**{len(orphans)}** of the equations found on theory pages "
-        f"are orphan.\n\n"
+        f"``@pytest.mark.verifies(\"label\")``, excluding labels "
+        f"explicitly marked ``:vv-status: documented``. "
+        f"**{len(orphans)}** of the testable equations found on "
+        f"theory pages are orphan.\n\n"
     )
     if orphans:
         for eq in sorted(orphans):
             lines.append(f"- ``{eq}``\n")
     else:
-        lines.append("*(none — every theory equation has at least one "
-                     "verifying test)*\n")
+        lines.append("*(none — every testable theory equation has at "
+                     "least one verifying test)*\n")
+    lines.append("\n")
+
+    # Documented-only equations (excluded from the orphan gate)
+    lines.append("Documented-only equations\n")
+    lines.append("-------------------------\n\n")
+    lines.append(
+        f"Theory labels marked ``.. vv-status: <label> documented`` in "
+        f"their RST source. These are excluded from the orphan-equation "
+        f"gate because they are either definitional (no single "
+        f"implementing function — e.g. ``boltzmann``), describe a "
+        f"module whose Python port does not yet exist (e.g. the "
+        f"thermal-hydraulics / fuel-behaviour / reactor-kinetics "
+        f"equations), or have a deliberately deferred test paired with "
+        f"a tracking issue. **{len(documented)}** labels carry the "
+        f"directive. See ``docs/testing/architecture.rst``"
+        f":ref:`vv-status-documented` for the full taxonomy.\n\n"
+    )
+    if documented:
+        for eq in sorted(documented):
+            lines.append(f"- ``{eq}``\n")
+    else:
+        lines.append("*(none)*\n")
     lines.append("\n")
 
     # ERR catalog cross-check
@@ -218,9 +256,12 @@ def _render(payload: dict) -> str:
     if untagged_count:
         lines.append(
             f"**{untagged_count} tests** have no V&V level marker.\n"
-            "Unmarked is acceptable for tests that exercise infrastructure\n"
-            "(mesh construction, dataclass immutability, CLI behaviour) and\n"
-            "do not verify a physics equation.\n\n"
+            "This is a gap — every test in the tree should carry either\n"
+            "a physics-ladder marker (``l0``..``l3``) or the orthogonal\n"
+            "``foundation`` marker (``@pytest.mark.foundation``) for\n"
+            "tests that verify software invariants rather than physics\n"
+            "equations. See ``docs/testing/architecture.rst``\n"
+            ":ref:`vv-foundation-tests` for the taxonomy.\n\n"
         )
         by_file: Counter[str] = Counter()
         for nodeid in untagged:
@@ -231,7 +272,10 @@ def _render(payload: dict) -> str:
         for f, c in by_file.most_common():
             lines.append(f"   ``{f}``, {c}\n")
     else:
-        lines.append("*(none — every test carries an L0/L1/L2/L3 marker)*\n")
+        lines.append(
+            "*(none — every test carries an L0/L1/L2/L3 or "
+            "foundation marker)*\n"
+        )
     lines.append("\n")
 
     return "".join(lines)
