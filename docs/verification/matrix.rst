@@ -152,7 +152,7 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
 Orphan equations
 ----------------
 
-Equations with zero tests carrying ``@pytest.mark.verifies("label")``. **72** of the equations found on theory pages are orphan.
+Equations with zero tests carrying ``@pytest.mark.verifies("label")``. **73** of the equations found on theory pages are orphan.
 
 - ``absorption-xs``
 - ``attenuation``
@@ -206,6 +206,7 @@ Equations with zero tests carrying ``@pytest.mark.verifies("label")``. **72** of
 - ``ray-circle``
 - ``rcp-from-double-antideriv``
 - ``reciprocity``
+- ``richardson-diffusion``
 - ``roulette-restore``
 - ``s-integral``
 - ``scalar-flux-integral``
