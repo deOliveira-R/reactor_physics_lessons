@@ -417,8 +417,17 @@ class TestBicgstabNormalization:
         )
 
 
+@pytest.mark.verifies("pn-scatter")
 class TestAnisotropicScattering:
-    """Pn scattering must reduce to P0 when L=0, and affect keff when L>0."""
+    """Pn scattering must reduce to P0 when L=0, and affect keff when L>0.
+
+    Every test in this class exercises the Legendre-expanded scattering
+    source from Eq. :label:`pn-scatter`: it constructs SNSolver with a
+    non-zero scattering_order, builds per-ordinate anisotropic sources
+    via the (2l+1) summation over flux moments, and asserts either
+    reduction-to-P0 (zero-anisotropy or isotropic-flux limits) or a
+    measurable keff change (anisotropic material).
+    """
 
     def test_p0_gives_identical_keff(self):
         """scattering_order=0 must give the exact same keff as the default."""
@@ -573,8 +582,16 @@ class TestAnisotropicScattering:
                                        err_msg="P1 source nonzero for isotropic flux")
 
 
+@pytest.mark.verifies("pn-scatter")
 class TestBicgstabPnScattering:
-    """BiCGSTAB path must handle Pn scattering consistently with source iteration."""
+    """BiCGSTAB path must handle Pn scattering consistently with source iteration.
+
+    Verifies that the Legendre-expanded scattering source
+    (Eq. :label:`pn-scatter`) is assembled identically on the
+    BiCGSTAB path and the source-iteration path, so switching solvers
+    does not introduce a silent convention drift in the anisotropic
+    moments.
+    """
 
     def test_bicgstab_p0_matches_si_p0(self):
         """BiCGSTAB and source iteration must agree at P0."""

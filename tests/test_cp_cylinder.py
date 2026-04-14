@@ -17,6 +17,16 @@ pytestmark = [pytest.mark.l1, pytest.mark.verifies(
     "one-group-kinf",
     "matrix-eigenvalue",
     "mg-balance",
+    # B.4 (#87) carry-over from B.2: tau_m and tau_p are the two
+    # optical-path flavours defined in
+    # docs/theory/collision_probability.rst for the cylinder chord
+    # integration (same-side and through-centre paths). Every
+    # cylindrical CP test evaluates both implicitly when building
+    # the second-difference rcp via _compute_radial_rcp, and the
+    # eigenvalue match against the SymPy CPmatrix reference to 1e-8
+    # pins both definitions.
+    "tau-m",
+    "tau-p",
 )]
 
 

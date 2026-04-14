@@ -489,6 +489,8 @@ conservative form for a coordinate :math:`r` with face area
    \bigl[\alpha_{n+\frac12}\psi_{n+\frac12} - \alpha_{n-\frac12}\psi_{n-\frac12}\bigr]
    + \Sigt{} \psi_{n,i} = S_i
 
+.. vv-status: conservative-form documented
+
 where the streaming cosine is :math:`\mu_n` for spherical and
 :math:`\eta_m` for cylindrical, and :math:`S_i = Q_i / W` is the
 isotropic source density divided by the quadrature weight sum.

@@ -33,6 +33,12 @@ pytestmark = [
         "one-group-kinf",
         "matrix-eigenvalue",
         "mg-balance",
+        # B.4 (#87): the Bailey (2009) general curvilinear balance
+        # equation with the DeltaA/w geometry factor. Every
+        # cylindrical sweep implements this form; the per-ordinate
+        # flat-flux tests and the end-to-end eigenvalue tests here
+        # both verify it.
+        "balance-general",
     ),
 ]
 
