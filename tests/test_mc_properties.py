@@ -198,6 +198,7 @@ def test_mcmesh_rejects_spherical():
 # L0-MC-003: Majorant computation
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.verifies("majorant")
 def test_majorant_computation():
     """L0-MC-003: sig_t_max[g] = max over materials of SigT[g].
 
@@ -414,6 +415,7 @@ def test_periodic_bc_wrapping():
 # L0-MC-009: Russian roulette weight conservation
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.verifies("roulette-restore")
 def test_roulette_weight_conservation():
     """L0-MC-009: E[w_after] = w_before for Russian roulette.
 
@@ -449,6 +451,7 @@ def test_roulette_weight_conservation():
     )
 
 
+@pytest.mark.verifies("roulette-restore")
 def test_roulette_restore_weight():
     """Surviving neutrons must have weight restored to w0, not kept at w."""
     rng = np.random.default_rng(42)
@@ -477,6 +480,7 @@ def test_roulette_restore_weight():
 # L0-MC-010: Splitting weight conservation
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.verifies("splitting")
 def test_splitting_weight_conservation():
     """L0-MC-010: Splitting preserves total weight exactly.
 

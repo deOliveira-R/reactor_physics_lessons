@@ -131,6 +131,7 @@ def _build_heterogeneous_geom(case):
 
 @pytest.mark.slow
 @pytest.mark.catches("ERR-017")
+@pytest.mark.verifies("hetero-tolerance")
 @pytest.mark.parametrize("case_name", [
     "mc_cyl1D_1eg_2rg",
     "mc_cyl1D_2eg_2rg",
