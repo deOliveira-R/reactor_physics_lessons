@@ -77,6 +77,8 @@ integro-differential form [Duderstadt1976]_:
      \int_0^\infty \nu\Sigma_\mathrm{f}(\mathbf{r}, E')
      \, \phi(\mathbf{r}, E') \, dE'
 
+.. vv-status: boltzmann documented
+
 Here :math:`\psi(\mathbf{r}, \hat{\Omega}, E)` is the angular flux,
 :math:`\phi(\mathbf{r}, E) = \int_{4\pi} \psi \, d\Omega` is the scalar
 flux, :math:`\chi(E)` is the fission spectrum, and :math:`k` is the
@@ -142,12 +144,16 @@ The group flux is the integral over the group's energy interval:
 
    \phi_g = \int_{E_g}^{E_{g-1}} \phi(E) \, dE
 
+.. vv-status: group-flux documented
+
 Group-averaged cross sections are **flux-weighted** averages:
 
 .. math::
    :label: group-xs
 
    \Sigt{g} = \frac{1}{\phi_g} \int_{E_g}^{E_{g-1}} \Sigt{}(E) \, \phi(E) \, dE
+
+.. vv-status: group-xs documented
 
 In practice, these averages are pre-computed and stored in the
 421-group HELIOS library that ships with ORPHEUS.  The library provides
@@ -241,6 +247,8 @@ is stored in the **from-row, to-column** convention:
 
    (\boldsymbol{\Sigma}_{\mathrm{s}})_{g',g}
    = \Sigs{g' \to g}
+
+.. vv-status: sigs-convention documented
 
 That is, row :math:`g'` gives the **source group** and column :math:`g`
 gives the **destination group**.  A downscatter-only matrix is therefore
@@ -719,6 +727,8 @@ the slowing-down equation yields the well-known **1/E flux** law:
 
    \phi(E) = \frac{S}{\xi \Sigt{}} \cdot \frac{1}{E}
 
+.. vv-status: one-over-E documented
+
 where :math:`S` is the slowing-down source (neutrons entering from
 above) and :math:`\xi` is the mean logarithmic energy decrement.
 On a **flux-per-lethargy** plot, the 1/E region appears as a
@@ -749,6 +759,8 @@ distribution** at the moderator temperature :math:`T`:
    :label: maxwellian
 
    \phi_\mathrm{th}(E) \propto E \, \exp\!\left(-\frac{E}{k_B T}\right)
+
+.. vv-status: maxwellian documented
 
 which peaks at :math:`E_\mathrm{peak} = k_B T`.  At room temperature
 (294 K), :math:`k_B T = 0.0253` eV, producing the characteristic
@@ -849,6 +861,8 @@ eigenvalue error decays as:
    :label: convergence-rate
 
    |k^{(n)} - k_0| \sim \rho^n
+
+.. vv-status: convergence-rate documented
 
 For the 421-group industrial problems, the dominance ratio is very small
 (the spectrum is dominated by a single fundamental mode), so
