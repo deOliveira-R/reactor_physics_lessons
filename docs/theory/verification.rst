@@ -57,10 +57,36 @@ All verification cases use **abstract synthetic cross sections** from
 All cross sections satisfy the consistency relation
 :math:`\Sigma_t = \Sigma_c + \Sigma_f + \sum_{g'} \Sigma_{s,g \to g'}`.
 
-P1 scattering anisotropy is included with physically motivated mean
-scattering cosines :math:`\bar\mu`: A=0.05 (heavy fuel, nearly isotropic),
-B=0.60 (light moderator, strongly forward-peaked), C=0.10 (cladding),
-D=0.30 (gas gap).
+P1 scattering anisotropy
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Every region carries a P1 scattering matrix in addition to the P0
+isotropic form. The P1 matrix is built as
+:math:`\Sigma_{s,1}(g \to g') = \bar\mu \cdot \Sigma_{s,0}(g \to g')`,
+where :math:`\bar\mu` is the mean lab-frame scattering cosine set
+per region to reflect the target nuclide's mass:
+
+.. csv-table::
+   :header: Region, Role, Nuclide analogue, :math:`\bar\mu`, Rationale
+   :widths: 10, 22, 22, 10, 36
+
+   A, fissile, "heavy uranium/plutonium", 0.05, "A ~ 235 gives :math:`\bar\mu_{cm \to lab} \approx 2/(3A) \approx 0.003`; bumped to 0.05 to expose the anisotropic-correction code path without making it dominant."
+   B, moderator, "light H / H\ :sub:`2`\ O", 0.60, "A = 1 is the textbook forward-peaked limit, :math:`\bar\mu_{lab} = 2/3` for s-wave elastic on H. Rounded to 0.60."
+   C, cladding, "intermediate Zr-90", 0.10, "A = 90 places it between fuel and moderator; 0.10 gives a mild forward peak consistent with Zr's :math:`2/(3A) \approx 0.007` lab-frame, again slightly amplified for test coverage."
+   D, gap, "light He / void", 0.30, "Low-density gas with light nuclei. 0.30 picks a middle value that is neither fully isotropic nor dominated by the streaming peak."
+
+These values are physically motivated but NOT tuned to any specific
+isotope. The point is to give every transport solver a non-trivial
+:math:`\Sigma_{s,1}` matrix so that the P1 correction term is
+exercised by the verification suite; the absolute values are not
+intended to match real nuclear data. Production runs always use the
+real library from ``orpheus/data/micro_xs/``.
+
+The definitive values and per-group arrays live in
+``orpheus/derivations/_xs_library.py`` (see the ``_MU_BAR`` dict at
+the top of the file). Changing them there automatically propagates
+to every verification case because all derivation modules import
+``make_mixture`` from the same module.
 
 Region layouts:
 
