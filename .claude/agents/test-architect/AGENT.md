@@ -95,7 +95,11 @@ For every feature, populate this matrix:
 
 ### 4. Write the tests
 
-Use pytest. File naming: `tests/test_sn_*.py`.
+Use pytest. File naming follows the per-module layout — e.g.
+`tests/sn/test_spherical.py`, `tests/cp/test_verification.py`,
+`tests/moc/test_ray_tracing.py`. See `tests/` for the folder
+breakdown (sn/, cp/, mc/, moc/, diffusion/, homogeneous/, data/,
+geometry/).
 
 ```python
 def test_descriptive_name():

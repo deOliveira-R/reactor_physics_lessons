@@ -876,9 +876,7 @@ Verification
 
 Run the full suite (excluding slow tests)::
 
-   pytest tests/test_moc_quadrature.py tests/test_moc_ray_tracing.py \
-          tests/test_moc.py tests/test_moc_properties.py \
-          tests/test_moc_verification.py -v -k "not slow"
+   pytest tests/moc/ -v -k "not slow"
 
 
 Homogeneous Infinite Medium

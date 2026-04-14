@@ -1841,9 +1841,7 @@ Plus 36 diagnostic tests in ``test_cp_diagnostics.py``.
 
 ::
 
-   pytest tests/test_cp_slab.py tests/test_cp_cylinder.py \
-          tests/test_cp_sphere.py tests/test_cp_properties.py \
-          tests/test_cp_verification.py tests/test_cp_diagnostics.py -v
+   pytest tests/cp/ -v
 
 
 Implementation Details

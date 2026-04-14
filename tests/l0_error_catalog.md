@@ -709,8 +709,8 @@ which is why only the spherical case failed visibly.
 
 The specific failing tests:
 
-    tests/test_geometry.py::TestZoneSubdivision::test_equal_volume_single_zone[SPHERICAL]
-    tests/test_geometry.py::TestZoneSubdivision::test_equal_volume_multi_zone[SPHERICAL]
+    tests/geometry/test_geometry.py::TestZoneSubdivision::test_equal_volume_single_zone[SPHERICAL]
+    tests/geometry/test_geometry.py::TestZoneSubdivision::test_equal_volume_multi_zone[SPHERICAL]
 
 reported volumes of `7.260569688296488` vs reference `7.260569688296414`
 — a relative difference of `1.03e-14` against an `rtol=1e-14` assertion.
@@ -747,7 +747,7 @@ arbitrary edges continue to fall back to `compute_volumes_1d` from
 edges.
 
 **L0 test that catches it:**
-`tests/test_geometry.py::TestZoneSubdivision::test_equal_volume_{single,multi}_zone`
+`tests/geometry/test_geometry.py::TestZoneSubdivision::test_equal_volume_{single,multi}_zone`
 for every `CoordSystem` — enforces bit-equal volumes at `rtol=1e-14`.
 
 **Lesson:** Non-bijective float operations (`sqrt`, `cbrt`, `exp`,
@@ -796,7 +796,7 @@ segments: continue`, so a degenerate ray is now silently dropped
 instead of aborting the trace.
 
 **L0 test that catches it:**
-`tests/test_moc_ray_tracing.py::test_degenerate_corner_ray` — seeds a
+`tests/moc/test_ray_tracing.py::test_degenerate_corner_ray` — seeds a
 ray with `(x0, y0) = (0, 0)` and `phi = π/4` so the entry point is
 exactly the `(0, 0)` corner, and asserts that
 `_ray_box_intersections` returns `None` and `_trace_single_ray`
@@ -857,7 +857,7 @@ Applied in `orpheus.mc.solver` (MCResult assignment),
 `orpheus.plotting.plot_moc_spectra`.
 
 **L0 test that catches it:**
-`tests/test_mc_gaps.py::test_flux_per_lethargy_nonnegative` — runs a
+`tests/mc/test_gaps.py::test_flux_per_lethargy_nonnegative` — runs a
 small MC with a descending two-group grid, asserts
 `result.flux_per_lethargy >= 0` element-wise.
 

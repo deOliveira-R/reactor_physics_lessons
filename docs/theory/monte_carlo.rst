@@ -908,7 +908,7 @@ at each **scattering** event in group :math:`g` (line 307).
    :math:`|\Delta u|` at the definition site in ``orpheus.mc.solver``,
    ``orpheus.homogeneous.solver``, and ``orpheus.plotting``. The
    regression test
-   ``tests/test_mc_gaps.py::test_flux_per_lethargy_nonnegative``
+   ``tests/mc/test_gaps.py::test_flux_per_lethargy_nonnegative``
    pins the invariant. The collision-estimator design question above
    is the *separate* and still-open part of issue #25.
 

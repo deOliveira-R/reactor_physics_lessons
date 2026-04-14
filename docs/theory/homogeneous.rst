@@ -1113,7 +1113,7 @@ implementation to 5 significant digits.
 
 Run the verification suite::
 
-   pytest tests/test_homogeneous.py -v
+   pytest tests/homogeneous/ -v
 
 
 Comparison with Spatially-Dependent Solvers

@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **519**
+Total tests collected: **530**
 
 V&V level distribution
 ----------------------
@@ -16,11 +16,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 267, 51.4%
-   L1, 146, 28.1%
-   L2, 45, 8.7%
+   L0, 278, 52.5%
+   L1, 146, 27.5%
+   L2, 45, 8.5%
    L3, 0, 0.0%
-   foundation, 61, 11.8%
+   foundation, 61, 11.5%
    unmarked, 0, 0.0%
 
 Tagging source
@@ -32,7 +32,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 431
+   explicit, 442
    verify, 0
    class-name, 46
    func-name, 0
@@ -46,37 +46,38 @@ Module × level grid
    :header: Module, L0, L1, L2, L3, FD, ??
    :widths: 40, 6, 6, 6, 6, 6, 6
 
+   cp/test_cylinder, 0, 9, 0, 0, 0, 0
+   cp/test_diagnostics, 8, 28, 0, 0, 0, 0
+   cp/test_properties, 12, 0, 0, 0, 0, 0
+   cp/test_slab, 0, 9, 0, 0, 0, 0
+   cp/test_sphere, 0, 9, 0, 0, 0, 0
+   cp/test_verification, 1, 25, 5, 0, 0, 0
+   data/test_cross_section_data, 11, 0, 0, 0, 0, 0
+   data/test_mixture, 4, 0, 0, 0, 0, 0
+   diffusion/test_diffusion, 0, 2, 0, 0, 0, 0
+   diffusion/test_properties, 3, 0, 0, 0, 0, 0
+   geometry/test_geometry, 0, 0, 0, 0, 61, 0
+   homogeneous/test_homogeneous, 0, 4, 0, 0, 0, 0
+   mc/test_convergence, 0, 0, 3, 0, 0, 0
+   mc/test_cross_verification, 0, 0, 2, 0, 0, 0
+   mc/test_gaps, 7, 8, 0, 0, 0, 0
+   mc/test_monte_carlo, 0, 12, 0, 0, 0, 0
+   mc/test_properties, 24, 0, 0, 0, 0, 0
+   moc/test_moc, 0, 3, 3, 0, 0, 0
+   moc/test_properties, 4, 0, 0, 0, 0, 0
+   moc/test_quadrature, 24, 0, 0, 0, 0, 0
+   moc/test_ray_tracing, 22, 0, 0, 0, 0, 0
+   moc/test_verification, 27, 15, 6, 0, 0, 0
+   sn/test_cartesian, 0, 5, 6, 0, 0, 0
+   sn/test_cylindrical, 4, 10, 11, 0, 0, 0
+   sn/test_discrete_ordinates_2d, 0, 0, 2, 0, 0, 0
+   sn/test_properties, 4, 0, 0, 0, 0, 0
+   sn/test_quadrature, 49, 0, 0, 0, 0, 0
+   sn/test_solver_components, 35, 0, 0, 0, 0, 0
+   sn/test_spherical, 13, 7, 6, 0, 0, 0
+   sn/test_sweep_regression, 12, 0, 0, 0, 0, 0
    test_convergence, 0, 0, 1, 0, 0, 0
-   test_cp_cylinder, 0, 9, 0, 0, 0, 0
-   test_cp_diagnostics, 8, 28, 0, 0, 0, 0
-   test_cp_properties, 12, 0, 0, 0, 0, 0
-   test_cp_slab, 0, 9, 0, 0, 0, 0
-   test_cp_sphere, 0, 9, 0, 0, 0, 0
-   test_cp_verification, 1, 25, 5, 0, 0, 0
-   test_diffusion, 0, 2, 0, 0, 0, 0
-   test_diffusion_properties, 3, 0, 0, 0, 0, 0
-   test_discrete_ordinates, 0, 0, 2, 0, 0, 0
-   test_geometry, 0, 0, 0, 0, 61, 0
-   test_homogeneous, 0, 4, 0, 0, 0, 0
-   test_mc_convergence, 0, 0, 3, 0, 0, 0
-   test_mc_cross_verification, 0, 0, 2, 0, 0, 0
-   test_mc_gaps, 7, 8, 0, 0, 0, 0
-   test_mc_properties, 24, 0, 0, 0, 0, 0
-   test_mixture, 4, 0, 0, 0, 0, 0
-   test_moc, 0, 3, 3, 0, 0, 0
-   test_moc_properties, 4, 0, 0, 0, 0, 0
-   test_moc_quadrature, 24, 0, 0, 0, 0, 0
-   test_moc_ray_tracing, 22, 0, 0, 0, 0, 0
-   test_moc_verification, 27, 15, 6, 0, 0, 0
-   test_monte_carlo, 0, 12, 0, 0, 0, 0
    test_pending_ports, 5, 0, 0, 0, 0, 0
-   test_sn_1d, 0, 5, 6, 0, 0, 0
-   test_sn_cylindrical, 4, 10, 11, 0, 0, 0
-   test_sn_properties, 4, 0, 0, 0, 0, 0
-   test_sn_quadrature, 49, 0, 0, 0, 0, 0
-   test_sn_solver_components, 35, 0, 0, 0, 0, 0
-   test_sn_spherical, 13, 7, 6, 0, 0, 0
-   test_sn_sweep_regression, 12, 0, 0, 0, 0, 0
    test_vv_harness_audit, 9, 0, 0, 0, 0, 0
 
 Equation coverage
@@ -168,6 +169,7 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``isotropic-source``, 6
    ``moc-keff-update``, 6
    ``moc-wigner-seitz``, 6
+   ``xs-interp``, 5
    ``absorption-xs``, 4
    ``fission-matrix``, 4
    ``fission-source``, 4
@@ -183,6 +185,8 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``two-group-charpoly``, 4
    ``two-group-roots``, 4
    ``hetero-tolerance``, 3
+   ``number-density``, 3
+   ``sigma-zero``, 3
    ``dd-cartesian-2d``, 2
    ``richardson-diffusion``, 2
    ``roulette-restore``, 2
@@ -196,11 +200,9 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
 Orphan equations
 ----------------
 
-Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **3** of the testable equations found on theory pages are orphan.
+Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **0** of the testable equations found on theory pages are orphan.
 
-- ``number-density``
-- ``sigma-zero``
-- ``xs-interp``
+*(none — every testable theory equation has at least one verifying test)*
 
 Documented-only equations
 -------------------------

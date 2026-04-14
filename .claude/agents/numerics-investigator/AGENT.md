@@ -38,7 +38,11 @@ so they can be promoted to the permanent test suite. Use this template:
 """Diagnostic: [short description of what this investigates].
 
 Created by numerics-investigator on YYYY-MM-DD.
-If this test catches a real bug, promote to tests/test_sn_*.py.
+If this test catches a real bug, promote to the matching per-module
+folder — ``tests/sn/``, ``tests/cp/``, ``tests/moc/``, ``tests/mc/``,
+``tests/diffusion/``, ``tests/homogeneous/``, ``tests/data/`` or
+``tests/geometry/`` — picking the file name that matches the affected
+code path (e.g. ``tests/sn/test_spherical.py``).
 """
 import numpy as np
 import pytest
@@ -170,7 +174,9 @@ Write: `derivations/diagnostics/diag_06_scaling.py`
 
 Once the root cause is found and fixed:
 1. Convert the minimal reproducer (step 2) into a regression test
-2. Move it to `tests/test_sn_*.py` with a descriptive name
+2. Move it to the matching per-module folder — e.g.
+   `tests/sn/test_spherical.py`, `tests/cp/test_verification.py` —
+   with a descriptive name
 3. Reference the GitHub Issue number in the test docstring
 4. Delete the diagnostic scripts that are no longer needed
 5. Keep any diagnostic that tests a GENERAL property (like per-ordinate

@@ -1466,10 +1466,7 @@ For all geometries:
 
 Run the full suite::
 
-   pytest tests/test_sn_1d.py tests/test_sn_properties.py \
-          tests/test_sn_solver_components.py tests/test_sn_spherical.py \
-          tests/test_sn_cylindrical.py tests/test_sn_quadrature.py \
-          tests/test_sn_sweep_regression.py -v -m "not slow"
+   pytest tests/sn/ -v -m "not slow"
 
 
 .. _investigation-history:

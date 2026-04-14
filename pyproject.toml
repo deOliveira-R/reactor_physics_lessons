@@ -33,6 +33,15 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# Modern importlib-based discovery. Required once tests/ grew to a
+# nested layout (``tests/sn/``, ``tests/cp/``, ...) because several
+# subfolders share basenames (e.g. ``test_properties.py`` exists in
+# cp/, sn/, mc/, moc/, diffusion/, moc/). The legacy ``prepend``
+# import mode would import each as the same top-level module name
+# and raise "import file mismatch" on collection. Passed via
+# ``addopts`` because the ``importmode`` key is not a recognised
+# pytest ini option — only the CLI flag form is supported.
+addopts = "--import-mode=importlib"
 markers = [
     "slow: long-running tests (MC, full convergence studies)",
     "l0: L0 Term Verification — hand calc vs code, per term (synthetic XS)",
