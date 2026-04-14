@@ -123,6 +123,8 @@ rate of 200 W/cm = 20 000 W/m.
    m_j \, c_p(T_j) \frac{dT_j}{dt}
    = -(Q_{j+1} - Q_j) + \dot{q}'''_j V_{j,0}
 
+.. vv-status: fb-fuel-heat documented
+
 The heat flows :math:`Q_j` at the :math:`n_f + 1` radial interfaces are:
 
 .. math::
@@ -150,6 +152,8 @@ For each strain component :math:`i \in \{r, \theta, z\}`:
    \varepsilon_i^{\text{fuel}} = \varepsilon^T(T) + \varepsilon_i^E(\boldsymbol{\sigma})
      + \varepsilon_i^C + \frac{\dot{V}_S}{3}
 
+.. vv-status: fb-fuel-strain documented
+
 where :math:`\varepsilon^T = \text{thExp}(T)` is the isotropic thermal expansion,
 :math:`\varepsilon_i^E` is the elastic strain (Hooke's law), :math:`\varepsilon_i^C`
 is the directional creep strain, and :math:`\dot{V}_S/3` is the isotropic volumetric
@@ -163,6 +167,8 @@ swelling divided equally among the three directions.
    \varepsilon_i^{\text{clad}} = \varepsilon^T(T) + \varepsilon_i^E(\boldsymbol{\sigma})
      + \varepsilon_i^P + \varepsilon_i^C
 
+.. vv-status: fb-clad-strain documented
+
 
 Fuel Swelling
 -------------
@@ -175,6 +181,8 @@ The volumetric fuel swelling rate has two contributions (MATPRO [MATPRO2003]_):
    \dot{V}_S = \underbrace{2.5 \times 10^{-29} \dot{F}}_{\text{solid FP}} \;+\;
      \underbrace{8.8 \times 10^{-56} \dot{F} \, (2800 - T)^{11.73}
      e^{-0.0162(2800 - T)} e^{-8 \times 10^{-27} F}}_{\text{gaseous (T < 2800\,K)}}
+
+.. vv-status: fb-swelling documented
 
 where :math:`\dot{F}` is the fission rate density (fissions/m³/s) and :math:`F` is
 the cumulative fission density (fissions/m³).  The gaseous contribution is strongly
@@ -323,6 +331,8 @@ Closed-Gap BC4 — Displacement-Based Constraint
       r_{c,\text{in}}^0 \, (1 + \varepsilon_\theta^c(r_{\text{in}}))
       - r_{f,\text{out}}^0 \, (1 + \varepsilon_\theta^f(r_f))
       = \varepsilon_{\text{rough}}
+
+   .. vv-status: fb-bc4-displacement documented
 
    where :math:`\varepsilon_{\text{rough}} = 6\,\mu\text{m}`.  This formulation:
 

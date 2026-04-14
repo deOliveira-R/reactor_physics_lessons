@@ -124,6 +124,8 @@ Point Kinetics Equations
    \frac{dP}{dt} = \frac{\rho - \beta_{\text{eff}}}{\Lambda} P
      + \sum_{i=1}^{6} \lambda_i C_i
 
+.. vv-status: power-equation documented
+
 **Precursor equations:**
 
 .. math::
@@ -131,6 +133,8 @@ Point Kinetics Equations
 
    \frac{dC_i}{dt} = \frac{\beta_i}{\Lambda} P - \lambda_i C_i
    \qquad i = 1, \ldots, 6
+
+.. vv-status: precursor-equation documented
 
 **Kinetics parameters:**
 
@@ -174,6 +178,8 @@ Reactivity Feedback
 
    \rho_D = \alpha_D \, \langle T_{\text{fuel}} \rangle
 
+.. vv-status: doppler-feedback documented
+
 where :math:`\alpha_D = -2{\times}10^{-5}` K\ :sup:`-1` and
 :math:`\langle T_{\text{fuel}} \rangle` is the volume-averaged fuel
 temperature, averaged over all radial and axial nodes.
@@ -184,6 +190,8 @@ temperature, averaged over all radial and axial nodes.
    :label: coolant-feedback
 
    \rho_c = \alpha_c \, \langle T_{\text{cool}} \rangle
+
+.. vv-status: coolant-feedback documented
 
 where :math:`\alpha_c = -2{\times}10^{-4}` K\ :sup:`-1` (10× larger than
 Doppler) and :math:`\langle T_{\text{cool}} \rangle` is the mean coolant
@@ -226,6 +234,8 @@ The gap closure event function monitors:
    :label: gap-closure-event
 
    E(t) = \min_z \bigl[ \delta_{\text{gap},z} - \varepsilon_{\text{rough}} \bigr]
+
+.. vv-status: gap-closure-event documented
 
 where :math:`\delta_{\text{gap},z} = r_{c,\text{in},z} - r_{f,z}` is the
 deformed gap width and :math:`\varepsilon_{\text{rough}}` is the surface

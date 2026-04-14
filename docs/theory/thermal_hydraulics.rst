@@ -94,6 +94,8 @@ volumetric heat generation:
      \left[ r \, k(T, Bu, p) \frac{\partial T}{\partial r} \right]
    + \dot{q}'''
 
+.. vv-status: fuel-heat documented
+
 **Boundary conditions:**
 
 - Centre (:math:`r = 0`): adiabatic, :math:`\partial T / \partial r = 0`
@@ -122,6 +124,8 @@ for node :math:`j` is:
 
    \frac{dT_{f,j}}{dt} = \frac{-(Q_{j+1} - Q_j) + \dot{q}'''_j V_j}
      {m_j \, c_p(T_j)}
+
+.. vv-status: fuel-rate documented
 
 where :math:`m_j = \rho_f V_j` is the ring mass and
 :math:`V_j = \pi(r_{j+1}^2 - r_j^2) \Delta z` is the ring volume.
@@ -153,6 +157,8 @@ Clad Temperature
    \rho_c \, c_p(T) \frac{\partial T}{\partial t}
    = \frac{1}{r} \frac{\partial}{\partial r}
      \left[ r \, k(T) \frac{\partial T}{\partial r} \right]
+
+.. vv-status: clad-heat documented
 
 **Boundary conditions:**
 
@@ -206,6 +212,8 @@ Coolant Enthalpy
    + \frac{\partial(\dot{m} h)}{\partial z}
    = \frac{q_w \, A_{\text{HX}}}{V_{\text{flow}}}
 
+.. vv-status: coolant-energy documented
+
 where :math:`\dot{m}` is the junction mass flow rate (kg/s),
 :math:`q_w` is the regime-dependent wall heat flux (W/m\ :sup:`2`),
 and :math:`A_{\text{HX}} = 2\pi r_{\text{out}} \Delta z` is the heat
@@ -218,6 +226,8 @@ exchange area.
 
    \frac{dh_z}{dt} = \frac{-(\dot{m} h)_{z+1/2} + (\dot{m} h)_{z-1/2}
      + q_w \, A_{\text{HX}}}{\rho_z \, a_{\text{flow}} \, \Delta z}
+
+.. vv-status: coolant-rate documented
 
 The junction enthalpies use upwind values:
 :math:`h_{z-1/2} = h_{\text{inlet}}` at the first junction,
@@ -243,6 +253,8 @@ model depends on the gap state:
        & \text{if gap closed } (\delta \le 0)
    \end{cases}
 
+.. vv-status: gap-conductance documented
+
 where :math:`k_{\text{He}}(T) = 2.639{\times}10^{-3} \, T^{0.7085}` W/m-K,
 :math:`\delta_{\text{gap}} = r_{c,\text{in}} - r_{f,\text{out}}` is the
 deformed gap width, and :math:`\varepsilon_{\text{rough}} \approx 6\,\mu\text{m}`
@@ -264,6 +276,8 @@ Ideal gas law for the helium inventory distributed between plenum and gap:
    p_{\text{gas}} = \frac{\mu_{\text{He},0} \, R}
      {\displaystyle \frac{V_{\text{plenum}}}{T_{\text{plenum}}}
        + \sum_{z} \frac{V_{\text{gap},z}}{T_{\text{gap},z}}}
+
+.. vv-status: gas-pressure documented
 
 where :math:`\mu_{\text{He},0}` is the initial helium mole count (conserved),
 :math:`V_{\text{gap},z} = \pi(r_{c,\text{in}}^2 - r_f^2) \Delta z_z` is the
@@ -361,6 +375,8 @@ The effective plastic strain rate follows a Norton power-law:
      10^{-3} \left( \frac{\sigma_{\text{VM}} \times 10^6}{K(T)\,
      |\bar\varepsilon_p + 10^{-6}|^{n(T)}} \right)^{1/m(T)} \right)
 
+.. vv-status: creep-rate documented
+
 where :math:`\sigma_{\text{VM}}` is the von Mises stress (MPa), and
 :math:`K(T), m(T), n(T)` are temperature-dependent Zircaloy strength
 parameters from MATPRO.  The deviatoric components follow the Prandtl–Reuss
@@ -422,6 +438,8 @@ burst stress:
      \cdot (r_{\text{out}} + r_{\text{in}})/2}{r_{\text{out}} - r_{\text{in}}}
    \qquad
    \text{Failure when } \sigma_B(T) - \sigma_I \le 0
+
+.. vv-status: burst-criterion documented
 
 The burst stress :math:`\sigma_B(T)` follows the Kingery–Hobson correlation
 from MATPRO.  After failure, the internal gas pressure equilibrates with

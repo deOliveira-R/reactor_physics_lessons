@@ -509,6 +509,7 @@ def test_splitting_weight_conservation():
 # L0-MC-011: Scattering-vs-absorption branching ratio
 # ═══════════════════════════════════════════════════════════════════════
 
+@pytest.mark.verifies("branching")
 def test_scattering_branching_ratio():
     """L0-MC-011: P(scatter) = sig_s_sum / sig_t.
 
