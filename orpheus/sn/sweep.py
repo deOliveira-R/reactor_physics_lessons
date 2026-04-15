@@ -29,6 +29,7 @@ def transport_sweep(
     sn_mesh: SNMesh,
     psi_bc: dict,
     Q_aniso: np.ndarray | None = None,
+    boundary_condition: str = "reflective",
 ) -> tuple[np.ndarray, np.ndarray]:
     """Perform one full diamond-difference transport sweep.
 
@@ -41,28 +42,50 @@ def transport_sweep(
         for reflective BCs between outer iterations.
     Q_aniso : (N, nx, ny, ng) per-ordinate anisotropic source (P1+
         scattering). None for isotropic-only (P0).
+    boundary_condition : "reflective" (default) or "vacuum".
+        Vacuum BC zeros the incoming angular flux at every external
+        face — needed for fixed-source verification (MMS) where the
+        manufactured solution vanishes at the slab edges.
 
     Returns
     -------
     angular_flux : (N, nx, ny, ng) angular flux per ordinate.
     scalar_flux : (nx, ny, ng) = Σ_n w_n ψ_n.
     """
+    if boundary_condition not in ("reflective", "vacuum"):
+        raise ValueError(
+            f"boundary_condition must be 'reflective' or 'vacuum', "
+            f"got {boundary_condition!r}"
+        )
+
     quad = sn_mesh.quad
     ny = sn_mesh.ny
 
     if sn_mesh.curvature == "spherical":
+        if boundary_condition != "reflective":
+            raise NotImplementedError(
+                "vacuum BC not yet supported for spherical sweep"
+            )
         return _sweep_1d_spherical(Q, sig_t, sn_mesh, psi_bc)
 
     if sn_mesh.curvature == "cylindrical":
+        if boundary_condition != "reflective":
+            raise NotImplementedError(
+                "vacuum BC not yet supported for cylindrical sweep"
+            )
         return _sweep_1d_cylindrical(Q, sig_t, sn_mesh, psi_bc)
 
     is_gl_1d = (ny == 1 and np.all(np.abs(quad.mu_y) < 1e-15)
-                 and Q_aniso is None)
+                 and Q_aniso is None
+                 and boundary_condition == "reflective")
 
     if is_gl_1d:
         return _sweep_1d_cumprod(Q, sig_t, sn_mesh, psi_bc)
     else:
-        return _sweep_2d_wavefront(Q, sig_t, sn_mesh, psi_bc, Q_aniso)
+        return _sweep_2d_wavefront(
+            Q, sig_t, sn_mesh, psi_bc, Q_aniso,
+            boundary_condition=boundary_condition,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -462,6 +485,7 @@ def _sweep_2d_wavefront(
     sn_mesh: SNMesh,
     psi_bc: dict,
     Q_aniso: np.ndarray | None = None,
+    boundary_condition: str = "reflective",
 ) -> tuple[np.ndarray, np.ndarray]:
     """2D sweep using wavefront parallelism along anti-diagonals.
 
@@ -545,16 +569,19 @@ def _sweep_2d_wavefront(
         key = (1 if mx >= 0 else -1, 1 if my >= 0 else -1)
         ix_in, ix_out, iy_in, iy_out, diags = _diag_cache[key]
 
-        # Reflective BC: incoming boundary flux from reflected partner
-        if mx >= 0:
-            psi_x[n, 0, :, :] = psi_x[ref_x[n], 0, :, :]
-        else:
-            psi_x[n, nx, :, :] = psi_x[ref_x[n], nx, :, :]
+        # Boundary condition — vacuum leaves incoming faces at zero
+        # (no reflection copy), which equals zero since those entries
+        # are never written except by this copy (see sweep.py docs).
+        if boundary_condition == "reflective":
+            if mx >= 0:
+                psi_x[n, 0, :, :] = psi_x[ref_x[n], 0, :, :]
+            else:
+                psi_x[n, nx, :, :] = psi_x[ref_x[n], nx, :, :]
 
-        if my >= 0:
-            psi_y[n, :, 0, :] = psi_y[ref_y[n], :, 0, :]
-        else:
-            psi_y[n, :, ny, :] = psi_y[ref_y[n], :, ny, :]
+            if my >= 0:
+                psi_y[n, :, 0, :] = psi_y[ref_y[n], :, 0, :]
+            else:
+                psi_y[n, :, ny, :] = psi_y[ref_y[n], :, ny, :]
 
         # Precomputed streaming for this ordinate
         str_x_n = str_x[n]  # (nx,)

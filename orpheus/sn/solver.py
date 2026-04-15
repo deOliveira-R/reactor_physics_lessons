@@ -29,6 +29,24 @@ from .sweep import transport_sweep
 
 
 @dataclass
+class SNFixedSourceResult:
+    """Results of an SN fixed-source (non-eigenvalue) calculation.
+
+    Used by :func:`solve_sn_fixed_source` and MMS verification
+    (:mod:`orpheus.derivations.sn_mms`). Carries the same flux arrays
+    as :class:`SNResult` but omits the fission eigenvalue fields.
+    """
+
+    angular_flux: np.ndarray   # (N_ordinates, nx, ny, ng)
+    scalar_flux: np.ndarray    # (nx, ny, ng) = Σ w_n ψ_n
+    geometry: Mesh1D | Mesh2D
+    quadrature: AngularQuadrature
+    n_inner: int               # source iterations used
+    residual: float            # final ||Δφ||/||φ||
+    elapsed_seconds: float
+
+
+@dataclass
 class SNResult:
     """Results of an SN transport calculation.
 
@@ -524,5 +542,113 @@ def solve_sn(
         geometry=mesh,
         quadrature=quadrature,
         eg=_any_mat.eg,
+        elapsed_seconds=elapsed,
+    )
+
+
+def solve_sn_fixed_source(
+    materials: dict[int, Mixture],
+    mesh: Mesh1D | Mesh2D,
+    quadrature: AngularQuadrature,
+    external_source: np.ndarray,
+    boundary_condition: str = "vacuum",
+    scattering_order: int = 0,
+    max_inner: int = 1000,
+    inner_tol: float = 1e-12,
+) -> SNFixedSourceResult:
+    r"""Solve the multi-group SN fixed-source transport problem.
+
+    Solves
+
+    .. math::
+
+        \mu_n \frac{\partial\psi_n}{\partial x}+\Sigma_t\psi_n
+        = \frac{1}{W}\left(\Sigma_s\phi + Q^{\text{ext}}_n\right)
+
+    for a prescribed per-ordinate external source ``external_source``,
+    with vacuum or reflective boundary conditions. The fission source
+    is zero — this is the pure transport operator. Source iteration
+    converges geometrically at rate :math:`c = \max\Sigma_s/\Sigma_t`.
+
+    Parameters
+    ----------
+    materials, mesh, quadrature, scattering_order :
+        Same as :func:`solve_sn`.
+    external_source : (N, nx, ny, ng)
+        Per-ordinate volumetric source :math:`Q^{\text{ext}}_n(x)`.
+        Passed to the sweep as its ``Q_aniso`` argument (the solver
+        applies the :math:`1/W` factor internally).
+    boundary_condition : {"vacuum", "reflective"}
+        Vacuum is the default because the intended consumer is
+        Method of Manufactured Solutions verification on a finite slab.
+    max_inner, inner_tol :
+        Source-iteration limits.
+
+    Notes
+    -----
+    This entry point exists for L1 verification via MMS, not for
+    engineering problems — real fixed-source calculations should still
+    build on :func:`solve_sn` with an appropriate external-source hook.
+    See :mod:`orpheus.derivations.sn_mms` and the MMS verification
+    section of the discrete-ordinates theory page.
+    """
+    t_start = time.perf_counter()
+
+    sn_mesh = SNMesh(mesh, quadrature)
+    solver = SNSolver(
+        materials, sn_mesh,
+        scattering_order=scattering_order,
+        max_inner=max_inner, inner_tol=inner_tol,
+    )
+
+    N = sn_mesh.quad.N
+    nx, ny, ng = sn_mesh.nx, sn_mesh.ny, solver.ng
+    if external_source.shape != (N, nx, ny, ng):
+        raise ValueError(
+            f"external_source shape {external_source.shape} does not "
+            f"match (N, nx, ny, ng) = {(N, nx, ny, ng)}"
+        )
+
+    phi = np.zeros((nx, ny, ng))
+    angular = None
+    residual = np.inf
+
+    for n_inner in range(max_inner):
+        phi_prev = phi
+
+        # Isotropic in-scatter + (n,2n). No fission — this is fixed-source.
+        Q = np.zeros_like(phi)
+        solver._add_scattering_source(Q, phi)
+        solver._add_n2n_source(Q, phi)
+
+        # Merge P1+ scattering moments (if any) with external MMS source.
+        Q_aniso_p1 = solver._build_aniso_scattering(angular)
+        if Q_aniso_p1 is None:
+            Q_aniso_total = external_source
+        else:
+            Q_aniso_total = Q_aniso_p1 + external_source
+
+        angular, phi = transport_sweep(
+            Q, solver.sig_t, sn_mesh, solver._psi_bc,
+            Q_aniso=Q_aniso_total,
+            boundary_condition=boundary_condition,
+        )
+
+        norm = np.linalg.norm(phi)
+        if norm > 0:
+            residual = np.linalg.norm(phi - phi_prev) / norm
+            if residual < inner_tol:
+                break
+    else:
+        n_inner = max_inner - 1  # loop exhausted without break
+
+    elapsed = time.perf_counter() - t_start
+    return SNFixedSourceResult(
+        angular_flux=angular,
+        scalar_flux=phi,
+        geometry=mesh,
+        quadrature=quadrature,
+        n_inner=n_inner + 1,
+        residual=float(residual),
         elapsed_seconds=elapsed,
     )
