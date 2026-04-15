@@ -662,3 +662,84 @@ def test_mcmesh_vs_concentric_keff():
         f"MCMesh vs Concentric: k1={result1.keff:.6f}, k2={result2.keff:.6f}, "
         f"diff={diff:.6f}, tol={tol:.6f}"
     )
+
+
+# =====================================================================
+# L1-MC-013: (n,2n) keff matches analytical k_inf (issue #23)
+# =====================================================================
+
+@pytest.mark.l1
+@pytest.mark.catches("ERR-023")
+def test_mc_n2n_keff_matches_analytical():
+    """L1-MC-013: MC with nonzero Sig2 must match analytical k_inf.
+
+    Region A 2G is augmented with Sig2[0,0] = 0.01 (same fixture as
+    TestN2N in tests/cp/test_verification.py). Before the #23 fix the
+    MC ignored Sig2 entirely and undercounted neutron production; k_mc
+    was stuck at the Sig2=0 value even though the mixture's SigT had
+    already been raised by the n2n reaction. The gap was invisible
+    because every pre-existing test material had Sig2 = 0 (Meta-Lesson
+    6: zero cross sections hide bugs).
+
+    Reference: scipy generalised eigenvalue problem on the 2G infinite
+    medium with effective scattering SigS_eff = SigS + 2*Sig2 (the
+    double-counting matches the weight-doubling analog convention).
+    """
+    import scipy.linalg as la
+    from scipy.sparse import csr_matrix
+    from orpheus.data.macro_xs.mixture import Mixture
+
+    xs = get_xs("A", "2g")
+    ng = len(xs["sig_t"])
+    sig_s = xs["sig_s"].copy()
+    sig2 = np.zeros((ng, ng))
+    sig2[0, 0] = 0.01
+    sig_t = xs["sig_c"] + xs["sig_f"] + sig_s.sum(axis=1) + sig2.sum(axis=1)
+    eg = np.logspace(7, -3, ng + 1)
+    mat_n2n = Mixture(
+        SigC=xs["sig_c"].copy(),
+        SigL=np.zeros(ng),
+        SigF=xs["sig_f"].copy(),
+        SigP=(xs["nu"] * xs["sig_f"]).copy(),
+        SigT=sig_t,
+        SigS=[csr_matrix(sig_s)],
+        Sig2=csr_matrix(sig2),
+        chi=xs["chi"].copy(),
+        eg=eg,
+    )
+
+    # Analytical k_inf: (SigT - SigS^T - 2 Sig2^T) phi = (1/k) chi nu_SigF^T phi
+    M = np.diag(sig_t) - sig_s.T - 2.0 * sig2.T
+    F = np.outer(mat_n2n.chi, mat_n2n.SigP)
+    eigvals, _ = la.eig(F, M)
+    k_ref = float(np.max(eigvals.real))
+
+    # Sanity: Sig2 must move the eigenvalue away from the baseline.
+    mat_no = get_mixture("A", "2g")
+    M_no = np.diag(mat_no.SigT) - np.array(mat_no.SigS[0].todense()).T
+    F_no = np.outer(mat_no.chi, mat_no.SigP)
+    k_no = float(np.max(la.eig(F_no, M_no)[0].real))
+    assert k_ref > k_no + 1e-3, (
+        f"(n,2n) should raise k_inf: k_ref={k_ref:.6f} k_no={k_no:.6f}"
+    )
+
+    # MC: single homogeneous region, no boundaries -> infinite medium.
+    geom = SlabPinCell(boundaries=[], mat_ids=[0], pitch=3.6)
+    params = MCParams(
+        n_neutrons=200, n_inactive=50, n_active=400,
+        seed=42, geometry=geom,
+    )
+    result = solve_monte_carlo({0: mat_n2n}, params)
+
+    # Five-sigma band plus a 5e-3 bias allowance (finite statistics).
+    tol = 5.0 * result.sigma + 5e-3
+    assert abs(result.keff - k_ref) < tol, (
+        f"MC n2n: k_mc={result.keff:.6f} +/- {result.sigma:.5f}, "
+        f"k_ref={k_ref:.6f}, tol={tol:.5f}"
+    )
+    # Also: the MC keff must differ from the Sig2=0 baseline (otherwise
+    # Sig2 would still be silently dropped somewhere).
+    assert abs(result.keff - k_no) > abs(k_ref - k_no) / 2.0, (
+        f"MC keff={result.keff:.6f} has not moved from baseline "
+        f"k_no={k_no:.6f} toward k_ref={k_ref:.6f}"
+    )

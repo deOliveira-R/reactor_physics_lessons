@@ -298,6 +298,7 @@ class _PrecomputedXS:
 
     sig_t_max: np.ndarray       # (ng,) majorant per group
     sig_s_dense: dict           # mat_id -> (ng, ng) dense scattering
+    sig_2n_dense: dict          # mat_id -> (ng, ng) dense (n,2n) matrix
     chi_cum: np.ndarray         # cumulative fission spectrum
     ng: int
     eg: np.ndarray              # energy group boundaries
@@ -318,14 +319,17 @@ def _precompute_xs(materials: dict[int, Mixture]) -> _PrecomputedXS:
         sig_t_max = np.maximum(sig_t_max, mix.SigT)
 
     sig_s_dense = {}
+    sig_2n_dense = {}
     for mat_id, mix in materials.items():
         sig_s_dense[mat_id] = np.array(mix.SigS[0].todense())
+        sig_2n_dense[mat_id] = np.array(mix.Sig2.todense())
 
     chi_cum = np.cumsum(_any_mat.chi)
 
     return _PrecomputedXS(
         sig_t_max=sig_t_max,
         sig_s_dense=sig_s_dense,
+        sig_2n_dense=sig_2n_dense,
         chi_cum=chi_cum,
         ng=ng,
         eg=eg,
@@ -375,17 +379,28 @@ def _random_walk(
         sig_p = mat.SigP[ig]
         sig_s_row = xs.sig_s_dense[mat_id][ig, :]
         sig_s_sum = sig_s_row.sum()
-        sig_t = sig_a + sig_s_sum
+        sig_2n_row = xs.sig_2n_dense[mat_id][ig, :]
+        sig_2n_sum = sig_2n_row.sum()
+        sig_t = sig_a + sig_s_sum + sig_2n_sum
         sig_v = xs.sig_t_max[ig] - sig_t
 
         if sig_v / xs.sig_t_max[ig] >= rng.random():
             virtual_collision = True
         else:
             virtual_collision = False
-            if sig_s_sum / sig_t >= rng.random():
+            r = rng.random() * sig_t
+            if r < sig_s_sum:
                 tally[ig] += w / sig_s_sum
                 cum_s = np.cumsum(sig_s_row)
                 ig = np.searchsorted(cum_s, rng.random() * sig_s_sum)
+                ig = min(ig, xs.ng - 1)
+            elif r < sig_s_sum + sig_2n_sum:
+                # Analog (n,2n): one reaction sampled per Σ_2n, weight
+                # doubled to represent two emitted neutrons. Exit group
+                # sampled from the Sig2[ig, :] row (convention [from,to]).
+                w *= 2.0
+                cum_2 = np.cumsum(sig_2n_row)
+                ig = np.searchsorted(cum_2, rng.random() * sig_2n_sum)
                 ig = min(ig, xs.ng - 1)
             else:
                 if sig_a > 0:

@@ -882,6 +882,65 @@ the genuine bug.
 
 ---
 
+## ERR-023 — MC solver silently ignores Sig2 (n,2n) reactions
+
+**Failure mode:** #6 Untested code path — every existing MC test
+material had `Sig2 = 0`, so the missing branch was invisible.
+**Date:** 2026-04-15
+**Solver:** MC (`orpheus.mc.solver._random_walk`,
+`orpheus.mc.solver._precompute_xs`).
+
+**Bug:** The random walk only computed `sig_t = sig_a + sig_s_sum`
+and used a two-way branch between absorption and scatter. The `mat.Sig2`
+matrix was never touched — no reaction was sampled and no weight
+doubling occurred. At the same time `_precompute_xs` seeded the
+majorant with `mix.SigT`, which by the project's convention
+(`orpheus.data.macro_xs.mixture._compute_mixture`, line 142) already
+includes one copy of `Sig2.sum(axis=1)`. The mismatch meant the Σ_2n
+fraction of the majorant was effectively *always* rejected as a
+virtual collision: the particle free-flighted past (n,2n) sites
+without ever sampling them. Net effect: zero (n,2n) contribution to
+the scattering kernel, whereas the CP solver correctly includes
+`2·Sig2·φ` as a source (anti-ERR-015).
+
+**Impact:** Bias on `keff` whenever a material has nonzero (n,2n).
+For the 2 G Region-A fixture with `Sig2[0,0] = 0.01`, the
+analytical `k_inf` is 0.817 vs 0.800 with Sig2 = 0 — a 2 % shift
+that the MC was unable to reproduce.
+
+**Fix:** In `_random_walk`, compute `sig_2n_row = Sig2[ig, :]` and
+`sig_2n_sum = sig_2n_row.sum()`, set
+`sig_t = sig_a + sig_s_sum + sig_2n_sum`, and add a third branch in
+the collision decision:
+
+    r = rng.random() * sig_t
+    if r < sig_s_sum:            ... # scatter
+    elif r < sig_s_sum+sig_2n:   w *= 2.0; sample exit from Sig2 row
+    else:                        ... # absorb / fission
+
+The majorant stays as `mix.SigT` (unchanged) — because mixture.SigT
+already carries `Σ_2n.sum` once, no `2·` factor is needed at the
+majorant level. The weight doubling inside the (n,2n) branch is the
+analog-MC convention for "one reaction, two neutrons emitted."
+
+**L1 test that catches it:**
+`tests/mc/test_gaps.py::test_mc_n2n_keff_matches_analytical` — builds
+the 2 G Region-A mixture with `Sig2[0,0] = 0.01`, solves a scipy
+generalised eigenvalue problem with effective loss
+`SigT − Σ_s^T − 2·Σ_2n^T`, and checks that the MC keff matches to
+`5σ + 5·10⁻³`. Also checks that the MC has moved at least halfway
+from the Sig2 = 0 baseline toward the (n,2n) reference.
+
+**Lesson:** Reinforces Meta-Lesson 6 (zero cross sections hide bugs).
+A structurally correct-looking `sig_t = sig_a + sig_s_sum` is only
+correct if *every* term in the project's total-XS definition is
+accounted for. When a mixture field (here `Sig2`) is **never read**
+inside a transport kernel, that field is silently dropped on the
+floor — and every downstream test that happens to use a zero value
+for it gives false confidence.
+
+---
+
 ## Meta-Lessons
 
 1. **1-group is degenerate.** k = νΣ_f/Σ_a regardless of flux shape.

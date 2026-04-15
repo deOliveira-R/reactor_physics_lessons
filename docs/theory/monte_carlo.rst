@@ -553,27 +553,63 @@ including negative positions and exact-boundary positions.
 Collision Physics
 ==================
 
-At each **real** collision site, two outcomes are possible: scattering or
-absorption.  The decision is based on the branching ratio:
+At each **real** collision site, three outcomes are possible: ordinary
+scattering, an (n,2n) reaction, or absorption.  The reaction is sampled
+from the full branching ratio
 
 .. math::
    :label: branching
 
-   P(\text{scatter}) = \frac{\Sigma_{s,g}}{\Sigma_{t,g}}, \qquad
+   P(\text{scatter}) = \frac{\Sigma_{s,g}}{\Sigma_{t,g}}, \quad
+   P(\text{(n,2n)}) = \frac{\Sigma_{2n,g}}{\Sigma_{t,g}}, \quad
    P(\text{absorb}) = \frac{\Sigma_{a,g}}{\Sigma_{t,g}}
 
-where :math:`\Sigma_{a,g} = \Sigma_{f,g} + \Sigma_{c,g} + \Sigma_{L,g}`.
-In the code::
+where :math:`\Sigma_{a,g} = \Sigma_{f,g} + \Sigma_{c,g} + \Sigma_{L,g}`
+and :math:`\Sigma_{2n,g} = \sum_{g'} \Sigma_{2n}(g \to g')`.  The real
+total is the sum of the three terms::
 
     sig_a = mat.SigF[ig] + mat.SigC[ig] + mat.SigL[ig]
     sig_s_row = sig_s_dense[mat_id][ig, :]
     sig_s_sum = sig_s_row.sum()
-    sig_t = sig_a + sig_s_sum
+    sig_2n_row = sig_2n_dense[mat_id][ig, :]
+    sig_2n_sum = sig_2n_row.sum()
+    sig_t = sig_a + sig_s_sum + sig_2n_sum
+
+Note the project convention (:mod:`orpheus.data.macro_xs.mixture`)
+stores :math:`\Sigma_T` with :math:`\Sigma_{2n}` counted **once**, so
+the majorant seeded from ``mix.SigT`` needs no ``2·`` factor.  The
+doubled-neutron nature of (n,2n) is handled inside the collision branch
+below (**weight doubling**, not majorant inflation).
 
 Verified by ``test_mc_properties.py::test_scattering_branching_ratio``:
 for region A (1G), :math:`P(\text{scatter}) = 0.5/1.0 = 0.5`, confirmed
-by 100k samples.  XS consistency (:math:`\Sigma_t = \Sigma_a + \Sigma_s`)
-verified for all 12 materials by ``test_mc_gaps.py::test_xs_consistency_in_solver``.
+by 100k samples.  XS consistency (:math:`\Sigma_t = \Sigma_a + \Sigma_s
++ \Sigma_{2n}`) verified for all 12 materials by
+``test_mc_gaps.py::test_xs_consistency_in_solver``.
+
+The three-way branch is sampled by a single scaled uniform::
+
+    r = rng.random() * sig_t
+    if r < sig_s_sum:
+        # ordinary downscatter — sample exit from Sig_s row
+        ...
+    elif r < sig_s_sum + sig_2n_sum:
+        # (n,2n): analog weight doubling, exit from Sig_2n row
+        w *= 2.0
+        ...
+    else:
+        # absorption / fission
+        ...
+
+The **weight doubling** convention (``w *= 2.0``) represents the two
+emitted neutrons of an (n,2n) reaction without spawning a second
+particle: one sample of a reaction whose rate is :math:`\Sigma_{2n}\phi`
+already carries weight two, so the total expected source into any exit
+group :math:`g'` is :math:`2\,\Sigma_{2n}(g \to g')\phi_g`, matching the
+CP/SN treatment (:ref:`theory-collision-probability`, anti-ERR-015).
+This is documented as **ERR-023** in ``tests/l0_error_catalog.md`` and
+pinned by
+``tests/mc/test_gaps.py::test_mc_n2n_keff_matches_analytical``.
 
 **Cross-section preprocessing.**  The solver precomputes dense scattering
 rows for all materials::
