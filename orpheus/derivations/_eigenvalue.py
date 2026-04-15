@@ -41,9 +41,42 @@ def kinf_homogeneous(
     chi : (ng,) fission spectrum.
     sig_2 : (ng, ng) or None — (n,2n) transfer matrix.
     """
-    ng = len(sig_t)
+    k, _ = kinf_and_spectrum_homogeneous(sig_t, sig_s, nu_sig_f, chi, sig_2)
+    return k
 
-    # Effective scattering: Σs + 2·Σ₂
+
+def kinf_and_spectrum_homogeneous(
+    sig_t: np.ndarray,
+    sig_s: np.ndarray,
+    nu_sig_f: np.ndarray,
+    chi: np.ndarray,
+    sig_2: np.ndarray | None = None,
+) -> tuple[float, np.ndarray]:
+    r"""Infinite-medium :math:`k_\infty` **and** the dominant flux spectrum.
+
+    Phase-1.1 extension of :func:`kinf_homogeneous` that also returns
+    the right eigenvector — the multigroup flux spectrum — of
+    :math:`\mathbf{A}^{-1}\mathbf{F}`. This is the continuous
+    reference for any test that wants to verify *flux shape* on a
+    reflective (infinite-medium) problem, not just :math:`k_{\text{eff}}`.
+
+    The spectrum is sign-normalised so every component is
+    non-negative (physical flux) and normalised to unit
+    :math:`\ell^{2}` norm. Callers that need a different
+    normalisation (e.g. :math:`\phi_1 = 1` or volume-integrated
+    total flux) should rescale the returned vector.
+
+    Parameters
+    ----------
+    sig_t, sig_s, nu_sig_f, chi, sig_2 : see :func:`kinf_homogeneous`.
+
+    Returns
+    -------
+    k : float
+        Dominant eigenvalue, identical to :func:`kinf_homogeneous`.
+    phi_spectrum : (ng,) ndarray
+        Right eigenvector, :math:`\ell^{2}`-normalised, non-negative.
+    """
     sig_s_eff = sig_s.copy()
     if sig_2 is not None:
         sig_s_eff = sig_s_eff + 2.0 * sig_2
@@ -51,7 +84,29 @@ def kinf_homogeneous(
     A = np.diag(sig_t) - sig_s_eff.T
     F = np.outer(chi, nu_sig_f)
     M = np.linalg.solve(A, F)
-    return float(np.max(np.real(np.linalg.eigvals(M))))
+
+    eigvals, eigvecs = np.linalg.eig(M)
+    real_vals = np.real(eigvals)
+    dominant = int(np.argmax(real_vals))
+    k = float(real_vals[dominant])
+    phi = np.real(eigvecs[:, dominant])
+
+    # Sign-normalise so the spectrum is non-negative (physical)
+    if phi.sum() < 0:
+        phi = -phi
+    # Safety: if numerical noise leaves tiny negatives, clamp to zero.
+    # For a well-posed downscatter problem the physical flux is
+    # strictly non-negative; any component < -1e-12 indicates a real
+    # numerical problem and is propagated as-is so the caller notices.
+    phi = np.where(np.abs(phi) < 1e-14, 0.0, phi)
+
+    norm = float(np.linalg.norm(phi))
+    if norm == 0:
+        raise ValueError(
+            "Dominant eigenvector of A^{-1}F is identically zero — "
+            "cross-section inputs are likely degenerate."
+        )
+    return k, phi / norm
 
 
 def kinf_from_cp(

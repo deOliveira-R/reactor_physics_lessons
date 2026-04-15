@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **600**
+Total tests collected: **607**
 
 V&V level distribution
 ----------------------
@@ -16,11 +16,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 345, 57.5%
-   L1, 149, 24.8%
-   L2, 45, 7.5%
+   L0, 345, 56.8%
+   L1, 156, 25.7%
+   L2, 45, 7.4%
    L3, 0, 0.0%
-   foundation, 61, 10.2%
+   foundation, 61, 10.0%
    unmarked, 0, 0.0%
 
 Tagging source
@@ -32,7 +32,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 512
+   explicit, 519
    verify, 0
    class-name, 46
    func-name, 0
@@ -58,6 +58,7 @@ Module × level grid
    diffusion/test_diffusion, 0, 2, 0, 0, 0, 0
    diffusion/test_properties, 3, 0, 0, 0, 0, 0
    geometry/test_geometry, 0, 0, 0, 0, 61, 0
+   homogeneous/test_continuous_reference, 0, 7, 0, 0, 0, 0
    homogeneous/test_homogeneous, 0, 4, 0, 0, 0, 0
    mc/test_convergence, 0, 0, 3, 0, 0, 0
    mc/test_cross_verification, 0, 0, 2, 0, 0, 0
@@ -91,9 +92,9 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    :header: Equation label, Tests
    :widths: 50, 10
 
-   ``matrix-eigenvalue``, 160
-   ``mg-balance``, 160
-   ``one-group-kinf``, 114
+   ``matrix-eigenvalue``, 167
+   ``mg-balance``, 167
+   ``one-group-kinf``, 121
    ``reflective-bc``, 112
    ``alpha-recursion``, 100
    ``wdd-closure``, 100
@@ -164,6 +165,13 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``ws-pitch``, 12
    ``dd-recurrence``, 11
    ``dd-solve``, 11
+   ``fission-matrix``, 11
+   ``inf-hom-balance``, 11
+   ``removal-matrix``, 11
+   ``two-group-A``, 11
+   ``two-group-Ainv``, 11
+   ``two-group-F``, 11
+   ``two-group-M``, 11
    ``pn-scatter``, 9
    ``tau-m``, 9
    ``tau-p``, 9
@@ -179,17 +187,10 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``xs-interp``, 5
    ``absorption-xs``, 4
    ``en-kernel-integral``, 4
-   ``fission-matrix``, 4
    ``fission-source``, 4
    ``fixed-source-solve``, 4
-   ``inf-hom-balance``, 4
    ``keff-update``, 4
    ``macro-sum``, 4
-   ``removal-matrix``, 4
-   ``two-group-A``, 4
-   ``two-group-Ainv``, 4
-   ``two-group-F``, 4
-   ``two-group-M``, 4
    ``two-group-charpoly``, 4
    ``two-group-roots``, 4
    ``hetero-tolerance``, 3

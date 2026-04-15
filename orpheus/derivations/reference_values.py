@@ -137,9 +137,9 @@ def _build_continuous_registry() -> dict[str, ContinuousReferenceSolution]:
     refs: dict[str, ContinuousReferenceSolution] = {}
 
     # Populated incrementally through Phases 1–5 of the verification
-    # campaign. Empty during Phase 0; the first retrofitted module
-    # (homogeneous) will add entries in Phase 1 Session 1.1.
-    _continuous_modules: list = []
+    # campaign.
+    from . import homogeneous
+    _continuous_modules: list = [homogeneous]
 
     for module in _continuous_modules:
         if hasattr(module, "continuous_cases"):
