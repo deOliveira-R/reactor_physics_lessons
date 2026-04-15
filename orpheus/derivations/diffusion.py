@@ -233,7 +233,11 @@ def solver_cases() -> list[VerificationCase]:
 # with S(k) = [[0, -D^-1], [-M(k), 0]] and M(k) the net removal
 # matrix diag(absorption + out-scatter) − downscatter_coupling
 # − (1/k)·chi ⊗ (nu·Sigma_f). See docs/theory/diffusion_1d.rst
-# :eq:`diffusion-transfer-matrix` for the derivation.
+# :eq:`diffusion-region-ode` and :eq:`diffusion-M-matrix` for the
+# derivation, and :eq:`diffusion-mode-decomposition`,
+# :eq:`diffusion-exponential-branch`, and
+# :eq:`diffusion-trigonometric-branch` for how the ODE is solved
+# region-by-region in the bounded real basis.
 
 
 _NG = 2  # everything in this module is two-group
@@ -902,9 +906,14 @@ def derive_2rg_continuous(
 
     Notes
     -----
-    See :eq:`diffusion-transfer-matrix`,
-    :eq:`diffusion-interface-matching`, and
-    :eq:`diffusion-transcendental` on the theory page.
+    See :eq:`diffusion-region-ode`, :eq:`diffusion-mode-decomposition`,
+    :eq:`diffusion-matching-matrix`, :eq:`diffusion-transcendental`,
+    and :eq:`diffusion-spurious-root-validation` on the theory
+    page for the full algorithm. The ``Investigation history``
+    section of that page records the two earlier approaches
+    (``expm`` transfer-matrix composition and complex-eigenvalue
+    mode decomposition) that were tried and abandoned, with the
+    numerical evidence of their failure modes.
     """
     H_f = float(fuel_height)
     H_r = float(refl_height)
@@ -1047,9 +1056,15 @@ def derive_2rg_continuous(
         equation_labels=(
             "diffusion-operator",
             "diffusion-coefficient",
-            "diffusion-transfer-matrix",
+            "diffusion-region-ode",
+            "diffusion-M-matrix",
+            "diffusion-mode-decomposition",
+            "diffusion-exponential-branch",
+            "diffusion-trigonometric-branch",
             "diffusion-interface-matching",
+            "diffusion-matching-matrix",
             "diffusion-transcendental",
+            "diffusion-spurious-root-validation",
             "diffusion-back-substitution",
         ),
         vv_level="L1",

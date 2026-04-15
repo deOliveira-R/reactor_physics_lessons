@@ -179,12 +179,18 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``bare-slab-buckling``, 8
    ``bare-slab-critical-equation``, 8
    ``bare-slab-eigenfunction``, 8
+   ``diffusion-M-matrix``, 8
    ``diffusion-back-substitution``, 8
    ``diffusion-coefficient``, 8
+   ``diffusion-exponential-branch``, 8
    ``diffusion-interface-matching``, 8
+   ``diffusion-matching-matrix``, 8
+   ``diffusion-mode-decomposition``, 8
    ``diffusion-operator``, 8
+   ``diffusion-region-ode``, 8
+   ``diffusion-spurious-root-validation``, 8
    ``diffusion-transcendental``, 8
-   ``diffusion-transfer-matrix``, 8
+   ``diffusion-trigonometric-branch``, 8
    ``bar-psi``, 6
    ``boyd-eq-45``, 6
    ``characteristic-ode``, 6

@@ -47,9 +47,15 @@ pytestmark = [pytest.mark.l1, pytest.mark.verifies(
     "bare-slab-buckling",
     "bare-slab-eigenfunction",
     "bare-slab-critical-equation",
-    "diffusion-transfer-matrix",
+    "diffusion-region-ode",
+    "diffusion-M-matrix",
+    "diffusion-mode-decomposition",
+    "diffusion-exponential-branch",
+    "diffusion-trigonometric-branch",
     "diffusion-interface-matching",
+    "diffusion-matching-matrix",
     "diffusion-transcendental",
+    "diffusion-spurious-root-validation",
     "diffusion-back-substitution",
 )]
 
