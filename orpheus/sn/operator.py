@@ -269,7 +269,8 @@ def build_rhs(
     normalization for the discrete angular flux equation.
 
     For Pn scattering (scattering_order > 0), the scattering source
-    is per-ordinate using Legendre moments of the angular flux:
+    is per-ordinate using Legendre moments of the angular flux::
+
         qS(n) = Σ_l (2l+1) · Σ_s^l^T @ [Σ_m fiL_lm · Y_lm(n)] / sum_w
 
     Parameters

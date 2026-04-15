@@ -48,6 +48,15 @@ nexus_extra_source_dirs = ['tests']
 autodoc_member_order = 'bysource'
 autodoc_typehints = 'description'
 
+# -- Options for napoleon ---------------------------------------------
+#
+# Render NumPy-style ``Attributes`` sections as ``:ivar:`` info fields
+# rather than standalone ``.. attribute::`` directives. Without this
+# flag, dataclass fields are double-documented (once by autodoc and
+# once by napoleon), causing "duplicate object description" warnings.
+
+napoleon_use_ivar = True
+
 # -- Auto-generate verification matrix page ---------------------------
 #
 # Runs `python -m tools.verification.generate_matrix` before Sphinx

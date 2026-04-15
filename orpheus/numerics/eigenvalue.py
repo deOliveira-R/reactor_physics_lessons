@@ -109,7 +109,7 @@ def power_iteration(
 
     Power iteration converges to the largest eigenvalue k_0 (= k_eff)
     and its eigenvector φ_0 (the fundamental mode).  The convergence
-    rate is governed by the dominance ratio |k_1 / k_0|.
+    rate is governed by the dominance ratio :math:`|k_1 / k_0|`.
 
     Returns
     -------

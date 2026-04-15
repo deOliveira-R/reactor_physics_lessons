@@ -1,6 +1,7 @@
 """Diamond-difference transport sweep for 1D and 2D Cartesian meshes.
 
 Two paths, automatically dispatched:
+
 - **1D cumprod**: for ny=1, mu_y=0 (Gauss-Legendre). Solves the
   recurrence via cumulative products — O(nc) numpy ops, ~ms.
 - **2D wavefront**: for general 2D. Sweeps cells along anti-diagonals

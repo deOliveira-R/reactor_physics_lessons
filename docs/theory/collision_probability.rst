@@ -1366,7 +1366,7 @@ chord heights using composite Gauss--Legendre quadrature
 boundary to capture chord-length discontinuities.
 
 Second-Difference Formula (Cylindrical)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------
 
 The CP matrix is computed by integrating the Ki\ :sub:`4` second
 differences over all chord heights:
@@ -1433,7 +1433,7 @@ Geometry built via :func:`~geometry.factories.mesh1d_from_zones` with
 ``coord = CoordSystem.SPHERICAL``.
 
 Second-Difference Formula (Spherical)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------------
 
 The reduced collision probability has the same structure as cylindrical,
 but with :math:`F = \exp(-\cdot)` and :math:`y`-weighted quadrature:

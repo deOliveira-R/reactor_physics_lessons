@@ -962,8 +962,8 @@ See :func:`~data.macro_xs.recipes.aqueous_uranium`.
    import warnings
    warnings.filterwarnings('ignore')
 
-   from data.macro_xs.recipes import aqueous_uranium
-   from homogeneous import solve_homogeneous_infinite
+   from orpheus.data.macro_xs.recipes import aqueous_uranium
+   from orpheus.homogeneous import solve_homogeneous_infinite
 
    mix = aqueous_uranium(temp_K=294, pressure_MPa=0.1, u_conc_ppm=1000.0)
    result = solve_homogeneous_infinite(mix)
@@ -1021,8 +1021,8 @@ See :func:`~data.macro_xs.recipes.pwr_like_mix`.
    import warnings
    warnings.filterwarnings('ignore')
 
-   from data.macro_xs.recipes import pwr_like_mix
-   from homogeneous import solve_homogeneous_infinite
+   from orpheus.data.macro_xs.recipes import pwr_like_mix
+   from orpheus.homogeneous import solve_homogeneous_infinite
 
    mix = pwr_like_mix()
    result = solve_homogeneous_infinite(mix)
@@ -1177,9 +1177,6 @@ References
 
 .. [Bondarenko1964] I.I. Bondarenko et al., *Group Constants for Nuclear
    Reactor Calculations*, Consultants Bureau, 1964.
-
-.. [Hebert2009] A. Hebert, *Applied Reactor Physics*, Presses
-   internationales Polytechnique, 2009.
 
 .. [Stacey2007] W.M. Stacey, *Nuclear Reactor Physics*, 2nd ed.,
    Wiley-VCH, 2007.

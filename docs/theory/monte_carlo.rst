@@ -44,6 +44,8 @@ The Monte Carlo (MC) method solves the neutron transport equation by
 discretising the phase space (angle, energy, space) as deterministic methods
 do, MC tracks particles through a geometry, sampling collision events from
 probability distributions derived from the underlying cross sections.
+The classical textbook treatment is [Lux1991]_; a more recent pedagogical
+overview aimed at reactor-physics practitioners is [Brown2005]_.
 
 ORPHEUS implements a **power iteration Monte Carlo** solver for the
 :math:`k`-eigenvalue problem in a 2-D unit cell with periodic boundary

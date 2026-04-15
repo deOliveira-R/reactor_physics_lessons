@@ -894,10 +894,6 @@ Known Limitations
 References
 ==========
 
-.. [MATPRO2003] D.L. Hagrman et al., *MATPRO — A Library of Materials
-   Properties for Light-Water-Reactor Accident Analysis*, NUREG/CR-6150,
-   Idaho National Laboratory, 2003.
-
 .. [IAPWS2008] IAPWS, *Release on the IAPWS Formulation 2008 for the
    Viscosity of Ordinary Water Substance*, 2008.  The correlation
    implemented in ``_iapws_viscosity`` and in XSteam/pyXSteam.

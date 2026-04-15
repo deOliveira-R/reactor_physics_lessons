@@ -27,7 +27,9 @@ Overview
 
 Module 08 simulates a **Reactivity Insertion Accident (RIA)** in a single
 PWR fuel channel using 0-D point kinetics coupled with 1-D radial heat
-transfer and thermo-mechanics.  The model consists of:
+transfer and thermo-mechanics.  The formulation follows the standard
+textbook treatment of point-kinetics feedback [Ott1985]_.  The model
+consists of:
 
 - **Point kinetics** — 6-group delayed neutrons with prompt and delayed
   fission power.
@@ -426,6 +428,3 @@ References
 
 .. [Ott1985] K.O. Ott and R.J. Neuhold, *Introductory Nuclear Reactor
    Dynamics*, American Nuclear Society, 1985.
-
-.. [Duderstadt1976] J.J. Duderstadt and L.J. Hamilton, *Nuclear Reactor
-   Analysis*, John Wiley & Sons, 1976.
