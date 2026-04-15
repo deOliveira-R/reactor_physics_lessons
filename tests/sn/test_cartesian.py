@@ -5,7 +5,7 @@ import pytest
 
 from orpheus.derivations import get
 from orpheus.derivations._xs_library import get_mixture
-from orpheus.geometry import homogeneous_1d, slab_fuel_moderator, mesh1d_from_zones, Zone, CoordSystem
+from orpheus.geometry import homogeneous_1d, slab_fuel_moderator
 from orpheus.sn.quadrature import GaussLegendre1D
 from orpheus.sn.solver import solve_sn
 
@@ -45,38 +45,26 @@ def test_homogeneous_exact(case_name):
     )
 
 
-# ─── Heterogeneous: convergence to Richardson reference ──────────────
-
-@pytest.mark.slow
-@pytest.mark.catches("ERR-003")
-@pytest.mark.parametrize("case_name", [
-    "sn_slab_1eg_2rg",
-    "sn_slab_2eg_2rg",
-    "sn_slab_4eg_2rg",
-    "sn_slab_1eg_4rg",
-    "sn_slab_2eg_4rg",
-    "sn_slab_4eg_4rg",
-])
-def test_heterogeneous_convergence(case_name):
-    """SN on heterogeneous slab must converge to the Richardson reference."""
-    case = get(case_name)
-    gp = case.geom_params
-    zones = []
-    edge = 0.0
-    for t, mid in zip(gp["thicknesses"], gp["mat_ids"]):
-        edge += t
-        zones.append(Zone(outer_edge=edge, mat_id=mid, n_cells=20))
-    mesh = mesh1d_from_zones(zones, coord=CoordSystem.CARTESIAN)
-    quad = GaussLegendre1D.create(16)
-    result = solve_sn(
-        case.materials, mesh, quad,
-        max_outer=500, max_inner=500, inner_tol=1e-10, keff_tol=1e-8,
-    )
-
-    err = abs(result.keff - case.k_inf)
-    assert err < 1e-3, (
-        f"{case_name}: keff={result.keff:.8f} vs ref={case.k_inf:.8f} err={err:.2e}"
-    )
+# ─── Heterogeneous: replaced by MMS continuous reference ─────────────
+#
+# Phase 2.1a of the verification campaign removed the legacy
+# ``test_heterogeneous_convergence`` test that consumed
+# ``sn_slab_Neg_Nrg`` (N > 1) references from
+# ``orpheus.derivations.sn._derive_sn_heterogeneous``. Those
+# references were Richardson-extrapolated from the SN solver
+# itself (T3 circular self-verification) and have been deleted.
+#
+# The new heterogeneous SN spatial-operator verification lives in
+# ``tests/sn/test_mms_heterogeneous.py`` and consumes the
+# ``sn_mms_slab_2g_hetero`` Phase-0 ContinuousReferenceSolution
+# from ``orpheus.derivations.sn_mms`` — the Method of Manufactured
+# Solutions with smooth cross sections. See the heterogeneous MMS
+# section of ``docs/theory/discrete_ordinates.rst`` for why.
+#
+# The eigenvalue-heterogeneous verification that the deleted test
+# was nominally covering (but did not actually verify, because it
+# compared the solver to its own extrapolant) will be restored in
+# Phase 2.1b by a Case singular-eigenfunction reference.
 
 
 # ─── Spatial convergence O(h²) ───────────────────────────────────────

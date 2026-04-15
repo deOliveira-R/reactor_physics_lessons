@@ -1499,11 +1499,210 @@ round-off at the finest mesh.
   richer operator coverage.
 
 **Follow-ups.**  MMS for :doc:`method_of_characteristics`, diffusion,
-and heterogeneous / multigroup SN is tracked in GitHub Issues
-(see ``type:feature level:L1``).  The current case
-verifies only the Cartesian diamond-difference sweep --- spherical
-and cylindrical curvilinear sweeps need their own ansatz because
-their vacuum BC plumbing is not yet wired up.
+and spherical / cylindrical curvilinear SN is tracked in GitHub
+Issues (see ``type:feature level:L1``).  The curvilinear sweeps
+need their own ansatz because their vacuum BC plumbing is not
+yet wired up. **Heterogeneous and multigroup SN MMS is covered
+by the next subsection.**
+
+
+.. _sn-mms-heterogeneous-verification:
+
+Heterogeneous MMS — 2-group continuous-:math:`\Sigma` slab
+-----------------------------------------------------------
+
+The homogeneous MMS case above verifies the Cartesian 1D SN
+sweep for a *single-material* slab. To verify the multigroup
+operator on a **heterogeneous** problem --- where each cell can
+have different cross sections and the scatter matrix couples
+groups across positions --- the Method of Manufactured Solutions
+is extended in Phase 2.1a of the verification campaign with two
+deliberate choices:
+
+1. **Continuous (smooth)** :math:`\Sigma_{t,g}(x)` and
+   :math:`\Sigma_{s,g\to g'}(x)` instead of piecewise-constant
+   material regions. Discontinuous :math:`\Sigma` at interfaces
+   that do not coincide with cell faces degrades diamond
+   difference from :math:`\mathcal O(h^{2})` to
+   :math:`\mathcal O(h)`, which would contaminate the
+   spatial-convergence measurement with interface-treatment
+   artefacts. With smooth :math:`\Sigma(x)` the diamond-
+   difference operator hits its design :math:`\mathcal O(h^{2})`
+   order exactly --- the convergence study becomes a clean test
+   of the operator itself. This follows Salari & Knupp
+   SAND2000-1444 §6, the canonical MMS reference for
+   heterogeneous verification.
+2. **Per-group amplitudes** :math:`\mathbf c = (c_1, c_2)` in
+   the ansatz, so the scalar flux has a non-trivial group
+   spectrum and the downscatter source term in the manufactured
+   :math:`Q^{\text{ext}}` is non-zero. A bug that transposes
+   the scatter matrix or drops a cross-group source term
+   produces an incorrect :math:`\phi_2` that the convergence
+   test catches immediately.
+
+**Ansatz.**  The homogeneous ansatz carries over, now with a
+per-group amplitude:
+
+.. math::
+   :label: sn-mms-hetero-psi
+
+   \psi_{n,g}(x) \;=\; \frac{c_g}{W}\,A(x),
+   \qquad A(x) \;=\; \sin\!\left(\frac{\pi x}{L}\right),
+
+where :math:`W = \sum_n w_n` is the quadrature weight sum. The
+scalar flux in each group is
+:math:`\phi_g(x) = c_g\,A(x)`, so the amplitudes
+:math:`\mathbf c` literally are the group fluxes at the slab
+midpoint (where :math:`A` peaks). With
+:math:`\mathbf c = (1.0, 0.3)` the two groups are linearly
+independent and the downscatter coupling is visible.
+
+Both groups share the same *spatial* mode :math:`\sin(\pi x/L)`
+--- this is the fundamental mode of the bare slab and is exactly
+the shape that emerges from separation of variables in the
+diffusion limit. The heterogeneous SN problem would in general
+have each group living in its own spatial harmonic, but we
+*choose* the shared-mode ansatz as the manufactured target and
+derive the non-trivial :math:`Q^{\text{ext}}` that makes it
+satisfy the transport equation. The test then measures how well
+the numerical SN sweep reproduces this prescribed shape.
+
+**Manufactured source.**  Substituting :eq:`sn-mms-hetero-psi`
+into the multigroup discrete-ordinates transport equation
+
+.. math::
+
+    \mu_n\,\frac{\partial\psi_{n,g}}{\partial x}
+        + \Sigma_{t,g}(x)\,\psi_{n,g}
+    \;=\; \frac{1}{W}\!\left(
+        \sum_{g'}\Sigma_{s,g'\to g}(x)\,\phi_{g'}(x)
+      + Q^{\text{ext}}_{n,g}(x)
+    \right)
+
+and solving algebraically for :math:`Q^{\text{ext}}`:
+
+.. math::
+   :label: sn-mms-hetero-qext
+
+   Q^{\text{ext}}_{n,g}(x) \;=\;
+       \mu_n\,c_g\,A'(x)
+     + c_g\,\Sigma_{t,g}(x)\,A(x)
+     \;-\; \sum_{g'}\Sigma_{s,g'\to g}(x)\,c_{g'}\,A(x).
+
+The :math:`W` factor cancels between the ansatz's :math:`1/W`
+prefactor and the solver's own :math:`1/W` convention on the
+isotropic and anisotropic source slots, so :eq:`sn-mms-hetero-qext`
+is the residual hand-delivered to the sweep without any
+additional rescaling.
+
+**Structure of the source.**  The streaming term
+:math:`\mu_n\,c_g\,A'(x)` is odd in :math:`\mu` and carries the
+only angular dependence, which is why SN MMS fundamentally
+needs the per-ordinate ``Q_aniso`` plumbing path. The removal
+term :math:`c_g\,\Sigma_{t,g}(x)\,A(x)` is diagonal in group
+index. The **in-scatter** sum
+:math:`\sum_{g'}\Sigma_{s,g'\to g}\,c_{g'}\,A(x)` is the only
+term that couples groups, and for :math:`g=2` in the default
+2-group setup it contributes
+:math:`-\Sigma_{s,1\to 2}(x)\,c_1\,A(x)` --- the thermal source
+depends on the fast amplitude through the downscatter cross
+section, exactly as the multigroup scatter assembly in the
+sweep does.
+
+**Canonical cross sections.**  The reference uses smooth
+profiles on :math:`[0, L]`:
+
+.. math::
+
+    \Sigma_{t,1}(x) &= 1.0 + 0.2\sin(\pi x/L), \\
+    \Sigma_{t,2}(x) &= 2.0 + 0.3\cos(\pi x/L), \\
+    \Sigma_{s,1\to 1}(x) &= 0.3 + 0.1\sin(\pi x/L), \\
+    \Sigma_{s,1\to 2}(x) &= 0.2 + 0.05\sin(\pi x/L), \\
+    \Sigma_{s,2\to 2}(x) &= 1.5 + 0.15\sin(\pi x/L), \\
+    \Sigma_{s,2\to 1}(x) &= 0.
+
+These give :math:`\Sigma_{a,1}(x) = 0.5 + 0.05\sin(\pi x/L) > 0`
+trivially and
+:math:`\Sigma_{a,2}(x) = 0.5 + 0.3\cos(\pi x/L) - 0.15\sin(\pi x/L)`,
+bounded below by :math:`0.5 - \sqrt{0.3^{2} + 0.15^{2}} \approx
+0.165 > 0`, so the cross sections are physical everywhere. The
+scattering ratios :math:`c_g = \Sigma_{s,\text{tot},g}/\Sigma_{t,g}`
+stay around :math:`0.5` for both groups, which means source
+iteration converges geometrically at rate :math:`\sim 0.5^n`
+per sweep.
+
+**Per-cell material construction.**  The solver consumes the
+continuous :math:`\Sigma(x)` by creating **one material per cell**
+with cross sections evaluated at the cell centre
+:math:`x_i = (x_{i-1/2} + x_{i+1/2})/2`. The midpoint rule for
+the cell-average cross section is :math:`\mathcal O(h^{2})`-
+accurate on smooth :math:`\Sigma`, matching the diamond-
+difference design order and not degrading the measured
+convergence rate. The number of materials scales with mesh
+refinement, so each mesh in the convergence study builds a
+fresh materials dictionary via
+:meth:`orpheus.derivations.sn_mms.SNSlab2GHeterogeneousMMSCase.build_materials`.
+
+**Measured convergence.**  With default parameters
+(:math:`L = 5\,\text{cm}`, :math:`\mathbf c = (1.0, 0.3)`,
+Gauss--Legendre :math:`S_{16}`):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 20 20 20
+
+   * - :math:`n_{\rm cells}`
+     - :math:`\|\phi_1 - \phi_{1,\rm ex}\|_{L^{2}}`
+     - :math:`\|\phi_2 - \phi_{2,\rm ex}\|_{L^{2}}`
+     - measured order
+   * - 20
+     - :math:`3.71\!\times\!10^{-4}`
+     - :math:`3.38\!\times\!10^{-4}`
+     - ---
+   * - 40
+     - :math:`9.25\!\times\!10^{-5}`
+     - :math:`8.45\!\times\!10^{-5}`
+     - 2.00
+   * - 80
+     - :math:`2.31\!\times\!10^{-5}`
+     - :math:`2.11\!\times\!10^{-5}`
+     - 2.00
+   * - 160
+     - :math:`5.78\!\times\!10^{-6}`
+     - :math:`5.28\!\times\!10^{-6}`
+     - 2.00
+
+Both groups hit the design order independently, confirming
+that the multigroup scatter coupling is correctly exercised.
+The L1 test
+:func:`tests.sn.test_mms_heterogeneous.test_sn_heterogeneous_mms_converges_second_order`
+asserts ``> 1.9`` to leave round-off headroom at the finest
+mesh.
+
+**What this replaces.** Before Phase 2.1a, the heterogeneous
+SN verification was
+:func:`orpheus.derivations.sn._derive_sn_heterogeneous`, which
+computed the reference :math:`k_{\text{eff}}` by running the
+SN solver itself at four mesh refinements and Richardson-
+extrapolating the eigenvalue sequence. That is a **T3 circular
+self-test** in the verification-campaign taxonomy: the solver
+verifies against its own extrapolated output, so any consistent
+bug in the SN sweep that affects all mesh refinements the same
+way is invisible to the test. The heterogeneous MMS reference
+above breaks the circularity: the reference comes from the
+manufactured-solution algebra, not from the solver.
+
+**Complementary eigenvalue verification.** The MMS test
+verifies the **spatial operator** on a heterogeneous problem
+but does not exercise the eigenvalue iteration. Phase 2.1b of
+the verification campaign lands a Case singular-eigenfunction
+eigenvalue reference that restores eigenvalue-heterogeneous
+coverage for the SN solver (T2 semi-analytical, from the
+first-order Boltzmann equation itself, no diffusion
+approximation). Until Phase 2.1b lands, the eigenvalue
+iteration is verified transitively through the homogeneous
+:math:`k_\infty = \nu\Sigma_f/\Sigma_a` tests, which are
+themselves Phase 1.1 continuous references.
 
 
 Homogeneous Infinite Medium

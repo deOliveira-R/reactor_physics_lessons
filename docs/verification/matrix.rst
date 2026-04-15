@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **615**
+Total tests collected: **613**
 
 V&V level distribution
 ----------------------
@@ -16,11 +16,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 345, 56.1%
-   L1, 164, 26.7%
-   L2, 45, 7.3%
+   L0, 345, 56.3%
+   L1, 168, 27.4%
+   L2, 39, 6.4%
    L3, 0, 0.0%
-   foundation, 61, 9.9%
+   foundation, 61, 10.0%
    unmarked, 0, 0.0%
 
 Tagging source
@@ -32,11 +32,11 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 527
+   explicit, 531
    verify, 0
    class-name, 46
    func-name, 0
-   case, 42
+   case, 36
    unmarked, 0
 
 Module × level grid
@@ -71,10 +71,11 @@ Module × level grid
    moc/test_quadrature, 24, 0, 0, 0, 0, 0
    moc/test_ray_tracing, 22, 0, 0, 0, 0, 0
    moc/test_verification, 27, 15, 6, 0, 0, 0
-   sn/test_cartesian, 0, 5, 6, 0, 0, 0
+   sn/test_cartesian, 0, 5, 0, 0, 0, 0
    sn/test_cylindrical, 4, 10, 11, 0, 0, 0
    sn/test_discrete_ordinates_2d, 0, 0, 2, 0, 0, 0
    sn/test_mms, 0, 2, 0, 0, 0, 0
+   sn/test_mms_heterogeneous, 0, 4, 0, 0, 0, 0
    sn/test_properties, 4, 0, 0, 0, 0, 0
    sn/test_quadrature, 49, 0, 0, 0, 0, 0
    sn/test_solver_components, 35, 0, 0, 0, 0, 0
@@ -93,17 +94,17 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    :header: Equation label, Tests
    :widths: 50, 10
 
-   ``matrix-eigenvalue``, 167
-   ``mg-balance``, 167
-   ``one-group-kinf``, 121
-   ``reflective-bc``, 112
+   ``mg-balance``, 165
+   ``matrix-eigenvalue``, 161
+   ``one-group-kinf``, 115
+   ``reflective-bc``, 106
    ``alpha-recursion``, 100
    ``wdd-closure``, 100
    ``wdd-face``, 100
    ``collision-rate``, 88
    ``alpha-cylindrical``, 74
    ``mm-weights``, 74
-   ``multigroup``, 64
+   ``multigroup``, 62
    ``self-slab``, 52
    ``balance-general``, 51
    ``self-cyl``, 51
@@ -143,9 +144,9 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``effective-spacing``, 22
    ``pitch-recovery``, 22
    ``ray-circle``, 22
+   ``dd-slab``, 20
    ``en-kernel-derivative``, 20
    ``kin-kernel-derivative``, 20
-   ``dd-slab``, 16
    ``direction-sampling``, 16
    ``fission-weight``, 16
    ``keff-cycle``, 16
@@ -155,20 +156,18 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``second-diff-cyl``, 15
    ``second-diff-general``, 15
    ``second-diff-sph``, 15
-   ``dd-cartesian-1d``, 14
-   ``transport-cartesian``, 13
    ``complementarity``, 12
+   ``dd-cartesian-1d``, 12
    ``kin-bickley-legacy-convention``, 12
    ``kinf-1g``, 12
    ``kinf-mg``, 12
    ``periodic-bc``, 12
    ``reciprocity``, 12
    ``ws-pitch``, 12
-   ``dd-recurrence``, 11
-   ``dd-solve``, 11
    ``fission-matrix``, 11
    ``inf-hom-balance``, 11
    ``removal-matrix``, 11
+   ``transport-cartesian``, 11
    ``two-group-A``, 11
    ``two-group-Ainv``, 11
    ``two-group-F``, 11
@@ -199,6 +198,8 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``kin-kernel-special-values``, 6
    ``moc-keff-update``, 6
    ``moc-wigner-seitz``, 6
+   ``dd-recurrence``, 5
+   ``dd-solve``, 5
    ``en-kernel-special-values``, 5
    ``xs-interp``, 5
    ``absorption-xs``, 4
@@ -207,6 +208,8 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``fixed-source-solve``, 4
    ``keff-update``, 4
    ``macro-sum``, 4
+   ``sn-mms-hetero-psi``, 4
+   ``sn-mms-hetero-qext``, 4
    ``two-group-charpoly``, 4
    ``two-group-roots``, 4
    ``hetero-tolerance``, 3
@@ -278,7 +281,7 @@ Every ``ERR-NNN`` entry in ``tests/l0_error_catalog.md`` and the tests that carr
 
    ``ERR-001``, 1
    ``ERR-002``, 1
-   ``ERR-003``, 6
+   ``ERR-003``, **0 (MISSING)**
    ``ERR-004``, 1
    ``ERR-005``, 1
    ``ERR-006``, 2

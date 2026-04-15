@@ -60,7 +60,30 @@ def _build_registry() -> dict[str, VerificationCase]:
 
 
 def _load_solver_cases() -> None:
-    """Load solver-computed heterogeneous cases (requires solver modules on path)."""
+    """Load solver-computed heterogeneous cases (legacy T3 path).
+
+    .. deprecated:: verification-campaign
+
+        ``solver_cases()`` is the entry point for the Richardson-
+        extrapolated heterogeneous references that the
+        verification campaign is replacing one module at a time:
+
+        - ``sn.py`` — deleted in Phase 2.1a; heterogeneous SN
+          verification is now the MMS continuous reference in
+          :mod:`orpheus.derivations.sn_mms`.
+        - ``moc.py`` — Phase 2.2 target (still T3 at the time of
+          writing).
+        - ``diffusion.py`` — Phase 1.2 replaced the *continuous*
+          registry entry with a transcendental transfer-matrix
+          reference, but the legacy Richardson ``solver_cases``
+          path is kept alive during the migration window so
+          that pre-Phase-1.2 tests (which still read from the
+          legacy :func:`get` registry) keep working.
+
+        The loop below iterates over modules that *still* define
+        ``solver_cases`` at import time, so deletions are a
+        one-line change to the target module.
+    """
     global _SOLVER_CASES_LOADED
     if _SOLVER_CASES_LOADED:
         return
@@ -68,7 +91,7 @@ def _load_solver_cases() -> None:
 
     cases = _ensure_loaded()
     try:
-        from . import sn, moc, diffusion
+        from . import diffusion, moc, sn
         for module in [sn, moc, diffusion]:
             if hasattr(module, 'solver_cases'):
                 for case in module.solver_cases():
@@ -138,8 +161,8 @@ def _build_continuous_registry() -> dict[str, ContinuousReferenceSolution]:
 
     # Populated incrementally through Phases 1–5 of the verification
     # campaign.
-    from . import diffusion, homogeneous
-    _continuous_modules: list = [homogeneous, diffusion]
+    from . import diffusion, homogeneous, sn_mms
+    _continuous_modules: list = [homogeneous, diffusion, sn_mms]
 
     for module in _continuous_modules:
         if hasattr(module, "continuous_cases"):
