@@ -326,6 +326,8 @@ def test_keff_cycle_estimator():
 # =====================================================================
 
 @pytest.mark.l1
+@pytest.mark.verifies("collision-estimator")
+@pytest.mark.catches("ERR-024")
 def test_2g_flux_ratio_homogeneous():
     """L1-MC-005: 2G homogeneous flux ratio checks spectral correctness.
 
@@ -361,10 +363,37 @@ def test_2g_flux_ratio_homogeneous():
     ratio = flux[1] / flux[0]
     assert np.isfinite(ratio), f"Flux ratio is not finite: {ratio}"
 
-    # For material A 2G, thermal flux should dominate (more scattering
-    # events in thermal group due to sig_s = 0.90 vs 0.48)
-    assert ratio > 0.1, (
-        f"Thermal/fast flux ratio={ratio:.4f} seems too low for material A"
+    # Analytical infinite-medium flux spectrum from the same XS.
+    # Loss: diag(SigT) - SigS^T - 2 Sig2^T ; production: chi nu_Sig_f^T
+    import scipy.linalg as la
+    SigT = np.asarray(mix.SigT)
+    SigS_mat = np.array(mix.SigS[0].todense())
+    Sig2_mat = np.array(mix.Sig2.todense())
+    chi = np.asarray(mix.chi)
+    nu_SigF = np.asarray(mix.SigP)
+    M = np.diag(SigT) - SigS_mat.T - 2.0 * Sig2_mat.T
+    F = np.outer(chi, nu_SigF)
+    eigvals, eigvecs = la.eig(F, M)
+    idx = int(np.argmax(eigvals.real))
+    phi_ref = np.abs(eigvecs[:, idx].real)
+
+    # Convert MC flux-per-lethargy back to per-group flux, then normalise.
+    du = np.abs(np.log(mix.eg[1:] / mix.eg[:-1]))
+    phi_mc = flux * du
+    phi_mc /= phi_mc.sum()
+    phi_ref /= phi_ref.sum()
+
+    # Tolerance: flux-shape must match analytical eigenvector to
+    # within 10% relative per group at the modest 100k-collision
+    # statistics of this test. A scattering-only (pre-fix) estimator
+    # or a SigS transpose bug (ERR-002) would shift this ratio by
+    # O(1), well outside the tolerance.
+    np.testing.assert_allclose(
+        phi_mc, phi_ref, rtol=0.10, atol=0.0,
+        err_msg=(
+            f"MC flux shape {phi_mc} does not match analytical "
+            f"eigenvector {phi_ref}"
+        ),
     )
 
 

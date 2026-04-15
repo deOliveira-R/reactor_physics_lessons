@@ -388,9 +388,10 @@ def _random_walk(
             virtual_collision = True
         else:
             virtual_collision = False
+            # Collision estimator: tally every real collision.
+            tally[ig] += w / sig_t
             r = rng.random() * sig_t
             if r < sig_s_sum:
-                tally[ig] += w / sig_s_sum
                 cum_s = np.cumsum(sig_s_row)
                 ig = np.searchsorted(cum_s, rng.random() * sig_s_sum)
                 ig = min(ig, xs.ng - 1)

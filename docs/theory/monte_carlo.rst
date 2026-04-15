@@ -910,43 +910,57 @@ discarded to allow the fission source to converge from the initial
 Verified by ``test_mc_convergence.py::test_inactive_cycles_reduce_bias``.
 
 
-Flux Tally (Known Limitation)
-------------------------------
+Flux Tally (Collision Estimator)
+--------------------------------
 
-The solver accumulates a scattering detector during the random walk::
+The scalar flux in each energy group is accumulated with the standard
+**collision estimator**
 
-    detect_s[ig] += w / sig_s_sum
+.. math::
+   :label: collision-estimator
 
-at each **scattering** event in group :math:`g` (line 307).
+   \phi_g \;\approx\; \frac{1}{N_{\text{act}} V}
+       \sum_{\text{real coll.\ in } g} \frac{w}{\Sigma_{t,g}}
 
-.. warning::
+applied at **every** real collision site (scatter, (n,2n), or
+absorption), inside the random walk and **before** the three-way
+branching decision of :eq:`branching`.  In the code::
 
-   **This is not a proper flux estimator** (MT-20260406-007 / issue #25).
-   A correct collision estimator would accumulate :math:`w / \Sigma_{t,g}`
-   at every **real** collision (both scattering and absorption). The
-   current tally:
+    if not virtual_collision:
+        tally[ig] += w / sig_t   # <-- collision estimator, ERR-024 fix
+        r = rng.random() * sig_t
+        ...
 
-   - Misses absorption events entirely
-   - Weights by :math:`1/\Sigma_s` instead of :math:`1/\Sigma_t`
+The collision estimator is unbiased for any combination of reactions
+sampled at the collision site, which is why moving the accumulation
+*before* the branching (rather than counting only scatters) is both
+necessary and sufficient.  The eigenvalue :math:`k_{\text{eff}}` is
+still computed from the weight ratio :eq:`keff-cycle` and does **not**
+depend on this tally — the fix therefore affects only the flux
+spectrum output, not keff.
 
-   The eigenvalue :math:`k_{\text{eff}}` is computed from the weight
-   ratio :eq:`keff-cycle` and is **not affected** by this tally.
+.. note::
+
+   The code previously used a *scattering* estimator
+   ``tally[ig] += w / sig_s_sum`` on scatters only.  It is unbiased
+   for a Σ\\ :sub:`s`\\ -weighted response but **not** for the scalar
+   flux, and the resulting shape distortion is visible at the ~10 %
+   level for Region A (2 G).  The design bug is documented as
+   **ERR-024** in ``tests/l0_error_catalog.md`` and closed by issue
+   #25 together with this change.
 
 .. note::
 
    A separate sign-of-:math:`\Delta u` bug used to flip every
-   ``flux_per_lethargy`` entry through :math:`y = 0` (because nuclear-
-   data group grids are descending, so
-   :math:`\Delta u_g = \ln(E_{g+1}/E_g) < 0` and dividing a non-negative
-   tally by a signed :math:`\Delta u` produced uniformly negative
-   spectra). That bug is documented as **ERR-022** in
-   ``tests/l0_error_catalog.md`` and was fixed by taking
-   :math:`|\Delta u|` at the definition site in ``orpheus.mc.solver``,
-   ``orpheus.homogeneous.solver``, and ``orpheus.plotting``. The
-   regression test
-   ``tests/mc/test_gaps.py::test_flux_per_lethargy_nonnegative``
-   pins the invariant. The collision-estimator design question above
-   is the *separate* and still-open part of issue #25.
+   ``flux_per_lethargy`` entry through :math:`y = 0` (because
+   nuclear-data group grids are descending, so
+   :math:`\Delta u_g = \ln(E_{g+1}/E_g) < 0`).  That bug is documented
+   as **ERR-022** and was fixed by taking :math:`|\Delta u|` at the
+   definition site.  The regression test
+   ``tests/mc/test_gaps.py::test_flux_per_lethargy_nonnegative`` pins
+   the invariant.  The spectral shape is now additionally pinned by
+   ``test_2g_flux_ratio_homogeneous`` which compares the MC spectrum
+   against the analytical 2 G eigenvector at 10 % rtol.
 
 
 Solver Parameters and Results

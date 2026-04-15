@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **530**
+Total tests collected: **531**
 
 V&V level distribution
 ----------------------
@@ -16,8 +16,8 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 278, 52.5%
-   L1, 146, 27.5%
+   L0, 278, 52.4%
+   L1, 147, 27.7%
    L2, 45, 8.5%
    L3, 0, 0.0%
    foundation, 61, 11.5%
@@ -32,7 +32,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 442
+   explicit, 443
    verify, 0
    class-name, 46
    func-name, 0
@@ -60,7 +60,7 @@ Module × level grid
    homogeneous/test_homogeneous, 0, 4, 0, 0, 0, 0
    mc/test_convergence, 0, 0, 3, 0, 0, 0
    mc/test_cross_verification, 0, 0, 2, 0, 0, 0
-   mc/test_gaps, 7, 8, 0, 0, 0, 0
+   mc/test_gaps, 7, 9, 0, 0, 0, 0
    mc/test_monte_carlo, 0, 12, 0, 0, 0, 0
    mc/test_properties, 24, 0, 0, 0, 0, 0
    moc/test_moc, 0, 3, 3, 0, 0, 0
@@ -113,11 +113,12 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``scalar-flux-integral``, 48
    ``wigner-seitz``, 46
    ``chord-length``, 36
-   ``keff-mean``, 32
-   ``sigma-keff``, 32
+   ``keff-mean``, 33
+   ``sigma-keff``, 33
    ``cp-keff-update``, 31
    ``first-flight-kernel``, 31
    ``flat-source``, 31
+   ``free-flight``, 31
    ``matrix-A-def``, 31
    ``matrix-B-def``, 31
    ``neutron-balance``, 31
@@ -129,23 +130,22 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``self-double-integral``, 31
    ``surface-to-region``, 31
    ``surface-to-surface``, 31
-   ``free-flight``, 30
-   ``chi-sampling``, 27
-   ``decompose``, 27
-   ``scattering-cdf``, 27
+   ``chi-sampling``, 28
+   ``decompose``, 28
+   ``scattering-cdf``, 28
    ``transport-spherical``, 26
    ``transport-cylindrical``, 25
    ``azimuthal-angles``, 24
    ``effective-spacing``, 22
    ``pitch-recovery``, 22
    ``ray-circle``, 22
+   ``direction-sampling``, 16
+   ``fission-weight``, 16
+   ``keff-cycle``, 16
+   ``roulette-conservation``, 16
+   ``roulette-prob``, 16
    ``dc-slab``, 15
    ``dd-slab``, 15
-   ``direction-sampling``, 15
-   ``fission-weight``, 15
-   ``keff-cycle``, 15
-   ``roulette-conservation``, 15
-   ``roulette-prob``, 15
    ``second-diff-cyl``, 15
    ``second-diff-general``, 15
    ``second-diff-sph``, 15
@@ -192,6 +192,7 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``roulette-restore``, 2
    ``transport-cartesian-2d``, 2
    ``branching``, 1
+   ``collision-estimator``, 1
    ``majorant``, 1
    ``normalisation``, 1
    ``sigT-computed``, 1
@@ -270,6 +271,8 @@ Every ``ERR-NNN`` entry in ``tests/l0_error_catalog.md`` and the tests that carr
    ``ERR-020``, 6
    ``ERR-021``, 2
    ``ERR-022``, 1
+   ``ERR-023``, 1
+   ``ERR-024``, 1
 
 Unmarked tests
 --------------

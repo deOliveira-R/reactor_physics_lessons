@@ -941,6 +941,57 @@ for it gives false confidence.
 
 ---
 
+## ERR-024 — MC flux tally: scattering estimator instead of collision estimator
+
+**Failure mode:** #3 Design error rather than term error — the tally
+was a well-defined *scattering* estimator but the output field
+`flux_per_lethargy` claimed to represent the scalar flux.
+**Date:** 2026-04-15
+**Solver:** MC (`orpheus.mc.solver._random_walk` tally accumulation).
+
+**Bug:** On each real scattering event the solver accumulated
+`tally[ig] += w / sig_s_sum`. This is the textbook *scattering*
+estimator for a response-like integral weighted by Σ_s, but the
+`MCResult.flux_per_lethargy` field was divided only by `|du|` and
+treated as a scalar flux by plotting and by
+`tests/mc/test_gaps.py::test_2g_flux_ratio_homogeneous`. Absorption
+events contributed nothing, and the per-event weighting was
+`1/Σ_s` instead of the `1/Σ_t` required by a collision estimator.
+The existing spectral test had to be loosened to `ratio > 0.1` to
+accommodate the bias (issue #25).
+
+**Impact:** None on keff (the eigenvalue is computed from the
+weight ratio in :eq:`keff-cycle` and never touches the tally). Bias
+on every flux-spectrum plot, proportional to the relative shape
+difference between Σ_s and Σ_t across groups. For Region A the
+shape distortion is visible at the ~10 % level.
+
+**Fix:** Move the tally inside the "real collision" branch
+*before* the scatter-vs-(n,2n)-vs-absorb decision and use
+
+    tally[ig] += w / sig_t
+
+where `sig_t` is the real total (not the majorant). This is the
+standard collision estimator and is unbiased for any combination of
+reactions being sampled.
+
+**L1 test that catches it:**
+`tests/mc/test_gaps.py::test_2g_flux_ratio_homogeneous` — now
+compares the MC flux shape (per-group, normalised) against the
+analytical eigenvector from
+`scipy.linalg.eig(F, diag(SigT) - Σ_s^T - 2·Σ_2n^T)` with
+`rtol = 10 %`. The previous scattering-estimator bias cannot satisfy
+this tolerance because the `Σ_s / Σ_t` ratio differs across groups.
+
+**Lesson:** Unbiasedness alone is not a specification. A scattering
+estimator and a collision estimator are *both* unbiased for their
+respective integrals, but only one of them estimates the *flux*. If
+a result field is labelled `flux_*`, the code that produces it must
+be a flux estimator — and that contract should be enforced by a
+spectral test, not a marginal `> 0.1` placeholder.
+
+---
+
 ## Meta-Lessons
 
 1. **1-group is degenerate.** k = νΣ_f/Σ_a regardless of flux shape.
