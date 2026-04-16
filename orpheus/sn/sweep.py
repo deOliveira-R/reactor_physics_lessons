@@ -116,16 +116,28 @@ def _sweep_1d_cumprod(
     Q_1d = Q[:, 0, :]        # (nx, ng)
     sig_t_1d = sig_t[:, 0, :]  # (nx, ng)
 
-    # Precompute DD coefficients for positive directions
+    # Precompute DD face-flux recurrence coefficients for positive directions.
+    # The diamond-difference face-flux recurrence is
+    #     ψ_out = a·ψ_in + b·(Q/W)
+    # where (see ``orpheus.derivations.sn_balance.derive_cumprod_recurrence``
+    # for the symbolic derivation of Eq. dd-recurrence)
+    #     a = (2μ − Δx·Σ_t) / (2μ + Δx·Σ_t)
+    #     b = 2·Δx / (2μ + Δx·Σ_t)
+    # and W = Σ w_n is the quadrature weight sum, needed because the
+    # isotropic scalar source Q produced by :meth:`SNSolver._add_scattering_source`
+    # is in scalar-flux units — the per-ordinate transport equation sees
+    # Q/W as its right-hand side. (See ``_sweep_2d_wavefront``, which
+    # applies the same ``weight_norm = 1/W`` factor via ``Q_scaled``.)
     n_half = N // 2
     mu_pos = np.abs(quad.mu_x[N // 2:])  # positive half
     w_pos = weights[N // 2:]
+    weight_norm = 1.0 / weights.sum()
 
-    # stream_coeff[n,i,g] = 2μ / (2μ + dx[i]·Σ_t[i,g])
-    # source_coeff[n,i,g] = 0.5·dx[i] / (2μ + dx[i]·Σ_t[i,g])
     denom = 2.0 * mu_pos[:, None, None] + dx[None, :, None] * sig_t_1d[None, :, :]
-    stream_coeff = 2.0 * mu_pos[:, None, None] / denom
-    source_coeff = 0.5 * dx[None, :, None] / denom
+    stream_coeff = (
+        2.0 * mu_pos[:, None, None] - dx[None, :, None] * sig_t_1d[None, :, :]
+    ) / denom
+    source_coeff = (2.0 * weight_norm) * dx[None, :, None] / denom
 
     # Initialize boundary fluxes
     if "bc_1d" not in psi_bc:

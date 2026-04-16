@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **613**
+Total tests collected: **615**
 
 V&V level distribution
 ----------------------
@@ -16,11 +16,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 345, 56.3%
-   L1, 168, 27.4%
-   L2, 39, 6.4%
+   L0, 346, 56.3%
+   L1, 169, 27.5%
+   L2, 39, 6.3%
    L3, 0, 0.0%
-   foundation, 61, 10.0%
+   foundation, 61, 9.9%
    unmarked, 0, 0.0%
 
 Tagging source
@@ -32,7 +32,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 531
+   explicit, 533
    verify, 0
    class-name, 46
    func-name, 0
@@ -71,7 +71,7 @@ Module × level grid
    moc/test_quadrature, 24, 0, 0, 0, 0, 0
    moc/test_ray_tracing, 22, 0, 0, 0, 0, 0
    moc/test_verification, 27, 15, 6, 0, 0, 0
-   sn/test_cartesian, 0, 5, 0, 0, 0, 0
+   sn/test_cartesian, 1, 6, 0, 0, 0, 0
    sn/test_cylindrical, 4, 10, 11, 0, 0, 0
    sn/test_discrete_ordinates_2d, 0, 0, 2, 0, 0, 0
    sn/test_mms, 0, 2, 0, 0, 0, 0
@@ -94,17 +94,17 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    :header: Equation label, Tests
    :widths: 50, 10
 
-   ``mg-balance``, 165
-   ``matrix-eigenvalue``, 161
-   ``one-group-kinf``, 115
-   ``reflective-bc``, 106
+   ``mg-balance``, 167
+   ``matrix-eigenvalue``, 163
+   ``one-group-kinf``, 117
+   ``reflective-bc``, 108
    ``alpha-recursion``, 100
    ``wdd-closure``, 100
    ``wdd-face``, 100
    ``collision-rate``, 88
    ``alpha-cylindrical``, 74
    ``mm-weights``, 74
-   ``multigroup``, 62
+   ``multigroup``, 64
    ``self-slab``, 52
    ``balance-general``, 51
    ``self-cyl``, 51
@@ -156,8 +156,9 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``second-diff-cyl``, 15
    ``second-diff-general``, 15
    ``second-diff-sph``, 15
+   ``dd-cartesian-1d``, 14
+   ``transport-cartesian``, 13
    ``complementarity``, 12
-   ``dd-cartesian-1d``, 12
    ``kin-bickley-legacy-convention``, 12
    ``kinf-1g``, 12
    ``kinf-mg``, 12
@@ -167,7 +168,6 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``fission-matrix``, 11
    ``inf-hom-balance``, 11
    ``removal-matrix``, 11
-   ``transport-cartesian``, 11
    ``two-group-A``, 11
    ``two-group-Ainv``, 11
    ``two-group-F``, 11
@@ -190,6 +190,8 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``diffusion-spurious-root-validation``, 8
    ``diffusion-transcendental``, 8
    ``diffusion-trigonometric-branch``, 8
+   ``dd-recurrence``, 7
+   ``dd-solve``, 7
    ``bar-psi``, 6
    ``boyd-eq-45``, 6
    ``characteristic-ode``, 6
@@ -198,8 +200,6 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``kin-kernel-special-values``, 6
    ``moc-keff-update``, 6
    ``moc-wigner-seitz``, 6
-   ``dd-recurrence``, 5
-   ``dd-solve``, 5
    ``en-kernel-special-values``, 5
    ``xs-interp``, 5
    ``absorption-xs``, 4
@@ -281,7 +281,7 @@ Every ``ERR-NNN`` entry in ``tests/l0_error_catalog.md`` and the tests that carr
 
    ``ERR-001``, 1
    ``ERR-002``, 1
-   ``ERR-003``, **0 (MISSING)**
+   ``ERR-003``, 2
    ``ERR-004``, 1
    ``ERR-005``, 1
    ``ERR-006``, 2
@@ -303,6 +303,7 @@ Every ``ERR-NNN`` entry in ``tests/l0_error_catalog.md`` and the tests that carr
    ``ERR-022``, 1
    ``ERR-023``, 1
    ``ERR-024``, 1
+   ``ERR-025``, 2
 
 Unmarked tests
 --------------

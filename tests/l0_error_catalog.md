@@ -992,6 +992,114 @@ spectral test, not a marginal `> 0.1` placeholder.
 
 ---
 
+## ERR-025 — Diamond-difference cumprod recurrence: missing −Σ_t in numerator and missing 1/W source normalization
+
+**Failure mode:** #3 Missing factor + #4 Factor error (two
+compensating factor-of-two errors that cancel for homogeneous
+problems)
+**Date:** 2026-04-16
+**Solver:** SN (`orpheus.sn.sweep._sweep_1d_cumprod`, 1D Cartesian
+Gauss-Legendre fast path).
+
+**Bug:** The precomputed face-flux recurrence coefficients were
+
+    a = 2μ / (2μ + Δx·Σ_t)           # WRONG — missing −Σ_t in numerator
+    b = 0.5·Δx·Q / (2μ + Δx·Σ_t)     # WRONG — missing 1/W, extra factor 0.5
+
+instead of the canonical diamond-difference (DD) recurrence derived
+symbolically in `orpheus.derivations.sn_balance.derive_cumprod_recurrence`:
+
+    a = (2μ − Δx·Σ_t) / (2μ + Δx·Σ_t)
+    b = 2·Δx·(Q/W) / (2μ + Δx·Σ_t)
+
+where `W = Σ w_n` is the quadrature weight sum. The `1/W` factor is
+needed because `SNSolver._add_scattering_source` produces `Q` in
+scalar-flux units while the per-ordinate transport equation sees
+`Q/W` on the right-hand side — the same normalization
+`_sweep_2d_wavefront` already applied via its `weight_norm = 1/W`
+factor (`Q_scaled = Q * weight_norm`). The 1D fast path had been
+independently derived without that normalization, and its `a`
+formula had an additional sign error in the numerator.
+
+**Why the two errors cancel for homogeneous problems:** the fixed
+point of the buggy recurrence is `ψ = Q/(2Σ_t)`, half the correct
+`ψ = Q/Σ_t`. The missing `1/W = 1/2` for Gauss-Legendre on `[−1, 1]`
+rescales by exactly 2, turning `Q/(2Σ_t)` back into `Q/Σ_t` per
+ordinate. The resulting scalar flux is correct up to a uniform
+rescaling by `Σ_t(x)`. For eigenvalue problems with a single
+material this is invisible, because the Rayleigh quotient
+`k = νΣ_f·φ / Σ_a·φ` is invariant under a uniform rescaling of φ.
+At a material interface the rescale factor depends on which side
+of the interface you are on, so the cancellation breaks and k_eff
+shifts.
+
+**Impact:** ~1.48 × 10⁻² error in k_eff on the ORPHEUS Phase 2.1b
+2-region A+B reflective slab (fuel Σ_t=1, Σ_s=0.5, νΣ_f=0.75; mod
+Σ_t=2, Σ_s=1.9, νΣ_f=0; reflective BCs). Case
+singular-eigenfunction reference and CP slab E₃ kernel both give
+k ≈ 1.27461, while the buggy solver converged to ≈ 1.25988.
+
+**How it hid from higher-level tests:**
+- Homogeneous single-region k_inf tests: exact to machine precision
+  (uniform rescaling of φ is eigenvalue-invariant).
+- Same-material two-region tests: exact for the same reason.
+- Smooth-Σ MMS verification (Phase 2.1a): passed cleanly because
+  the MMS consumer test uses `solve_sn_fixed_source`, which goes
+  through the `_sweep_2d_wavefront` path with the correct
+  `weight_norm = 1/W`.
+- Self-referencing Richardson convergence tests on heterogeneous
+  problems: saw clean O(h) convergence **to the wrong asymptote**,
+  because the Richardson reference was built from the same buggy
+  solver. This is exactly the T3 dead-end pattern documented in
+  `docs/theory/diffusion_1d.rst` "Investigation history".
+
+**Fix:** `orpheus/sn/sweep.py:119-140` — replaced the wrong
+coefficients with the canonical DD recurrence, added a
+source-of-truth comment pointing at `derive_cumprod_recurrence`.
+One-formula correction; nothing downstream of the coefficients
+needed changes.
+
+**Evidence after fix:**
+
+| Method                           | k_eff       |
+|----------------------------------|-------------|
+| Case singular-eigenfunction (S8) | 1.27461604  |
+| CP slab E₃ kernel (converged)    | 1.27442847  |
+| solve_sn S8 @ n_per=320 post-fix | 1.27461601  |
+
+Case ↔ solve_sn agreement at matching quadrature order improved
+from 1.48 × 10⁻² to 3.4 × 10⁻⁸.
+
+**L1 test that catches it:**
+`tests/sn/test_cartesian.py::test_heterogeneous_absolute_keff` — pins
+the 2-region A+B reflective slab against the Case singular-eigenfunction
+reference to 5 × 10⁻⁴. Without a material interface the bug is
+invisible (the Rayleigh quotient's rescale invariance hides it), so
+this test is the minimal configuration that exposes it.
+
+A cheaper L0 alternative — a direct unit test of the fixed-point
+of the 1D cumprod recurrence on a 1-cell uniform-material slab
+that would catch the factor-of-2 in milliseconds without needing
+any reference solver — is tracked for a future commit as part of
+the broader derivation-implementation audit (issue #95).
+
+**Lesson:** When a symbolic derivation module exists
+(`orpheus.derivations.sn_balance.derive_cumprod_recurrence`), its
+output is the source of truth and the implementation must visibly
+match. A comment in the implementation pointing back at the
+derivation function would have caught this at review time. Two
+opposite-sign factor-of-two errors cancelled exactly for eigenvalue
+problems because the only thing that matters to
+`k = νΣ_f·φ / Σ_a·φ` is the *shape* of φ, not its scale — and
+factor-of-Σ_t(x) cancellations hide everywhere except at material
+interfaces. Phase 1.2 learned the same lesson for diffusion
+(hardcoded tolerances masking quadratic convergence); Phase 2.1b
+is the same pattern repeated for SN. See GitHub issue #95 for the
+follow-up audit work checking every solver implementation against
+its derivation.
+
+---
+
 ## Meta-Lessons
 
 1. **1-group is degenerate.** k = νΣ_f/Σ_a regardless of flux shape.
