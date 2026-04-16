@@ -1284,6 +1284,135 @@ thinner annuli (more cells in the ``Mesh1D``).  The CP solver's
 + 3 clad + 7 coolant sub-cells is adequate for most applications.
 
 
+MMS Verification (Phase 2.2a)
+=============================
+
+.. _moc-mms-verification:
+
+The Method of Manufactured Solutions (MMS) provides an L1-level
+verification of the flat-source MOC spatial operator.  Unlike the
+SN MMS (which injects a per-ordinate source into
+:func:`~sn.solver.solve_sn_fixed_source`), the MOC MMS requires
+**per-segment, per-angle manufactured sources** along each
+characteristic because the streaming residual is angle-dependent.
+
+Ansatz
+------
+
+A smooth radial scalar flux centred at :math:`(P/2, P/2)`:
+
+.. math::
+   :label: moc-mms-psi-ref
+
+   \phi_{\text{ref}}(r)
+   = 1 + A\,\cos\!\bigl(\pi\,r^{2}/R^{2}\bigr),
+   \qquad r = \sqrt{(x - P/2)^{2} + (y - P/2)^{2}},
+   \quad R = P/2
+
+The :math:`r^{2}` argument ensures :math:`C^{\infty}` smoothness at
+:math:`r = 0`.  With :math:`A = 0.3` the ansatz is positive
+everywhere (minimum :math:`1 - A = 0.7`).  The radial form is
+deliberate: any product-of-cosines Cartesian ansatz centred at the
+cell centre integrates to **exactly zero** over any concentric
+annulus, making the FSR averages degenerate.
+
+Manufactured source along each characteristic
+----------------------------------------------
+
+With isotropic angular flux
+:math:`\psi_{\text{ref}} = \phi_{\text{ref}}/(4\pi)`, substituting
+into the characteristic ODE
+:math:`\mathrm{d}\psi/\mathrm{d}s + \Sigma_t\psi = Q` gives:
+
+.. math::
+   :label: moc-mms-qext
+
+   Q_{\text{mms}}(x,y,\varphi_a,\theta_p) =
+     \frac{1}{4\pi}\bigl[
+       \sin\theta_p\,(\cos\varphi_a\,\partial_x\phi_{\text{ref}}
+                     + \sin\varphi_a\,\partial_y\phi_{\text{ref}})
+       + \Sigma_t\,\phi_{\text{ref}}
+     \bigr]
+
+The streaming term depends on track direction :math:`(\varphi_a, \theta_p)`.
+When averaged over :math:`4\pi` it vanishes (both
+:math:`\sum\omega_a\cos\varphi_a = 0` by quadrature symmetry, and
+forward + backward sweeps cancel), so **an isotropic per-FSR source
+cannot carry this information**.  The MMS sweep injects the source
+per segment at the segment midpoint.
+
+Why isotropic source fails
+--------------------------
+
+The isotropic average of :math:`Q_{\text{mms}}` over all angles is
+:math:`\Sigma_t\,\phi_{\text{ref}}/(4\pi)`.  If fed as a per-FSR
+source into a standard MOC fixed-source solve, the resulting scalar
+flux differs from :math:`\phi_{\text{ref}}` by a transport correction
+:math:`\nabla\cdot\mathbf{J} / \Sigma_t` that does not converge to
+zero with FSR refinement.
+
+Scalar flux reconstruction
+--------------------------
+
+Each segment has its own :math:`\tilde q_{\text{seg}}`, so the
+standard Boyd Eq. 45 equilibrium term
+:math:`4\pi Q_i / \Sigma_t` cannot be used directly (it assumes
+:math:`Q` is constant per FSR).  The equilibrium value is instead
+computed analytically:
+
+.. math::
+
+   \langle\phi_{\text{ref}}\rangle_i
+   = 1 + \frac{A\,R^{2}}{\pi\,(r_2^{2} - r_1^{2})}
+     \bigl[\sin(\pi\,r_2^{2}/R^{2}) - \sin(\pi\,r_1^{2}/R^{2})\bigr]
+
+and the transport correction :math:`\delta\phi_i` from the sweep
+is added:
+
+.. math::
+
+   \phi_i = \langle\phi_{\text{ref}}\rangle_i
+          + \frac{\delta\phi_i}{A_i\,\Sigma_t}
+
+The :math:`\delta\phi` is the only term carrying flat-source spatial
+discretisation error; it converges at :math:`\mathcal{O}(h^{2})` or
+better as the FSR mesh is refined with fixed track spacing and angular
+quadrature.
+
+Convergence evidence
+--------------------
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`N_{\text{ann}}`
+     - :math:`\|e\|_{L^{2}}` (inner FSRs)
+     - Measured order
+   * - 4
+     - :math:`5.8 \times 10^{-2}`
+     - —
+   * - 16
+     - :math:`7.4 \times 10^{-3}`
+     - 3.0
+   * - 64
+     - :math:`1.1 \times 10^{-3}`
+     - 2.7
+
+The measured order exceeds :math:`\mathcal{O}(h^{2})` because the
+midpoint-rule source integral benefits from the symmetry of the
+exponential attenuation kernel (even-order error terms cancel).
+
+Implementation
+--------------
+
+- :mod:`orpheus.derivations.moc_mms` — MMS case, standalone sweep,
+  continuous-reference registration
+- ``tests/moc/test_mms.py`` — L1 convergence consumer test
+- The outermost FSR (square-border region) is excluded from the
+  convergence measurement because its complex geometry has a fixed
+  track-sampling error that does not converge with FSR refinement.
+
+
 Open Improvements
 =================
 

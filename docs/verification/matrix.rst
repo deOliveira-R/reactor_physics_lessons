@@ -17,8 +17,8 @@ V&V level distribution
    :widths: 15, 10, 10
 
    L0, 346, 56.1%
-   L1, 171, 27.7%
-   L2, 39, 6.3%
+   L1, 174, 28.2%
+   L2, 36, 5.8%
    L3, 0, 0.0%
    foundation, 61, 9.9%
    unmarked, 0, 0.0%
@@ -32,11 +32,11 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 535
+   explicit, 538
    verify, 0
    class-name, 46
    func-name, 0
-   case, 36
+   case, 33
    unmarked, 0
 
 Module × level grid
@@ -66,7 +66,8 @@ Module × level grid
    mc/test_gaps, 7, 9, 0, 0, 0, 0
    mc/test_monte_carlo, 0, 12, 0, 0, 0, 0
    mc/test_properties, 24, 0, 0, 0, 0, 0
-   moc/test_moc, 0, 3, 3, 0, 0, 0
+   moc/test_mms, 0, 3, 0, 0, 0, 0
+   moc/test_moc, 0, 3, 0, 0, 0, 0
    moc/test_properties, 4, 0, 0, 0, 0, 0
    moc/test_quadrature, 24, 0, 0, 0, 0, 0
    moc/test_ray_tracing, 22, 0, 0, 0, 0, 0
@@ -95,9 +96,9 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    :header: Equation label, Tests
    :widths: 50, 10
 
-   ``mg-balance``, 167
-   ``matrix-eigenvalue``, 163
-   ``one-group-kinf``, 119
+   ``mg-balance``, 164
+   ``matrix-eigenvalue``, 160
+   ``one-group-kinf``, 116
    ``reflective-bc``, 110
    ``alpha-recursion``, 100
    ``wdd-closure``, 100
@@ -196,11 +197,7 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``bar-psi``, 6
    ``boyd-eq-45``, 6
    ``characteristic-ode``, 6
-   ``delta-psi``, 6
-   ``isotropic-source``, 6
    ``kin-kernel-special-values``, 6
-   ``moc-keff-update``, 6
-   ``moc-wigner-seitz``, 6
    ``en-kernel-special-values``, 5
    ``xs-interp``, 5
    ``absorption-xs``, 4
@@ -213,7 +210,13 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``sn-mms-hetero-qext``, 4
    ``two-group-charpoly``, 4
    ``two-group-roots``, 4
+   ``delta-psi``, 3
    ``hetero-tolerance``, 3
+   ``isotropic-source``, 3
+   ``moc-keff-update``, 3
+   ``moc-mms-psi-ref``, 3
+   ``moc-mms-qext``, 3
+   ``moc-wigner-seitz``, 3
    ``number-density``, 3
    ``sigma-zero``, 3
    ``dd-cartesian-2d``, 2
@@ -221,6 +224,7 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``roulette-restore``, 2
    ``sn-case-back-substitution``, 2
    ``sn-case-matching-matrix``, 2
+   ``sn-case-per-ordinate``, 2
    ``sn-case-physical-validation``, 2
    ``sn-case-real-basis``, 2
    ``sn-case-slope-matrix``, 2
@@ -238,9 +242,9 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
 Orphan equations
 ----------------
 
-Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **1** of the testable equations found on theory pages are orphan.
+Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **0** of the testable equations found on theory pages are orphan.
 
-- ``sn-case-per-ordinate``
+*(none — every testable theory equation has at least one verifying test)*
 
 Documented-only equations
 -------------------------

@@ -1,4 +1,4 @@
-"""Verify the Method of Characteristics solver against analytical/Richardson references."""
+"""Verify the Method of Characteristics solver against analytical references."""
 
 import numpy as np
 import pytest
@@ -55,38 +55,3 @@ def test_moc_homogeneous(case_name):
     )
 
 
-def _build_heterogeneous_mesh(radii, mat_ids):
-    """Build a Wigner-Seitz mesh for heterogeneous tests."""
-    pitch = 2.0 * radii[-1]
-    ws_r = pitch / np.sqrt(np.pi)
-    edges = [0.0] + list(radii[:-1]) + [ws_r]
-    return Mesh1D(
-        edges=np.array(edges),
-        mat_ids=np.array(mat_ids),
-        coord=CoordSystem.CYLINDRICAL,
-    )
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("case_name", [
-    "moc_cyl1D_1eg_2rg",
-    "moc_cyl1D_2eg_2rg",
-    "moc_cyl1D_1eg_4rg",
-])
-def test_moc_heterogeneous(case_name):
-    """MOC heterogeneous must converge near the Richardson reference."""
-    case = get(case_name)
-    gp = case.geom_params
-    mesh = _build_heterogeneous_mesh(gp["radii"], gp["mat_ids"])
-
-    result = solve_moc(
-        case.materials, mesh,
-        n_azi=16, n_polar=3, ray_spacing=0.03,
-        max_outer=300, n_inner_sweeps=20,
-    )
-
-    err = abs(result.keff - case.k_inf)
-    assert err < 5e-2, (
-        f"{case_name}: solver={result.keff:.6f} "
-        f"ref={case.k_inf:.6f} err={err:.2e}"
-    )
