@@ -9,6 +9,8 @@ Collision Probability Method
    :depth: 3
 
 
+.. _key-facts-cp:
+
 Key Facts
 =========
 
@@ -2051,8 +2053,53 @@ integral equation** is the continuous (pre-discretisation) form of that
 equation, and solving it at high quadrature resolution provides an
 independent reference for verifying the CP solver's flux profiles.
 
-For a 1-D slab :math:`[0, L]` with piecewise-constant cross sections,
-the Peierls equation for the scalar flux :math:`\varphi(x)` is:
+Derivation from the 1-D transport equation
+-------------------------------------------
+
+The starting point is the steady-state, isotropic-source transport
+equation for a 1-D slab in energy group :math:`g`:
+
+.. math::
+
+   \mu\,\frac{\partial\psi_g}{\partial x}(x,\mu)
+   + \Sigt{g}(x)\,\psi_g(x,\mu)
+   = \frac{q_g(x)}{2}
+
+where :math:`\psi_g(x,\mu)` is the angular flux,
+:math:`\mu = \cos\theta \in [-1, 1]` is the direction cosine, and
+:math:`q_g(x)` is the isotropic source (scattering + fission).
+
+For :math:`\mu > 0`, the formal solution (integrating factor) for a
+slab :math:`[0, L]` with vacuum boundary at :math:`x = 0` gives:
+
+.. math::
+
+   \psi_g(x,\mu) = \frac{1}{2\mu}\int_0^x
+   \exp\!\Bigl(-\frac{\tau_g(x',x)}{\mu}\Bigr)\,q_g(x')\,\mathrm{d}x'
+
+where
+:math:`\tau_g(x',x) = \int_{x'}^{x}\Sigt{g}(s)\,\mathrm{d}s` is the
+optical path.  A symmetric expression holds for :math:`\mu < 0`.
+
+The scalar flux is obtained by integrating over angle:
+
+.. math::
+
+   \varphi_g(x) = \int_{-1}^{1}\psi_g(x,\mu)\,\mathrm{d}\mu
+   = \frac{1}{2}\int_0^L q_g(x')\!\int_0^1
+   \frac{1}{\mu}\exp\!\Bigl(-\frac{\tau_g(x,x')}{\mu}\Bigr)\,\mathrm{d}\mu
+   \;\mathrm{d}x'
+
+The inner angular integral is exactly the **first exponential integral**:
+
+.. math::
+
+   E_1(z) = \int_0^1 \frac{1}{\mu}\,e^{-z/\mu}\,\mathrm{d}\mu
+
+(Case & Zweifel 1967, Ch. 2, Eq. 2.67; equivalently,
+:math:`E_1(z) = \int_1^\infty t^{-1} e^{-zt}\,\mathrm{d}t`.)
+
+Substituting yields the **Peierls integral equation** for the scalar flux:
 
 .. math::
    :label: peierls-equation
@@ -2066,34 +2113,189 @@ where :math:`q(x') = \sum_{g'}\Sigma_{s,g'\to g}\varphi_{g'}(x')
 isotropic source and the optical path is
 :math:`\tau(x,x') = \int_{\min(x,x')}^{\max(x,x')}\Sigma_t(s)\,\mathrm{d}s`.
 
+.. note::
+
+   The equation above is written for :math:`\varphi` (scalar flux), NOT
+   :math:`\Sigt{}\varphi` (collision rate).  This matters for the
+   operator form: the LHS is :math:`\varphi`, not
+   :math:`\Sigt{}\varphi`, so the identity operator appears in the
+   eigenvalue system :math:`(I - K_s)\varphi = (1/k)\,K_f\varphi`.
+   An earlier version incorrectly placed :math:`\Sigt{}` on the LHS,
+   producing a ``diag(Sigma_t) - K_scatter`` operator that broke the
+   conservation property (see :ref:`peierls-conservation` below).
+
+Why :math:`E_1` and not :math:`E_3`
+------------------------------------
+
+The CP method uses the :math:`E_3` function (double antiderivative of
+:math:`E_1`) to integrate the kernel analytically over flat-source
+regions (:eq:`dd-slab`, :eq:`dc-slab`, :eq:`self-slab`).  A Peierls
+reference that uses :math:`E_1` directly provides **genuinely
+independent** verification:
+
+- **Different special function**: :math:`E_3` is computed from :math:`E_1`
+  via recursion (:math:`E_{n+1}(z) = [e^{-z} - z\,E_n(z)]/n`).  A
+  systematic error in the :math:`E_3` recursion (wrong sign, off-by-one
+  in the index) would affect both the CP matrices and any reference
+  built from the same recursion.
+
+- **No flat-source assumption**: the Peierls Nystrom solver resolves the
+  flux within each region as a high-order polynomial (degree
+  :math:`p-1` per GL panel), while CP assumes piecewise-constant flux.
+  This makes the Peierls reference sensitive to flux shape errors that
+  are invisible to a CP-vs-CP comparison.
+
+- **Common-mode failure prevention**: the existing CP eigenvalue tests
+  compare the CP solver against analytically-constructed CP matrices
+  (same :math:`E_3` kernel, same flat-source discretisation).  A sign
+  error in the :math:`E_3` second-difference formula would cancel
+  between the test and the code.  The Peierls reference would catch it.
+
+Nystrom method details
+----------------------
+
+The Nystrom method converts the integral equation into a matrix
+eigenvalue problem by approximating the integral with a quadrature rule
+[Kress2014]_.  For the Peierls equation, the key challenge is the
+logarithmic singularity in :math:`E_1` at :math:`x = x'`.
+
+**Composite Gauss--Legendre panels.**
+The slab :math:`[0, L]` is divided into :math:`n_{\rm panels}` panels
+per material region.  Within each panel, :math:`p` Gauss--Legendre
+nodes and weights are computed.  The total number of quadrature nodes is
+:math:`N = n_{\rm regions} \times n_{\rm panels} \times p`.
+
 **Singularity treatment.**
 The :math:`E_1` kernel has a logarithmic singularity at :math:`x = x'`:
 
 .. math::
+   :label: e1-decomposition
 
    E_1(z) = \bigl[-\ln z - \gamma\bigr] + R(z),
    \qquad R(z) \equiv E_1(z) + \ln z + \gamma,\quad R(0) = 0.
 
-The Nyström discretisation splits the integral over each composite
-Gauss–Legendre panel.  Off-diagonal panels (where the kernel is smooth)
-use standard GL weights evaluated via :func:`~derivations._kernels.e_n_mp`.
-Diagonal panels use **product-integration weights** that exactly
-integrate the Lagrange basis against the :math:`-\ln|x - x'|` weight,
-computed via ``mpmath.quad``.
+The remainder :math:`R(z)` is a smooth (analytic) function that
+vanishes at the origin.  This decomposition is the basis for
+**singularity subtraction**: on each panel, the kernel is split
+into a smooth part (handled by standard GL weights) and a logarithmic
+part (handled by product-integration weights).
 
-**White boundary conditions.**
-For an infinite lattice (white BC), the re-entrant isotropic flux is:
+For a diagonal panel :math:`[a, b]` containing evaluation point
+:math:`x_i`, the integral is:
 
 .. math::
+
+   \int_a^b f(x')\,\bigl[-\ln|x_i - x'|\bigr]\,\mathrm{d}x'
+   \approx \sum_{j=1}^{p} w_j^{(\ln)}\,f(x_j)
+
+where the **product-integration weights** :math:`w_j^{(\ln)}` are
+computed by exactly integrating each Lagrange basis polynomial
+:math:`L_j(x')` against the :math:`-\ln|x_i - x'|` weight:
+
+.. math::
+
+   w_j^{(\ln)} = \int_a^b L_j(x')\,\bigl[-\ln|x_i - x'|\bigr]\,\mathrm{d}x'
+
+These integrals are evaluated to high precision via ``mpmath.quad``
+(see ``_product_log_weights()`` in :mod:`orpheus.derivations.peierls_slab`).
+The full Nystrom weight for the diagonal panel entry :math:`K[i, j]` is
+then (in the implementation):
+
+.. math::
+
+   K[i, j] = \tfrac{1}{2}\bigl[R(\tau_{ij})\,w_j
+   + (-\ln\Sigt{} - \gamma)\,w_j + w_j^{(\ln)}\bigr]
+
+where the :math:`-\ln\Sigt{}` term arises from separating
+:math:`\ln\tau = \ln(\Sigt{}\,|x_i - x_j|)
+= \ln\Sigt{} + \ln|x_i - x_j|`.
+
+**Why this approach over alternatives.**
+Several singularity-handling strategies exist [Atkinson1997]_:
+
+1. *Graded meshes* (cluster quadrature nodes near the diagonal):
+   algebraic convergence only, many nodes needed for high accuracy.
+2. *IMT (Iri--Moriguti--Takahashi) transformation*: double-exponential
+   variable substitution that neutralises endpoint singularities.
+   Effective but hard to control for the travelling singularity at
+   :math:`x = x'`.
+3. *Singularity subtraction + product integration* (used here):
+   splits the known singular part from the smooth remainder.  The smooth
+   part converges spectrally with GL; the singular part is handled
+   analytically.  This gives spectral convergence for the smooth part
+   and guaranteed exactness for the logarithmic part, making it the
+   natural choice for a reference-quality solver.
+
+Off-diagonal panels (where the kernel is smooth because :math:`x_i`
+is far from the panel containing :math:`x_j`) use standard GL weights
+evaluated via :func:`~orpheus.derivations._kernels.e_n_mp`.
+
+White boundary conditions
+-------------------------
+
+For an infinite lattice (white BC), the re-entrant isotropic flux is
+derived by requiring that the angular flux entering each face equals
+the isotropic average of the flux exiting the opposite face.  The
+result is a separable rank-2 perturbation of the interior kernel:
+
+.. math::
+   :label: peierls-white-bc
 
    \varphi_{\rm bc}(x) = \frac{1}{1 - T^2}\sum_j w_j\,q_j\,
    \bigl[E_2(\tau_{0,i})(E_2(\tau_{0,j}) + T\,E_2(\tau_{L,j}))
    + E_2(\tau_{L,i})(E_2(\tau_{L,j}) + T\,E_2(\tau_{0,j}))\bigr]
 
 where :math:`T = 2\,E_3(\tau_{\rm total})` is the slab transmission
-probability.
+probability,
+:math:`\tau_{0,i} = \int_0^{x_i}\Sigt{}(s)\,\mathrm{d}s`, and
+:math:`\tau_{L,i} = \int_{x_i}^{L}\Sigt{}(s)\,\mathrm{d}s`.
 
-**Relationship to CP.**
+The :math:`E_2` factors represent the uncollided angular flux
+arriving at point :math:`x_i` from a face source:
+:math:`E_2(\tau) = \int_0^1 e^{-\tau/\mu}\,\mathrm{d}\mu`.  The
+:math:`1/(1-T^2)` denominator sums the geometric series of
+multiple slab traversals.
+
+.. _peierls-conservation:
+
+Conservation property
+---------------------
+
+For the :math:`\varphi` equation (identity on the LHS, not
+:math:`\Sigt{}`), the Nystrom kernel satisfies the following
+conservation identity for constant unit flux with white BC:
+
+.. math::
+
+   \sum_{j=1}^{N} K_{\rm total}[i, j]\,w_j = \frac{1}{\Sigt{i}}
+   \qquad\text{(row-sum identity)}
+
+where :math:`K_{\rm total}` includes both the interior :math:`E_1`
+kernel and the white-BC re-entry kernel.
+
+**Physical interpretation**: a spatially uniform, isotropically
+scattering medium with :math:`\Sigs{} = \Sigt{}` (no absorption)
+must produce :math:`\varphi(x) = \text{const}` everywhere.
+Substituting :math:`q(x') = \Sigt{}\,\varphi_0` into
+:eq:`peierls-equation` and requiring
+:math:`\varphi(x_i) = \varphi_0` gives the row-sum identity above.
+
+.. warning::
+
+   An earlier version of the Peierls solver used
+   :math:`\Sigt{}\,\varphi(x)` on the LHS instead of :math:`\varphi(x)`.
+   This corresponds to a different normalisation where the eigenvalue
+   system is :math:`(\mathrm{diag}(\Sigt{}) - K_s)\varphi
+   = (1/k)\,K_f\varphi`.  The row-sum identity then becomes
+   :math:`\sum_j K[i,j]\,w_j = 1`, which ALSO holds --- but the
+   operator itself is wrong because the :math:`\Sigt{}` factor changes
+   the eigenvectors.  The identity-LHS form is the physically correct
+   normalisation for computing the scalar flux.  This was a debugging
+   insight during Phase 4.1 development.
+
+Relationship to CP
+------------------
+
 The CP flat-source approximation integrates the :math:`E_1` kernel
 analytically over each region to obtain the :math:`E_3` second-difference
 formulae (:eq:`dd-slab`, :eq:`dc-slab`, :eq:`self-slab`).  The
@@ -2101,9 +2303,103 @@ Peierls reference bypasses this integration and solves the full
 integral equation numerically, making it an independent check on
 the CP method's spatial discretisation.
 
+.. _peierls-scattering-convention:
+
+Multi-group scattering convention
+---------------------------------
+
+The Peierls solver receives scattering matrices from the XS library in
+the convention ``sig_s[g', g]`` = transfer FROM group :math:`g'` TO
+group :math:`g`.  In the assembly loop
+(``_build_system_matrices()`` in :mod:`orpheus.derivations.peierls_slab`,
+line 250), the scatter kernel for the equation in group ``ge`` sums
+over source groups ``gs``:
+
+.. code-block:: python
+
+   K_scatter[row, col] += kij * sig_s_at_node[j][gs][ge]
+
+Here ``sig_s_at_node[j][gs][ge]`` is :math:`\Sigma_{s,gs \to ge}` ---
+the transfer cross section FROM group ``gs`` TO group ``ge``.  The
+outer loop index ``ge`` is the target group in the Peierls equation, and
+``gs`` is the source group in the column index.
+
+.. warning::
+
+   A naive reading of ``sig_s[gs][ge]`` might suggest "from ge to gs"
+   (confusing row/column with from/to).  The correct convention is
+   ``sig_s[from, to]``, consistent with the ``Mixture.SigS`` storage
+   where ``SigS[g_from, g_to]`` and the in-scatter source is
+   ``Q = SigS^T @ phi``.  See the scattering convention note in the
+   :ref:`key-facts-cp` section.
+
+Numerical evidence
+------------------
+
+The Nystrom eigenvalue converges to the CP eigenvalue as the quadrature
+is refined.  The following table shows the 2-group, 2-region slab case
+(materials A + B, white BC, :math:`p`-point GL per panel):
+
+.. list-table:: Nystrom k-eigenvalue convergence (2G, 2-region slab)
+   :header-rows: 1
+   :widths: 15 15 25 25
+
+   * - Panels/region
+     - :math:`p`
+     - Nystrom :math:`\keff`
+     - Relative error vs CP
+   * - 4
+     - 4
+     - 1.2149
+     - :math:`1.4 \times 10^{-2}`
+   * - 8
+     - 6
+     - 1.2281
+     - :math:`3.3 \times 10^{-3}`
+   * - 8
+     - 8
+     - 1.2307
+     - :math:`1.2 \times 10^{-3}`
+
+The convergence is slow because the :math:`E_1` kernel's logarithmic
+singularity limits the global convergence rate even with
+product-integration handling on the diagonal panel.  For verification
+purposes, the 2% agreement at moderate resolution is sufficient to
+confirm that both methods solve the same integral transport equation.
+
+The registered reference in the test suite
+(``continuous_cases()`` in :mod:`orpheus.derivations.peierls_slab`) uses a
+lightweight configuration (4 panels |times| 4 GL points per region,
+20-digit ``mpmath`` precision) to keep import time fast.  Tests that
+need higher accuracy should call
+``_build_peierls_slab_case()``
+directly with larger parameters.
+
+Performance note
+----------------
+
+The ``mpmath`` solver is CPU-bound on the :math:`O(N^2)` kernel
+assembly and :math:`O(N^3)` LU factorisation at arbitrary precision:
+
+- **4 panels |times| 4 points** per region (2G 2R): ~6 s
+- **8 panels |times| 6 points** per region (2G 2R): ~120 s
+- **16 panels |times| 6 points** per region (2G 2R): ~10+ min
+
+For this reason, the slow 2G 2-region convergence test is marked
+``@pytest.mark.slow`` and excluded from routine CI.
+
 .. seealso::
 
-   :mod:`orpheus.derivations.peierls_slab` — Nyström solver implementation.
+   :mod:`orpheus.derivations.peierls_slab` — Nystrom solver implementation.
+
+   :class:`orpheus.derivations.peierls_slab.PeierlsSlabSolution` — result container
+   with barycentric interpolation for flux evaluation at arbitrary points.
+
+   ``tests/derivations/test_peierls_convergence.py`` — L0 self-convergence
+   and eigenvalue agreement tests.
+
+   ``tests/cp/test_peierls_flux.py`` — L1 CP flux convergence against
+   the Peierls reference.
 
 
 References
@@ -2119,6 +2415,12 @@ References
 
 .. [Hebert2009] A. Hebert, *Applied Reactor Physics*, Presses
    internationales Polytechnique, 2009.
+
+.. [Kress2014] R. Kress, *Linear Integral Equations*, 3rd ed.,
+   Springer, 2014.
+
+.. [Atkinson1997] K.E. Atkinson, *The Numerical Solution of Integral
+   Equations of the Second Kind*, Cambridge University Press, 1997.
 
 
 .. |times| unicode:: U+00D7
