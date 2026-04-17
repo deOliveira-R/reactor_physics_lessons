@@ -780,7 +780,7 @@ angular cells.  The resulting :math:`\tau` alternates between 0.5
 (DD, for the left member of each pair) and 1.0 (step, for the right
 member).  This alternating pattern is correct but could be smoothed by
 using a Gauss-type azimuthal quadrature with distinct :math:`\eta`
-values (see ``IMPROVEMENTS.md`` item DO-20260405-002).
+values (see `GitHub Issue #1 <https://github.com/deOliveira-R/ORPHEUS/issues/1>`_).
 
 The M-M weights force the contamination factor :math:`\beta` to **machine
 zero** (verified: :math:`\beta \sim 10^{-16}`), completely eliminating

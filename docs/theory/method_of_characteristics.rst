@@ -1427,18 +1427,16 @@ Implementation
 Open Improvements
 =================
 
-See ``03.Method.Of.Characteristics/IMPROVEMENTS.md`` for the full
-tracker.  Key open items:
+Tracked in GitHub Issues (label ``module:moc``):
 
-- **MC-20260406-006**: Sphinx theory chapter (this document) ---
-  move from IMPL to DONE
-- **MC-20260406-007**: Vectorise the Python transport sweep
-  (5-deep loop) for performance
-- **MC-20260406-008**: Tighten heterogeneous test tolerances with
-  regenerated Richardson references
-- **MC-20260406-009**: Cyclic track linking for single-sweep BC
-  convergence
-- **MC-20260406-010**: CMFD coarse-mesh acceleration
+- `#13 <https://github.com/deOliveira-R/ORPHEUS/issues/13>`_:
+  Vectorise the Python transport sweep (5-deep loop bottleneck)
+- `#14 <https://github.com/deOliveira-R/ORPHEUS/issues/14>`_:
+  Tighten heterogeneous test tolerances
+- `#15 <https://github.com/deOliveira-R/ORPHEUS/issues/15>`_:
+  Cyclic track linking for single-sweep BC convergence
+- `#16 <https://github.com/deOliveira-R/ORPHEUS/issues/16>`_:
+  CMFD coarse-mesh acceleration
 
 
 References
