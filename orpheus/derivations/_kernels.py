@@ -122,12 +122,29 @@ class BickleyTables:
         return float(np.interp(x, self._x, self._ki4, right=0.0))
 
     def ki3_vec(self, x: np.ndarray) -> np.ndarray:
-        """Vectorised Ki₃."""
+        """Vectorised Ki₃ (legacy naming — actually canonical Ki₂)."""
         return np.interp(np.asarray(x, dtype=float), self._x, self._ki3, right=0.0)
 
     def ki4_vec(self, x: np.ndarray) -> np.ndarray:
-        """Vectorised Ki₄."""
+        """Vectorised Ki₄ (legacy naming — actually canonical Ki₃)."""
         return np.interp(np.asarray(x, dtype=float), self._x, self._ki4, right=0.0)
+
+    # Canonical A&S-named aliases (added for Phase 4.2, resolves #94)
+    def Ki2(self, x: float) -> float:
+        """Canonical :math:`\\mathrm{Ki}_2(x)` (= legacy ``ki3``)."""
+        return self.ki3(x)
+
+    def Ki3(self, x: float) -> float:
+        """Canonical :math:`\\mathrm{Ki}_3(x)` (= legacy ``ki4``, ~1e-3 accuracy)."""
+        return self.ki4(x)
+
+    def Ki2_vec(self, x: np.ndarray) -> np.ndarray:
+        """Vectorised canonical :math:`\\mathrm{Ki}_2` (= legacy ``ki3_vec``)."""
+        return self.ki3_vec(x)
+
+    def Ki3_vec(self, x: np.ndarray) -> np.ndarray:
+        """Vectorised canonical :math:`\\mathrm{Ki}_3` (= legacy ``ki4_vec``)."""
+        return self.ki4_vec(x)
 
 
 @functools.lru_cache(maxsize=1)

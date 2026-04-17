@@ -1,8 +1,16 @@
 """Semi-analytical cylindrical collision probability eigenvalues.
 
 Derives k_inf for {1,2,4} energy groups × {1,2,4} regions using the
-Ki₃/Ki₄ Bickley-Naylor kernel. The CP matrix is computed numerically
-via y-quadrature; the eigenvalue problem is a finite matrix solve.
+canonical Ki₃ (Bickley-Naylor) kernel as the second-difference
+anti-derivative. The CP matrix is computed numerically via
+y-quadrature; the eigenvalue problem is a finite matrix solve.
+
+.. note::
+
+   Phase-4.2 resolved the naming discrepancy documented in #94:
+   the legacy ``BickleyTables.ki4`` method computes the canonical
+   Ki₃ (A&S convention).  This module now uses the canonical-named
+   alias ``Ki3_vec`` for clarity.
 """
 
 from __future__ import annotations
@@ -66,7 +74,7 @@ def _cylinder_cp_matrix(
     y_wts = np.concatenate(w_all)
     chords = _chord_half_lengths(radii, y_pts)
     n_y = len(y_pts)
-    ki4_0 = tables.ki4_vec(np.zeros(n_y))
+    ki4_0 = tables.Ki3_vec(np.zeros(n_y))
 
     P_inf_g = np.empty((N_reg, N_reg, ng))
 
@@ -87,7 +95,7 @@ def _cylinder_cp_matrix(
                 continue
 
             self_same = 2.0 * chords[i, :] - (2.0 / sti) * (
-                ki4_0 - tables.ki4_vec(tau_i)
+                ki4_0 - tables.Ki3_vec(tau_i)
             )
             rcp[i, i] += 2.0 * sti * np.dot(y_wts, self_same)
 
@@ -101,18 +109,18 @@ def _cylinder_cp_matrix(
                     gap_d = None
 
                 if gap_d is not None:
-                    dd = (tables.ki4_vec(gap_d)
-                          - tables.ki4_vec(gap_d + tau_i)
-                          - tables.ki4_vec(gap_d + tau_j)
-                          + tables.ki4_vec(gap_d + tau_i + tau_j))
+                    dd = (tables.Ki3_vec(gap_d)
+                          - tables.Ki3_vec(gap_d + tau_i)
+                          - tables.Ki3_vec(gap_d + tau_j)
+                          + tables.Ki3_vec(gap_d + tau_i + tau_j))
                 else:
                     dd = np.zeros(n_y)
 
                 gap_c = bnd_pos[i, :] + bnd_pos[j, :]
-                dc = (tables.ki4_vec(gap_c)
-                      - tables.ki4_vec(gap_c + tau_i)
-                      - tables.ki4_vec(gap_c + tau_j)
-                      + tables.ki4_vec(gap_c + tau_i + tau_j))
+                dc = (tables.Ki3_vec(gap_c)
+                      - tables.Ki3_vec(gap_c + tau_i)
+                      - tables.Ki3_vec(gap_c + tau_j)
+                      + tables.Ki3_vec(gap_c + tau_i + tau_j))
 
                 rcp[i, j] += 2.0 * np.dot(y_wts, dd + dc)
 
