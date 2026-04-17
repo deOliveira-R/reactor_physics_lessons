@@ -1077,6 +1077,66 @@ reference to 5 × 10⁻⁴. Without a material interface the bug is
 invisible (the Rayleigh quotient's rescale invariance hides it), so
 this test is the minimal configuration that exposes it.
 
+---
+
+## ERR-026 — Curvilinear sweep WDD angular closure converges to wrong fixed-source solution
+
+**Failure mode:** #6 Wrong answer accepted — sweep converges to a
+stable, balance-satisfying solution that is NOT the correct discrete
+transport solution
+**Date:** 2026-04-17
+**Solver:** SN (`orpheus.sn.sweep._sweep_1d_spherical`,
+`_sweep_1d_cylindrical`).
+
+**Bug:** The curvilinear sweeps use a one-directional WDD angular
+face-flux closure:
+
+    ψ_{n+1/2} = (ψ_n − (1−τ)·ψ_{n−1/2}) / τ
+
+while the BiCGSTAB transport operator
+(`build_transport_linear_operator_spherical`) uses a symmetric closure:
+
+    ψ_{n+1/2} = τ·ψ_{n+1} + (1−τ)·ψ_n
+
+Both are consistent for flat flux analytically. But the sweep's
+one-directional WDD, combined with the zero-area face at r=0
+(which eliminates spatial coupling at the innermost cell), creates
+a system where the iterative sweep converges to a NON-FLAT solution
+that still satisfies the discrete balance equation.
+
+**Impact:** `solve_sn_fixed_source` on spherical / cylindrical meshes
+produces 35–50% error at cell 0, **growing** with mesh refinement
+(divergent, not convergent). MMS verification (Phase 3.3–3.4) is
+blocked. Global conservation is exact despite the wrong spatial profile.
+
+**How it hid from higher-level tests:**
+- Eigenvalue solver routes to BiCGSTAB for curvilinear geometry — the
+  sweep is never exercised by the eigenvalue path
+- 1-group k_eff is shape-independent (Rayleigh quotient invariance)
+- Multi-group eigenvalue tests use 2% tolerance that absorbs the sweep
+  error
+- No fixed-source tests existed for curvilinear geometry until the
+  Phase 3.3 MMS attempt
+
+**Evidence:**
+
+| Test (constant source, reflective BCs) | Sweep    | BiCGSTAB |
+|-----------------------------------------|----------|----------|
+| φ at cell 0 (nx=20)                    | 0.64     | 1.000    |
+| Error vs refinement                    | Diverges | Zero     |
+| Conservation (volume-weighted average)  | Exact    | Exact    |
+| Cartesian sweep (same test)             | Exact    | N/A      |
+
+**Fix:** Route `solve_sn_fixed_source` through BiCGSTAB for curvilinear
+geometry, adding an external-source slot to `build_rhs_spherical` /
+`build_rhs_cylindrical`. GitHub Issue #98 tracks the fix, Issue #99
+tracks the blocked MMS verification.
+
+**L1 test that catches it:**
+`tests/sn/test_sweep_operator_inconsistency.py::test_spherical_sweep_vs_bicgstab_flat_flux`
+— runs constant-source reflective-BC problem via both sweep and BiCGSTAB
+and asserts BiCGSTAB is exact while documenting the sweep's deviation.
+
 A cheaper L0 alternative — a direct unit test of the fixed-point
 of the 1D cumprod recurrence on a 1-cell uniform-material slab
 that would catch the factor-of-2 in milliseconds without needing

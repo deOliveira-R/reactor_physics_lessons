@@ -55,10 +55,10 @@ def transport_sweep(
     ny = sn_mesh.ny
 
     if sn_mesh.curvature == "spherical":
-        return _sweep_1d_spherical(Q, sig_t, sn_mesh, psi_bc)
+        return _sweep_1d_spherical(Q, sig_t, sn_mesh, psi_bc, Q_aniso)
 
     if sn_mesh.curvature == "cylindrical":
-        return _sweep_1d_cylindrical(Q, sig_t, sn_mesh, psi_bc)
+        return _sweep_1d_cylindrical(Q, sig_t, sn_mesh, psi_bc, Q_aniso)
 
     is_gl_1d = (ny == 1 and np.all(np.abs(quad.mu_y) < 1e-15)
                 and Q_aniso is None)
@@ -194,6 +194,7 @@ def _sweep_1d_spherical(
     sig_t: np.ndarray,
     sn_mesh: SNMesh,
     psi_bc: dict,
+    Q_aniso: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     r"""Spherical 1-D sweep with geometry-weighted angular redistribution.
 
@@ -252,7 +253,12 @@ def _sweep_1d_spherical(
     # Isotropic source → angular source density by dividing by sum(w)
     # Then multiply by cell volume for the balance equation
     weight_norm = 1.0 / weights.sum()
-    QV = Q_1d * V[:, None] * weight_norm  # (nx, ng)
+    QV_iso = Q_1d * V[:, None] * weight_norm  # (nx, ng)
+
+    # Per-ordinate anisotropic source (MMS external / P1+), if present
+    has_aniso = Q_aniso is not None
+    if has_aniso:
+        Q_aniso_1d = Q_aniso[:, :, 0, :] * weight_norm  # (N, nx, ng)
 
     for n in range(N):
         mu_n = mu[n]
@@ -263,6 +269,11 @@ def _sweep_1d_spherical(
         tau_n = tau[n]            # M-M angular closure weight
         c_out = alpha_out / tau_n               # denom coefficient
         c_in = (1.0 - tau_n) / tau_n * alpha_out + alpha_in  # numer coefficient
+
+        # Per-ordinate volumetric source
+        QV = QV_iso
+        if has_aniso:
+            QV = QV_iso + Q_aniso_1d[n] * V[:, None]
 
         if mu_n < 0:
             # Inward sweep: outer boundary → centre
@@ -337,6 +348,7 @@ def _sweep_1d_cylindrical(
     sig_t: np.ndarray,
     sn_mesh: SNMesh,
     psi_bc: dict,
+    Q_aniso: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     r"""Cylindrical 1-D sweep with geometry-weighted azimuthal redistribution.
 
@@ -388,7 +400,12 @@ def _sweep_1d_cylindrical(
 
     # Isotropic source → angular source density
     weight_norm = 1.0 / weights.sum()
-    QV = Q_1d * V[:, None] * weight_norm  # (nx, ng)
+    QV_iso = Q_1d * V[:, None] * weight_norm  # (nx, ng)
+
+    # Per-ordinate anisotropic source (MMS external / P1+), if present
+    has_aniso = Q_aniso is not None
+    if has_aniso:
+        Q_aniso_1d = Q_aniso[:, :, 0, :] * weight_norm  # (N, nx, ng)
 
     # Process each μ-level independently
     for p, level_idx in enumerate(quad.level_indices):
@@ -411,6 +428,11 @@ def _sweep_1d_cylindrical(
             tau_m = tau_level[m_local]       # M-M angular closure weight
             c_out = alpha_out / tau_m
             c_in = (1.0 - tau_m) / tau_m * alpha_out + alpha_in
+
+            # Per-ordinate volumetric source
+            QV = QV_iso
+            if has_aniso:
+                QV = QV_iso + Q_aniso_1d[n] * V[:, None]
 
             if eta_n < 0:
                 # Inward sweep: outer → centre

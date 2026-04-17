@@ -64,7 +64,9 @@ from scipy.sparse import csr_matrix
 
 from orpheus.data.macro_xs.mixture import Mixture
 from orpheus.geometry import Mesh1D, Mesh2D
-from orpheus.sn.quadrature import GaussLegendre1D, LebedevSphere
+from orpheus.geometry.coord import CoordSystem
+from orpheus.geometry.mesh import BC
+from orpheus.sn.quadrature import GaussLegendre1D, LebedevSphere, ProductQuadrature
 
 from ._reference import (
     ContinuousReferenceSolution,
@@ -1011,6 +1013,334 @@ def build_2d_cartesian_heterogeneous_mms_case(
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 3.5 — 1D Cartesian P1 anisotropic scattering MMS
+# ═══════════════════════════════════════════════════════════════════════
+r"""
+P1 anisotropic scattering MMS reference.
+
+**Problem.**  1-group vacuum-BC slab with linearly anisotropic
+scattering (:math:`\ell = 0, 1`). The ansatz has weak
+:math:`\mu`-dependence so the P1 scattering slot is exercised:
+
+.. math::
+
+    \psi_n(x) = \frac{1}{W}\bigl(A(x) + \alpha\,\mu_n\,B(x)\bigr)
+
+with :math:`A(x) = \sin(\pi x/L)`, :math:`B(x) = \sin(\pi x/L)`,
+and small :math:`\alpha`.  The scalar flux is
+:math:`\phi(x) = A(x)` (isotropic term), the current is
+:math:`J(x) = \alpha\,B(x)/3` (for Gauss–Legendre on :math:`[-1, 1]`
+where :math:`\sum w_n\mu_n^2 = 2/3` and :math:`W = 2`).
+
+**Manufactured source.** From the 1D transport equation with P1
+scattering:
+
+.. math::
+
+    Q^{\text{ext}}_n(x) =
+        \mu_n A'(x)
+      + (\Sigma_t - \Sigma_s^{(0)})\,A(x)
+      + \alpha\,\mu_n\,(\Sigma_t - \Sigma_s^{(1)})\,B(x)
+      + \alpha\,\mu_n^2\,B'(x)
+"""
+
+
+@dataclass(frozen=True)
+class SNP1AnisoMMSCase:
+    r"""MMS case with P1 anisotropic scattering on a 1D Cartesian slab.
+
+    Attributes
+    ----------
+    sigma_t : float
+        Total cross section.
+    sigma_s0 : float
+        P0 (isotropic) scattering cross section.
+    sigma_s1 : float
+        P1 (linearly anisotropic) scattering cross section.
+    alpha : float
+        Strength of the μ-dependent term in the ansatz.
+    """
+
+    name: str
+    sigma_t: float
+    sigma_s0: float
+    sigma_s1: float
+    alpha: float
+    slab_length: float
+    materials: dict[int, "Mixture"]
+    mat_id: int
+    quadrature: GaussLegendre1D
+    tolerance: str = "O(h^2)"
+    equation_labels: tuple[str, ...] = (
+        "transport-cartesian",
+        "dd-cartesian-1d",
+        "dd-slab",
+        "pn-scatter",
+        "sn-mms-p1-psi",
+        "sn-mms-p1-qext",
+    )
+
+    def phi_exact(self, x: np.ndarray) -> np.ndarray:
+        r"""Scalar flux :math:`\phi(x) = A(x) = \sin(\pi x/L)`."""
+        return np.sin(np.pi * np.asarray(x) / self.slab_length)
+
+    def build_mesh(self, n_cells: int) -> Mesh1D:
+        edges = np.linspace(0.0, self.slab_length, n_cells + 1)
+        mat_ids = np.full(n_cells, self.mat_id, dtype=int)
+        return Mesh1D(edges=edges, mat_ids=mat_ids)
+
+    def external_source(self, mesh: Mesh1D) -> np.ndarray:
+        r"""Per-ordinate external source for the P1 MMS ansatz.
+
+        .. math::
+
+            Q_n(x) = \mu_n A' + (\Sigma_t - \Sigma_s^0) A
+                    + \alpha\mu_n(\Sigma_t - \Sigma_s^1) B
+                    + \alpha\mu_n^2 B'
+
+        where :math:`A = B = \sin(\pi x/L)`, :math:`A' = B' = (\pi/L)\cos(\pi x/L)`.
+        Shape ``(N, nx, 1, 1)``.
+        """
+        x = mesh.centers
+        L = self.slab_length
+        A = np.sin(np.pi * x / L)
+        Ap = (np.pi / L) * np.cos(np.pi * x / L)
+        mu = self.quadrature.mu_x
+        N = len(mu)
+        a = self.alpha
+
+        # Each term: (N, nx)
+        t1 = mu[:, None] * Ap[None, :]                              # μ A'
+        t2 = (self.sigma_t - self.sigma_s0) * A[None, :]            # (Σ_t - Σ_s0) A
+        t3 = a * mu[:, None] * (self.sigma_t - self.sigma_s1) * A[None, :]  # α μ (Σ_t - Σ_s1) B
+        t4 = a * (mu[:, None] ** 2) * Ap[None, :]                   # α μ² B'
+        Q = t1 + t2 + t3 + t4
+        return Q[:, :, None, None]
+
+
+def _make_1g_p1_mixture(
+    sigma_t: float, sigma_s0: float, sigma_s1: float,
+) -> Mixture:
+    """Build a 1-group mixture with P0 and P1 scattering matrices."""
+    if sigma_s0 >= sigma_t:
+        raise ValueError(f"Need Σ_s0 < Σ_t (got {sigma_s0}, {sigma_t})")
+    ng = 1
+    SigS0 = csr_matrix(np.array([[sigma_s0]], dtype=float))
+    SigS1 = csr_matrix(np.array([[sigma_s1]], dtype=float))
+    Sig2 = csr_matrix(np.zeros((ng, ng)))
+    return Mixture(
+        SigC=np.array([sigma_t - sigma_s0]),
+        SigL=np.zeros(ng),
+        SigF=np.zeros(ng),
+        SigP=np.zeros(ng),
+        SigT=np.array([sigma_t]),
+        SigS=[SigS0, SigS1],   # P0 and P1 scattering matrices
+        Sig2=Sig2,
+        chi=np.zeros(ng),
+        eg=np.array([1e-5, 2e7]),
+    )
+
+
+def build_p1_aniso_mms_case(
+    sigma_t: float = 1.0,
+    sigma_s0: float = 0.5,
+    sigma_s1: float = 0.2,
+    alpha: float = 0.1,
+    slab_length: float = 5.0,
+    n_ordinates: int = 16,
+    mat_id: int = 1,
+    name: str = "sn_mms_p1_aniso",
+) -> SNP1AnisoMMSCase:
+    r"""Build the canonical P1 anisotropic scattering MMS case.
+
+    Default parameters:
+
+    - :math:`\alpha = 0.1` — weak anisotropy, enough to exercise
+      the P1 slot without making the source stiff.
+    - :math:`\Sigma_s^{(1)} = 0.2` — moderate forward scattering
+      (positive = forward-peaked in the lab frame).
+    """
+    materials = {mat_id: _make_1g_p1_mixture(sigma_t, sigma_s0, sigma_s1)}
+    quadrature = GaussLegendre1D.create(n_ordinates=n_ordinates)
+    return SNP1AnisoMMSCase(
+        name=name,
+        sigma_t=sigma_t,
+        sigma_s0=sigma_s0,
+        sigma_s1=sigma_s1,
+        alpha=alpha,
+        slab_length=slab_length,
+        materials=materials,
+        mat_id=mat_id,
+        quadrature=quadrature,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 3.3 — 1D Spherical MMS (1-group, GL quadrature)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class SNSphericalMMSCase:
+    r"""Closed-form MMS fixed-source problem for 1D spherical SN verification.
+
+    Ansatz: :math:`\psi_n(r) = A(r)/W` with :math:`A(r) = \sin(\pi r/R)`.
+    Vanishes at :math:`r = 0` and :math:`r = R`.  Isotropic in angle,
+    so the angular redistribution term vanishes and the manufactured
+    source is :math:`Q_n = \mu_n A'(r) + (\Sigma_t - \Sigma_s) A(r)`.
+    """
+
+    name: str
+    sigma_t: float
+    sigma_s: float
+    radius: float
+    materials: dict[int, "Mixture"]
+    mat_id: int
+    quadrature: GaussLegendre1D
+    tolerance: str = "O(h^2)"
+    equation_labels: tuple[str, ...] = (
+        "transport-spherical",
+        "sn-mms-spherical-psi",
+        "sn-mms-spherical-qext",
+    )
+
+    def phi_exact(self, r: np.ndarray) -> np.ndarray:
+        return np.sin(np.pi * np.asarray(r) / self.radius)
+
+    def dphi_exact(self, r: np.ndarray) -> np.ndarray:
+        R = self.radius
+        return (np.pi / R) * np.cos(np.pi * np.asarray(r) / R)
+
+    def build_mesh(self, n_cells: int) -> Mesh1D:
+        edges = np.linspace(0.0, self.radius, n_cells + 1)
+        mat_ids = np.full(n_cells, self.mat_id, dtype=int)
+        return Mesh1D(
+            edges=edges, mat_ids=mat_ids,
+            coord=CoordSystem.SPHERICAL,
+            bc_left=BC("reflective"),   # r = 0: symmetry
+            bc_right=BC("vacuum"),      # r = R: vacuum
+        )
+
+    def external_source(self, mesh: Mesh1D) -> np.ndarray:
+        r = mesh.centers
+        A = self.phi_exact(r)
+        Ap = self.dphi_exact(r)
+        mu = self.quadrature.mu_x
+        N = len(mu)
+        streaming = mu[:, None] * Ap[None, :]
+        removal = (self.sigma_t - self.sigma_s) * A[None, :]
+        Q = streaming + removal
+        return Q[:, :, None, None]
+
+
+def build_spherical_mms_case(
+    sigma_t: float = 1.0,
+    sigma_s: float = 0.5,
+    radius: float = 5.0,
+    n_ordinates: int = 16,
+    mat_id: int = 1,
+    name: str = "sn_mms_spherical_sin",
+) -> SNSphericalMMSCase:
+    r"""Build the canonical 1D spherical MMS case."""
+    materials = {mat_id: _make_1g_mixture(sigma_t, sigma_s)}
+    quadrature = GaussLegendre1D.create(n_ordinates=n_ordinates)
+    return SNSphericalMMSCase(
+        name=name,
+        sigma_t=sigma_t,
+        sigma_s=sigma_s,
+        radius=radius,
+        materials=materials,
+        mat_id=mat_id,
+        quadrature=quadrature,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 3.4 — 1D Cylindrical MMS (1-group, Product quadrature)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class SNCylindricalMMSCase:
+    r"""Closed-form MMS fixed-source problem for 1D cylindrical SN verification.
+
+    Ansatz: :math:`\psi_n(r) = A(r)/W` with :math:`A(r) = \sin(\pi r/R)`.
+    Isotropic in angle; the azimuthal redistribution term vanishes.
+    The radial direction cosine for cylindrical SN is :math:`\eta_n`,
+    accessed as ``quadrature.mu_x[n]``.
+
+    Manufactured source:
+    :math:`Q_n = \eta_n A'(r) + (\Sigma_t - \Sigma_s) A(r)`.
+    """
+
+    name: str
+    sigma_t: float
+    sigma_s: float
+    radius: float
+    materials: dict[int, "Mixture"]
+    mat_id: int
+    quadrature: ProductQuadrature
+    tolerance: str = "O(h^2)"
+    equation_labels: tuple[str, ...] = (
+        "transport-cylindrical",
+        "sn-mms-cylindrical-psi",
+        "sn-mms-cylindrical-qext",
+    )
+
+    def phi_exact(self, r: np.ndarray) -> np.ndarray:
+        return np.sin(np.pi * np.asarray(r) / self.radius)
+
+    def dphi_exact(self, r: np.ndarray) -> np.ndarray:
+        R = self.radius
+        return (np.pi / R) * np.cos(np.pi * np.asarray(r) / R)
+
+    def build_mesh(self, n_cells: int) -> Mesh1D:
+        edges = np.linspace(0.0, self.radius, n_cells + 1)
+        mat_ids = np.full(n_cells, self.mat_id, dtype=int)
+        return Mesh1D(
+            edges=edges, mat_ids=mat_ids,
+            coord=CoordSystem.CYLINDRICAL,
+            bc_left=BC("reflective"),   # r = 0: symmetry
+            bc_right=BC("vacuum"),      # r = R: vacuum
+        )
+
+    def external_source(self, mesh: Mesh1D) -> np.ndarray:
+        r = mesh.centers
+        A = self.phi_exact(r)
+        Ap = self.dphi_exact(r)
+        # mu_x is the radial direction cosine (η) for cylindrical
+        eta = self.quadrature.mu_x
+        N = len(eta)
+        streaming = eta[:, None] * Ap[None, :]
+        removal = (self.sigma_t - self.sigma_s) * A[None, :]
+        Q = streaming + removal
+        return Q[:, :, None, None]
+
+
+def build_cylindrical_mms_case(
+    sigma_t: float = 1.0,
+    sigma_s: float = 0.5,
+    radius: float = 5.0,
+    n_mu: int = 4,
+    n_phi: int = 8,
+    mat_id: int = 1,
+    name: str = "sn_mms_cylindrical_sin",
+) -> SNCylindricalMMSCase:
+    r"""Build the canonical 1D cylindrical MMS case."""
+    materials = {mat_id: _make_1g_mixture(sigma_t, sigma_s)}
+    quadrature = ProductQuadrature.create(n_mu=n_mu, n_phi=n_phi)
+    return SNCylindricalMMSCase(
+        name=name,
+        sigma_t=sigma_t,
+        sigma_s=sigma_s,
+        radius=radius,
+        materials=materials,
+        mat_id=mat_id,
+        quadrature=quadrature,
+    )
+
+
 # ── Phase-0 ContinuousReferenceSolution wrapper ──────────────────────
 
 def _build_heterogeneous_continuous_reference() -> ContinuousReferenceSolution:
@@ -1230,10 +1560,118 @@ def _build_2d_cartesian_2g_continuous_reference() -> ContinuousReferenceSolution
     )
 
 
+def _build_spherical_continuous_reference() -> ContinuousReferenceSolution:
+    """Phase-3.3 continuous reference for spherical MMS."""
+    mms = build_spherical_mms_case()
+    return ContinuousReferenceSolution(
+        name=mms.name,
+        problem=ProblemSpec(
+            materials=mms.materials,
+            geometry_type="sphere",
+            geometry_params={"radius": mms.radius, "mms_case": mms},
+            boundary_conditions={"inner": "reflective", "outer": "vacuum"},
+            external_source=None, is_eigenvalue=False, n_groups=1,
+        ),
+        operator_form="differential-sn",
+        phi=lambda r: mms.phi_exact(r),
+        provenance=Provenance(
+            citation="Oberkampf & Roy 2010, Ch. 6 (MMS fundamentals)",
+            derivation_notes=(
+                "1-group spherical SN MMS with isotropic ansatz "
+                "ψ_n(r) = (1/W) sin(πr/R). Angular redistribution "
+                "vanishes for isotropic flux; manufactured source "
+                "Q_n = μ_n A'(r) + (Σ_t − Σ_s) A(r)."
+            ),
+            sympy_expression=r"Q_n(r) = \mu_n A'(r) + (\Sigma_t - \Sigma_s) A(r)",
+            precision_digits=None,
+        ),
+        k_eff=None, psi=None,
+        equation_labels=mms.equation_labels,
+        vv_level="L1",
+        description="1-group spherical SN MMS — Phase 3.3 continuous reference.",
+        tolerance="O(h^2)",
+    )
+
+
+def _build_cylindrical_continuous_reference() -> ContinuousReferenceSolution:
+    """Phase-3.4 continuous reference for cylindrical MMS."""
+    mms = build_cylindrical_mms_case()
+    return ContinuousReferenceSolution(
+        name=mms.name,
+        problem=ProblemSpec(
+            materials=mms.materials,
+            geometry_type="cylinder",
+            geometry_params={"radius": mms.radius, "mms_case": mms},
+            boundary_conditions={"inner": "reflective", "outer": "vacuum"},
+            external_source=None, is_eigenvalue=False, n_groups=1,
+        ),
+        operator_form="differential-sn",
+        phi=lambda r: mms.phi_exact(r),
+        provenance=Provenance(
+            citation="Oberkampf & Roy 2010, Ch. 6 (MMS fundamentals)",
+            derivation_notes=(
+                "1-group cylindrical SN MMS with isotropic ansatz "
+                "ψ_n(r) = (1/W) sin(πr/R). Azimuthal redistribution "
+                "vanishes for isotropic flux; manufactured source "
+                "Q_n = η_n A'(r) + (Σ_t − Σ_s) A(r)."
+            ),
+            sympy_expression=r"Q_n(r) = \eta_n A'(r) + (\Sigma_t - \Sigma_s) A(r)",
+            precision_digits=None,
+        ),
+        k_eff=None, psi=None,
+        equation_labels=mms.equation_labels,
+        vv_level="L1",
+        description="1-group cylindrical SN MMS — Phase 3.4 continuous reference.",
+        tolerance="O(h^2)",
+    )
+
+
+def _build_p1_aniso_continuous_reference() -> ContinuousReferenceSolution:
+    """Phase-3.5 continuous reference for P1 anisotropic scattering MMS."""
+    mms = build_p1_aniso_mms_case()
+    return ContinuousReferenceSolution(
+        name=mms.name,
+        problem=ProblemSpec(
+            materials=mms.materials,
+            geometry_type="slab",
+            geometry_params={"length": mms.slab_length, "mms_case": mms},
+            boundary_conditions={"left": "vacuum", "right": "vacuum"},
+            external_source=None, is_eigenvalue=False, n_groups=1,
+        ),
+        operator_form="differential-sn",
+        phi=lambda x: mms.phi_exact(x),
+        provenance=Provenance(
+            citation="Oberkampf & Roy 2010, Ch. 6 (MMS fundamentals)",
+            derivation_notes=(
+                "1-group P1 anisotropic scattering SN MMS. Ansatz "
+                "ψ_n(x) = (1/W)(A(x) + α μ_n B(x)) with A=B=sin(πx/L), "
+                "α=0.1. Exercises the P1 scattering slot in "
+                "_build_aniso_scattering. Manufactured source includes "
+                "the standard streaming + removal terms plus α μ_n "
+                "(Σ_t − Σ_s^1) B and α μ_n² B' from the P1 current."
+            ),
+            sympy_expression=(
+                r"Q_n = \mu_n A' + (\Sigma_t - \Sigma_s^0) A "
+                r"+ \alpha \mu_n (\Sigma_t - \Sigma_s^1) B "
+                r"+ \alpha \mu_n^2 B'"
+            ),
+            precision_digits=None,
+        ),
+        k_eff=None, psi=None,
+        equation_labels=mms.equation_labels,
+        vv_level="L1",
+        description="1-group P1 aniso scattering SN MMS — Phase 3.5 reference.",
+        tolerance="O(h^2)",
+    )
+
+
 def continuous_cases() -> list[ContinuousReferenceSolution]:
     """Return the Phase-0 continuous references produced by this module."""
     return [
         _build_heterogeneous_continuous_reference(),
         _build_2d_cartesian_continuous_reference(),
         _build_2d_cartesian_2g_continuous_reference(),
+        _build_spherical_continuous_reference(),
+        _build_cylindrical_continuous_reference(),
+        _build_p1_aniso_continuous_reference(),
     ]
