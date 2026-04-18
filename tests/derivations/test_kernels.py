@@ -15,15 +15,9 @@ These tests nail down:
    finite-difference against the analytical form.
 3. **Full-line integrals** :math:`\int_0^\infty E_n(x)\,dx = 1/n`
    and the analogue for :math:`\mathrm{Ki}_n`.
-4. **Legacy–high-precision parity** on the domain both tiers cover.
-5. **Naming discrepancy** between the legacy :class:`BickleyTables`
-   and the Abramowitz & Stegun convention, documented as a
-   regression guard so the legacy numbering is not silently changed
-   while the Phase-4 Peierls cylinder reference is being built.
 
 See :doc:`/verification/reference_solutions` for the contract these
-primitives underpin and the full treatment of the Phase-0
-infrastructure.
+primitives underpin.
 """
 
 from __future__ import annotations
@@ -35,7 +29,6 @@ import numpy as np
 import pytest
 
 from orpheus.derivations._kernels import (
-    bickley_tables,
     e_n,
     e_n_at_zero,
     e_n_derivative,
@@ -164,60 +157,6 @@ def test_kin1_derivative_is_bessel_k0(x: float):
     analytical_k0 = -float(mpmath.besselk(0, x))
     assert numerical == pytest.approx(analytical_k0, abs=1e-9)
     assert ki_n_derivative(1, x) == pytest.approx(analytical_k0, abs=1e-14)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Legacy vs high-precision parity (regression guard on the naming)
-# ═══════════════════════════════════════════════════════════════════════
-
-@pytest.mark.l0
-@pytest.mark.verifies("kin-bickley-legacy-convention")
-@pytest.mark.parametrize("x", [0.0, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0])
-def test_legacy_bt_ki3_equals_kin2(x: float):
-    r"""Legacy ``BickleyTables.ki3(x)`` equals the canonical
-    :math:`\mathrm{Ki}_2(x)`, **not** :math:`\mathrm{Ki}_3(x)`.
-
-    This test documents the convention discrepancy between the
-    legacy lookup table (whose integrand is
-    :math:`\sin(t)\,\exp(-x/\sin t)` — equivalent to
-    :math:`\mathrm{Ki}_2^{\text{A\&S}}`) and the high-precision
-    mpmath evaluator :func:`orpheus.derivations._kernels.ki_n`
-    (Abramowitz & Stegun 11.2).
-
-    Until the Phase-4 Peierls cylinder reference is implemented
-    and ``cp_cylinder.py`` is migrated off the legacy tables, this
-    test acts as a **regression guard**: if someone silently
-    "corrects" the legacy numbering they will break the CP formulas
-    that are numerically self-consistent under the legacy names.
-
-    See :doc:`/verification/reference_solutions` for the full
-    treatment of the Phase-0 naming audit.
-    """
-    legacy = bickley_tables().ki3(x)
-    canonical = ki_n(2, x)
-    # Legacy table is linearly interpolated from 20k points on
-    # [0, 50]; interpolation error is ~1e-7 at x=0, tighter
-    # elsewhere. 1e-6 absolute gives a safe floor for the guard.
-    assert legacy == pytest.approx(canonical, abs=1e-6)
-
-
-@pytest.mark.l0
-@pytest.mark.verifies("kin-bickley-legacy-convention")
-@pytest.mark.parametrize("x", [0.0, 0.5, 1.0, 2.0, 5.0])
-def test_legacy_bt_ki4_approximates_kin3(x: float):
-    r"""Legacy ``BickleyTables.ki4(x)`` approximates the canonical
-    :math:`\mathrm{Ki}_3(x)` via a cumulative-sum integration.
-
-    Accuracy is limited to ~1e-3 absolute because the cumsum uses
-    the 20k-point trapezoidal rule on a linear mesh — not a
-    high-order quadrature. This test **documents** that accuracy
-    ceiling so any future legacy callers know what they are paying.
-    """
-    legacy = bickley_tables().ki4(x)
-    canonical = ki_n(3, x)
-    # The legacy cumsum bound is ~1.3e-3 at x=0 (observed empirically).
-    # 5e-3 gives the regression guard headroom.
-    assert legacy == pytest.approx(canonical, abs=5e-3)
 
 
 # ═══════════════════════════════════════════════════════════════════════

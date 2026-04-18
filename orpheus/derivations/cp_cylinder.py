@@ -11,12 +11,15 @@ integration hierarchy and the unified :math:`\\Delta^{2}` operator.
 
 .. note::
 
-   Phase-4.2 resolved the naming discrepancy documented in #94:
-   the legacy ``BickleyTables.ki4`` method computes the canonical
-   :math:`\\mathrm{Ki}_3` (A&S convention). Phase B.2 routes the
-   cylinder kernel through ``Ki3_vec`` via the unified builder;
-   Phase B.4 will replace the tabulation with ``ki_n_mp(3, ·, 30)``
-   and retire :class:`~._kernels.BickleyTables`.
+   Phase B.4 retired the legacy :class:`~._kernels.BickleyTables`
+   tabulation (Issue #94). The :math:`\\mathrm{Ki}_3` kernel is now
+   evaluated through the Chebyshev interpolant of
+   :math:`e^{\\tau}\\,\\mathrm{Ki}_3(\\tau)` in
+   :func:`~.cp_geometry._ki3_mp`, built from
+   :func:`~._kernels.ki_n_mp` at 30 dps. The solver
+   (``orpheus.cp.solver``) shares the same kernel to guarantee
+   bit-identical evaluations between solver ``keff`` and derivation
+   ``k_inf``.
 """
 
 from __future__ import annotations

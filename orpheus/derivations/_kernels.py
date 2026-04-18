@@ -1,40 +1,46 @@
 r"""Special-function kernels for continuous reference solutions.
 
-Two tiers coexist for the verification migration:
+This module provides the two kernel families used across the
+flat-source CP and pointwise Peierls references:
 
-- **Legacy tier** (``e3``, ``BickleyTables``): double-precision
-  wrappers around ``scipy.special.expn`` and a 20 000-point
-  Bickley–Naylor lookup table. Used by the existing ``cp_slab.py``
-  / ``cp_cylinder.py`` derivations whose P-matrix constructions
-  pre-date the Phase-0 reference-solution contract. They stay
-  alive until the Phase-4 Peierls Nyström references replace them.
+- **Exponential integrals** :math:`E_n(x)`: double-precision
+  :func:`e3` / :func:`e3_vec` thin wrappers over
+  :func:`scipy.special.expn`, plus arbitrary-precision :func:`e_n`
+  / :func:`e_n_mp` via :func:`mpmath.expint`.
 
-- **High-precision tier** (``e_n``, ``ki_n``, ``e_n_derivative``,
-  ``ki_n_derivative``): mpmath-backed arbitrary-precision
-  evaluators for :math:`E_n(x)` and the Bickley–Naylor
-  :math:`\mathrm{Ki}_n(x)`. These satisfy the kernel identities
+- **Bickley-Naylor functions** :math:`\mathrm{Ki}_n(x)`: arbitrary-
+  precision :func:`ki_n` / :func:`ki_n_mp` via :func:`mpmath.quad` on
+  the canonical A&S 11.2 definition. Double-precision fast paths live
+  with their consumers (e.g. :func:`~.cp_geometry._ki3_mp` builds a
+  Chebyshev interpolant of :math:`e^{\tau}\,\mathrm{Ki}_3(\tau)` from
+  :func:`ki_n_mp` at module load).
 
-  .. math::
+Both families satisfy the differential identities
 
-     E_n'(x) = -E_{n-1}(x), \qquad
-     \mathrm{Ki}_n'(x) = -\mathrm{Ki}_{n-1}(x),
+.. math::
 
-  and are verified term-by-term in ``tests/derivations/test_kernels.py``
-  (L0). They are the primitives the Phase-4 Peierls/Bickley Nyström
-  solvers will consume at 50 digits of working precision.
+   E_n'(x) = -E_{n-1}(x), \qquad
+   \mathrm{Ki}_n'(x) = -\mathrm{Ki}_{n-1}(x),
 
-The two tiers must agree to double precision on their common domain;
-this is itself a kernel-identity test (``test_legacy_matches_mpmath``).
+exposed as :func:`e_n_derivative` / :func:`ki_n_derivative` and
+verified term-by-term in ``tests/derivations/test_kernels.py`` (L0).
+
+.. note::
+
+   The legacy :class:`BickleyTables` tabulation (20 000-point
+   :math:`\mathrm{Ki}_3` lookup with ~:math:`10^{-3}` absolute
+   accuracy and a naming discrepancy under the A&S convention —
+   Issue #94) was retired in Phase B.4. Every former consumer now
+   uses the mpmath-built Chebyshev interpolant in
+   :mod:`~.cp_geometry`.
 """
 
 from __future__ import annotations
 
-import functools
 from typing import Callable
 
 import mpmath
 import numpy as np
-from scipy.integrate import quad
 from scipy.special import expn
 
 
@@ -108,109 +114,6 @@ def e3(x: float) -> float:
 def e3_vec(x: np.ndarray) -> np.ndarray:
     """Vectorised E₃."""
     return expn(3, np.maximum(x, 0.0))
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Ki₃ / Ki₄ kernels (cylindrical geometry)
-# ═══════════════════════════════════════════════════════════════════════
-
-class BickleyTables:
-    r"""Legacy tabulated Bickley–Naylor functions.
-
-    .. warning::
-
-       **Naming discrepancy with the Abramowitz & Stegun convention.**
-       The :meth:`ki3` method integrates ``sin(t)·exp(-x/sin(t))``,
-       which — under the substitution :math:`\theta' = \pi/2 - t` —
-       equals the canonical :math:`\mathrm{Ki}_2(x)` of A&S 11.2,
-       **not** :math:`\mathrm{Ki}_3(x)`. Similarly :meth:`ki4` returns
-       an approximation to the canonical :math:`\mathrm{Ki}_3(x)` via
-       a cumulative-sum integration with ~1e-3 absolute error.
-
-       This is kept for backward compatibility with
-       :mod:`orpheus.derivations.cp_cylinder` whose P-matrix
-       construction was written against these legacy names. The
-       Phase-4 Peierls cylinder reference (see the verification
-       campaign plan) will replace these with the canonical
-       :func:`ki_n` high-precision evaluator and retire this class.
-
-       Tracked in GitHub Issue on the verification campaign. Do
-       **not** rename silently — the CP formulas that consume this
-       may be numerically self-consistent under the legacy naming
-       and would break if the numbering were corrected in place.
-
-    Definitions as implemented:
-
-    .. math::
-
-        \mathtt{ki3}(x) &= \int_0^{\pi/2} \sin(t)\,\exp(-x/\sin t)\,dt
-            \;=\; \mathrm{Ki}_2^{\text{A\&S}}(x) \\
-        \mathtt{ki4}(x) &\approx \int_x^{\infty} \mathtt{ki3}(t)\,dt
-            \;\approx\; \mathrm{Ki}_3^{\text{A\&S}}(x)
-
-    Tables are built once and cached.
-    """
-
-    def __init__(self, n_points: int = 20_000, x_max: float = 50.0):
-        self.n_points = n_points
-        self.x_max = x_max
-        self._x = np.linspace(0, x_max, n_points)
-        self._dx = self._x[1] - self._x[0]
-
-        # Build Ki₃ table via numerical integration
-        ki3 = np.empty(n_points)
-        ki3[0] = 1.0
-        for i in range(1, n_points):
-            ki3[i], _ = quad(
-                lambda t, xx=self._x[i]: np.exp(-xx / np.sin(t)) * np.sin(t),
-                0, np.pi / 2,
-            )
-        self._ki3 = ki3
-
-        # Ki₄ = cumulative integral of Ki₃ from x to infinity
-        self._ki4 = np.cumsum(ki3[::-1])[::-1] * self._dx
-        self._ki4[-1] = 0.0
-
-    def ki3(self, x: float) -> float:
-        """Evaluate Ki₃(x) by interpolation."""
-        return float(np.interp(x, self._x, self._ki3, right=0.0))
-
-    def ki4(self, x: float) -> float:
-        """Evaluate Ki₄(x) by interpolation."""
-        return float(np.interp(x, self._x, self._ki4, right=0.0))
-
-    def ki3_vec(self, x: np.ndarray) -> np.ndarray:
-        """Vectorised Ki₃ (legacy naming — actually canonical Ki₂)."""
-        return np.interp(np.asarray(x, dtype=float), self._x, self._ki3, right=0.0)
-
-    def ki4_vec(self, x: np.ndarray) -> np.ndarray:
-        """Vectorised Ki₄ (legacy naming — actually canonical Ki₃)."""
-        return np.interp(np.asarray(x, dtype=float), self._x, self._ki4, right=0.0)
-
-    # Canonical A&S-named aliases (added for Phase 4.2, resolves #94)
-    def Ki2(self, x: float) -> float:
-        """Canonical :math:`\\mathrm{Ki}_2(x)` (= legacy ``ki3``)."""
-        return self.ki3(x)
-
-    def Ki3(self, x: float) -> float:
-        """Canonical :math:`\\mathrm{Ki}_3(x)` (= legacy ``ki4``, ~1e-3 accuracy)."""
-        return self.ki4(x)
-
-    def Ki2_vec(self, x: np.ndarray) -> np.ndarray:
-        """Vectorised canonical :math:`\\mathrm{Ki}_2` (= legacy ``ki3_vec``)."""
-        return self.ki3_vec(x)
-
-    def Ki3_vec(self, x: np.ndarray) -> np.ndarray:
-        """Vectorised canonical :math:`\\mathrm{Ki}_3` (= legacy ``ki4_vec``)."""
-        return self.ki4_vec(x)
-
-
-@functools.lru_cache(maxsize=1)
-def bickley_tables(
-    n_points: int = 20_000, x_max: float = 50.0,
-) -> BickleyTables:
-    """Get (or build) the cached Bickley-Naylor lookup tables."""
-    return BickleyTables(n_points, x_max)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -338,8 +241,7 @@ def ki_n(n: int, x: float, precision_digits: int = 50) -> float:
     :math:`x \ge 0`.
 
     Cross-checked against the Wallis closed form
-    :math:`\mathrm{Ki}_n(0)` (see :func:`ki_n_at_zero`) and against
-    the legacy :class:`BickleyTables` at double precision in the
+    :math:`\mathrm{Ki}_n(0)` (see :func:`ki_n_at_zero`) in the
     L0 kernel-identity tests.
 
     Parameters

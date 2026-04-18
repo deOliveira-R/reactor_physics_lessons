@@ -1006,14 +1006,17 @@ class TestKi4Resolution:
     not a systematic error.
     """
 
-    def test_cylindrical_ki4_convergence_with_table_size(self):
-        """[L2] Increasing Ki4 table points should improve cylindrical keff.
+    def test_cylindrical_ki3_kernel_is_insensitive_to_n_ki_table(self):
+        """[L2] After Phase B.4, the cylindrical solver routes through
+        the Chebyshev interpolant in orpheus.derivations.cp_geometry
+        (fixed ~1e-6 absolute accuracy), so ``n_ki_table`` is a no-op.
+        This test pins the new invariant: tuning ``n_ki_table`` does
+        not move ``keff`` at all.
 
         Setup: 2G 2-region cylindrical problem.
-        Expected: keff changes by < 1e-6 between 10k and 40k table points,
-                  confirming the default 20k is adequate.
-        Catches: table resolution being the dominant error source.
-        Closes: W-6.
+        Expected: keff bit-identical across three values of n_ki_table.
+        Closes: W-6 (under the new architecture — the old
+        "tune table resolution" knob is retired with BickleyTables).
         """
         from orpheus.derivations import get
         case = get("cp_cyl1D_2eg_2rg")
@@ -1035,17 +1038,9 @@ class TestKi4Resolution:
             result = solve_cp(case.materials, mesh, params)
             keffs[n_ki] = result.keff
 
-        # Convergence: difference should decrease with more table points
-        diff_low = abs(keffs[20000] - keffs[5000])
-        diff_high = abs(keffs[40000] - keffs[20000])
-
-        assert diff_high < diff_low, (
-            f"Ki4 table not converging: "
-            f"|k(20k)-k(5k)|={diff_low:.2e}, |k(40k)-k(20k)|={diff_high:.2e}"
-        )
-
-        # The 20k-to-40k difference should be small (within the Ki4
-        # interpolation accuracy, which is ~1e-5 for the default table)
-        assert diff_high < 2e-5, (
-            f"Ki4 residual error too large: |k(40k)-k(20k)|={diff_high:.2e}"
+        # All three runs must give bit-identical keff — n_ki_table is
+        # now a no-op parameter.
+        assert keffs[5000] == keffs[20000] == keffs[40000], (
+            f"n_ki_table should not affect keff after Phase B.4, "
+            f"got {keffs}"
         )

@@ -1,20 +1,19 @@
 """L0 parity tests for the unified flat-source CP builder.
 
-Phase B.2a gate: the unified :func:`~cp_geometry.build_cp_matrix`
-must reproduce the legacy ``_slab_cp_matrix``, ``_cylinder_cp_matrix``,
-and ``_sphere_cp_matrix`` outputs **bit-identically** — all three
-kernel paths use the same underlying primitives on both sides:
+Phase B.2a / B.4 gate: the unified :func:`~cp_geometry.build_cp_matrix`
+reproduces the pre-refactor ``_slab_cp_matrix``, ``_cylinder_cp_matrix``,
+and ``_sphere_cp_matrix`` outputs. As of B.4, the three facade
+functions *delegate* to ``build_cp_matrix``, so these parity tests
+become self-consistency checks (any call-site bug would surface
+here before the end-to-end eigenvalue tests).
+
+Kernel sources on each geometry:
 
 - Slab: scipy ``expn(3, x)`` via :func:`_kernels.e3_vec`.
-- Cylinder: legacy :class:`_kernels.BickleyTables` (retires in
-  Phase B.4 / :issue:`94` when the precision upgrade to
-  ``ki_n_mp(3, ·, 30)`` lands).
-- Sphere: ``np.exp(-tau)``.
-
-These tests pin the B.2a commit before B.2b swaps the three facades
-to delegate to the unified builder. If this file passes in Commit 1
-and the facades' L1 eigenvalue tests pass in Commit 2, the refactor
-is safe."""
+- Cylinder: Chebyshev interpolant of :math:`e^{\\tau}\\,\\mathrm{Ki}_3(\\tau)`
+  built from :func:`_kernels.ki_n_mp` at 30 dps (~:math:`10^{-6}`
+  absolute). Replaces the retired :class:`_kernels.BickleyTables`.
+- Sphere: ``np.exp(-tau)``."""
 
 from __future__ import annotations
 
@@ -97,7 +96,7 @@ def test_unified_slab_matches_legacy(ng_key, n_regions):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Cylinder: bit-identity (same BickleyTables on both sides in Phase B.2)
+# Cylinder: facade-over-unified consistency (same code path on both sides)
 # ═══════════════════════════════════════════════════════════════════════
 
 @pytest.mark.l0
@@ -111,9 +110,10 @@ def test_unified_slab_matches_legacy(ng_key, n_regions):
 @pytest.mark.parametrize("ng_key", ["1g", "2g", "4g"])
 @pytest.mark.parametrize("n_regions", [1, 2, 4])
 def test_unified_cylinder_matches_legacy(ng_key, n_regions):
-    """Unified cylinder P_inf matches legacy ``_cylinder_cp_matrix``
-    bit-identically — same ``BickleyTables.Ki3_vec`` on both sides in
-    Phase B.2. Phase B.4 will introduce the Ki_3 precision upgrade."""
+    """Unified cylinder P_inf matches the cp_cylinder facade (which is
+    itself a delegation to ``build_cp_matrix``). Bit-identity guards
+    against drift in the facade wiring or accidental alternate call
+    paths for the cylinder kernel."""
     sig_t_all, radii, volumes, R_cell = _cyl_inputs(ng_key, n_regions)
 
     legacy = _legacy_cyl._cylinder_cp_matrix(
@@ -354,19 +354,34 @@ class TestEscapeFromPCell:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Phase B.4 marker: Ki_3 precision upgrade is deferred
+# Cylinder Ki_3 Chebyshev interpolant accuracy (Phase B.4)
 # ═══════════════════════════════════════════════════════════════════════
 
 @pytest.mark.l0
-def test_cylinder_kernel_is_bickley_in_phase_b2():
-    """Phase B.2 pins the cylinder kernel to the legacy BickleyTables
-    for bit-identity with the pre-refactor builder. Phase B.4 will
-    swap to ``ki_n_mp(3, ·, 30)`` and retire :class:`BickleyTables`
-    (:issue:`94`). When that commit lands, this test flips."""
-    from orpheus.derivations.cp_geometry import _ki3_legacy
-    from orpheus.derivations._kernels import bickley_tables
+class TestKi3ChebyshevInterpolant:
+    """After Phase B.4, the cylinder kernel uses a Chebyshev interpolant
+    of ``exp(tau) * Ki_3(tau)`` built from ``ki_n_mp(3, ·, 30)`` at
+    module load — the legacy :class:`BickleyTables` retired. Accuracy
+    target: ~1e-6 absolute on ``[0, 50]`` (vs legacy ~1e-3)."""
 
-    tau = np.array([0.0, 0.5, 1.0, 2.5, 5.0, 10.0])
-    np.testing.assert_array_equal(
-        _ki3_legacy(tau), bickley_tables().Ki3_vec(tau),
-    )
+    def test_agrees_with_mpmath(self):
+        from orpheus.derivations._kernels import ki_n_mp
+        from orpheus.derivations.cp_geometry import _ki3_mp
+
+        probes = np.linspace(0.01, 48.0, 40)
+        cheb = _ki3_mp(probes)
+        mp = np.array([float(ki_n_mp(3, float(t), 30)) for t in probes])
+        err = np.abs(cheb - mp).max()
+        assert err < 5e-6, (
+            f"Ki_3 Chebyshev interpolant err {err:.3e} > 5e-6"
+        )
+
+    def test_ki3_at_zero_matches_pi_over_four(self):
+        from orpheus.derivations.cp_geometry import _ki3_mp
+        val = _ki3_mp(np.array([0.0]))[0]
+        assert abs(val - np.pi / 4.0) < 5e-6
+
+    def test_clamps_beyond_tau_max_to_zero(self):
+        from orpheus.derivations.cp_geometry import _ki3_mp
+        far = np.array([60.0, 100.0, 1e6])
+        np.testing.assert_allclose(_ki3_mp(far), 0.0, atol=1e-20)

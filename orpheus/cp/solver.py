@@ -36,12 +36,12 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 import numpy as np
-from scipy.integrate import quad
 from scipy.special import expn
 
 from orpheus.data.macro_xs.mixture import Mixture
 from orpheus.data.macro_xs.cell_xs import CellXS, assemble_cell_xs
 from orpheus.derivations._kernels import chord_half_lengths
+from orpheus.derivations.cp_geometry import _ki3_mp as _ki3_kernel
 from orpheus.geometry import BC, CoordSystem, Mesh1D
 from orpheus.numerics.eigenvalue import power_iteration
 
@@ -57,6 +57,9 @@ class CPParams:
     max_outer: int = 500
     keff_tol: float = 1e-6
     flux_tol: float = 1e-5
+    # n_ki_table, ki_max: retained for backwards compatibility; as of
+    # Phase B.4 the cylinder kernel is a fixed-precision Chebyshev
+    # interpolant in orpheus.derivations.cp_geometry (see #94).
     n_ki_table: int = 20000
     ki_max: float = 50.0
     n_quad_y: int = 64
@@ -89,39 +92,6 @@ class CPResult:
 def _e3(x):
     """Vectorised E_3(x) = integral_0^1 mu exp(-x/mu) dmu."""
     return expn(3, np.maximum(x, 0.0))
-
-
-def _build_ki_tables(
-    n_pts: int = 20000,
-    x_max: float = 50.0,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Tabulate Ki_3 and Ki_4 on a uniform grid.
-
-    Ki_3(x) = int_0^{pi/2} exp(-x/sin t) sin t dt
-    Ki_4(x) = int_x^inf Ki_3(t) dt
-
-    Returns (x_grid, ki3_vals, ki4_vals).
-    """
-    x_grid = np.linspace(0, x_max, n_pts)
-    ki3_vals = np.empty(n_pts)
-    ki3_vals[0] = 1.0
-
-    for i in range(1, n_pts):
-        ki3_vals[i], _ = quad(
-            lambda t, xx=x_grid[i]: np.exp(-xx / np.sin(t)) * np.sin(t),
-            0, np.pi / 2,
-        )
-
-    dx = x_grid[1] - x_grid[0]
-    ki4_vals = np.cumsum(ki3_vals[::-1])[::-1] * dx
-    ki4_vals[-1] = 0.0
-
-    return x_grid, ki3_vals, ki4_vals
-
-
-def _ki4_lookup(x, x_grid, ki4_vals):
-    """Vectorised Ki_4 lookup."""
-    return np.interp(x, x_grid, ki4_vals, right=0.0)
 
 
 def _composite_gauss_legendre(breakpoints, n_quad):
@@ -206,15 +176,17 @@ class CPMesh:
         self._chords = chord_half_lengths(radii, self._y_pts)
 
     def _setup_cylindrical(self) -> None:
-        """Cylindrical: Ki₄ kernel + y-quadrature."""
-        p = self.params
-        print("  Building Ki3/Ki4 lookup tables ...")
-        ki_x, _, ki4_v = _build_ki_tables(p.n_ki_table, p.ki_max)
+        """Cylindrical: canonical Ki_3 kernel + y-quadrature.
 
+        Shares the Chebyshev interpolant of ``exp(τ)·Ki_3(τ)`` built
+        in :mod:`orpheus.derivations.cp_geometry` so the solver's
+        ``keff`` and the derivation's ``k_inf`` reference use
+        bit-identical kernel evaluations. Accuracy ~:math:`10^{-6}`
+        absolute (cf legacy cumulative-sum tabulation at ~:math:`10^{-3}`)."""
         self._setup_radial_quadrature()
         n_y = len(self._y_pts)
-        self._kernel = lambda tau: _ki4_lookup(tau, ki_x, ki4_v)
-        self._kernel_zero = _ki4_lookup(np.zeros(n_y), ki_x, ki4_v)
+        self._kernel = _ki3_kernel
+        self._kernel_zero = _ki3_kernel(np.zeros(n_y))
 
     def _setup_spherical(self) -> None:
         """Spherical: exp(-τ) kernel + y-weighted quadrature."""

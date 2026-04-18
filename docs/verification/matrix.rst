@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **787**
+Total tests collected: **777**
 
 V&V level distribution
 ----------------------
@@ -16,11 +16,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 452, 57.4%
-   L1, 210, 26.7%
+   L0, 442, 56.9%
+   L1, 210, 27.0%
    L2, 36, 4.6%
    L3, 0, 0.0%
-   foundation, 78, 9.9%
+   foundation, 78, 10.0%
    unmarked, 11, 1.4%
 
 Tagging source
@@ -32,7 +32,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 697
+   explicit, 687
    verify, 0
    class-name, 46
    func-name, 0
@@ -57,8 +57,8 @@ Module × level grid
    cp/test_verification, 1, 25, 5, 0, 0, 0
    data/test_cross_section_data, 11, 0, 0, 0, 0, 0
    data/test_mixture, 4, 0, 0, 0, 0, 0
-   derivations/test_cp_geometry, 46, 0, 0, 0, 0, 0
-   derivations/test_kernels, 67, 0, 0, 0, 0, 0
+   derivations/test_cp_geometry, 48, 0, 0, 0, 0, 0
+   derivations/test_kernels, 55, 0, 0, 0, 0, 0
    derivations/test_peierls_convergence, 5, 0, 0, 0, 0, 0
    derivations/test_peierls_cylinder_eigenvalue, 3, 5, 0, 0, 0, 0
    derivations/test_peierls_cylinder_geometry, 10, 0, 0, 0, 0, 0
@@ -186,7 +186,6 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``transport-cartesian``, 16
    ``second-diff-general``, 15
    ``complementarity``, 12
-   ``kin-bickley-legacy-convention``, 12
    ``kinf-1g``, 12
    ``kinf-mg``, 12
    ``periodic-bc``, 12

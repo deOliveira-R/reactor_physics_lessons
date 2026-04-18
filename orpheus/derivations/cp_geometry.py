@@ -33,15 +33,15 @@ The per-geometry kernel choices are:
 
 - ``slab`` — :math:`E_{3}(\tau)` via ``scipy.special.expn(3, x)``
   (double-precision, ~1e-16 accuracy).
-- ``cylinder-1d`` — :math:`\mathrm{Ki}_{3}(\tau)` via the legacy
-  :class:`~._kernels.BickleyTables` (20k-point tabulation,
-  ~:math:`10^{-3}` accuracy). This is deliberate in Phase B.2 to
-  keep the unified builder bit-identical with the legacy
-  ``_cylinder_cp_matrix`` — the actual precision upgrade to
-  ``ki_n_mp(3, ·, dps=30)`` lands in Phase B.4 together with the
-  :class:`BickleyTables` retirement (:issue:`94`). The
-  :meth:`kernel_F3` dispatch is the single call site that the
-  Phase-B.4 commit has to swap.
+- ``cylinder-1d`` — :math:`\mathrm{Ki}_{3}(\tau)` via a Chebyshev
+  interpolant of :math:`e^{\tau}\,\mathrm{Ki}_{3}(\tau)` built from
+  :func:`~._kernels.ki_n_mp` at 30 dps on 64 Chebyshev-Gauss nodes
+  over :math:`[0, 50]`. Scaling by :math:`e^{\tau}` converts the
+  exponentially-decaying tail into a slowly-varying function —
+  reached by a degree-63 polynomial to ~:math:`10^{-6}` relative
+  accuracy (compared with the legacy :class:`BickleyTables` at
+  ~:math:`10^{-3}`). The :class:`BickleyTables` class is retired
+  as of this commit (:issue:`94`).
 - ``sphere-1d`` — :math:`e^{-\tau}` via ``np.exp(-tau)``
   (double-precision, machine-accurate).
 
@@ -55,11 +55,12 @@ The three pre-built :class:`FlatSourceCPGeometry` singletons
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Callable
 
 import numpy as np
 
-from ._kernels import bickley_tables, chord_half_lengths, e3_vec
+from ._kernels import chord_half_lengths, e3_vec, ki_n_mp
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -90,13 +91,46 @@ def _second_difference(
 # Per-geometry kernel callables
 # ═══════════════════════════════════════════════════════════════════════
 
-def _ki3_legacy(tau: np.ndarray) -> np.ndarray:
-    r"""Legacy tabulated :math:`\mathrm{Ki}_3(\tau)` via
-    :class:`~._kernels.BickleyTables` (~:math:`10^{-3}` tabulation
-    accuracy). Kept bit-identical with ``_cylinder_cp_matrix`` in
-    Phase B.2; upgraded to ``ki_n_mp(3, ·, 30)`` in Phase B.4 when
-    :class:`BickleyTables` retires (:issue:`94`)."""
-    return bickley_tables().Ki3_vec(np.asarray(tau, dtype=float))
+_KI3_TAU_MAX: float = 50.0
+_KI3_DEG: int = 63          # 64 Chebyshev-Lobatto nodes
+_KI3_DPS: int = 30
+
+
+@lru_cache(maxsize=1)
+def _ki3_scaled_cheb() -> "np.polynomial.Chebyshev":
+    r"""Chebyshev interpolant of the SCALED kernel
+    :math:`f(\tau) = e^{\tau}\,\mathrm{Ki}_3(\tau)` on
+    :math:`[0, \tau_{\max}]`.
+
+    Scaling by :math:`e^{\tau}` converts the exponentially-decaying
+    tail of :math:`\mathrm{Ki}_3` into a slowly-varying function that
+    a degree-63 polynomial fits to ~:math:`10^{-6}` relative accuracy.
+    Built once at first access via :func:`lru_cache`; uses
+    :func:`~._kernels.ki_n_mp` at 30 dps. Build time: ~0.3 s.
+    """
+    def func_scaled(tau: np.ndarray) -> np.ndarray:
+        return np.array([
+            float(ki_n_mp(3, float(t), _KI3_DPS)) * float(np.exp(t))
+            for t in tau
+        ])
+    return np.polynomial.Chebyshev.interpolate(
+        func_scaled, deg=_KI3_DEG, domain=[0.0, _KI3_TAU_MAX],
+    )
+
+
+def _ki3_mp(tau: np.ndarray) -> np.ndarray:
+    r"""Double-precision :math:`\mathrm{Ki}_3(\tau)` via the Chebyshev
+    interpolant of :math:`e^{\tau}\,\mathrm{Ki}_3(\tau)`.
+
+    Clamps :math:`\tau > \tau_{\max}` to 0 (:math:`\mathrm{Ki}_3(50)
+    \approx 3\times 10^{-23}`, negligible)."""
+    poly = _ki3_scaled_cheb()
+    tau = np.asarray(tau, dtype=float)
+    out = np.zeros_like(tau, dtype=float)
+    mask = tau <= _KI3_TAU_MAX
+    if np.any(mask):
+        out[mask] = poly(tau[mask]) * np.exp(-tau[mask])
+    return out
 
 
 def _exp_kernel(tau: np.ndarray) -> np.ndarray:
@@ -133,7 +167,7 @@ class FlatSourceCPGeometry:
         if self.kind == "slab":
             return e3_vec(np.asarray(tau, dtype=float))
         if self.kind == "cylinder-1d":
-            return _ki3_legacy(tau)
+            return _ki3_mp(tau)
         return _exp_kernel(tau)
 
     def kernel_F3_at_zero(self) -> float:
