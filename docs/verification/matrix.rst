@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **845**
+Total tests collected: **874**
 
 V&V level distribution
 ----------------------
@@ -16,11 +16,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 501, 59.3%
-   L1, 219, 25.9%
-   L2, 36, 4.3%
+   L0, 520, 59.5%
+   L1, 225, 25.7%
+   L2, 36, 4.1%
    L3, 0, 0.0%
-   foundation, 78, 9.2%
+   foundation, 82, 9.4%
    unmarked, 11, 1.3%
 
 Tagging source
@@ -32,7 +32,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 755
+   explicit, 784
    verify, 0
    class-name, 46
    func-name, 0
@@ -65,7 +65,9 @@ Module × level grid
    derivations/test_peierls_cylinder_multi_region, 7, 0, 0, 0, 3, 0
    derivations/test_peierls_cylinder_prefactor, 4, 0, 0, 0, 0, 0
    derivations/test_peierls_cylinder_white_bc, 4, 3, 0, 0, 0, 0
-   derivations/test_peierls_rank_n_bc, 59, 9, 0, 0, 0, 0
+   derivations/test_peierls_rank_n_bc, 59, 15, 0, 0, 0, 0
+   derivations/test_peierls_rank_n_conservation, 0, 0, 0, 0, 4, 0
+   derivations/test_peierls_rank_n_primitives, 19, 0, 0, 0, 0, 0
    derivations/test_peierls_sphere_eigenvalue, 0, 4, 0, 0, 0, 0
    derivations/test_peierls_sphere_geometry, 21, 0, 0, 0, 0, 0
    derivations/test_peierls_sphere_prefactor, 6, 0, 0, 0, 0, 0
@@ -123,10 +125,10 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``alpha-recursion``, 100
    ``wdd-closure``, 100
    ``wdd-face``, 100
+   ``peierls-rank-n-bc-closure``, 93
    ``collision-rate``, 91
    ``alpha-cylindrical``, 74
    ``mm-weights``, 74
-   ``peierls-rank-n-bc-closure``, 68
    ``multigroup``, 65
    ``ki3-def``, 61
    ``e3-def``, 58
@@ -283,9 +285,11 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
 Orphan equations
 ----------------
 
-Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **6** of the testable equations found on theory pages are orphan.
+Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **8** of the testable equations found on theory pages are orphan.
 
 - ``e1-decomposition``
+- ``peierls-rank-n-P-esc-moment``
+- ``peierls-rank-n-jacobian-derivation``
 - ``peierls-sphere-G-bc``
 - ``peierls-sphere-equation``
 - ``peierls-sphere-nystrom``

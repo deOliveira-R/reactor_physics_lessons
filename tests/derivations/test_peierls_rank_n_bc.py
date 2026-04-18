@@ -234,23 +234,61 @@ def test_shifted_legendre_known_values(n, mu, expected):
 # ═══════════════════════════════════════════════════════════════════════
 
 @pytest.mark.l1
+@pytest.mark.parametrize("geometry", _GEOMETRIES)
+@pytest.mark.parametrize("R", [1.0, 2.0, 5.0])
+def test_rank2_improves_over_rank1(geometry, R):
+    """Rank-2 (DP_1) error ≤ rank-1 (DP_0) error at every R ≤ 5 MFP.
+
+    This is the **canonical Marshak-ladder first step** that the
+    2026-04-18 ``(ρ_max / R)²`` Jacobian fix unlocked in
+    :func:`~orpheus.derivations.peierls_geometry.compute_P_esc_mode`.
+    Adding the N=1 mode to the rank-1 closure MUST reduce the
+    thin-cell error on both geometries — this is the direct analogue
+    of Stepanek 1981's slab DP_0 → DP_1 improvement at each optical
+    thickness.
+
+    Expected headline improvements after the fix:
+
+    =========  ======  ================  ================
+    Geometry    R      N=1 err           N=2 err
+    =========  ======  ================  ================
+    Sphere     1 MFP   26.9 %            1.2 %
+    Sphere     5 MFP   0.68 %            0.25 %
+    Cylinder   1 MFP   20.9 %            8.3 %
+    Cylinder   5 MFP   2.1 %             1.4 %
+    =========  ======  ================  ================
+
+    Regression would indicate the Jacobian factor was dropped. Issue
+    #112 remains open for the full ladder to N=8 (requires cylinder
+    3-D quadrature + sphere canonical DP_N audit).
+    """
+    err_1 = abs(_solve(geometry, R=R, n_bc_modes=1,
+                       n_angular=32, n_rho=32, n_surf_quad=32).k_eff - _K_INF) / _K_INF
+    err_2 = abs(_solve(geometry, R=R, n_bc_modes=2,
+                       n_angular=32, n_rho=32, n_surf_quad=32).k_eff - _K_INF) / _K_INF
+    assert err_2 < err_1, (
+        f"[{geometry.kind}] R={R}: rank-2 error {err_2*100:.3f}% "
+        f"exceeds rank-1 {err_1*100:.3f}%. The (ρ_max/R)² Jacobian "
+        f"in compute_P_esc_mode may have been regressed."
+    )
+
+
+@pytest.mark.l1
 @pytest.mark.slow
 @pytest.mark.xfail(
     reason=(
-        "Cylinder rank-N convergence is non-monotone because the "
-        "current implementation weights the existing surface-centred "
-        "Ki_1/d G_bc integrand by P̃_n(|μ_s_2D|) where μ_s_2D is the "
-        "2-D projected cosine (R − r cos φ)/d. The CANONICAL Gelbard "
-        "DP_{N−1} basis requires the FULL 3-D μ_s = sin θ_p · μ_s_2D "
-        "that emerges when the z-integration of the 3-D point kernel "
-        "is done with the P̃_n weighting INSIDE the kernel. For mode "
-        "n=0 the weighting is trivial (P̃_0 ≡ 1) and the two forms "
-        "agree; for n ≥ 1 they differ and my shortcut of 'same "
-        "integrand, reweighted by P̃_n(μ_s_2D)' is not equivalent to "
-        "the canonical closure. Diagnostic trail preserved in Issue "
-        "#112 (follow-up) and §8 of peierls_unified.rst. Flip to "
-        "pass once Issue #112 lands the 3-D angular quadrature for "
-        "cylinder mode-n primitives."
+        "Partial fix landed 2026-04-18 (the (ρ_max/R)² Jacobian "
+        "factor in compute_P_esc_mode). Cylinder thin-cell now "
+        "improves 21 % → 8 % (N=2) → 27 % (N=3) — the rank-1 → "
+        "rank-2 step is a clean 2.5× improvement, but the ladder "
+        "DIVERGES at N ≥ 3 because the cylinder G_bc_mode still "
+        "uses a 2-D projected μ_s (P̃_n(|μ_{s,2D}|)) in the "
+        "surface-centred Ki_1/d integrand. The CANONICAL Gelbard "
+        "DP_{N-1} basis requires the FULL 3-D cosine "
+        "μ_{s,3D} = sin θ_p · μ_{s,2D}, obtained by explicit "
+        "θ_p integration that produces higher-order Bickley "
+        "functions Ki_{2+k} (Knyazev 1993). Issue #112 tracks the "
+        "3-D cylinder quadrature to flip this xfail to pass."
     ),
     strict=False,
 )
@@ -297,17 +335,18 @@ def test_rank_n_row_sum_improves_thin_cell_cylinder():
 @pytest.mark.parametrize("N", [2, 3, 5])
 @pytest.mark.xfail(
     reason=(
-        "Rank-N at thick R introduces a ~1–10 % perturbation from "
-        "the converged rank-1 value because the mode-n primitives "
-        "are not in the canonical Gelbard/Marshak normalization "
-        "(cylinder uses a 2-D μ_s projection instead of the full 3-D "
-        "μ_s; sphere mode-n magnitude is correct in shape but the "
-        "(2n+1) normalization interacts with the solver's linear "
-        "algebra in a way that over-perturbs the BC block). The "
-        "diagonal rank-1 decomposition IS verified "
-        "(test_rank_n_cross_mode_diagonal passes), so the structural "
-        "assembly is correct; only the mode-n MAGNITUDE is wrong. "
-        "Fix plan in Issue #112."
+        "Partial fix landed 2026-04-18 (the (ρ_max/R)² Jacobian "
+        "factor in compute_P_esc_mode). Thick-cell stability now "
+        "vastly improved: sphere k(N=2) − k(N=1) = 1.7e-3, "
+        "cylinder = 1.0–2.1e-3 (down from 1–10 % before the fix). "
+        "This test's strict 1e-3 bound fails by a hair (the fix is "
+        "a ~2× improvement over rank-1 at thick R, not a "
+        "'no-change' regression gate). The strict bound is "
+        "appropriate as the GOAL for the full Phase-C cylinder 3-D "
+        "quadrature in Issue #112 (at which point sphere should "
+        "also tighten further). Meanwhile, "
+        "test_rank_n_conservation_improves passes as the "
+        "canonical rank-N-improves-rank-1 gate."
     ),
     strict=False,
 )
@@ -342,14 +381,20 @@ def test_rank_n_thick_cell_unchanged(geometry, N):
 @pytest.mark.slow
 @pytest.mark.xfail(
     reason=(
-        "Sphere rank-N plateaus at ~15 % after N=2 because mode-n ≥ 2 "
-        "contributions are too small (empirically 5× smaller than the "
-        "canonical Gelbard DP_N predicts). The shape of the mode-1 "
-        "correction is correct (27 % → 15 % is directionally right "
-        "and the rank-1 diagonal decomposition passes) but the "
-        "MAGNITUDE is off by a geometry-dependent normalization. "
-        "Issue #112 tracks the fix. Flip to pass once the sphere "
-        "mode-n P̃_n integrand is renormalized."
+        "Partial fix landed 2026-04-18 (the (ρ_max/R)² Jacobian "
+        "factor in compute_P_esc_mode). Sphere thin-cell now converges "
+        "DRAMATICALLY better: 27 % (N=1) → 1.22 % (N=2) — a 22× "
+        "reduction, exactly matching the Gelbard DP_1 prediction. "
+        "However, the ladder PLATEAUS at ~2.5 % for N ≥ 3 because "
+        "the closure is diagonal-in-mode-index (each mode n is "
+        "self-contained per Sanchez & McCormick Eq. 167) and the "
+        "sphere's N=2 (= DP_1) closure is AS-GOOD-AS-IT-GETS with "
+        "the current single-Jacobian factor. Closing the plateau "
+        "to <1 % at N=8 requires the sphere integrand's canonical "
+        "Gelbard DP_N derivation (Phase A per Issue #112, likely "
+        "adding a cosine weight on top of the Jacobian). The "
+        "monotonicity clause of this test still passes down to N=2; "
+        "the plateau for higher N is the remaining work."
     ),
     strict=False,
 )

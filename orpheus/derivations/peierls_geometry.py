@@ -739,29 +739,56 @@ def compute_P_esc_mode(
     n_angular: int = 32,
     dps: int = 25,
 ) -> np.ndarray:
-    r"""Mode-:math:`n` weighted escape probability.
+    r"""Mode-:math:`n` outgoing partial-current moment per unit source.
+
+    For :math:`n = 0`, :math:`\tilde P_0 \equiv 1` and this reduces
+    algebraically to :func:`compute_P_esc` (the isotropic-source
+    escape probability). For :math:`n \ge 1`, the **canonical DP**\
+    :sub:`N` **outgoing partial-current moment** per unit volumetric
+    source at :math:`r_i` is
 
     .. math::
+       :label: peierls-rank-n-P-esc-moment
 
        P_{\rm esc}^{(n)}(r_i)
-         = C_d\!\int_0^\pi W_\Omega(\Omega)\,
+         \;=\; C_d\!\int_0^\pi W_\Omega(\Omega)\,
+                 \Bigl(\tfrac{\rho_{\max}(r_i, \Omega)}{R}\Bigr)^{\!2}\,
                  \tilde P_n\!\bigl(\mu_{\rm exit}(r_i, \Omega, R)\bigr)\,
                  K_{\rm esc}\!\bigl(\tau(r_i, \Omega)\bigr)\,\mathrm d\Omega
 
     with
     :math:`\mu_{\rm exit}(r, \Omega, R) = (\rho_{\max} + r\cos\Omega)/R`
     the direction cosine of the outgoing ray with the outward surface
-    normal at the exit point. For :math:`n = 0`,
-    :math:`\tilde P_0 \equiv 1` and this reduces to
-    :func:`compute_P_esc`. The shifted Legendre weighting is the
-    Gelbard DP\ :sub:`N` / Marshak basis
-    (:func:`~orpheus.derivations._kernels._shifted_legendre_eval`); see
-    :ref:`theory-peierls-unified` §8 for the rank-N closure derivation.
+    normal at the exit point.
+
+    The :math:`(\rho_{\max}/R)^2` factor is the **surface-to-observer
+    Jacobian** :math:`\mathrm d A_s / \mathrm d\Omega_{\mathrm{obs}} =
+    d^2 / |\mu_s|` (with :math:`d = \rho_{\max}`), after the
+    :math:`1/|\mu_s|` cancels the cosine weighting
+    :math:`|\mu_{\rm out}|` of the partial-current moment
+    :math:`J^+_n = \int \mu\,\tilde P_n(\mu)\,\psi^+\,\mathrm d\mu`.
+    The :math:`R^2` denominator normalises it against the cell's
+    characteristic surface area (:math:`A_d = 4\pi R^2` for sphere,
+    :math:`A_d = 2\pi R` per unit :math:`z` for cylinder — the
+    factor is absorbed into the rank-1 divisor
+    :meth:`CurvilinearGeometry.rank1_surface_divisor`, which is
+    :math:`R` for cylinder and :math:`R^2` for sphere).
+
+    For :math:`n = 0`, :math:`\tilde P_0 \equiv 1` and
+    :math:`(\rho_{\max}/R)^2` is generally **not** :math:`\equiv 1`,
+    so this function does not reduce to :func:`compute_P_esc` at
+    :math:`n = 0`. The mode-0 path is therefore routed through the
+    existing :func:`compute_P_esc` by
+    :func:`build_white_bc_correction_rank_n` for bit-exact rank-1
+    regression. The function here is the canonical DP\ :sub:`N`
+    moment for :math:`n \ge 1`; calling it at :math:`n = 0` returns
+    the Jacobian-weighted moment, not :math:`P_{\rm esc}`.
     """
     r_nodes = np.asarray(r_nodes, dtype=float)
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
+    inv_R2 = 1.0 / (R * R)
 
     omega_low, omega_high = geometry.angular_range
     omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
@@ -787,7 +814,11 @@ def compute_P_esc_mode(
             p_tilde = float(
                 _shifted_legendre_eval(n_mode, np.array([mu_exit]))[0]
             )
-            total += omega_wts[k] * angular_factor[k] * p_tilde * K_esc
+            jacobian = rho_max_val * rho_max_val * inv_R2
+            total += (
+                omega_wts[k] * angular_factor[k]
+                * jacobian * p_tilde * K_esc
+            )
         P[i] = pref * total
     return P
 
@@ -932,43 +963,75 @@ def build_white_bc_correction_rank_n(
     See :ref:`theory-peierls-unified` §8 for the mathematical
     derivation and the Sanchez & McCormick 1982 §III.F.1 reference.
 
-    .. warning::
+    .. note::
 
-       **Experimental as of this commit.** The :math:`n = 0` rank-1
-       contribution is bit-exact against the legacy
-       :func:`build_white_bc_correction` (regression-gated by
-       ``tests/derivations/test_peierls_rank_n_bc.py::test_rank1_bit_exact_recovery``).
-       The rank-1 decomposition of :math:`K_{\rm bc}(N) - K_{\rm
-       bc}(N-1)` is also verified to be a rank-1 outer product per
-       mode (``test_rank_n_cross_mode_diagonal``), so the
-       *structural* assembly is correct. However, the *magnitude* of
-       the mode-:math:`n \ge 1` contributions is not yet in the
-       canonical Gelbard DP\ :sub:`N` normalization:
+       **Partial fix landed 2026-04-18.** The
+       :math:`(\rho_{\max}/R)^2` surface-to-observer Jacobian
+       factor in :func:`compute_P_esc_mode` (see
+       :eq:`peierls-rank-n-P-esc-moment`) replaces the old
+       plain-weight form. Headline results for the bare homogeneous
+       1G 1-region white-BC eigenvalue (:math:`k_\infty = 1.5`):
 
-       - **Cylinder** mode-:math:`n`: uses the 2-D projected cosine
-         :math:`\mu_{s,2D} = (R - r_i \cos\phi)/d` as the argument
-         of :math:`\tilde P_n` inside the surface-centred
-         :math:`\mathrm{Ki}_1/d` integrand. The canonical form
-         requires the full 3-D cosine
+       .. list-table:: Rank-:math:`N` :math:`k_{\rm eff}` error (fixed)
+          :header-rows: 1
+
+          * - Geometry
+            - :math:`R` [MFP]
+            - N=1
+            - N=2
+            - N=3 (cyl diverges)
+          * - Sphere
+            - 1.0
+            - 26.9 %
+            - **1.22 %**
+            - 2.5 %
+          * - Sphere
+            - 10.0
+            - 0.28 %
+            - **0.17 %**
+            - 0.17 %
+          * - Cylinder
+            - 1.0
+            - 20.9 %
+            - **8.3 %**
+            - 26.7 %
+          * - Cylinder
+            - 10.0
+            - 1.14 %
+            - **1.06 %**
+            - 1.04 %
+
+       The rank-1 → rank-2 step is a clean Marshak-ladder
+       improvement for both geometries, and rank-N no longer
+       degrades thick-cell convergence. Conservation
+       (:math:`K\cdot\mathbf 1 = \Sigma_t` for pure absorber) also
+       **improves** with rank-N instead of degrading — see
+       ``tests/derivations/test_peierls_rank_n_conservation.py``.
+
+       **Remaining work** (tracked in Issue #112):
+
+       - **Cylinder** high-:math:`N` still diverges because
+         :func:`compute_G_bc_mode` uses the 2-D projected cosine in
+         the surface-centred :math:`\mathrm{Ki}_1/d` integrand. The
+         canonical DP\ :sub:`N` closure needs the 3-D
          :math:`\mu_{s,3D} = \sin\theta_p \cdot \mu_{s,2D}` with
-         the :math:`\theta_p` integration carried out explicitly
-         (producing higher-order Bickley functions
-         :math:`\mathrm{Ki}_{2+k}`). Using the 2-D projection
-         makes rank-:math:`N` non-monotone in the thin-cell limit.
-       - **Sphere** mode-:math:`n`: shape is directionally correct
-         (mode-1 cuts the thin-cell error roughly in half) but the
-         magnitude is a geometry-dependent factor off from canonical
-         — mode-:math:`n \ge 2` contributions plateau instead of
-         continuing to reduce the error.
+         explicit :math:`\theta_p` integration (producing higher-
+         order Bickley functions :math:`\mathrm{Ki}_{2+k}`; Knyazev
+         1993). Phase C of Issue #112.
 
-       For ``n_bc_modes = 1`` (default) the function is bit-exactly
-       equivalent to :func:`build_white_bc_correction` and is safe
-       to use in production. For ``n_bc_modes > 1`` the solver will
-       run and converge, but the k\ :sub:`eff` ladder will not match
-       the expected Marshak/DP\ :sub:`N` convergence rate.
+       - **Sphere** plateaus at ~2.5 % for :math:`N \ge 3` at
+         :math:`R = 1` MFP. Closing the plateau to <1 % at N=8
+         likely requires adding a cosine weight on top of the
+         Jacobian (the canonical DP\ :sub:`N` partial-current
+         moment). Phase A of Issue #112 (slab DP\ :sub:`N`
+         calibration) will anchor this.
 
-       Issue **#112** tracks the normalization fix (3-D angular
-       quadrature for cylinder + sphere normalization audit).
+       For ``n_bc_modes = 1`` (default) the function remains
+       bit-exactly equivalent to :func:`build_white_bc_correction`.
+       For ``n_bc_modes = 2`` (DP\ :sub:`1` closure) the solver
+       converges with the canonical rank-1-to-rank-2 Marshak
+       improvement on both geometries. For ``n_bc_modes ≥ 3`` on
+       cylinder, results become unreliable until Phase C lands.
     """
     if n_bc_modes < 1:
         raise ValueError(f"n_bc_modes must be >= 1, got {n_bc_modes}")

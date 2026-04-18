@@ -1457,21 +1457,186 @@ mode-index matrix to diagonal.
   magnitude issue.
 
 **Until Issue #112 lands** the 3-D cylinder quadrature and
-sphere normalization audit, the function is safe at the default
-``n_bc_modes = 1`` (byte-identical to the legacy
+sphere canonical DP\ :sub:`N` audit, the function is safe at the
+default ``n_bc_modes = 1`` (byte-identical to the legacy
 :func:`~orpheus.derivations.peierls_geometry.build_white_bc_correction`).
 Convergence-ladder tests
 (``test_rank_n_row_sum_improves_thin_cell_*``,
 ``test_rank_n_thick_cell_unchanged``,
 ``test_rank_n_sphere_thin_cell_convergence``) carry ``xfail``
 markers with diagnostic reasons referencing Issue #112 — they
-flip to pass automatically when the fix lands.
+flip to pass automatically when the full fix lands.
 
 The :func:`~orpheus.derivations._kernels._shifted_legendre_eval`
 utility (orthonormality and known-value tests in the same file)
 is verified-correct and is the basis building block both the
-Cylinder 3-D quadrature and the sphere normalization audit will
-reuse unchanged.
+cylinder 3-D quadrature and the sphere canonical DP\ :sub:`N`
+audit will reuse unchanged.
+
+
+Surface-to-observer Jacobian :math:`(\rho_{\max}/R)^2` — 2026-04-18 fix
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The initial rank-:math:`N` skeleton weighted the same angular
+integrand :math:`\int W_\Omega(\Omega)\,e^{-\tau}\,\mathrm d\Omega`
+by :math:`\tilde P_n(\mu_{\rm exit})` for BOTH
+:math:`G_{\rm bc}^{(n)}` (the flux-per-unit-\ :math:`J^-_n`
+response) and :math:`P_{\rm esc}^{(n)}` (the outgoing partial-
+current moment per unit source). The numerics-investigator
+uncovered an **identity** for the sphere,
+
+.. math::
+
+   G_{\rm bc}^{(n)}(r_i) \;=\; 4\,P_{\rm esc}^{(n)}(r_i)
+   \qquad \text{(sphere only, every } r,\ n,\ R\text{)},
+
+verified numerically to :math:`10^{-12}` precision across all
+modes and all cell radii. Both primitives share the **same**
+observer-centred integrand
+:math:`\int_{4\pi} \tilde P_n(\mu_s)\,e^{-\tau}\,\mathrm d\Omega`;
+the ratio :math:`4` is the geometry-prefactor convention
+(:math:`2` for :math:`G_{\rm bc}` vs :math:`0.5` for
+:math:`P_{\rm esc}`).
+
+**Consequence.** Each rank-1 outer product
+:math:`u_n \otimes v_n` of the form
+
+.. math::
+
+   u_n[i]\,v_n[j] \;=\;
+     \text{(scalar)} \cdot \tilde P_n(\mu_{\rm exit}(r_i)) \,\cdot\,
+                             \tilde P_n(\mu_{\rm exit}(r_j))
+
+is a **symmetric** :math:`\tilde P_n(r_i)\,\tilde P_n(r_j)`
+factorisation — the same function evaluated at both indices.
+Summed over :math:`n`, this gives a rank-:math:`N` matrix in the
+:math:`\tilde P_n` basis, but all modes share the **same** basis
+functions and the same integrand structure. No amount of scalar
+re-weighting by :math:`(2n+1)` vs :math:`1` vs :math:`1/(2n+1)`
+can recover a proper Marshak closure — verified empirically over
+three α-scans in
+``derivations/diagnostics/diag_rank_n_{06,07}_*.py``.
+
+**The fix**. Derive the canonical outgoing partial-current moment
+per unit volumetric source at :math:`r_i` from first principles.
+For a uniform source :math:`q = 1`:
+
+.. math::
+
+   J^{+}_n \;=\; \frac{1}{A_d}\,\int_S \mathrm d A_s
+                 \int_{\text{outward}} |\mu_{\rm out}|\,
+                 \tilde P_n(\mu_{\rm out})\,\psi^{+}\,\mathrm d\Omega.
+
+Convert the surface-plus-outward-hemisphere integral to an
+**observer-centred** integral at the source point :math:`r_i`
+using the 3-D projection Jacobian
+
+.. math::
+
+   \mathrm d A_s\,\mathrm d\Omega_{\rm out}\,|\mu_s|
+   \;=\; d^{\,2}\,\mathrm d\Omega_{r_i},
+   \qquad d = \rho_{\max}(r_i,\Omega)
+
+(standard optics; the outgoing direction :math:`\Omega_{\rm out}`
+at the surface is the reverse of the observer-centred direction
+:math:`\Omega_{r_i}`). The :math:`|\mu_s|` cancels the
+:math:`|\mu_{\rm out}|` cosine weight of the partial-current
+moment, and the :math:`\mathrm d A_s\,\mathrm d\Omega_{\rm out}`
+pair becomes :math:`\mathrm d\Omega_{r_i}\,d^{\,2}`:
+
+.. math::
+   :label: peierls-rank-n-jacobian-derivation
+
+   J^{+}_n(r_i) \;=\; \frac{1}{A_d}\,
+                      \int_\Omega \tilde P_n(\mu_{\rm exit})\,
+                      d^{\,2}(r_i,\Omega)\,\psi^{+}\,\mathrm d\Omega
+                 \;=\; \frac{1}{A_d}\,
+                      \int_\Omega \tilde P_n(\mu_{\rm exit})\,
+                      \rho_{\max}^{\,2}(r_i,\Omega)\,e^{-\tau}\,
+                      \mathrm d\Omega.
+
+Dividing by the cell's characteristic :math:`R^2` (to match the
+:math:`A_d^{\rm divisor}` convention in
+:meth:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry.rank1_surface_divisor`,
+which is :math:`R` for cylinder and :math:`R^2` for sphere) gives
+the dimensionless factor :math:`(\rho_{\max}/R)^2` now carried in
+:func:`~orpheus.derivations.peierls_geometry.compute_P_esc_mode`:
+
+.. math::
+   :label: peierls-rank-n-P-esc-moment
+
+   P_{\rm esc}^{(n)}(r_i) \;=\; C_d\!\int_0^\pi W_\Omega(\Omega)\,
+                    \Bigl(\tfrac{\rho_{\max}(r_i,\Omega)}{R}\Bigr)^{\!2}\,
+                    \tilde P_n\!\bigl(\mu_{\rm exit}\bigr)\,
+                    K_{\rm esc}(\tau)\,\mathrm d\Omega.
+
+The :math:`(\rho_{\max}/R)^2` factor is **trivially** :math:`1`
+at :math:`r = 0` in the sphere (where every ray has the same
+exit distance :math:`\rho_{\max} \equiv R`) and only matters
+off-centre. This is why the old rank-N skeleton produced
+apparently-correct mode-0 behaviour at :math:`r = 0`: the
+Jacobian factor is :math:`1` there, hiding the bug. The
+investigator's :math:`G_{\rm bc}^{(n)} = 4\,P_{\rm esc}^{(n)}`
+identity only breaks for :math:`r > 0` once the Jacobian is
+restored.
+
+**Empirical impact** (bare homogeneous 1G 1-region white-BC,
+:math:`k_\infty = 1.5`):
+
+.. list-table:: Rank-:math:`N` :math:`k_{\rm eff}` error, pre- and post-fix
+   :header-rows: 1
+   :widths: 10 10 15 15 15 15
+
+   * - Geom
+     - :math:`R`
+     - N=1 err
+     - N=2 pre-fix
+     - N=2 post-fix
+     - Improvement
+   * - Sphere
+     - 1 MFP
+     - 26.9 %
+     - 16 % (plateau)
+     - **1.22 %**
+     - :math:`22\times`
+   * - Sphere
+     - 10 MFP
+     - 0.28 %
+     - 6.64 % (worse!)
+     - **0.17 %**
+     - conserves
+   * - Cylinder
+     - 1 MFP
+     - 20.9 %
+     - 5.4 %
+     - **8.3 %** (worse)
+     - –
+   * - Cylinder
+     - 10 MFP
+     - 1.14 %
+     - 9.3 % (worse!)
+     - **1.06 %**
+     - conserves
+
+Sphere is the clean win. Cylinder is partial — at thick :math:`R`
+the fix prevents the rank-N degradation observed pre-fix (rank-2
+no longer shoots up to 9.3 %), but the thin-cell rank-2 behaves
+slightly worse than the old (no-Jacobian) form because the
+cylinder's :func:`compute_G_bc_mode` still uses the 2-D projected
+:math:`\mu_{s,2D}` in the surface-centred :math:`\mathrm{Ki}_1/d`
+integrand rather than the 3-D :math:`\mu_{s,3D} = \sin\theta_p
+\cdot \mu_{s,2D}`. That 3-D upgrade (Phase C of Issue #112) is
+expected to flip the cylinder improvement too.
+
+**Conservation** (the quantitative smoking gun). For a
+homogeneous pure absorber (:math:`\Sigma_s = \nu\Sigma_f = 0`)
+with uniform :math:`q = 1`, the kernel identity
+:math:`K\cdot\mathbf 1 = \Sigma_t\,\mathbf 1` must hold.
+Pre-fix: rank-N **degraded** the defect by :math:`10\times` at
+thick :math:`R`. Post-fix: rank-N **reduces** the defect
+uniformly. The
+``tests/derivations/test_peierls_rank_n_conservation.py``
+fixtures gate this explicitly.
 
 
 Section 9 — Test-bed evidence from Phase 4.2 (cylinder)

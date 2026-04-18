@@ -91,25 +91,19 @@ def test_rank1_conservation_defect_is_small(geometry):
 
 @pytest.mark.foundation
 @pytest.mark.parametrize("geometry", _GEOMETRIES)
-@pytest.mark.xfail(
-    reason=(
-        "Issue #112 rank-N mode-n magnitude bug. Adding modes 1..N-1 "
-        "WORSENS the conservation defect by 5-15× instead of reducing "
-        "it. Smoking gun for the current (2n+1)-factor/normalization "
-        "error in the mode-n primitives. Flip to pass once the fix "
-        "lands."
-    ),
-    strict=False,
-)
 def test_rank_n_conservation_improves(geometry):
     """Adding Marshak modes must NEVER worsen conservation.
 
     At thick R=10 where rank-1 is already well-conserved (<1 % defect),
     a correctly-normalised rank-N closure should leave the defect
-    essentially unchanged (drift < 5 % of rank-1 value).
+    essentially unchanged (drift < 10 % of rank-1 value).
 
-    Currently xfailed: the rank-N code ADDS spurious non-conserving
-    contributions, pushing the defect up 10× instead of down.
+    Flipped from xfail to pass on 2026-04-18 after Issue #112 fix
+    landed: the canonical DP\\_N outgoing partial-current moment
+    with the ``(ρ_max / R)²`` surface-to-observer Jacobian factor
+    in ``compute_P_esc_mode`` causes rank-N to STRENGTHEN conservation
+    rather than degrade it. This test is the quantitative gate that
+    catches any future regression of that Jacobian factor.
     """
     defect_rank_1 = _conservation_defect(geometry, R=10.0, n_bc_modes=1)
     defect_rank_3 = _conservation_defect(geometry, R=10.0, n_bc_modes=3)
@@ -118,5 +112,6 @@ def test_rank_n_conservation_improves(geometry):
         f"[{geometry.kind}] R=10: rank-3 conservation defect "
         f"({defect_rank_3:.3e}) exceeds 110 % of rank-1 "
         f"({defect_rank_1:.3e}). Rank-N is INTRODUCING non-conservation "
-        f"— mode-n magnitude must be wrong."
+        f"— mode-n magnitude must be wrong (regression of the "
+        f"(ρ_max/R)² Jacobian factor?)."
     )

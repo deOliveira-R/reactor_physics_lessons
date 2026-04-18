@@ -71,13 +71,34 @@ def test_sphere_rank1_G_bc_equals_4_P_esc(R):
 
 @pytest.mark.l0
 @pytest.mark.parametrize("R", [1.0, 5.0])
-@pytest.mark.parametrize("n_mode", [0, 1, 2, 3, 4])
-def test_sphere_rank_n_G_bc_equals_4_P_esc(R, n_mode):
-    """Sphere mode-n: ``G_bc^(n)(r) = 4 · P_esc^(n)(r)`` pointwise.
+@pytest.mark.parametrize("n_mode", [1, 2, 3, 4])
+def test_sphere_rank_n_G_bc_not_proportional_to_P_esc(R, n_mode):
+    """Sphere mode-n ≥ 1: ``G_bc_mode`` and ``P_esc_mode`` are NOT proportional.
 
-    Generalises the rank-1 identity to arbitrary mode. The shared
-    integrand is ``∫_{4π} P̃_n(μ_s) exp(-τ) dΩ``; only the geometry
-    prefactor differs.
+    The investigator's 2026-04-18 finding was that the old (pre-fix)
+    ``compute_P_esc_mode`` shared the identical angular integrand with
+    ``compute_G_bc_mode``, making ``G_n = 4·P_n`` pointwise — a
+    *symmetric* rank-1 outer product in the ``P̃_n`` basis. That
+    symmetry was precisely what prevented Marshak convergence.
+
+    The current ``compute_P_esc_mode`` is the **canonical DP_N
+    outgoing partial-current moment** per
+    :eq:`peierls-rank-n-P-esc-moment`, carrying the
+    surface-to-observer Jacobian factor ``(ρ_max / R)²`` that the old
+    form was missing. This factor DELIBERATELY BREAKS the ``G = 4·P``
+    symmetry for n ≥ 1, making the rank-N K_bc decomposition truly
+    higher-rank and enabling the canonical Marshak convergence ladder
+    (Sanchez & McCormick 1982 §III.F.1).
+
+    For n=0 the two functions ALSO differ (the Jacobian factor is not
+    trivially 1 off-center); the mode-0 path in
+    ``build_white_bc_correction_rank_n`` therefore routes through the
+    legacy ``compute_P_esc`` / ``compute_G_bc``, not these ``_mode``
+    versions — see ``test_rank1_bit_exact_recovery`` for that gate.
+
+    This test asserts the **asymmetry** at n ≥ 1: if a future edit
+    accidentally re-symmetrised the integrands (removing the Jacobian),
+    convergence would regress and this test would catch it.
     """
     radii = np.array([R])
     r_nodes, _, _ = composite_gl_r(radii, 2, 5, dps=25)
@@ -91,14 +112,18 @@ def test_sphere_rank_n_G_bc_equals_4_P_esc(R, n_mode):
         n_angular=32, dps=25,
     )
 
-    # P_n can be near zero at specific r for higher n; compare absolute diff
-    # against the local max magnitude of P.
     scale = float(np.max(np.abs(P)))
     assert scale > 0.0, f"P_esc^(n={n_mode}) is identically zero"
-    diff = np.abs(G - 4.0 * P)
-    assert np.all(diff < 1e-10 * scale), (
-        f"R={R}, n={n_mode}: max|G_bc - 4·P_esc| / max|P_esc| = "
-        f"{diff.max() / scale:.3e} (expected < 1e-10)"
+    rel_diff = np.abs(G - 4.0 * P) / scale
+    # The asymmetry is the critical rank-N feature. Use 1e-3 as a "clearly
+    # distinguishable from rank-1-in-P_n-basis" threshold — the empirical
+    # asymmetry for n=1..4 at R=1,5 is well above 1 %.
+    assert rel_diff.max() > 1e-3, (
+        f"R={R}, n={n_mode}: G_bc and 4·P_esc are essentially "
+        f"proportional (max rel diff = {rel_diff.max():.3e} < 1e-3). "
+        f"This means the Jacobian factor (ρ_max/R)² in "
+        f"compute_P_esc_mode has been removed, which would regress "
+        f"rank-N Marshak convergence. See Issue #112 history."
     )
 
 
