@@ -401,6 +401,26 @@ class CurvilinearGeometry:
             return 2.0 * np.pi * R
         return 4.0 * np.pi * R * R
 
+    def rank1_surface_divisor(self, R: float) -> float:
+        r"""Normalisation divisor for the rank-1 white-BC :math:`u_i` vector.
+
+        The theoretical form :math:`K_{\rm bc}[i, j] = \Sigma_t(r_i)\,
+        G_{\rm bc}(r_i) / A_d \cdot A_j\,P_{\rm esc}(r_j)` with
+        :math:`A_j` the volume-element area and :math:`A_d` the cell's
+        surface area reduces — after the shared :math:`2\pi` (cylinder)
+        or :math:`4\pi` (sphere) azimuthal factor cancels between
+        :math:`A_d` and :math:`A_j` — to a divisor of :math:`R` for the
+        cylinder and :math:`R^{2}` for the sphere.
+
+        - Cylinder (:math:`A_d = 2\pi R`, :math:`A_j = 2\pi r_j w_j`):
+          ratio :math:`A_j / A_d = r_j w_j / R`, divisor :math:`R`.
+        - Sphere (:math:`A_d = 4\pi R^2`, :math:`A_j = 4\pi r_j^2 w_j`):
+          ratio :math:`A_j / A_d = r_j^2 w_j / R^{2}`, divisor :math:`R^{2}`.
+        """
+        if self.kind == "cylinder-1d":
+            return R
+        return R * R
+
 
 # Convenience singletons
 CYLINDER_1D = CurvilinearGeometry(kind="cylinder-1d")
@@ -568,30 +588,61 @@ def compute_G_bc(
       \cos\phi}`.
 
     - **Sphere:**  :math:`G_{\rm bc}(r_i) = 2\!\int_0^\pi \sin\theta\,
-      \mathrm d\theta \, e^{-\Sigma_t d(r_i, R, \theta)} / (d^2)` up
-      to the angular-fold prefactor. *This is not implemented in this
-      module yet; the sphere-specific derivation lands in the
-      Phase-4.3 follow-up session. For now this routine raises
-      NotImplementedError on sphere geometry.*
-    """
-    if geometry.kind == "sphere-1d":
-        raise NotImplementedError(
-            "compute_G_bc for sphere-1d requires the Phase-4.3 sphere "
-            "derivation (next session). For cylinder use kind='cylinder-1d'."
-        )
+      e^{-\tau(r_i,\rho_{\max}(r_i,\theta))}\,\mathrm d\theta`.
 
+      Observer-centred ray parametrisation. For a uniform isotropic
+      inward partial current :math:`J^{-}` on the sphere, the
+      angular flux inside is :math:`\psi_{\rm in} = J^{-}/\pi` (since
+      :math:`J^{-} = \pi\,\psi_{\rm in}` for an isotropic inward
+      hemisphere). The scalar flux at observer :math:`r_i` is
+      :math:`\psi_{\rm in}\,\int_{4\pi}e^{-\tau}\,\mathrm d\Omega
+      = (J^{-}/\pi)\,\cdot 2\pi\,\int_0^\pi\sin\theta\,e^{-\tau}\,
+      \mathrm d\theta`, dividing by :math:`J^{-}` gives the
+      prefactor :math:`2`. No Jacobian :math:`1/d^{2}` appears
+      because we integrate over *directions at the observer* rather
+      than *area on the surface* (the two forms are equivalent via a
+      change of variables; the observer form avoids the
+      :math:`\cos\theta'` Lambertian weight).
+    """
     r_nodes = np.asarray(r_nodes, dtype=float)
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
 
+    N = len(r_nodes)
+    G_bc = np.zeros(N)
+
+    if geometry.kind == "sphere-1d":
+        # Observer-centred angular integral.
+        theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
+        cos_thetas = np.cos(theta_pts)
+        sin_thetas = np.sin(theta_pts)
+
+        for i in range(N):
+            r_i = r_nodes[i]
+            total = 0.0
+            for k in range(n_surf_quad):
+                ct = cos_thetas[k]
+                st = sin_thetas[k]
+                rho_to_surface = geometry.rho_max(r_i, ct, R)
+                if rho_to_surface <= 0.0:
+                    continue
+                if len(radii) == 1:
+                    tau = sig_t[0] * rho_to_surface
+                else:
+                    tau = geometry.optical_depth_along_ray(
+                        r_i, ct, rho_to_surface, radii, sig_t,
+                    )
+                total += theta_wts[k] * st * float(np.exp(-tau))
+            G_bc[i] = 2.0 * total
+        return G_bc
+
+    # Cylinder: surface-centred form, Ki_1/d kernel.
     phi_pts, phi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
     cos_phis = np.cos(phi_pts)
     sin_phis = np.sin(phi_pts)
     inv_pi = 1.0 / np.pi
 
-    N = len(r_nodes)
-    G_bc = np.zeros(N)
     for i in range(N):
         r_i = r_nodes[i]
         total = 0.0
@@ -605,7 +656,7 @@ def compute_G_bc(
                 tau = sig_t[0] * d
             else:
                 cb = (R * cf - r_i) / d
-                sb = R * sin_phis[k] / d
+                sb = R * sin_phis[k] / d  # noqa: F841 (kept for symmetry)
                 tau = geometry.optical_depth_along_ray(
                     r_i, cb, d, radii, sig_t,
                 )
@@ -661,10 +712,10 @@ def build_white_bc_correction(
         n_surf_quad=n_surf_quad, dps=dps,
     )
 
-    # For cylinder: u[i] = Σ_t(r_i) · G_bc(r_i) / R
-    # For sphere: (will be derived in the Phase-4.3 follow-up; same
-    # rank-1 structure with cell-surface normalisation.)
-    u = sig_t_n * G_bc / R
+    # u[i] = Σ_t(r_i) · G_bc(r_i) / A_d_divisor
+    #   cylinder: divisor R  (A_d = 2πR, A_j = 2π r_j w_j, ratio → r_j w_j / R)
+    #   sphere:   divisor R² (A_d = 4πR², A_j = 4π r_j² w_j, ratio → r_j² w_j / R²)
+    u = sig_t_n * G_bc / geometry.rank1_surface_divisor(R)
     # radial_volume_weight(r_j) · w_j captures r_j (cyl) or r_j^2 (sphere)
     rv = np.array([geometry.radial_volume_weight(rj) for rj in r_nodes])
     v = rv * r_wts * P_esc
