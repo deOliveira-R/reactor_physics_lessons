@@ -928,6 +928,308 @@ def compute_G_bc_mode(
     return G
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Factored tensor form of the boundary-closure kernel
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Mathematical background (see :ref:`theory-peierls-unified` Part IV for
+# the full derivation). The boundary-closure contribution K_bc is a
+# Hilbert-Schmidt integral operator on the radial function space V.
+# In the Nyström discretisation V = R^{N_r}, K_bc is a matrix in V ⊗ V*
+# (a (1,1) tensor). The white-BC physics factors it through a finite
+# mode space A = R^N (the Gelbard shifted-Legendre expansion on the
+# inward surface hemisphere) as the tensor network
+#
+#     K_bc = G · R · P    ∈ V ⊗ V*
+#
+# with the three operators
+#
+#     P : V → A    outgoing angular-moment operator ("escape tensor")
+#     R : A → A    reflection operator on the mode space
+#     G : A → V    surface-to-volume response operator
+#
+# Every BC flavour (vacuum, reflective, white-Mark, white-Marshak DP_N,
+# albedo, interface current) is a CHOICE OF R. The geometry-specific
+# integrals live entirely in P and G; the BC physics lives entirely in
+# R. The classes and helpers below expose this structure directly.
+
+
+@dataclass(frozen=True)
+class BoundaryClosureOperator:
+    r"""Factored tensor-network representation of :math:`K_{\mathrm{bc}}`.
+
+    Stores the three tensors of the factorisation
+
+    .. math::
+
+       K_{\mathrm{bc}} \;=\; G \cdot R \cdot P, \qquad
+       (K_{\mathrm{bc}})^i{}_j \;=\; G^i{}_n\,R^n{}_m\,P^m{}_j,
+
+    where :math:`P : V \to A`, :math:`R : A \to A`, :math:`G : A \to V`
+    are the escape, reflection, and response operators, with :math:`V`
+    the radial Nyström space (dim :math:`N_r`) and :math:`A` the finite
+    mode space on the surface (dim :math:`N`). Contraction is over the
+    shared mode index.
+
+    Complexity. Storage is :math:`\mathcal O(N_r N + N^2)`; applying
+    the operator to a source vector takes :math:`\mathcal O(N_r N +
+    N^2)` via :meth:`apply`; materialising the dense
+    :math:`N_r \times N_r` matrix costs :math:`\mathcal O(N_r^2 N)`
+    and is only needed when a caller demands a dense matrix (e.g. the
+    direct-LU eigenvalue iteration in :func:`solve_peierls_1g`).
+
+    Boundary conditions. The choice of BC is entirely encoded in
+    :attr:`R`:
+
+    - :func:`reflection_vacuum` — :math:`R = 0` (no reflection)
+    - :func:`reflection_mark` — :math:`R = e_0 e_0^{\top}`
+      (rank-1 isotropic white closure; only the scalar mode)
+    - :func:`reflection_marshak` — diagonal :math:`R` with Gelbard
+      :math:`(2n+1)` normalisation (rank-:math:`N` white closure)
+    - any other matrix — albedo, partial reflection, or (for
+      future lattice extensions) a non-square mode-coupling matrix
+      to neighbouring cells
+
+    See :ref:`theory-peierls-unified` Part IV for the Hilbert-Schmidt
+    factorisation, the Karhunen-Loève / SVD connection, and the full
+    derivation of the factored form.
+    """
+
+    P: np.ndarray  # escape tensor,       shape (N_modes, N_nodes)
+    G: np.ndarray  # response tensor,     shape (N_nodes, N_modes)
+    R: np.ndarray  # reflection operator, shape (N_modes, N_modes)
+
+    def __post_init__(self) -> None:
+        if self.P.ndim != 2 or self.G.ndim != 2 or self.R.ndim != 2:
+            raise ValueError("P, G, R must all be 2-D arrays")
+        N = self.R.shape[0]
+        if self.R.shape != (N, N):
+            raise ValueError(f"R must be square, got shape {self.R.shape}")
+        if self.P.shape[0] != N or self.G.shape[1] != N:
+            raise ValueError(
+                f"Shape mismatch: P {self.P.shape}, R {self.R.shape}, "
+                f"G {self.G.shape} — mode dim (axis 0 of P, both axes "
+                f"of R, axis 1 of G) must all equal {N}"
+            )
+        if self.P.shape[1] != self.G.shape[0]:
+            raise ValueError(
+                f"Radial node count mismatch: P has {self.P.shape[1]} "
+                f"nodes but G has {self.G.shape[0]}"
+            )
+
+    @property
+    def n_modes(self) -> int:
+        """Mode-space dimension :math:`N`."""
+        return self.R.shape[0]
+
+    @property
+    def n_nodes(self) -> int:
+        """Radial-space dimension :math:`N_r`."""
+        return self.P.shape[1]
+
+    @property
+    def closure_rank(self) -> int:
+        """Numerical rank of :math:`K_{\\mathrm{bc}}`, = rank(:math:`R`)
+        under the generic assumption that :math:`P` and :math:`G` have
+        full mode rank."""
+        return int(np.linalg.matrix_rank(self.R))
+
+    def apply(self, q: np.ndarray) -> np.ndarray:
+        r"""Matrix-free application :math:`K_{\mathrm{bc}}\,q` via the
+        three-step tensor contraction
+
+        .. math::
+
+           K_{\mathrm{bc}}\,q \;=\; G\,(R\,(P\,q)),
+
+        in :math:`\mathcal O(N_r N + N^2)` flops. No intermediate
+        :math:`N_r \times N_r` matrix is ever allocated — storage
+        stays at :math:`\mathcal O(N_r N + N^2)` throughout.
+        """
+        outgoing_moments = self.P @ q                 # V → A
+        incoming_moments = self.R @ outgoing_moments  # A → A
+        return self.G @ incoming_moments              # A → V
+
+    def as_matrix(self) -> np.ndarray:
+        r"""Materialise the dense :math:`N_r \times N_r` matrix
+        :math:`K_{\mathrm{bc}} = G R P`.
+
+        Cost :math:`\mathcal O(N_r^2 N)`; useful only when a caller
+        requires a dense representation (e.g. the direct-solve inner
+        iteration of :func:`solve_peierls_1g`, which uses
+        :func:`numpy.linalg.solve` on :math:`A = \mathrm{diag}(\Sigma_t)
+        - K\,\mathrm{diag}(\Sigma_s)`).
+        """
+        return self.G @ self.R @ self.P
+
+
+def reflection_vacuum(n_modes: int) -> np.ndarray:
+    r"""Vacuum-BC reflection: :math:`R = 0`.
+
+    All outgoing moments are absorbed; no re-entering flux.
+    :math:`K_{\mathrm{bc}} = 0` regardless of :math:`P`, :math:`G`.
+    """
+    return np.zeros((n_modes, n_modes))
+
+
+def reflection_mark(n_modes: int) -> np.ndarray:
+    r"""Mark / isotropic white-BC reflection: rank-1 projector on the
+    scalar mode.
+
+    .. math::
+
+       R \;=\; e_0 e_0^{\top}
+             \;=\; \mathrm{diag}(1, 0, 0, \ldots, 0).
+
+    The zeroth outgoing moment :math:`J^{+}_0` is returned as an
+    isotropic inward distribution with :math:`J^{-}_0 = J^{+}_0`; all
+    higher moments are discarded. This is the classical Mark closure
+    and coincides with the pre-rank-N ORPHEUS rank-1 white BC.
+    """
+    R = np.zeros((n_modes, n_modes))
+    R[0, 0] = 1.0
+    return R
+
+
+def reflection_marshak(n_modes: int) -> np.ndarray:
+    r"""Marshak / Gelbard DP\ :sub:`N-1` diagonal reflection with the
+    :math:`(2n+1)` normalisation built in.
+
+    .. math::
+
+       R \;=\; \mathrm{diag}\bigl(1,\,3,\,5,\,\ldots,\,(2(N-1)+1)\bigr).
+
+    Entry :math:`n = 0` is :math:`1` (preserves bit-exact rank-1
+    Mark recovery when the other modes are truncated by
+    :math:`n_{\mathrm{modes}} = 1`); entries :math:`n \ge 1` carry the
+    Gelbard-shifted-Legendre expansion normalisation :math:`2n+1`
+    that appears in :math:`\psi(\mu) = \sum_n (2n+1)\,a_n\,\tilde P_n(\mu)`.
+    Off-diagonal entries are zero: under isotropic scattering on a
+    rotationally-symmetric cell with white BC, the closure is
+    strictly diagonal in mode index (Sanchez & McCormick 1982
+    Eq. 167).
+    """
+    R = np.diag(
+        np.array([1.0] + [2.0 * n + 1.0 for n in range(1, n_modes)])
+    )
+    return R
+
+
+def build_closure_operator(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    *,
+    n_angular: int = 32,
+    n_surf_quad: int = 32,
+    dps: int = 25,
+    n_bc_modes: int = 1,
+    reflection: str | np.ndarray = "marshak",
+) -> BoundaryClosureOperator:
+    r"""Assemble the factored :math:`K_{\mathrm{bc}} = G\,R\,P` operator.
+
+    The escape tensor :math:`P` and response tensor :math:`G` are
+    built from geometry-specific Nyström integrals of the mode-0
+    (legacy Mark) and mode-:math:`n \ge 1` (Gelbard DP\ :sub:`N-1`)
+    primitives. The reflection operator :math:`R` is chosen via
+    the ``reflection`` argument (default: Marshak / Gelbard
+    DP\ :sub:`N-1` diagonal).
+
+    **Mode-0 convention**. Mode 0 is routed through the existing
+    :func:`compute_P_esc` / :func:`compute_G_bc` (the Mark
+    escape-probability form that predates the rank-N extension), so
+    that ``n_bc_modes = 1`` together with ``reflection = "mark"`` or
+    ``"marshak"`` (both have :math:`R_{00} = 1`) yields the rank-1
+    :math:`K_{\mathrm{bc}}` bit-exactly matching the legacy
+    :func:`build_white_bc_correction`. This is the regression gate.
+
+    **Mode-n (n ≥ 1) convention**. Modes :math:`n \ge 1` use
+    :func:`compute_P_esc_mode` (with the canonical
+    :math:`(\rho_{\max}/R)^2` surface-to-observer Jacobian
+    :eq:`peierls-rank-n-P-esc-moment`) and
+    :func:`compute_G_bc_mode`. The Gelbard :math:`(2n+1)` expansion
+    normalisation lives in :attr:`BoundaryClosureOperator.R`, not in
+    :math:`P` — this exposes the closure structure as the identity
+    :math:`R = \mathrm{diag}(2n+1)` on the mode space.
+
+    See :ref:`theory-peierls-unified` Part IV for the operator-level
+    derivation and the Hilbert-Schmidt / SVD interpretation.
+
+    Parameters
+    ----------
+    reflection : str | np.ndarray
+        ``"vacuum"``, ``"mark"``, ``"marshak"``, or an explicit
+        :math:`(N \times N)` matrix. See
+        :func:`reflection_vacuum`, :func:`reflection_mark`,
+        :func:`reflection_marshak` for the canonical choices.
+    """
+    if n_bc_modes < 1:
+        raise ValueError(f"n_bc_modes must be >= 1, got {n_bc_modes}")
+
+    r_nodes = np.asarray(r_nodes, dtype=float)
+    r_wts = np.asarray(r_wts, dtype=float)
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    R_cell = float(radii[-1])
+    N_r = len(r_nodes)
+    N = n_bc_modes
+
+    sig_t_n = np.empty(N_r)
+    for i, ri in enumerate(r_nodes):
+        sig_t_n[i] = sig_t[geometry.which_annulus(ri, radii)]
+    rv = np.array([geometry.radial_volume_weight(rj) for rj in r_nodes])
+    divisor = geometry.rank1_surface_divisor(R_cell)
+
+    P = np.zeros((N, N_r))
+    G = np.zeros((N_r, N))
+
+    # Mode 0 — legacy Mark convention for rank-1 bit-exact regression.
+    P_esc_0 = compute_P_esc(
+        geometry, r_nodes, radii, sig_t,
+        n_angular=n_angular, dps=dps,
+    )
+    G_bc_0 = compute_G_bc(
+        geometry, r_nodes, radii, sig_t,
+        n_surf_quad=n_surf_quad, dps=dps,
+    )
+    P[0, :] = rv * r_wts * P_esc_0
+    G[:, 0] = sig_t_n * G_bc_0 / divisor
+
+    # Modes n ≥ 1 — canonical Gelbard DP_{N-1} partial-current moments
+    # with the (ρ_max/R)² Jacobian baked into compute_P_esc_mode.
+    for n in range(1, N):
+        P_esc_n = compute_P_esc_mode(
+            geometry, r_nodes, radii, sig_t, n,
+            n_angular=n_angular, dps=dps,
+        )
+        G_bc_n = compute_G_bc_mode(
+            geometry, r_nodes, radii, sig_t, n,
+            n_surf_quad=n_surf_quad, dps=dps,
+        )
+        P[n, :] = rv * r_wts * P_esc_n
+        G[:, n] = sig_t_n * G_bc_n / divisor
+
+    # Reflection operator on the mode space.
+    if isinstance(reflection, str):
+        reflection_map = {
+            "vacuum": reflection_vacuum,
+            "mark": reflection_mark,
+            "marshak": reflection_marshak,
+        }
+        if reflection not in reflection_map:
+            raise ValueError(
+                f"Unknown reflection = {reflection!r}; expected one of "
+                f"{list(reflection_map)} or a {N}×{N} matrix."
+            )
+        R_matrix = reflection_map[reflection](N)
+    else:
+        R_matrix = np.asarray(reflection, dtype=float)
+
+    return BoundaryClosureOperator(P=P, G=G, R=R_matrix)
+
+
 def build_white_bc_correction_rank_n(
     geometry: CurvilinearGeometry,
     r_nodes: np.ndarray,
@@ -1032,45 +1334,24 @@ def build_white_bc_correction_rank_n(
        converges with the canonical rank-1-to-rank-2 Marshak
        improvement on both geometries. For ``n_bc_modes ≥ 3`` on
        cylinder, results become unreliable until Phase C lands.
-    """
-    if n_bc_modes < 1:
-        raise ValueError(f"n_bc_modes must be >= 1, got {n_bc_modes}")
 
-    # Mode 0: reuse the existing rank-1 closure for bit-exact regression.
-    K = build_white_bc_correction(
+    .. note::
+
+       **Thin wrapper** around :func:`build_closure_operator` +
+       :meth:`BoundaryClosureOperator.as_matrix`. The factored form
+       is the structural representation — assembling the dense
+       matrix here is a convenience for the direct-solve eigenvalue
+       iteration in :func:`solve_peierls_1g`. Callers that want
+       matrix-free application (e.g. large :math:`N_r`, iterative
+       solvers) should call :func:`build_closure_operator` and use
+       :meth:`BoundaryClosureOperator.apply` directly.
+    """
+    op = build_closure_operator(
         geometry, r_nodes, r_wts, radii, sig_t,
         n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
+        n_bc_modes=n_bc_modes, reflection="marshak",
     )
-    if n_bc_modes == 1:
-        return K
-
-    r_nodes = np.asarray(r_nodes, dtype=float)
-    r_wts = np.asarray(r_wts, dtype=float)
-    radii = np.asarray(radii, dtype=float)
-    sig_t = np.asarray(sig_t, dtype=float)
-    R = float(radii[-1])
-    N = len(r_nodes)
-
-    sig_t_n = np.empty(N)
-    for i, ri in enumerate(r_nodes):
-        sig_t_n[i] = sig_t[geometry.which_annulus(ri, radii)]
-
-    rv = np.array([geometry.radial_volume_weight(rj) for rj in r_nodes])
-    divisor = geometry.rank1_surface_divisor(R)
-
-    for n_mode in range(1, n_bc_modes):
-        P_esc_n = compute_P_esc_mode(
-            geometry, r_nodes, radii, sig_t, n_mode,
-            n_angular=n_angular, dps=dps,
-        )
-        G_bc_n = compute_G_bc_mode(
-            geometry, r_nodes, radii, sig_t, n_mode,
-            n_surf_quad=n_surf_quad, dps=dps,
-        )
-        u_n = sig_t_n * G_bc_n / divisor
-        v_n = (2 * n_mode + 1) * rv * r_wts * P_esc_n
-        K = K + np.outer(u_n, v_n)
-    return K
+    return op.as_matrix()
 
 
 # ═══════════════════════════════════════════════════════════════════════

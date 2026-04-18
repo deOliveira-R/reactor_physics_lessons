@@ -4039,6 +4039,601 @@ re-derivation.
    ``6badbe5`` (Phase B.4).
 
 
+Part IV — Tensor structure of the boundary closure
+==================================================
+
+The rank-:math:`N` Marshak closure introduced in Part III is not a
+collection of ad-hoc integrals — it is the **finite-tensor factorisation
+of a Hilbert-Schmidt integral operator** through a small intermediate
+mode space. Once the factorisation is made explicit, the physics of
+each boundary condition, the algorithmic cost of applying the kernel,
+and the programme of work remaining in Issue #112 all become trivially
+readable from a single tensor network diagram. This part develops the
+operator-level picture, connects it to classical reduced-order-modelling
+theory, and motivates the
+:class:`~orpheus.derivations.peierls_geometry.BoundaryClosureOperator`
+dataclass that now carries the structure in code.
+
+
+Section 24 — From continuous integral equation to finite tensor
+===============================================================
+
+The pointwise Peierls equation, written as in :eq:`peierls-unified`,
+reads
+
+.. math::
+   :label: peierls-operator-form
+
+   \Sigma_t\,\varphi \;=\; T_{\rm vol}\,q \;+\; S_{\rm bc},
+
+where :math:`T_{\rm vol}` is the volumetric integral operator
+
+.. math::
+
+   (T_{\rm vol}\,q)(r) \;=\; \int_V K_{\rm vol}(r, r')\,q(r')\,\mathrm d V',
+
+with the polar-form volume kernel
+
+.. math::
+
+   K_{\rm vol}(r, r')
+     \;=\; \frac{\Sigma_t(r)}{S_d}\,
+           \int_{\Omega_d}\!\mathrm d\Omega\!
+           \int_0^{\rho_{\max}(r,\Omega)}\!\!
+             \kappa_d(\Sigma_t\rho)\,\delta\!\bigl(r'-r'(\rho,\Omega,r)\bigr)\,
+           \mathrm d\rho,
+
+and :math:`S_{\rm bc}(r)` the re-entering boundary source. Under a
+white / albedo / lattice BC, :math:`S_{\rm bc}` is proportional to the
+outgoing flux, which is itself the result of uncollided transport of
+:math:`q` to the boundary. Closing this loop expresses :math:`S_{\rm bc}`
+as a linear functional of :math:`q`:
+
+.. math::
+   :label: peierls-bc-operator
+
+   S_{\rm bc}(r) \;=\; (T_{\rm bc}\,q)(r)
+     \;=\; \int_V K_{\rm bc}(r, r')\,q(r')\,\mathrm d V'.
+
+The Peierls equation becomes the **second-kind Fredholm equation** on
+:math:`V = L^{2}([0,R],\,r^{d-1}\,\mathrm d r)`
+
+.. math::
+
+   (\Sigma_t - T)\,\varphi \;=\; 0,
+   \qquad T \;\equiv\; T_{\rm vol} + T_{\rm bc},
+
+with an integral kernel :math:`K(r, r') = K_{\rm vol}(r, r') + K_{\rm
+bc}(r, r')` on :math:`V \times V`.
+
+**Hilbert-Schmidt regularity.** The total kernel
+:math:`K \in L^{2}(V \times V)` (it decays exponentially at optical
+distance :math:`|r - r'|` and is bounded at short range because of the
+polar-form Jacobian cancellation, Section 3), so :math:`T` is a
+**compact Hilbert-Schmidt operator** on :math:`V`. In particular:
+
+- :math:`T` has a discrete spectrum accumulating only at :math:`0`.
+- The singular-value expansion
+
+  .. math::
+     :label: peierls-svd
+
+     K(r, r') \;=\; \sum_{k=1}^{\infty} \sigma_k\,u_k(r)\,v_k(r'),
+     \qquad \sigma_k \to 0,
+
+  converges in :math:`L^{2}`.
+- Finite-rank approximations are well-defined and have a best
+  :math:`L^{2}`-error given by
+  :math:`\bigl(\sum_{k > N} \sigma_k^{2}\bigr)^{1/2}`.
+
+**Nyström discretisation.** Replace :math:`V` by the finite-dimensional
+radial Nyström space :math:`V_h \cong \mathbb R^{N_r}` spanned by
+piecewise-Lagrange basis functions on composite-GL panels
+(Section 6). The integral operator :math:`T` restricts to a matrix
+:math:`\mathbf K \in \mathbb R^{N_r \times N_r}`. As an element of
+:math:`V_h \otimes V_h^{*}`, the discrete kernel is — in the strict
+mathematical sense — a :math:`(1, 1)` tensor.
+
+Our object of study is therefore
+
+.. math::
+
+   \mathbf K_{\rm bc} \;\in\; V_h \otimes V_h^{*}
+   \;\cong\; \mathrm{Hom}(V_h, V_h)
+   \;\cong\; \mathbb R^{N_r \times N_r}.
+
+Part III gave us a formula for computing :math:`\mathbf K_{\rm bc}`
+mode-by-mode as the sum :math:`\sum_n u_n \otimes v_n`. We now show
+that this sum is not accidental: it is the **canonical factorisation
+of a surface-coupled operator through a mode space**.
+
+
+Section 25 — The factored form :math:`K_{\rm bc} = G\,R\,P`
+===========================================================
+
+At the continuous level, the boundary operator :math:`T_{\rm bc}`
+**factors through the inward-hemisphere surface angular flux**
+:math:`\psi^{-}`. Let :math:`A_\infty := L^{2}([0,1])` be the space of
+square-integrable functions on the inward-hemisphere cosine
+:math:`\mu_s \in [0, 1]`. Define three continuous operators:
+
+.. math::
+
+   P_\infty\;:\; V \to A_\infty, \quad
+     (P_\infty q)(\mu_s)
+     \;=\; \int_V \mathcal P(r', \mu_s)\,q(r')\,\mathrm d V',
+
+.. math::
+
+   R_\infty\;:\; A_\infty \to A_\infty, \quad
+     (R_\infty \psi^{+})(\mu_s)
+     \;=\; \int_0^1 \mathcal R(\mu_s, \mu'_s)\,\psi^{+}(\mu'_s)\,
+          \mathrm d\mu'_s,
+
+.. math::
+
+   G_\infty\;:\; A_\infty \to V, \quad
+     (G_\infty \psi^{-})(r)
+     \;=\; \int_0^1 \mathcal G(r, \mu_s)\,\psi^{-}(\mu_s)\,\mathrm d\mu_s,
+
+with kernels:
+
+- :math:`\mathcal P(r', \mu_s)` = rate at which a unit source at
+  :math:`r'` contributes to the outgoing angular flux at the surface
+  in direction :math:`\mu_s` (the **escape kernel**, cosine-weighted);
+- :math:`\mathcal R(\mu_s, \mu'_s)` = fraction of outgoing flux in
+  direction :math:`\mu'_s` that re-enters in direction :math:`\mu_s`
+  (the **reflection kernel**, entirely determined by the BC physics);
+- :math:`\mathcal G(r, \mu_s)` = contribution to interior flux at
+  :math:`r` from unit inward angular flux at the surface in
+  direction :math:`\mu_s` (the **response kernel**).
+
+Under rotational symmetry (radial 1-D cells) the surface angular flux
+depends only on :math:`\mu_s`; :math:`\psi^{-}` and :math:`\psi^{+}`
+are functions on the one-dimensional hemisphere :math:`[0, 1]`. With
+these three operators, the boundary operator is
+
+.. math::
+   :label: peierls-operator-factorisation
+
+   T_{\rm bc} \;=\; G_\infty \;\circ\; R_\infty \;\circ\; P_\infty.
+
+Let :math:`\{\phi_n\}_{n=0}^{\infty}` be an orthonormal basis of
+:math:`A_\infty` (e.g. shifted Legendre :math:`\tilde P_n` — see
+Section 26). Truncating to the first :math:`N` basis vectors gives a
+finite-dimensional mode space :math:`A_N := \mathrm{span}\{\phi_0,
+\ldots, \phi_{N-1}\} \cong \mathbb R^{N}`. Projecting onto :math:`A_N`
+yields matrix representations
+
+.. math::
+
+   P \;\in\; \mathbb R^{N \times N_r},
+   \quad
+   R \;\in\; \mathbb R^{N \times N},
+   \quad
+   G \;\in\; \mathbb R^{N_r \times N},
+
+whose entries are the projections of the continuous kernels onto the
+Nyström radial basis on the :math:`V`-side and onto
+:math:`\{\phi_0,\ldots,\phi_{N-1}\}` on the :math:`A`-side. The
+discrete boundary kernel is
+
+.. math::
+   :label: peierls-factored-kernel
+
+   \boxed{\;
+     \mathbf K_{\rm bc} \;=\; G \cdot R \cdot P
+   \;}
+   \qquad
+   \Longleftrightarrow
+   \qquad
+   (\mathbf K_{\rm bc})^{i}{}_{j}
+     \;=\; G^{i}{}_{n}\,R^{n}{}_{m}\,P^{m}{}_{j},
+
+with Einstein summation on the shared mode indices :math:`n, m`.
+
+Tensor network. In the graphical language of tensor networks
+(Penrose / Bridgeman-Chubb diagrams), :eq:`peierls-factored-kernel`
+is the composition::
+
+     V_h* ──[ P ]── A ──[ R ]── A ──[ G ]── V_h
+      j          m        n        i
+
+with one free index on each side (:math:`i \in V_h`, :math:`j \in V_h^{*}`)
+and the mode indices :math:`m, n \in A` contracted. :math:`K_{\rm bc}`
+is the (1,1) tensor obtained by summing over the mode space.
+
+**Algorithmic payoff.** The factored form has
+
+- **Storage** :math:`\mathcal O(N_r N + N^{2})` floats
+  (the three tensors :math:`P`, :math:`G`, :math:`R`) versus
+  :math:`\mathcal O(N_r^{2})` for the dense :math:`\mathbf K_{\rm bc}`.
+  For typical :math:`N_r \sim 50`, :math:`N \sim 4`: 420 floats vs
+  2500 — a 6× compression.
+
+- **Matrix-free application**
+  :math:`\mathbf K_{\rm bc}\,q = G\bigl(R\,(P\,q)\bigr)` in
+  :math:`\mathcal O(N_r N + N^{2})` flops, versus
+  :math:`\mathcal O(N_r^{2})` for the dense multiply.
+
+- **Rank** :math:`\mathrm{rank}(\mathbf K_{\rm bc}) =
+  \mathrm{rank}(R)` (generically, when :math:`P` and :math:`G` have
+  full mode rank). The rank of the boundary kernel is literally the
+  rank of the BC's reflection matrix.
+
+The final point is the structural payoff of the whole exercise.
+
+
+Section 26 — The reflection operator :math:`R`: where the BCs live
+==================================================================
+
+The factorisation :math:`K_{\rm bc} = G R P` separates what depends on
+the cell geometry (:math:`P` and :math:`G`) from what depends on the
+boundary condition physics (:math:`R`). Every boundary condition
+supported in 1-D radial transport corresponds to a specific choice of
+:math:`R`:
+
+.. list-table:: Reflection operator :math:`R` for standard 1-D BCs
+   :header-rows: 1
+   :widths: 20 20 30 30
+
+   * - BC
+     - :math:`R`
+     - Rank
+     - Physical meaning
+   * - Vacuum
+     - :math:`0`
+     - 0
+     - No re-entering flux
+   * - Mark (isotropic white)
+     - :math:`e_0 e_0^{\top}`
+     - 1
+     - Only scalar mode; :math:`J^{-}_0 = J^{+}_0`
+   * - Marshak DP\ :sub:`N-1`
+     - :math:`\mathrm{diag}(1, 3, \ldots, 2N{-}1)`
+     - :math:`N`
+     - Each Legendre moment preserved; :math:`(2n{+}1)` normalisation
+   * - Reflective (specular)
+     - :math:`\mathrm{diag}((-1)^{n})` (parity basis)
+     - :math:`N`
+     - :math:`\psi^{-}(\mu) = \psi^{+}(-\mu)`
+   * - Albedo :math:`\alpha`
+     - :math:`\alpha\,R_{\rm white}`
+     - :math:`N` (or < N)
+     - Fractional reflection
+   * - Interface current (lattice)
+     - Non-square :math:`R: A^{\rm out}_{\rm cell-i} \to A^{\rm in}_{\rm cell-j}`
+     - coupled
+     - Cell-to-cell mode coupling
+
+The rank-progression Mark → Marshak is now just the dimension of the
+mode subspace :math:`R` acts on non-trivially. Albedo, partial
+reflection, lattice coupling — all are different :math:`R`'s. The
+geometry-specific tensors :math:`P` and :math:`G` are **shared** across
+every BC of a given cell.
+
+This is the **separation of concerns** that the rank-N effort was
+reaching towards without naming. Once :math:`R` is recognised as the
+entire locus of the BC physics, the implementation reduces to:
+
+1. Compute :math:`P` and :math:`G` once per cell (expensive, depends
+   on the multi-region :math:`\Sigma_t` profile and the quadrature
+   settings).
+2. Choose :math:`R` (trivial, tabular, :math:`N \times N`).
+3. Compose.
+
+The Gelbard :math:`(2n + 1)` normalisation factor that previously
+lived on the :math:`v_n` side of the outer-product assembly is now
+carried cleanly by :math:`R = \mathrm{diag}(2n + 1)`, as part of the
+reflection-operator constructor :func:`reflection_marshak`. This is
+the right place for it because it is a **statement about the basis
+of :math:`A`**, not about the escape integral :math:`P`.
+
+
+Section 27 — The escape and response tensors: where geometry lives
+==================================================================
+
+The two remaining tensors :math:`P \in \mathbb R^{N \times N_r}` and
+:math:`G \in \mathbb R^{N_r \times N}` carry all the geometry-specific
+work. Mode-by-mode:
+
+.. math::
+   :label: peierls-tensor-P-definition
+
+   P^{n}{}_{j} \;\propto\;
+     r_j^{d-1}\,w_j\,\mathcal P^{(n)}(r_j),
+
+.. math::
+   :label: peierls-tensor-G-definition
+
+   G^{i}{}_{n} \;\propto\;
+     \frac{\Sigma_t(r_i)\,\mathcal G^{(n)}(r_i)}{A_d^{\rm divisor}},
+
+where :math:`\mathcal P^{(n)}` and :math:`\mathcal G^{(n)}` are the
+mode-:math:`n` escape integral and mode-:math:`n` response integral
+respectively (implemented in
+:func:`~orpheus.derivations.peierls_geometry.compute_P_esc_mode` and
+:func:`~orpheus.derivations.peierls_geometry.compute_G_bc_mode`, with
+mode 0 routed through the legacy
+:func:`~orpheus.derivations.peierls_geometry.compute_P_esc` /
+:func:`~orpheus.derivations.peierls_geometry.compute_G_bc` for rank-1
+bit-exact recovery).
+
+**Both tensors are BC-independent.** Once :math:`P` and :math:`G` are
+built, switching between vacuum, Mark, Marshak, albedo, or
+interface-current BCs is a replacement of :math:`R` with no
+recomputation of geometry integrals. This is a genuine and measurable
+improvement over the pre-factored code: previously, each BC had its
+own bespoke assembly function with overlapping integrals.
+
+**Mode-independent contributions**. The source-side weights
+:math:`r_j^{d-1}\,w_j` (volume-element Jacobian from the composite-GL
+quadrature) and :math:`\Sigma_t(r_i)` (the macroscopic total
+cross-section at node :math:`i`), and the surface-area divisor
+:math:`A_d^{\rm divisor}`, are all mode-independent. They appear
+as scaling factors on :math:`P` and :math:`G` but do not enter
+:math:`R`. The factorisation naturally isolates them.
+
+
+Section 28 — Connection to Hilbert-Schmidt and SVD theory
+=========================================================
+
+The finite factorisation :math:`K_{\rm bc} = G R P` has a canonical
+infinite-dimensional counterpart via :eq:`peierls-svd`, the SVD of the
+compact Hilbert-Schmidt operator :math:`T_{\rm bc}`:
+
+.. math::
+
+   T_{\rm bc} \;=\; \sum_{k=1}^{\infty} \sigma_k\,u_k \otimes v_k.
+
+The **rank-:math:`N` SVD truncation**
+
+.. math::
+
+   T_{\rm bc}^{\rm SVD\text{-}N}
+     \;:=\; \sum_{k=1}^{N} \sigma_k\,u_k \otimes v_k
+
+is the **best** rank-:math:`N` approximation to :math:`T_{\rm bc}` in
+the Frobenius / Hilbert-Schmidt norm. By the Eckart-Young theorem,
+
+.. math::
+
+   \|T_{\rm bc} - T_{\rm bc}^{\rm SVD\text{-}N}\|_{\rm HS}
+     \;=\; \Bigl(\sum_{k > N} \sigma_k^{2}\Bigr)^{\!1/2}
+     \;\le\; \|T_{\rm bc} - T_{\rm bc}^{(N)}\|_{\rm HS}
+
+for any rank-:math:`N` operator :math:`T_{\rm bc}^{(N)}`, including
+our Gelbard rank-:math:`N` closure. The singular vectors
+:math:`\{u_k, v_k\}` are the **Karhunen-Loève basis** of
+:math:`T_{\rm bc}` — the optimal modal basis for that specific
+operator.
+
+Why not use SVD directly?
+-------------------------
+
+Two reasons.
+
+**(a) SVD is data-adaptive, Gelbard is physics-adaptive.** The
+singular vectors :math:`(u_k, v_k)` depend on the cell geometry, the
+optical profile :math:`\Sigma_t(r)`, and the BC (through :math:`R`
+itself). Using them would require one SVD per problem:
+
+- Per cell radius :math:`R`
+- Per multi-region :math:`\Sigma_t` profile
+- Per BC flavour (vacuum, white, albedo, lattice)
+- Per multi-group energy dependence (with group-dependent
+  :math:`\Sigma_t`, each group has a different SVD)
+
+For a multi-group multi-cell lattice, the SVD bookkeeping becomes
+prohibitive. Gelbard's :math:`\tilde P_n(\mu_s)` basis is **fixed once
+and for all** — same basis for every cell, every material, every
+group, every BC. The tensors :math:`P` and :math:`G` change; the mode
+space :math:`A` does not.
+
+**(b) The Gelbard basis has a physical interpretation.**
+:math:`\tilde P_0` is the scalar (total) mode, :math:`\tilde P_1` is
+the linear anisotropy, :math:`\tilde P_2` the quadratic, etc. Truncating
+at :math:`N` says "I care about the first :math:`N` angular moments of
+the re-entering flux." This interpretability is inherited by every
+derived quantity: flux shapes, k\ :sub:`eff` sensitivities, surface
+currents. SVD modes have no such interpretation — they are whatever
+numerical artefacts the specific problem produces.
+
+**Sub-optimality, quantified.** Let :math:`\epsilon_N^{\rm Gelbard}`
+and :math:`\epsilon_N^{\rm SVD}` be the Frobenius errors at rank :math:`N`.
+Then :math:`\epsilon_N^{\rm Gelbard} \ge \epsilon_N^{\rm SVD}` with
+equality iff the Gelbard basis happens to coincide with the
+Karhunen-Loève basis. For smooth angular-flux distributions with
+exponential decay of high-Legendre-moment content, the gap is small:
+the first few Gelbard modes closely match the dominant singular
+vectors. For sharp boundary layers — thin cells, grazing rays — the
+gap widens, which is precisely the regime where higher-rank-:math:`N`
+is needed.
+
+**The Marshak / Gelbard basis is the ansatz choice**: fix the basis,
+accept sub-optimality, gain interpretability and geometry independence.
+This is the same trade-off that motivates POD vs physics-based modal
+bases throughout reduced-order modelling; see for example
+[Atkinson1997]_ §6 on projection methods for integral equations.
+
+
+Section 29 — Reinterpretation of Phases A and C (Issue #112)
+============================================================
+
+With the factored :math:`K_{\rm bc} = G R P` picture in hand, the
+remaining work in Issue #112 becomes trivially localised.
+
+Phase A (sphere plateau)
+------------------------
+
+Empirically, the sphere rank-:math:`N` closure converges to the
+canonical DP\ :sub:`1` result at :math:`N = 2` but then **plateaus** at
+:math:`\sim 2.5\,\%` error — modes :math:`n \ge 2` contribute almost
+nothing because the shifted-Legendre :math:`\tilde P_n(\mu)` basis is
+orthogonal with respect to the **unit-weight** inner product
+:math:`\int_0^1 \tilde P_n \tilde P_m\,\mathrm d\mu`, but the canonical
+DP\ :sub:`N` partial-current moments are cosine-weighted
+:math:`\int_0^1 \mu\,\tilde P_n \psi\,\mathrm d\mu`.
+
+In the tensor language: **our choice of basis for** :math:`A` **is
+sub-optimal at higher modes**. The Gelbard basis spans the right
+function space but is orthogonal under the wrong inner product for
+the partial-current closure.
+
+**Phase A is a change of basis in** :math:`A`. Replace
+:math:`\tilde P_n(\mu)` by the cosine-weighted shifted Legendre
+:math:`\tilde Q_n(\mu)` satisfying
+
+.. math::
+
+   \int_0^1 \mu\,\tilde Q_n(\mu)\,\tilde Q_m(\mu)\,\mathrm d\mu
+   \;=\; \frac{\delta_{nm}}{2n + 1}.
+
+This leaves the tensor network structure **unchanged** — only the
+integrand of :math:`P` and :math:`G` is modified (multiply the
+:math:`\tilde P_n` evaluations by the Christoffel-Darboux-type weight
+that orthogonalises against :math:`\mu\,\mathrm d\mu`), and the
+:math:`(2n+1)` in :math:`R` is replaced by the new normalisation.
+Calibration against [Stepanek1981]_ slab DP\ :sub:`N` tables anchors
+the normalisation constants.
+
+Phase C (cylinder 3-D quadrature)
+---------------------------------
+
+The cylinder's :math:`P` (via :func:`compute_P_esc_mode`) uses the
+observer-centred :math:`\beta`-integral with an **implicit** polar
+integration (the :math:`\mathrm{Ki}_2` kernel absorbs the
+:math:`\theta_p` integration analytically). The cylinder's :math:`G`
+(via :func:`compute_G_bc_mode`) uses a **different** form — the
+surface-centred :math:`\mathrm{Ki}_1/d` integrand with an **explicit**
+:math:`\phi`-integration. For :math:`n = 0` the two forms agree by
+rotational symmetry; for :math:`n \ge 1` they project :math:`\tilde P_n`
+onto different angular coordinates, producing inconsistent moments.
+
+**Phase C is rebuilding** :math:`P` **and** :math:`G` **in a shared
+3-D observer-centred frame**. Both tensors use explicit
+:math:`(\beta, \theta_p)` double integration; the
+:math:`\tilde P_n(\sin\theta_p \cdot \mu_{s,2D})` weighting is carried
+inside the :math:`\theta_p` quadrature, producing higher-order Bickley
+functions :math:`\mathrm{Ki}_{2+k}` per the analytic polynomial
+expansion ([Knyazev1993]_ exploits this for linearly anisotropic
+scattering). Again :math:`R` is unchanged; only the integrands that
+define :math:`P` and :math:`G` move.
+
+A common refactor
+-----------------
+
+Both phases share the same principle: **work in the Gelbard-plus-cosine
+inner product on a common 3-D angular frame**. The implementation
+change is concentrated in
+:func:`~orpheus.derivations.peierls_geometry.compute_P_esc_mode` and
+:func:`~orpheus.derivations.peierls_geometry.compute_G_bc_mode`. The
+rest of the architecture —
+:class:`~orpheus.derivations.peierls_geometry.BoundaryClosureOperator`,
+the reflection-operator constructors, the solver loop — does not move.
+This is the structural payoff: the fix now fits in two functions.
+
+
+Section 30 — The ``BoundaryClosureOperator`` dataclass
+======================================================
+
+The :class:`~orpheus.derivations.peierls_geometry.BoundaryClosureOperator`
+dataclass carries the three tensors :math:`P`, :math:`G`, :math:`R` and
+exposes the factored-form operations directly:
+
+.. code-block:: python
+
+   @dataclass(frozen=True)
+   class BoundaryClosureOperator:
+       P: np.ndarray  # shape (N_modes, N_nodes)  — V → A
+       G: np.ndarray  # shape (N_nodes, N_modes)  — A → V
+       R: np.ndarray  # shape (N_modes, N_modes)  — A → A
+
+       def apply(self, q):
+           return self.G @ (self.R @ (self.P @ q))
+
+       def as_matrix(self):
+           return self.G @ self.R @ self.P
+
+       @property
+       def closure_rank(self):
+           return np.linalg.matrix_rank(self.R)
+
+The three methods embody the three algorithmic regimes:
+
+- :meth:`~.BoundaryClosureOperator.apply` — matrix-free, for large
+  :math:`N_r` with iterative solvers (GMRES, BiCGStab). Cost
+  :math:`\mathcal O(N_r N + N^{2})` per apply.
+- :meth:`~.BoundaryClosureOperator.as_matrix` — on-demand dense
+  assembly for direct-LU eigenvalue iteration (what
+  :func:`~orpheus.derivations.peierls_geometry.solve_peierls_1g`
+  currently uses). Cost :math:`\mathcal O(N_r^{2} N)` once, per
+  cell, per group, per BC.
+- :attr:`~.BoundaryClosureOperator.closure_rank` — structural
+  diagnostic, checks that :math:`R` has the expected rank signature
+  (rank 0 for vacuum, 1 for Mark, :math:`N` for Marshak, non-trivial
+  for lattice couplings).
+
+The assembly function
+:func:`~orpheus.derivations.peierls_geometry.build_closure_operator`
+takes a geometry, a radial grid, the optical profile, and a
+reflection choice (``"vacuum"``, ``"mark"``, ``"marshak"``, or any
+user-supplied :math:`N \times N` matrix) and returns the factored
+operator. It is the **canonical** entry point for constructing the
+boundary closure at any rank and for any BC — no separate
+per-BC assembly functions are required.
+
+The pre-existing
+:func:`~orpheus.derivations.peierls_geometry.build_white_bc_correction_rank_n`
+remains as a thin convenience wrapper that calls
+:func:`build_closure_operator` with ``reflection="marshak"`` and
+returns :meth:`~.BoundaryClosureOperator.as_matrix`. This is purely
+for API continuity with the pre-factored-form callers (chiefly
+:func:`~orpheus.derivations.peierls_geometry.solve_peierls_1g`).
+
+Reflection-operator constructors
+--------------------------------
+
+Three canonical reflection operators are provided as free functions in
+:mod:`~orpheus.derivations.peierls_geometry`:
+
+- :func:`~orpheus.derivations.peierls_geometry.reflection_vacuum` —
+  :math:`R = 0` (vacuum BC)
+- :func:`~orpheus.derivations.peierls_geometry.reflection_mark` —
+  :math:`R = e_0 e_0^{\top}` (rank-1 isotropic white)
+- :func:`~orpheus.derivations.peierls_geometry.reflection_marshak` —
+  :math:`R = \mathrm{diag}(1, 3, 5, \ldots, 2N{-}1)` (Marshak
+  DP\ :sub:`N-1` with Gelbard normalisation)
+
+A user wishing to experiment with, say, an albedo-0.7 BC need only
+pass ``reflection = 0.7 * reflection_marshak(N)`` to
+:func:`build_closure_operator`. The geometry integrals are not
+recomputed.
+
+Regression gates
+----------------
+
+The factored form is gated by three classes of tests in
+``tests/derivations/test_peierls_closure_operator.py`` (foundation
+tests, software-invariant contracts):
+
+1. **Algebraic consistency**:
+   :meth:`~.BoundaryClosureOperator.apply` and
+   :meth:`~.BoundaryClosureOperator.as_matrix` must agree on random
+   input vectors to machine precision (rtol 1e-13).
+2. **Rank structure**:
+   :attr:`~.BoundaryClosureOperator.closure_rank` must equal
+   :math:`\mathrm{rank}(R)` for each canonical reflection constructor.
+3. **BC-as-R**: Marshak via ``reflection="marshak"`` matches
+   :func:`build_white_bc_correction_rank_n` exactly; rank-1 Mark /
+   Marshak matches legacy :func:`build_white_bc_correction` exactly;
+   vacuum gives the zero matrix.
+
+Together these gates ensure that any future refactor — including
+the Phase A basis change and the Phase C 3-D frame — cannot break
+the tensor-network structure without one of these contracts firing.
+
+
 References
 ==========
 
@@ -4096,3 +4691,24 @@ References
    (§3 of the paper) is the closest stochastic analogue of the
    deterministic ``optical_depth_along_ray_with_map`` helper proposed
    for Phase H.2 (`Issue #109 <https://github.com/deOliveira-R/ORPHEUS/issues/109>`_).
+
+.. [Stepanek1981] J. Stepanek, "The DP\ :sub:`N` Surface Flux Integral
+   Neutron Transport Method for Slab Geometry," *Nuclear Science and
+   Engineering* **78**, 171–179 (1981).
+   DOI: 10.13182/NSE81-A19606. Canonical derivation of the rank-N DP
+   closure for the surface-flux integral equation in slab geometry;
+   the slab DP\ :sub:`N` k\ :sub:`eff` tables in Tables I–III are the
+   calibration anchor for the Phase-A sphere normalisation audit
+   (see :ref:`theory-peierls-unified` §29 and Issue #112).
+
+.. [Knyazev1993] A.P. Knyazev, "Solution of the transport equation in
+   integral form in a one-dimensional cylindrical geometry with
+   linearly anisotropic scattering," *Atomic Energy* **74** (5),
+   385–389 (1993). DOI: 10.1007/BF00844623. Derivation of the
+   higher-order Bickley-Naylor functions :math:`\mathrm{Ki}_{2+k}`
+   arising from the :math:`P_n`-weighted polar-angle integration in
+   cylindrical geometry — the analytic identity behind the Phase-C
+   3-D angular-quadrature reformulation of the cylinder
+   :func:`~orpheus.derivations.peierls_geometry.compute_P_esc_mode` /
+   :func:`~orpheus.derivations.peierls_geometry.compute_G_bc_mode`
+   primitives (Issue #112).
