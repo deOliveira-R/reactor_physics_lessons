@@ -432,13 +432,14 @@ def _optical_depth_along_ray(
         s_mid = 0.5 * (s_lo + s_hi)
         r_mid_sq = r_obs * r_obs + 2.0 * r_obs * s_mid * cos_beta + s_mid * s_mid
         r_mid = np.sqrt(max(r_mid_sq, 0.0))
-        # Annulus k contains r_mid iff r_{k-1} ≤ r_mid < r_k (r_0 = 0)
-        k = 0
+        # Annulus k contains r_mid iff r_{k-1} ≤ r_mid < r_k (r_0 = 0).
+        # Default: outermost annulus (handles r_mid just outside radii[-1]
+        # from floating-point noise at the cylinder boundary).
+        k = N - 1
         for kk in range(N):
             if r_mid < radii[kk]:
                 k = kk
                 break
-            k = N - 1  # outermost
         tau += sig_t[k] * (s_hi - s_lo)
     return tau
 
@@ -532,13 +533,14 @@ def build_volume_kernel(
 
     for i in range(N):
         r_i = r_nodes[i]
-        # Σ_t(r_i): locate the annulus containing r_i
-        k_obs = 0
+        # Σ_t(r_i): locate the annulus containing r_i (default to
+        # outermost for any r_i that lands exactly on the outer radius
+        # due to floating-point noise).
+        k_obs = len(radii) - 1
         for kk in range(len(radii)):
             if r_i < radii[kk]:
                 k_obs = kk
                 break
-            k_obs = len(radii) - 1
         sig_t_i = sig_t[k_obs]
 
         for k in range(n_beta):
