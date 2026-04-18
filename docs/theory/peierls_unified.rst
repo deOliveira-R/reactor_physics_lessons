@@ -1290,20 +1290,64 @@ at any cell size. Tests that compare the Peierls cylinder reference
 against CP (white BC) must use :math:`R \ge 5` MFP to keep the
 closure error under 3 %.
 
-Sphere — Issue #100
--------------------
+Sphere — Issue #100 (retracted; historical record)
+--------------------------------------------------
 
-The identical failure mode was observed in the Phase-4.3 spherical
-Peierls attempt (GitHub Issue #100). The sphere's uncollided escape
-probability :math:`P_{\rm esc}(r)` varies from ~0.37 at the centre
-to ~0.68 at the surface, while the re-entry distribution
+.. note::
+
+   **2026-04-18 update — retraction.** The Phase-4.3 unified
+   sphere Peierls implementation delivers **physically sensible
+   rank-1 white-BC behaviour matching the cylinder**. The
+   ":math:`k_{\rm eff} \approx 6.7`" datum and the
+   "rank-1 fails structurally on the sphere" conclusion below
+   are artefacts of the earlier attempt's missing :math:`R^{2}`
+   surface divisor (the cylinder code was repurposed for the
+   sphere without updating :math:`A_d = 2\pi R \to 4\pi R^{2}`).
+   The corrected divisor is now dispatched by
+   :meth:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry.rank1_surface_divisor`.
+
+   Current sphere rank-1 :math:`k_{\rm eff}` scan (bare sphere,
+   :math:`\Sigma_t = 1`, :math:`\Sigma_s = 0.5`,
+   :math:`\nu\Sigma_f = 0.75`, :math:`k_\infty = 1.5`):
+
+   ======  ===================  ===============
+   R/MFP   :math:`k_{\rm eff}`  err vs k_∞
+   ======  ===================  ===============
+   1.0     1.0963               26.9 %
+   2.0     1.3914               7.2 %
+   5.0     1.4897               0.7 %
+   10.0    1.4957               0.3 %
+   20.0    1.4945               0.4 %
+   ======  ===================  ===============
+
+   This **parallels the cylinder** (21 % at :math:`R=1` MFP,
+   falling to 1 % at :math:`R=10` MFP): both geometries show the
+   same inverse-cell-size growth of the rank-1 Mark closure
+   error, which is a flat-source artefact reapplied at the
+   pointwise level (Issue #103 / N1). The full retraction
+   discussion and the R-vs-R² gotcha are archived in
+   :doc:`collision_probability`, §
+   :ref:`issue-100-retraction`. The text below is preserved as
+   historical context — keeping the record of what was tried and
+   why it failed prevents the same mistake from being made twice.
+
+   Sphere Peierls is **shipped** as of Phase-4.3 (commits
+   ``435c0b3``, ``9d03948``, ``cad2f0b``); the Peierls-vs-CP
+   comparison at white-BC parity runs in
+   ``tests/cp/test_peierls_sphere_flux.py``.
+
+*Historical text (pre-correction):* The identical failure mode was
+observed in the Phase-4.3 spherical Peierls attempt (GitHub Issue
+#100). The sphere's uncollided escape probability
+:math:`P_{\rm esc}(r)` varies from ~0.37 at the centre to ~0.68
+at the surface, while the re-entry distribution
 :math:`G_{\rm bc}(r)` varies from 0 at the centre (Davison's
-:math:`u(0) = 0` constraint) to ~2.7 at the surface, and the ratio
-is not constant — it varies by ~40 % across the sphere radius.
-A rank-1 correction necessarily imposes a *constant* ratio, so it
-over-shoots near the surface and under-shoots near the centre,
-giving :math:`k_{\rm eff} \approx 6.7` for a 1-G 1-region case
-(expected :math:`k_\infty = 1.5`).
+:math:`u(0) = 0` constraint) to ~2.7 at the surface, and the
+ratio is not constant — it varies by ~40 % across the sphere
+radius. A rank-1 correction necessarily imposes a *constant*
+ratio, so it over-shoots near the surface and under-shoots near
+the centre, giving :math:`k_{\rm eff} \approx 6.7` for a 1-G
+1-region case (expected :math:`k_\infty = 1.5`).
 
 Both observations — the cylinder's size-dependent error and the
 sphere's structural failure — are **the same phenomenon**: rank-1
@@ -1321,11 +1365,23 @@ are:
     a Mark-:math:`n`-like :math:`P_n` expansion of the re-entering
     hemisphere. Rank :math:`n+1` correction.
 
-Both approaches are deferred. The cylinder test gate works around
-the rank-1 deficit by requiring :math:`R\ge 5` MFP; the sphere
-Peierls reference in Phase 4.3 is currently *not shipped* pending
-resolution of this issue. The Peierls-vs-CP comparison at white-BC
-parity is planned for a future campaign.
+*Post-correction assessment (2026-04-18).* The "ratio varies by
+40 %" argument above conflates two independent things: the rank-1
+closure is an outer product :math:`u_i\,v_j` where :math:`u` and
+:math:`v` can individually vary with radius. What the rank-1
+closure approximates is the re-entering **angular distribution**
+:math:`J^{-}(\Omega)` (treated as uniform isotropic by Mark),
+**not** the :math:`(i, j)` coupling structure. A radius-dependent
+ratio :math:`P_{\rm esc} / G_{\rm bc}` therefore does **not**
+imply structural failure; it is absorbed into the outer-product
+factorisation. What the rank-1 closure actually suffers from is
+the Mark-closure error in the angular shape of :math:`J^{-}`, and
+that error scales with cell optical thickness (thick cells
+homogenise the angular distribution via multiple scattering, thin
+cells do not). Path (a) and path (b) above are the correct
+architectural fixes — Issue #103 (N1) tracks higher-rank
+angular decomposition — but they apply **equally** to cylinder
+and sphere. Neither is a sphere-specific blocker.
 
 
 Section 9 — Test-bed evidence from Phase 4.2 (cylinder)
@@ -1388,14 +1444,54 @@ product-integration weights, and the rank-2 white-BC closure. The
 test depth is comparable; the evidence table is deliberately
 not reproduced here since the geometry is specific.
 
-The sphere Peierls reference is not yet shipped (Issue #100). The
-three-checks pattern — row-sum, vacuum-BC leakage limit, CP
-cross-check — will transfer verbatim to the sphere case once the
-white-BC closure is on firm ground.
+The sphere Peierls reference **is shipped** (Phase-4.3; commits
+``435c0b3``, ``9d03948``, ``cad2f0b``). The three-checks pattern —
+row-sum, vacuum-BC leakage limit, CP cross-check — transfers
+verbatim:
+
+- **Row-sum identity (homogeneous).** At :math:`R = 10` MFP with
+  :math:`(n_\theta, n_\rho) = (24, 24)`,
+  :math:`\max_i |\Sigma_t - \sum_j K_{ij}| < 10^{-3}` at
+  :math:`r_i \le R/2`. Tested in
+  ``TestSphereRowSumIdentity.test_interior_row_sum_equals_sigma_t``
+  in ``tests/derivations/test_peierls_sphere_prefactor.py``.
+- **Vacuum-BC thick-sphere limit.** At :math:`R = 30` MFP,
+  :math:`|k_{\rm eff} - k_\infty|/k_\infty < 10^{-2}`. Monotone
+  growth in :math:`R` on :math:`R \in \{1.5, 3, 6, 12, 24\}` MFP.
+  Tested in ``TestVacuumBCThickLimit``.
+- **CP-vs-Peierls eigenvalue + flux shape.** At :math:`R = 10` MFP
+  CP :math:`k_{\rm eff}` agrees with Peierls to < 2 %, and the
+  volume-weighted normalised flux profiles agree to L2 < 5 %.
+  Tested in ``TestCPvsPeierlsSphereAtThickR`` in
+  ``tests/cp/test_peierls_sphere_flux.py``.
+
+The rank-1 white-BC deficit is bounded by Issue #103 (N1); see
+:ref:`issue-100-retraction` in :doc:`collision_probability` for
+the numerical evidence.
 
 
 Section 10 — Extending to a new geometry: a checklist
 =====================================================
+
+.. note::
+
+   **Status as of 2026-04-18.** The three standard 1-D geometries are
+   complete:
+
+   - **Slab (1-D Cartesian)**: Phase-4.1 ✓ (``peierls_slab.py``,
+     :math:`E_1` kernel, rank-2 white-BC closure).
+   - **Cylinder (1-D radial)**: Phase-4.2 ✓
+     (``peierls_cylinder.py`` + ``peierls_geometry.py``,
+     :math:`\mathrm{Ki}_1` kernel, rank-1 white-BC closure).
+   - **Sphere (1-D radial)**: Phase-4.3 ✓
+     (``peierls_sphere.py`` + ``peierls_geometry.py``,
+     :math:`e^{-\tau}` kernel, rank-1 white-BC closure with
+     geometry-aware :math:`R^{2}` surface divisor).
+
+   The unified :class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
+   covers both curvilinear cases; any further 1-D extension (e.g. a
+   1-D Cartesian Nyström sharing the cylinder's sweep machinery)
+   follows the steps below.
 
 Based on the architecture documented above, adding a Peierls Nyström
 reference for a new 1-D geometry requires:
@@ -1467,9 +1563,29 @@ standard tests.
    and the rank-1 white-BC correction
    (:func:`~orpheus.derivations.peierls_cylinder.build_white_bc_correction`).
 
+   :mod:`orpheus.derivations.peierls_sphere` — Phase-4.3 sphere
+   Peierls reference (:math:`e^{-\tau}`), a thin facade over the
+   unified :class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
+   (``kind = "sphere-1d"``). Eigenvalue driver
+   :func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`;
+   white-BC correction
+   :func:`~orpheus.derivations.peierls_sphere.build_white_bc_correction`.
+
+   :mod:`orpheus.derivations.peierls_geometry` — unified
+   polar-form Nyström infrastructure; ``CurvilinearGeometry``
+   singletons ``CYLINDER_1D`` and ``SPHERE_1D``.
+
    GitHub Issue `#100
    <https://github.com/deOliveira-R/ORPHEUS/issues/100>`_ —
-   Sphere Peierls white-BC rank-1 deficit; the Phase-4.3 blocker.
+   Sphere Peierls white-BC rank-1 closure (**retracted** /
+   closed-by-fix; the original :math:`k_{\rm eff} \approx 6.7`
+   failure was a missing :math:`R^{2}` surface divisor, not a
+   structural rank-1 defect). See :ref:`issue-100-retraction`.
+
+   GitHub Issue `#103
+   <https://github.com/deOliveira-R/ORPHEUS/issues/103>`_ — N1:
+   Higher-rank white-BC closure for pointwise Peierls (cyl +
+   sphere); open.
 
 
 References

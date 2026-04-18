@@ -3077,6 +3077,1077 @@ sorting crossings, making the bare-cylinder case
    Sanchez tie-point and thick-cylinder limit eigenvalue tests.
 
 
+Peierls integral equation reference — sphere
+=============================================
+
+The cylindrical Peierls reference above verifies the CP flat-source
+discretisation for 1-D radial geometries with 2-D translational
+symmetry. The **spherical** Peierls reference closes the trio for
+``sph1D`` meshes: it solves the 3-D integral transport equation on a
+bare or concentric-shell sphere at arbitrary quadrature order,
+providing an independent numerical reference against
+:func:`~orpheus.cp.solver.solve_cp` on spherical meshes and the
+flat-source spherical CP of :mod:`orpheus.derivations.cp_sphere`.
+
+Unlike the slab (:math:`E_1` from :math:`y, z`-integration) and the
+cylinder (:math:`\mathrm{Ki}_1` from :math:`z`-integration), the
+sphere **does not reduce dimensions** — the native 3-D point kernel
+:math:`e^{-\tau}/(4\pi\,d^{2})` is already 3-D. Rotational symmetry
+about the centre is not a translation and cannot be used to collapse
+the kernel; it only constrains the *source field* to depend on
+:math:`|\mathbf r'| = r'` rather than on all three coordinates. The
+polar-form pivot still buys the Jacobian cancellation (the
+:math:`\rho^{2}` polar volume element cancels the :math:`1/d^{2}` of
+the Green's function exactly), but the resulting reduced kernel is
+the bare exponential :math:`e^{-\tau}`, not any :math:`E_n` or
+:math:`\mathrm{Ki}_n` function. This makes the sphere both the
+simplest kernel to evaluate (plain ``np.exp``) and the most
+informative cross-check for a common-mode :math:`\mathrm{Ki}_n`
+recursion bug: any factor-of-two, off-by-one, or sign error in the
+Bickley recurrence that would affect the cylinder cancels out of the
+sphere, and vice-versa.
+
+The implementation lives in :mod:`orpheus.derivations.peierls_sphere`
+— a thin facade over the unified
+:class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
+(``kind = "sphere-1d"``). The sphere shares the
+Lagrange-basis, composite-GL radial quadrature, optical-depth walker,
+and power-iteration primitives with the cylinder verbatim; the only
+geometry-specific ingredients are the kernel :math:`\kappa_d(\tau) =
+e^{-\tau}`, the angular weight :math:`W_\Omega(\theta) =
+\sin\theta`, the prefactor :math:`C_d = 1/2`, and the
+surface-divisor :math:`A_d = R^{2}` in the rank-1 white-BC
+closure. The architectural separation is documented at full length
+in :doc:`peierls_unified`.
+
+Derivation from the 3-D point kernel
+-------------------------------------
+
+Starting from the 3-D Green's function for the one-speed, isotropic
+integral transport equation,
+
+.. math::
+   :label: peierls-sphere-green-3d
+
+   G_{\rm 3D}(\mathbf r, \mathbf r')
+     \;=\; \frac{e^{-\tau(\mathbf r, \mathbf r')}}
+                {4\pi\,|\mathbf r - \mathbf r'|^{2}},
+   \qquad
+   \tau \;=\; \int_{\mathbf r'}^{\mathbf r}\!\Sigma_t(\mathbf s)\,
+     \mathrm d\ell,
+
+.. vv-status: peierls-sphere-green-3d documented
+
+the **pointwise** scalar-flux form of the Peierls integral equation
+on a bare sphere of radius :math:`R` is
+
+.. math::
+
+   \varphi(\mathbf r)
+     \;=\; \iiint_{\rm ball}\!
+       \frac{e^{-\tau(\mathbf r, \mathbf r')}}
+            {4\pi\,|\mathbf r - \mathbf r'|^{2}}\,
+         q(\mathbf r')\,\mathrm d^{3}r'
+     \;+\; \varphi_{\rm bc}(\mathbf r).
+
+This is the **native** 3-D kernel. Compare with the slab
+:eq:`peierls-equation` (whose kernel is :math:`E_1`, obtained by
+integrating the point kernel over two transverse dimensions) and
+the cylinder :eq:`peierls-cylinder-green-2d` (whose kernel is
+:math:`\mathrm{Ki}_1`, obtained by integrating over one axial
+direction). The sphere's
+point kernel **cannot be pre-integrated** because there is no
+translational symmetry to exploit — a radial 1-D problem inherits
+only rotational symmetry from the embedding space, and rotations
+move every point on a shell to every other point on the same shell
+without ever crossing the shell boundary.
+
+.. note::
+
+   The monotone progression of dimensional reductions — two for the
+   slab, one for the cylinder, zero for the sphere — is the defining
+   feature of the trio. :doc:`peierls_unified` §2 tabulates the
+   reduced kernels side-by-side.
+
+Observer-centred polar form and Jacobian cancellation
+------------------------------------------------------
+
+The native 3-D integral above is not directly tractable: the
+:math:`1/|\mathbf r - \mathbf r'|^{2}` singularity at
+:math:`\mathbf r' = \mathbf r` is a **volume singularity**
+(non-integrable without the Jacobian of an appropriate coordinate
+change). Rather than attempt a chord/impact-parameter formulation
+analogous to the cylinder's (which, on the sphere, would introduce
+*three* coincident endpoint singularities at a point), the
+implementation uses the **equivalent polar form** centred on the
+observer.
+
+Let :math:`\theta \in [0, \pi]` be the polar angle from the outward
+radial direction at :math:`\mathbf r`, :math:`\phi \in [0, 2\pi]`
+the azimuth, and :math:`\rho \ge 0` the distance along the ray from
+:math:`\mathbf r` in direction :math:`(\theta, \phi)`. The source
+position is
+
+.. math::
+   :label: peierls-sphere-r-prime
+
+   r'(r, \rho, \theta) \;=\;
+     \sqrt{r^{2} + 2 r \rho \cos\theta + \rho^{2}},
+
+.. vv-status: peierls-sphere-r-prime documented
+
+**identical** to the cylinder case
+:eq:`peierls-cylinder-r-prime` — the 1-D radial chord algebra does
+not care whether the surrounding source field is
+:math:`2`-D-symmetric (cylinder) or :math:`3`-D-symmetric
+(sphere). That is the architectural insight that let
+:class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
+share ray primitives between the two geometries.
+
+The 3-D volume element in observer-centred coordinates is
+:math:`\rho^{2}\,\sin\theta\,\mathrm d\rho\,\mathrm d\theta\,
+\mathrm d\phi`. Combined with the 3-D Green's function the
+integrand becomes
+
+.. math::
+
+   \frac{e^{-\tau}}{4\pi\,\rho^{2}}\,\cdot\,
+   \rho^{2}\,\sin\theta\,\mathrm d\rho\,\mathrm d\theta\,
+   \mathrm d\phi
+   \;=\;
+   \frac{\sin\theta}{4\pi}\,e^{-\tau}\,\mathrm d\rho\,
+   \mathrm d\theta\,\mathrm d\phi.
+
+The :math:`\rho^{2}` polar volume factor **cancels the**
+:math:`1/\rho^{2}` **of the Green's function exactly** — the
+Jacobian-cancellation trick derived in full generality in
+:doc:`peierls_unified` §3. The integrand is now a bounded,
+polynomial-smooth function on the whole integration domain (modulo
+:math:`\Sigma_t` jumps, which are handled by the composite radial
+grid described below). Because the source field is radially
+symmetric, nothing in the integrand depends on :math:`\phi`, so the
+azimuthal integral collapses to a factor of :math:`2\pi`:
+
+.. math::
+   :label: peierls-sphere-polar
+
+   \varphi(r)
+     \;=\; \frac{1}{2}\!
+       \int_{0}^{\pi}\!\sin\theta\,\mathrm d\theta\!
+       \int_{0}^{\rho_{\max}(r, \theta)}\!\!
+         e^{-\tau(r, \rho, \theta)}\,
+         q\!\bigl(r'(r, \rho, \theta)\bigr)\,\mathrm d\rho
+     \;+\; \varphi_{\rm bc}(r).
+
+.. vv-status: peierls-sphere-polar documented
+
+The prefactor :math:`1/2` is :math:`2\pi / (4\pi) = 1/2`, and the
+:math:`\sin\theta` weight remains from the solid-angle element
+:math:`\mathrm d\Omega = \sin\theta\,\mathrm d\theta\,\mathrm d\phi`.
+
+.. note::
+
+   **No** :math:`\beta \to -\beta` **folding is needed** on the
+   sphere. The cylindrical polar form
+   :eq:`peierls-cylinder-polar` folds :math:`\beta \in [0, 2\pi]`
+   to :math:`[0, \pi]` (buying a factor of 2 into the
+   :math:`1/\pi` prefactor) because the integrand there is
+   :math:`\beta`-symmetric. On the sphere the polar angle
+   :math:`\theta \in [0, \pi]` already covers the full hemisphere
+   of ray directions at the observer, and :math:`\sin\theta \ge 0`
+   on that interval — no folding is available or needed.
+
+The upper radial limit :math:`\rho_{\max}` is the intersection of
+the ray with the outer sphere,
+
+.. math::
+   :label: peierls-sphere-rho-max
+
+   \rho_{\max}(r, \theta)
+     \;=\; -r\cos\theta
+         + \sqrt{r^{2}\cos^{2}\theta + R^{2} - r^{2}},
+
+.. vv-status: peierls-sphere-rho-max documented
+
+**identical** to the cylinder :eq:`peierls-cylinder-rho-max`.
+Verified by ``TestSphereRhoMax`` in
+``tests/derivations/test_peierls_sphere_geometry.py``, which covers
+the radial-outward ray (:math:`\rho_{\max} = R - r`), the
+radial-inward through-diameter ray (:math:`\rho_{\max} = R + r`),
+the tangential ray from the centre (:math:`\rho_{\max} = R`), and
+the observer-on-surface outward ray (:math:`\rho_{\max} = 0`).
+
+Writing the identity-LHS form used by the eigenvalue driver, the
+canonical spherical Peierls equation solved by this module is
+
+.. math::
+   :label: peierls-sphere-equation
+
+   \Sigma_t(r_i)\,\varphi(r_i)
+     \;=\; \frac{\Sigma_t(r_i)}{2}\!
+       \int_{0}^{\pi}\!\sin\theta\,\mathrm d\theta\!
+       \int_{0}^{\rho_{\max}(r_i, \theta)}\!\!
+         e^{-\tau(r_i, \rho, \theta)}\,
+         q\!\bigl(r'(r_i, \rho, \theta)\bigr)\,\mathrm d\rho
+     \;+\; S_{\rm bc}(r_i).
+
+.. vv-status: peierls-sphere-equation tested
+
+The sphere test files carry
+``@pytest.mark.verifies("peierls-unified")``, which is the coarse
+label shared across the whole unified polar-form implementation
+while finer-grained per-equation labels are retrofitted in a
+follow-up V&V harness pass. The ``vv-status: ... tested`` annotation
+above reflects that coverage.
+
+Why :math:`e^{-\tau}` and not :math:`E_3` / :math:`\mathrm{Ki}_3`
+------------------------------------------------------------------
+
+The flat-source CP method for the sphere
+(:mod:`orpheus.derivations.cp_sphere`) uses a second-difference
+formula in the :math:`E_3` function (see :eq:`second-diff-sph` above)
+because it averages the pointwise :math:`e^{-\tau}` kernel twice —
+once over the source region :math:`j` and once over the target
+region :math:`i` — and the **double antiderivative** of
+:math:`e^{-\tau}/d^{2}` along a chord produces exactly
+:math:`E_3(\tau)`. This is the sphere-specific instance of the
+general second-difference identity:
+
+.. list-table:: Pointwise kernels vs flat-source second-differences
+   :header-rows: 1
+   :widths: 18 30 30
+
+   * - Geometry
+     - Pointwise kernel
+     - Flat-source second-difference
+   * - Slab
+     - :math:`E_1`
+     - :math:`E_3`
+   * - Cylinder
+     - :math:`\mathrm{Ki}_1`
+     - :math:`\mathrm{Ki}_3`
+   * - Sphere
+     - :math:`e^{-\tau}`
+     - :math:`E_3`
+
+The sphere is alone in the right column: the second antiderivative
+of :math:`e^{-\tau}` involves :math:`E_1` and :math:`E_2` depending
+on which combination of chord endpoints is averaged, and the
+particular combination that appears for a concentric-shell spherical
+geometry happens to collapse to :math:`E_3`. Full derivation in
+``derivations/cp_sphere.py``; see :eq:`second-diff-sph` and
+:eq:`self-sph` for the resulting CP matrix elements, and
+:eq:`rcp-from-double-antideriv` for the general second-difference
+identity that specialises to the sphere via the same
+double-antiderivative argument used for the slab and cylinder.
+
+The Peierls reference solves for the **pointwise** flux
+:math:`\varphi(r_i)` — not a region-averaged collision rate — so it
+uses the raw :math:`e^{-\tau}` kernel directly and **bypasses** the
+analytic chord averaging that produces :math:`E_3`. This makes the
+sphere Peierls a clean cross-check on the CP flat-source
+construction:
+
+- A sign error, off-by-one, or factor-of-two in the
+  :math:`E_n(\tau)` recurrence for :math:`n \ge 2` would affect the
+  CP :math:`E_3` second-difference formula *but not* the Peierls
+  :math:`e^{-\tau}` evaluation (which is just ``np.exp``). A
+  systematic :math:`E_n` bug would therefore cancel between CP
+  solver and CP-self-verification test but be caught cleanly by
+  the Peierls reference.
+- Because the Peierls Nyström operator resolves the flux as a
+  piecewise polynomial of degree :math:`p - 1` on each radial
+  panel, it is sensitive to flux-shape errors that are invisible to
+  a flat-source CP-vs-CP comparison. The Phase-A Peierls-vs-CP
+  flux-shape test
+  (``TestCPvsPeierlsSphereAtThickR.test_flux_shape_agrees_at_thick_R``
+  in ``tests/cp/test_peierls_sphere_flux.py``) is the first-order
+  check that the CP flat-source approximation recovers the correct
+  pointwise flux in the thick-sphere limit where the approximation
+  is asymptotically exact.
+
+The :math:`e^{-\tau}` kernel also avoids the common-mode
+:math:`\mathrm{Ki}_n` recursion path: the cylinder Peierls depends
+on :class:`~orpheus.derivations._kernels.BickleyTables` for every
+:math:`\mathrm{Ki}_1` evaluation, but a sphere Peierls run makes
+**zero** calls into that table. The two references triangulate the
+integral-transport stack from orthogonal angles.
+
+Nyström assembly in polar coordinates
+-------------------------------------
+
+The sphere discretisation mirrors the cylinder's three-layer polar
+quadrature; each layer is dispatched through the unified
+:class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
+with ``kind = "sphere-1d"``.
+
+**Radial grid (composite Gauss–Legendre on** :math:`[0, R]`\ **).**
+The r-axis is partitioned into :math:`N_{\rm reg}` concentric
+shells :math:`[r_{k-1}, r_k]`, :math:`r_0 = 0`, :math:`r_N = R`.
+Each shell carries :math:`n_{\rm panels}` panels, each carrying
+:math:`p` Gauss–Legendre nodes. Panel breakpoints coincide with
+shell radii so the emission density :math:`q(r')` — which is
+piecewise-smooth but has slope discontinuities at material
+boundaries — is represented by a piecewise polynomial of degree
+:math:`p - 1`. This is the same strategy as the cylinder. The
+total number of radial Nyström unknowns is
+:math:`N = N_{\rm reg} \cdot n_{\rm panels} \cdot p`. Builder is
+``composite_gl_r`` (shared with the cylinder; the sphere module
+re-exports it verbatim via
+:mod:`orpheus.derivations.peierls_sphere`).
+
+Verified by ``TestSphereCompositeRadialGL`` in
+``tests/derivations/test_peierls_sphere_geometry.py``: the weighted
+integrals :math:`\int_0^R 1\,\mathrm dr = R` and
+:math:`\int_0^R 4\pi r^{2}\,\mathrm dr = \tfrac{4}{3}\pi R^{3}`
+recover the analytic values to machine precision under the
+composite grid.
+
+**Polar quadrature (Gauss–Legendre on** :math:`[0, \pi]`\ **).**
+With :math:`n_\theta` nodes and weights :math:`w_{\theta, k}`;
+the physical interval :math:`[0, \pi]` is **not folded** (see the
+note under :eq:`peierls-sphere-polar`). The :math:`\sin\theta`
+factor from :eq:`peierls-sphere-equation` is applied inside the
+assembly by
+:meth:`CurvilinearGeometry.angular_weight`; for
+``kind = "sphere-1d"`` this returns :math:`\sin\theta` evaluated at
+each node, distinguishing the sphere from the cylinder's constant
+:math:`W_\Omega = 1`.
+
+**Ray-distance quadrature (Gauss–Legendre on**
+:math:`[0, \rho_{\max}(r_i, \theta_k)]`\ **).**
+With :math:`n_\rho` nodes per ray. The upper limit depends on both
+the observer radius and the polar angle, so the
+:math:`\rho`-quadrature is **remapped per** :math:`(i, k)` from the
+reference interval :math:`[-1, 1]` to :math:`[0, \rho_{\max}]`.
+For a homogeneous bare sphere, a fixed :math:`\rho`-scale would
+under-resolve the long rays that pass near the diameter and
+over-resolve short outward rays near the surface; the per-ray
+remapping gives uniform relative accuracy.
+
+**Source interpolation by Lagrange basis.**
+Because :math:`r'(r_i, \rho_m, \theta_k)` is generally not a radial
+quadrature node, the emission density at the source point is
+expressed via the panel-local Lagrange basis:
+
+.. math::
+
+   q\!\bigl(r'_{ikm}\bigr)
+     \;=\; \sum_{j=1}^{N} L_j\!\bigl(r'_{ikm}\bigr)\,q_j,
+
+where :math:`L_j` is the degree-:math:`(p-1)` Lagrange polynomial
+supported only on the panel containing :math:`r'_{ikm}`. The basis
+is shared with the cylinder (``_lagrange_basis_on_panels`` in
+:mod:`orpheus.derivations.peierls_geometry`); partition of unity
+and polynomial reproduction are L0-verified in the cylinder's
+``TestLagrangeBasisOnPanels`` and carry over to the sphere case
+without modification.
+
+**Assembled matrix.**
+Substituting into :eq:`peierls-sphere-equation` gives the
+identity-LHS form
+
+.. math::
+   :label: peierls-sphere-nystrom
+
+   \Sigma_t(r_i)\,\varphi_i
+     \;=\; \sum_{j=1}^{N} K_{ij}\,q_j + S_{\rm bc}(r_i),
+
+.. vv-status: peierls-sphere-nystrom tested
+
+with
+
+.. math::
+
+   K_{ij}
+     \;=\; \frac{\Sigma_t(r_i)}{2}\!
+       \sum_{k=1}^{n_\theta}\!\sum_{m=1}^{n_\rho}\!
+         w_{\theta, k}\,\sin\theta_k\,w_{\rho, m}(r_i, \theta_k)\,
+         e^{-\tau_{ikm}}\,L_j\!\bigl(r'_{ikm}\bigr).
+
+The kernel matrix is assembled by ``build_volume_kernel`` in
+:mod:`orpheus.derivations.peierls_sphere`, which dispatches to
+:func:`peierls_geometry.build_volume_kernel` with the sphere
+geometry singleton pre-bound. The per-sample optical depth
+:math:`\tau_{ikm}` is computed by the shared multi-annulus walker,
+identical to the cylinder case — the 1-D radial annulus crossings
+are geometry-agnostic.
+
+Ray optical-depth walker
+------------------------
+
+The optical depth along the ray from :math:`r_i` in direction
+:math:`\theta` over distance :math:`\rho`,
+
+.. math::
+   :label: peierls-sphere-ray-optical-depth
+
+   \tau(r_i, \rho, \theta)
+     \;=\; \int_{0}^{\rho}\!
+       \Sigma_t\!\bigl(r'(r_i, s, \theta)\bigr)\,\mathrm ds,
+
+.. vv-status: peierls-sphere-ray-optical-depth tested
+
+shares **the same walker** as the cylinder's
+:eq:`peierls-cylinder-ray-optical-depth`: the boundary crossings
+:math:`|\mathbf{r}(s)|^{2} = r_k^{2}` give the same quadratic in
+:math:`s`, whose roots partition the ray into annular segments of
+constant :math:`\Sigma_t`. Because the embedding ambient space
+(2-D disc vs 3-D ball) enters only through the solid-angle weight
+of :eq:`peierls-sphere-equation` and the kernel :math:`\kappa_d`,
+the walker itself — which only sees the 1-D radial :math:`\Sigma_t`
+profile and the 1-D chord algebra — is reusable verbatim.
+
+L0-verified against closed-form traversals in
+``tests/derivations/test_peierls_sphere_geometry.py``:
+
+- ``TestSphereOpticalDepthAlongRay.test_homogeneous_1region_linear_in_rho``
+  — short-circuit :math:`\tau = \Sigma_t\,\rho` for a bare sphere.
+- ``test_scales_linearly_with_sig_t`` — doubling :math:`\Sigma_t`
+  doubles :math:`\tau` at every :math:`(r_i, \theta, \rho)`.
+- ``test_two_annulus_radial_transit`` — radial outward ray that
+  crosses from the inner shell into the outer shell, pinning the
+  per-segment accumulation against the analytic partitioning.
+- ``test_two_annulus_through_centre_diameter`` — through-centre
+  ray that traverses the inner shell twice (once on each side of
+  the centre) and the outer shell twice, covering the four
+  boundary-crossing algebra.
+
+Row-sum identity — homogeneous and multi-region
+-----------------------------------------------
+
+The row-sum identity is the single most diagnostic consistency
+check for the Peierls operator on any geometry. For the sphere the
+structure is **identical** to the cylinder's
+:ref:`peierls-cylinder-row-sum`, and the same
+:math:`u = \tau(\rho)` change-of-variables argument carries
+through: applying :math:`K` to a pure-scatter emission density
+:math:`q \equiv \Sigma_t` reproduces the spatially uniform
+:math:`\varphi \equiv 1` because the :math:`1/\Sigma_t` factor left
+by the Jacobian is absorbed.
+
+**Homogeneous sphere.** For a bare homogeneous sphere of radius
+:math:`R`, the infinite-medium identity for the identity-LHS
+kernel :eq:`peierls-sphere-nystrom` is
+
+.. math::
+
+   \sum_{j=1}^{N} K_{ij} \;=\; \Sigma_t(r_i) \qquad (R \to \infty).
+
+The finite-sphere deficit :math:`\Sigma_t - \sum_j K_{ij}` equals
+:math:`\Sigma_t \cdot P_{\rm esc}(r_i)` (the uncollided escape
+probability weighted by :math:`\Sigma_t`). For :math:`R = 10` MFP,
+:math:`\max_i |\Sigma_t - \sum_j K_{ij}| < 10^{-3}` at
+:math:`r_i \le R/2`. Tested in
+``TestSphereRowSumIdentity.test_interior_row_sum_equals_sigma_t``
+in ``tests/derivations/test_peierls_sphere_prefactor.py``.
+
+The deficit is **monotone increasing** from centre to surface
+(``test_deficit_grows_toward_boundary``), and shrinks under
+quadrature refinement at every interior observer
+(``test_convergence_under_quadrature_refinement``).
+
+**Multi-region sphere.** The naive "apply :math:`K` to
+:math:`\mathbf 1`" identity fails when :math:`\Sigma_t` is
+piecewise-constant across shells, for the same reason as the
+cylinder: the change of variables :math:`u = \tau(\rho)` gives
+
+.. math::
+
+   \int_{0}^{\rho_{\max}}\!e^{-\tau(\rho)}\,\mathrm d\rho
+     \;=\; \int_{0}^{\tau_{\max}}\!
+       \frac{e^{-u}}{\Sigma_t\!\bigl(r'(u)\bigr)}\,\mathrm du,
+
+and the :math:`1/\Sigma_t` factor depends on where along the ray
+the source point sits. The correct multi-region identity is
+obtained by applying :math:`K` to :math:`q = \Sigma_t`:
+
+.. math::
+   :label: peierls-sphere-row-sum-identity
+
+   \sum_{j=1}^{N} K_{ij}\,\Sigma_t(r_j) \;=\; \Sigma_t(r_i)
+   \qquad\text{(multi-region, } R \to \infty\text{)}.
+
+.. vv-status: peierls-sphere-row-sum-identity documented
+
+The :math:`\Sigma_t(r_j)` factor absorbs the :math:`1/\Sigma_t`
+left behind by the change of variables, restoring
+:math:`\int_0^\infty e^{-u}\,\mathrm du = 1` independently of
+:math:`\Sigma_t` variation along the ray.
+
+.. warning::
+
+   As on the cylinder, a test that applied :math:`K` to
+   :math:`\mathbf 1` and compared to :math:`\Sigma_t(r_i)` would
+   silently fail for the multi-region case even when the
+   implementation is correct. The row sum :math:`\sum_j K_{ij}`
+   instead equals a ray-path-weighted average of
+   :math:`1/\Sigma_t`, which is not a local quantity. The sphere
+   test suite mirrors the cylinder pattern: the **homogeneous**
+   identity uses :math:`\mathbf 1` because :math:`\Sigma_t` is
+   constant; any future multi-region row-sum test must apply
+   :math:`K` to :math:`\Sigma_t`, not to :math:`\mathbf 1`.
+
+Surface-to-volume Green's function :math:`G_{\rm bc}`
+------------------------------------------------------
+
+White-BC closure needs the sphere's surface-to-volume Green's
+function :math:`G_{\rm bc}(r_i)` — the scalar flux at interior
+observer :math:`r_i` induced by a **unit uniform isotropic inward
+partial current** :math:`J^{-}` on the spherical surface. This
+section derives the compact observer-centred form used by the
+implementation and documents the design choice to parametrise by
+directions at the observer rather than area elements on the
+surface.
+
+For a uniform isotropic inward partial current :math:`J^{-}` on
+the sphere, the inward angular flux on the surface is
+:math:`\psi_{\rm in} = J^{-}/\pi`, since the partial current and
+the isotropic angular flux are related by :math:`J^{-} =
+\int_{\Omega \cdot \hat n < 0}|\Omega \cdot \hat n|\,\psi\,
+\mathrm d\Omega = \pi\,\psi_{\rm in}` for an isotropic inward
+hemisphere. The scalar flux at interior observer :math:`r_i` is
+obtained by integrating the attenuated emission over **directions
+at the observer**:
+
+.. math::
+
+   \varphi(r_i)
+     \;=\; \psi_{\rm in}\!\int_{4\pi}\!
+       e^{-\tau_{\rm surf}(r_i, \Omega)}\,\mathrm d\Omega
+     \;=\; \frac{J^{-}}{\pi}\,\cdot\,2\pi\!\int_{0}^{\pi}\!
+       \sin\theta\,e^{-\tau_{\rm surf}(r_i, \theta)}\,
+       \mathrm d\theta,
+
+where
+:math:`\tau_{\rm surf}(r_i, \theta) = \int_0^{\rho_{\max}(r_i,\theta)}
+\Sigma_t(r'(s))\,\mathrm ds` is the optical depth along the ray
+from :math:`r_i` in direction :math:`\theta` to the surface.
+Dividing by :math:`J^{-}`:
+
+.. math::
+   :label: peierls-sphere-G-bc
+
+   G_{\rm bc}^{\rm sph}(r_i)
+     \;=\; 2\!\int_{0}^{\pi}\!\sin\theta\,
+       e^{-\tau_{\rm surf}(r_i, \theta)}\,\mathrm d\theta.
+
+.. vv-status: peierls-sphere-G-bc tested
+
+.. note::
+
+   **Observer parametrisation vs surface parametrisation.** The
+   standard textbook derivation writes :math:`G_{\rm bc}(r_i)` as
+   an integral over the boundary surface area element
+   :math:`\mathrm dA_{\rm surf} = R^{2}\sin\theta'\,\mathrm d\theta'\,
+   \mathrm d\phi'` with a :math:`\cos\theta'` Lambertian weight
+   (the projection of the inward normal onto the ray) and a
+   :math:`1/d^{2}` geometric attenuation:
+
+   .. math::
+
+      G_{\rm bc}^{\rm surf}(r_i)
+        \;=\; \frac{1}{\pi}\!\iint_{\rm surf}\!
+          \frac{\cos\theta'\,e^{-\tau_{\rm surf}}}{d(r_i, \theta')^{2}}\,
+            \mathrm dA_{\rm surf}.
+
+   The **observer form** :eq:`peierls-sphere-G-bc` and the
+   **surface form** are equivalent via change of variables: for
+   every inward-pointing ray at the observer there is one and only
+   one entry point on the surface, and the Jacobian of the mapping
+   exactly cancels the :math:`1/d^{2}` attenuation and the
+   :math:`\cos\theta'` Lambertian weight. The observer
+   parametrisation is **structurally simpler** — no
+   :math:`\cos\theta'`, no :math:`1/d^{2}`, no extra branch
+   choice — and the angular range is the natural :math:`[0, \pi]`
+   of polar-angle integration.
+
+   This is the same Jacobian-cancellation principle that eliminates
+   the :math:`1/\rho^{2}` volume singularity in the polar form of
+   the volume kernel. Choosing the observer parametrisation is the
+   design decision that makes :math:`G_{\rm bc}` a smooth integral
+   that Gauss–Legendre quadrature handles spectrally.
+
+**Vacuum limit (sanity check).** As :math:`\Sigma_t \to 0` the
+exponential collapses to unity and
+
+.. math::
+
+   G_{\rm bc}^{\rm sph}(r_i)\,\big|_{\Sigma_t = 0}
+     \;=\; 2\!\int_{0}^{\pi}\!\sin\theta\,\mathrm d\theta
+     \;=\; 2 \cdot 2 \;=\; 4.
+
+Physically: a uniform isotropic inward partial current of strength
+:math:`J^{-}` on an empty ball fills the interior with scalar flux
+:math:`4 J^{-}` (:math:`4\pi` sr of angular flux, each mode
+:math:`\psi_{\rm in} = J^{-}/\pi`, integrated gives :math:`4\pi \cdot
+J^{-}/\pi = 4 J^{-}`). This limit is tested in
+``TestSphereGBCVacuumLimit.test_vacuum_G_bc_is_four`` in
+``tests/derivations/test_peierls_sphere_prefactor.py``: a
+:math:`\Sigma_t R = 10^{-8}` sphere gives
+:math:`G_{\rm bc} = 4` to :math:`10^{-5}` at every interior
+observer.
+
+Rank-1 white-BC closure — geometry-aware surface divisor
+----------------------------------------------------------
+
+Under the **rank-1 Mark / isotropic closure**, the white-BC
+correction to the volume kernel is of outer-product form
+:math:`K_{\rm bc}[i, j] = u_i\,v_j` with
+
+.. math::
+
+   u_i \;=\; \frac{\Sigma_t(r_i)\,G_{\rm bc}(r_i)}{A_d},
+   \qquad
+   v_j \;=\; r_j^{d-1}\,w_j\,P_{\rm esc}(r_j),
+
+where :math:`A_d` is the cell-surface measure, :math:`d \in
+\{2, 3\}` is the ambient dimension, and :math:`P_{\rm esc}(r_j)`
+is the uncollided escape probability.
+
+For the **sphere** (:math:`d = 3`, :math:`A_d = 4\pi R^{2}`,
+volume-element area :math:`A_j = 4\pi r_j^{2} w_j`), the
+:math:`4\pi` azimuthal factor cancels between :math:`A_d` and
+:math:`A_j`, leaving a ratio :math:`A_j / A_d = r_j^{2} w_j /
+R^{2}`. The implementation therefore uses a surface divisor of
+:math:`R^{2}`:
+
+.. math::
+
+   u_i^{\rm sph} = \frac{\Sigma_t(r_i)\,G_{\rm bc}(r_i)}{R^{2}},
+   \qquad
+   v_j^{\rm sph} = r_j^{2}\,w_j\,P_{\rm esc}(r_j).
+
+For the **cylinder** the analogous ratio is :math:`r_j w_j / R`,
+so the divisor is :math:`R`. These two cases are dispatched by
+:meth:`CurvilinearGeometry.rank1_surface_divisor`, which returns
+:math:`R` for the cylinder and :math:`R^{2}` for the sphere.
+
+.. warning::
+
+   **R-vs-R² gotcha.** A sphere Peierls implementation that
+   re-uses cylinder scaffolding **without** updating the
+   surface-divisor from :math:`R` to :math:`R^{2}` under-counts
+   :math:`u_i` by a factor of :math:`R`. The symptom is an
+   enormous overestimation of :math:`k_{\rm eff}`: the white-BC
+   correction, having the wrong normalisation, feeds a spuriously
+   large boundary source back into the fission eigenvalue. A
+   previous attempt (see :ref:`issue-100-retraction` below) hit
+   exactly this wall and reported :math:`k_{\rm eff} \approx 6.7`
+   for a 1-G bare sphere where :math:`k_\infty = 1.5`. The
+   :meth:`~CurvilinearGeometry.rank1_surface_divisor` abstraction
+   exists precisely to make this mistake impossible in new code.
+
+The implementation is thin: :func:`build_white_bc_correction` in
+:mod:`orpheus.derivations.peierls_sphere` calls
+:func:`compute_G_bc`, :func:`compute_P_esc`, and assembles the
+rank-1 outer product with the geometry-aware divisor — all via the
+unified :class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
+dispatch in :func:`peierls_geometry.build_white_bc_correction`.
+
+.. _issue-100-retraction:
+
+Issue #100 — retraction of the ":math:`k_{\rm eff} \approx 6.7`" claim
+-----------------------------------------------------------------------
+
+The earlier discussion in :doc:`peierls_unified` (§8, "Sphere —
+Issue #100") reported that an initial Phase-4.3 sphere Peierls
+attempt produced :math:`k_{\rm eff} \approx 6.7` for a 1-G
+1-region bare sphere (:math:`k_\infty = 1.5`), and concluded that
+the rank-1 Mark closure **fails structurally** on the sphere
+because the ratio :math:`P_{\rm esc}(r) / G_{\rm bc}(r)` varies
+~40 % across the sphere radius — implying that no constant outer
+product can absorb the variation.
+
+**That conclusion is retracted.** With the corrected :math:`R^{2}`
+divisor implemented in the unified infrastructure, the sphere's
+rank-1 white-BC behaviour **parallels the cylinder's** — a large
+error at thin :math:`R`, monotone convergence to :math:`k_\infty`
+as :math:`R \to \infty`. The numerical evidence, produced by the
+Phase-4.3 ``TestWhiteBCRank1ErrorScan`` suite and reproduced here
+directly from the implementation with
+:math:`(\Sigma_t, \Sigma_s, \nu\Sigma_f) = (1, 0.5, 0.75)` and
+:math:`n_\theta = n_\rho = 20`, :math:`n_\phi = 32`, ``dps = 25``:
+
+.. list-table:: Rank-1 white-BC :math:`k_{\rm eff}` scan, bare sphere
+   :header-rows: 1
+   :widths: 14 18 18 22
+
+   * - :math:`R` / MFP
+     - :math:`k_{\rm eff}` (sphere)
+     - err vs :math:`k_\infty`
+     - cylinder comparator
+   * - 1.0
+     - 1.0963
+     - 26.9 %
+     - 1.19 (21 %)
+   * - 2.0
+     - 1.3914
+     - 7.2 %
+     - 1.40 (7 %)
+   * - 5.0
+     - 1.4897
+     - 0.7 %
+     - 1.48 (2 %)
+   * - 10.0
+     - 1.4957
+     - 0.3 %
+     - 1.49 (1 %)
+   * - 20.0
+     - 1.4945
+     - 0.4 %
+     - —
+   * - 30.0
+     - 1.4946
+     - 0.4 %
+     - —
+
+The beyond-:math:`R = 10` MFP plateau at
+:math:`|k_{\rm eff} - k_\infty|/k_\infty \approx 0.3\%\,\text{--}\,0.4\%`
+is the quadrature-noise floor at the cited
+:math:`(n_\theta, n_\rho, n_\phi)` order, not a rank-1 closure
+defect. Under refinement the floor drops further
+(``TestQuadratureConvergence.test_k_eff_converges_under_refinement``
+monitors this at :math:`R = 4` MFP).
+
+Row-sum residuals under the rank-1 white-BC correction
+(:math:`\max_i |K_{\rm tot} \cdot \Sigma_t - \Sigma_t|` for the
+homogeneous sphere at :math:`\Sigma_t = 1`):
+
+.. list-table:: Row-sum residuals (homogeneous sphere)
+   :header-rows: 1
+   :widths: 20 30 30
+
+   * - :math:`R`
+     - vacuum :math:`K`
+     - white :math:`K_{\rm tot}`
+   * - 2.0 MFP
+     - :math:`5.4\cdot10^{-1}`
+     - :math:`6.2\cdot10^{-2}`
+   * - 5.0 MFP
+     - :math:`4.0\cdot10^{-1}`
+     - :math:`9.4\cdot10^{-3}`
+   * - 10.0 MFP
+     - :math:`2.9\cdot10^{-1}`
+     - :math:`5.8\cdot10^{-3}`
+
+At :math:`R = 5` MFP the rank-1 closure recovers the row-sum
+identity to better than 1 % — pinned in
+``TestSphereWhiteBCRowSum.test_medium_sphere_residual_below_five_percent``
+and ``test_thick_sphere_residual_below_two_percent``.
+
+**Root cause of the earlier failure.** The earlier implementation
+was a direct port of the cylinder rank-1 closure that divided
+:math:`u_i` by :math:`R` unconditionally. For the sphere the
+correct divisor is :math:`R^{2}`, because :math:`A_d = 4\pi R^{2}`
+and :math:`A_j = 4\pi r_j^{2}\,w_j` (not :math:`2\pi R` and
+:math:`2\pi r_j\,w_j` as on the cylinder). Under-dividing by
+:math:`R` amounts to **multiplying** :math:`u_i` by :math:`R`,
+injecting a spurious factor of :math:`R` into the boundary
+correction. At :math:`R \sim 1` MFP this inflates
+:math:`k_{\rm eff}` by roughly the same factor; at :math:`R \to
+\infty` the leakage goes to zero but the spurious factor goes to
+infinity, so the original attempt would have diverged rather than
+approached :math:`k_\infty`. The reported :math:`k_{\rm eff}
+\approx 6.7` is therefore **consistent with an :math:`R \approx
+4{-}5` inflation at :math:`R \sim 1` MFP**, not with a genuine
+structural failure of the rank-1 Mark closure.
+
+**The earlier :math:`P_{\rm esc} / G_{\rm bc}` ratio argument does
+not apply.** The rank-1 closure is an outer product
+:math:`u_i\,v_j` with :math:`u_i \propto G_{\rm bc}(r_i)` and
+:math:`v_j \propto P_{\rm esc}(r_j) \cdot r_j^{2}\,w_j`.
+:math:`u` and :math:`v` can individually vary with radius; what
+the rank-1 closure *approximates* is the re-entering angular
+distribution on the sphere surface (treated as uniform isotropic
+by Mark) rather than the :math:`(i, j)` coupling structure of
+volume-to-volume terms. The pointwise Nyström deficit that grows
+as :math:`R \to 0` has the same root cause on sphere and cylinder:
+the Mark closure is *flat-source accurate* and becomes poor at
+pointwise resolution when the emission density varies
+significantly within a cell. That deficit is Issue #103 / N1, the
+higher-rank angular decomposition; it is a real limitation of the
+rank-1 closure, just not a sphere-specific one.
+
+**Historical context retained.** The earlier discussion is kept as
+a footnote in :doc:`peierls_unified` §8 with the update flag at
+the top — the record of what was tried and why it failed is
+valuable for future AI sessions reading this page as a knowledge
+base. Do not delete historical failure analyses even after the
+retraction; they prevent the same mistake from being made twice.
+
+Boundary conditions — rank-1 white and vacuum
+----------------------------------------------
+
+**Vacuum.** :math:`S_{\rm bc} \equiv 0`. The kernel :math:`K` is
+the full operator; the eigenvalue problem is
+
+.. math::
+
+   \bigl[\mathrm{diag}(\Sigma_t) - K\,\mathrm{diag}(\Sigma_s)\bigr]
+     \varphi \;=\; \frac{1}{k}\,K\,\mathrm{diag}(\nu\Sigma_f)\,\varphi,
+
+solved by fission-source power iteration in
+:func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g_vacuum`.
+This is the clean closure: no approximation enters beyond the
+quadrature orders.
+
+**Rank-1 white.** The unified :math:`K_{\rm vol} + K_{\rm bc}`
+structure with :math:`K_{\rm bc}` the rank-1 outer product derived
+above, solved by the same power iteration via
+:func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`
+with ``boundary="white"``. Accuracy is governed by the cell
+optical thickness (``test_thin_sphere_rank1_error_bounded`` /
+``test_medium_sphere_rank1_error_bounded`` /
+``test_thick_sphere_rank1_near_k_inf``).
+
+.. note::
+
+   The rank-1 closure collapses because of radial symmetry, not
+   because of the specific dimensionality. For a 1-D radial sphere
+   with isotropic scattering, the re-entering partial current is
+   scalar (:math:`J^{-}` has a single degree of freedom by
+   rotational symmetry), and the scalar balance
+   :math:`J^{-} = J^{+}` is exact at every surface point. What the
+   rank-1 Mark closure approximates is the **angular shape** of
+   :math:`J^{-}` — treating it as isotropic in the inward
+   hemisphere. That approximation is exact in the thick-cell
+   limit (where the angular flux at the boundary is the integrated
+   average over the slab's emission density) and degrades as
+   :math:`R \to 0` (where the angular dependence on the surface is
+   Fourier-rich). Issue #103 (N1) is the planned higher-rank
+   angular expansion that lifts this restriction.
+
+Relationship to the CP flat-source sphere solver
+--------------------------------------------------
+
+The CP flat-source method for the sphere
+(:func:`~orpheus.cp.solver.solve_cp` on ``sph1D`` meshes;
+:mod:`orpheus.derivations.cp_sphere`) integrates the native
+:math:`e^{-\tau}` 3-D kernel analytically over each concentric
+shell to produce the :math:`E_3` second-difference formula
+(:eq:`second-diff-sph` and :eq:`self-sph` above). The Peierls
+reference **bypasses that integration** entirely:
+
+- the kernel is :math:`e^{-\tau}`, not :math:`E_3`,
+- the spatial representation is a piecewise polynomial of degree
+  :math:`p - 1` per panel, not a piecewise constant,
+- the ray integration is performed numerically in observer-centred
+  polar coordinates, not analytically over annular shell
+  boundaries.
+
+So the two methods share **almost nothing** except the underlying
+point kernel they both derive from. A sign error, off-by-one, or
+factor-of-two in the :math:`E_3(\tau_a) - E_3(\tau_b) - E_3(\tau_c)
++ E_3(\tau_d)` sphere CP second-difference formula — which would
+cancel between the CP solver and a CP-self-verification test —
+would be caught by the Peierls reference. Conversely, a systematic
+error in the :math:`e^{-\tau}` evaluation (unlikely given that it
+is ``numpy.exp``) would be caught by the CP eigenvalue tests. The
+two together triangulate the spherical integral-transport stack.
+
+The **kernel-level** relationship is exactly parallel to the
+cylinder case:
+
+.. list-table:: Peierls vs CP kernel pairing by geometry
+   :header-rows: 1
+   :widths: 20 30 30
+
+   * - Geometry
+     - Peierls (pointwise)
+     - CP (flat-source)
+   * - Slab
+     - :math:`E_1`
+     - :math:`E_3` (2nd diff.)
+   * - Cylinder
+     - :math:`\mathrm{Ki}_1`
+     - :math:`\mathrm{Ki}_3` (2nd diff.)
+   * - Sphere
+     - :math:`e^{-\tau}`
+     - :math:`E_3` (2nd diff.)
+
+The Phase-A tests pin this relationship numerically:
+
+- ``TestPeierlsSphereSelfConvergence.test_k_eff_cauchy_convergence_at_thick_R``
+  and ``test_flux_cauchy_convergence_at_thick_R`` — Peierls is
+  Cauchy-convergent in :math:`k_{\rm eff}` and flux profile under
+  :math:`(n_\theta, n_\rho, n_\phi)` refinement.
+- ``TestCPvsPeierlsSphereAtThickR.test_k_eff_agrees_at_thick_R`` —
+  CP :math:`k_{\rm eff}` and Peierls :math:`k_{\rm eff}` agree to
+  < 2 % at :math:`R = 10` MFP.
+- ``TestCPvsPeierlsSphereAtThickR.test_flux_shape_agrees_at_thick_R``
+  — volume-weighted normalised flux profiles agree to L2
+  < 5 % at :math:`R = 10` MFP.
+
+Phase B will unify ``cp_sphere.py`` and ``cp_cylinder.py`` under a
+single ``cp_geometry.py`` module (Issue #107 / N6), mirroring the
+already-completed Peierls unification; the rank-1 white-BC
+closure parity between CP flat-source and Peierls rank-1 at the
+thick-:math:`R` limit, verified by the tests above, is the
+correctness gate for that unification.
+
+Verification evidence
+---------------------
+
+Three classes of independent checks gate the Peierls sphere
+implementation: geometry primitives (L0), prefactor / kernel
+normalisation / row-sum (L0), and eigenvalue / flux-shape (L1).
+All 35 sphere tests pass; cylinder regression (31 tests) passes
+unchanged.
+
+.. list-table:: Spherical Peierls verification summary
+   :header-rows: 1
+   :widths: 40 18 20 22
+
+   * - Check
+     - Level
+     - Tolerance
+     - Identity / eq.
+   * - Geometry constants (prefactor, sin θ, r², R²)
+     - L0
+     - exact
+     - :eq:`peierls-sphere-polar`
+   * - :math:`\rho_{\max}` closed forms (5 cases)
+     - L0
+     - :math:`10^{-12}`
+     - :eq:`peierls-sphere-rho-max`
+   * - :math:`r'` closed forms (3 cases)
+     - L0
+     - :math:`10^{-12}`
+     - :eq:`peierls-sphere-r-prime`
+   * - Optical-depth walker (4 cases)
+     - L0
+     - :math:`10^{-12}`
+     - :eq:`peierls-sphere-ray-optical-depth`
+   * - Composite radial GL (3 integrals)
+     - L0
+     - :math:`10^{-12}`
+     - :math:`\int_0^R 4\pi r^{2}\,\mathrm dr`
+   * - :math:`G_{\rm bc}` vacuum limit
+     - L0
+     - :math:`10^{-5}`
+     - :eq:`peierls-sphere-G-bc`
+   * - Row sum (homogeneous, :math:`R = 10` MFP)
+     - L0
+     - :math:`<10^{-3}` interior
+     - :eq:`peierls-sphere-nystrom`
+   * - Row sum (white-BC, :math:`R = 10` MFP)
+     - L0
+     - :math:`<2\times 10^{-2}`
+     - :eq:`peierls-sphere-row-sum-identity`
+   * - Thick vacuum limit (:math:`R = 30` MFP)
+     - L1
+     - :math:`<10^{-2}` vs :math:`k_\infty`
+     - vacuum fixed point
+   * - Vacuum :math:`k_{\rm eff}(R)` monotonicity
+     - L1
+     - monotone on 5 :math:`R` values
+     - vacuum fixed point
+   * - Quadrature convergence (:math:`R = 4` MFP)
+     - L1
+     - :math:`|\Delta k|_{\rm next}` < prev
+     - :eq:`peierls-sphere-nystrom`
+   * - Rank-1 white-BC error scan
+     - L1
+     - :math:`<35\%` at :math:`R=1`, :math:`<1\%` at :math:`R=10`
+     - :eq:`peierls-sphere-G-bc`
+   * - CP-vs-Peierls :math:`k_{\rm eff}` (:math:`R = 10` MFP)
+     - L1
+     - :math:`<2\%`
+     - :eq:`second-diff-sph`
+   * - CP-vs-Peierls flux shape (:math:`R = 10` MFP)
+     - L1
+     - :math:`L^2 < 5\%`
+     - :eq:`second-diff-sph`
+
+[CaseZweifel1967]_ tabulates bare-sphere critical-radius
+:math:`R_c` values as a function of :math:`c = \nu\Sigma_f /
+\Sigma_a` (1-group) and offers a literature tie-point analogous to
+the cylinder's Sanchez 1982 tie-point. The Peierls-sphere test
+suite currently pins the solver empirically via the vacuum-BC
+thick-limit and the monotone-:math:`R` scan rather than by
+transcribing numerical :math:`R_c` values from the Case–Zweifel
+tables (Cardinal Rule L4 forbids hand-transcription; a programmatic
+ingestion of the tables via the literature-researcher agent is a
+planned follow-up).
+
+Numerical cost
+--------------
+
+The :math:`(\theta, \rho)` tensor-product quadrature dominates. For
+each observer :math:`r_i` and each :math:`\theta_k`, the kernel
+assembly evaluates :math:`e^{-\tau}` at :math:`n_\rho` points —
+which is a single ``numpy.exp`` call per sample (no special-function
+recurrence, unlike the cylinder's :math:`\mathrm{Ki}_1`). Dominant
+cost: :math:`O(N \cdot n_\theta \cdot n_\rho)` exponential
+evaluations per group. For :math:`N = 10` radial nodes,
+:math:`(n_\theta, n_\rho) = (24, 24)`, ``dps = 20``, kernel
+assembly takes :math:`\approx 1` s on current hardware (cheaper
+than the cylinder by the :math:`\mathrm{Ki}_1`-vs-``exp`` speed
+ratio); eigenvalue power iteration is a further :math:`O(N^{3})`
+LU per iteration, typically converging in 20–30 iterations to
+:math:`10^{-10}` eigenvalue tolerance.
+
+Short-circuit: the homogeneous single-shell branch of
+:func:`~orpheus.derivations.peierls_geometry.compute_G_bc` bypasses
+the multi-annulus walker and computes :math:`\tau_{\rm surf} =
+\Sigma_t\,\rho_{\max}` directly, making the bare-sphere case
+:math:`\sim 2\times` faster than the multi-region path.
+
+.. seealso::
+
+   :mod:`orpheus.derivations.peierls_sphere` — thin facade; the
+   sphere-specific API names, the
+   ``_build_peierls_sphere_case`` registry builder, and the
+   ``continuous_cases`` registration.
+
+   :mod:`orpheus.derivations.peierls_geometry` — unified polar-form
+   Nyström infrastructure; the
+   :class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
+   class with ``kind = "sphere-1d"`` and
+   ``kind = "cylinder-1d"`` handles both geometries through one
+   code path.
+
+   :class:`orpheus.derivations.peierls_sphere.PeierlsSphereSolution`
+   — result container with radial node positions, flux values,
+   and :math:`k_{\rm eff}`; kept for symmetry with
+   :class:`~orpheus.derivations.peierls_cylinder.PeierlsCylinderSolution`.
+
+   :func:`orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`
+   — 1-group vacuum- or white-BC eigenvalue driver.
+
+   :func:`orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g_vacuum`
+   — vacuum-BC alias for the scaffold-level verification gate.
+
+   ``tests/derivations/test_peierls_sphere_geometry.py`` — 17 L0
+   tests for angular/radial geometry primitives, the composite
+   Gauss–Legendre builder, the :math:`\rho_{\max}` closed forms,
+   the :math:`r'` closed forms, and the multi-annulus
+   optical-depth walker.
+
+   ``tests/derivations/test_peierls_sphere_prefactor.py`` — 6 L0
+   tests for the row-sum identity (homogeneous and
+   white-BC-corrected), and the :math:`G_{\rm bc}` vacuum-limit
+   sanity check.
+
+   ``tests/derivations/test_peierls_sphere_eigenvalue.py`` — 4 L1
+   tests: vacuum-BC thick limit, :math:`k_{\rm eff}(R)`
+   monotonicity, quadrature convergence, white-BC thick-limit
+   sanity.
+
+   ``tests/derivations/test_peierls_sphere_white_bc.py`` — 4 L1
+   tests pinning the rank-1 closure error at :math:`R \in \{1, 2,
+   5, 10\}` MFP (Issue #103 bounds).
+
+   ``tests/cp/test_peierls_sphere_flux.py`` — 4 L1 tests for
+   Peierls self-convergence and CP-vs-Peierls flux / eigenvalue
+   agreement at :math:`R = 10` MFP.
+
+   :doc:`peierls_unified` — cross-cutting architectural page:
+   §2 dimensionally-reduced kernels, §3 Jacobian cancellation,
+   §8 white-BC rank-1 closure and Issue #100 historical record.
+
+
 References
 ==========
 
