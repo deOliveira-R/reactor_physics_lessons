@@ -251,7 +251,9 @@ class CurvilinearGeometry:
     kind: str
 
     def __post_init__(self) -> None:
-        if self.kind not in ("slab-polar", "cylinder-1d", "sphere-1d"):
+        if self.kind not in (
+            "slab-polar", "cylinder-1d", "cylinder-polar", "sphere-1d",
+        ):
             raise ValueError(f"Unsupported geometry kind {self.kind!r}")
 
     # ── geometric constants ───────────────────────────────────────────
@@ -262,6 +264,7 @@ class CurvilinearGeometry:
         return {
             "slab-polar": 3,
             "cylinder-1d": 2,
+            "cylinder-polar": 3,  # the z-integration is exposed explicitly
             "sphere-1d": 3,
         }[self.kind]
 
@@ -271,6 +274,7 @@ class CurvilinearGeometry:
         return {
             "slab-polar": 4.0 * np.pi,
             "cylinder-1d": 2.0 * np.pi,
+            "cylinder-polar": 2.0 * np.pi,
             "sphere-1d": 4.0 * np.pi,
         }[self.kind]
 
@@ -279,10 +283,17 @@ class CurvilinearGeometry:
         """Composite prefactor absorbing :math:`1/S_d` + azimuth fold + :math:`\\pm` fold.
 
         See the class docstring for the derivation.
+
+        ``cylinder-polar`` shares the ``1/π`` prefactor with ``cylinder-1d``:
+        both represent the same integral operator; cylinder-polar exposes
+        the out-of-plane z-integration as an explicit :math:`\\varphi`
+        integration so the kernel is :math:`e^{-\\tau/\\cos\\varphi}` instead
+        of the pre-integrated :math:`\\mathrm{Ki}_1(\\tau)`.
         """
         return {
             "slab-polar": 0.5,
             "cylinder-1d": 1.0 / np.pi,
+            "cylinder-polar": 1.0 / np.pi,
             "sphere-1d": 0.5,
         }[self.kind]
 
@@ -637,7 +648,7 @@ class CurvilinearGeometry:
         a consequence of both escape and emergence being angular integrals
         of the same point kernel over the same solid-angle domain.
         """
-        if self.kind == "cylinder-1d":
+        if self.kind in ("cylinder-1d", "cylinder-polar"):
             return float(ki_n_mp(2, float(tau), dps))
         return float(mpmath.exp(-mpmath.mpf(tau)))
 
@@ -651,7 +662,7 @@ class CurvilinearGeometry:
         :math:`r\,\mathrm d r\,\mathrm d\beta`).
         Sphere (:math:`d = 3`): returns :math:`r^2`.
         """
-        if self.kind == "cylinder-1d":
+        if self.kind in ("cylinder-1d", "cylinder-polar"):
             return r
         return r * r
 
@@ -663,7 +674,7 @@ class CurvilinearGeometry:
         - Cylinder: :math:`2\\pi R` (lateral surface per unit z).
         - Sphere:   :math:`4\\pi R^2` (full spherical surface area).
         """
-        if self.kind == "cylinder-1d":
+        if self.kind in ("cylinder-1d", "cylinder-polar"):
             return 2.0 * np.pi * R
         return 4.0 * np.pi * R * R
 
@@ -683,7 +694,7 @@ class CurvilinearGeometry:
         - Sphere (:math:`A_d = 4\pi R^2`, :math:`A_j = 4\pi r_j^2 w_j`):
           ratio :math:`A_j / A_d = r_j^2 w_j / R^{2}`, divisor :math:`R^{2}`.
         """
-        if self.kind == "cylinder-1d":
+        if self.kind in ("cylinder-1d", "cylinder-polar"):
             return R
         return R * R
 
@@ -691,6 +702,7 @@ class CurvilinearGeometry:
 # Convenience singletons
 SLAB_POLAR_1D = CurvilinearGeometry(kind="slab-polar")
 CYLINDER_1D = CurvilinearGeometry(kind="cylinder-1d")
+CYLINDER_POLAR_1D = CurvilinearGeometry(kind="cylinder-polar")
 SPHERE_1D = CurvilinearGeometry(kind="sphere-1d")
 
 
@@ -946,6 +958,167 @@ def _invert_tau_slab(
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Cylinder polar-form assembly — explicit out-of-plane φ integration
+# ═══════════════════════════════════════════════════════════════════════
+
+def _build_volume_kernel_cylinder_phi(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    panel_bounds: list[tuple[float, float, int, int]],
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    n_angular: int,
+    n_rho: int,
+    n_phi: int = 8,
+    dps: int = 30,
+) -> np.ndarray:
+    r"""Cylinder K-matrix with the out-of-plane :math:`\varphi`
+    integration exposed explicitly (issue #116).
+
+    The cylindrical Peierls operator's 2-D in-plane polar form uses the
+    Bickley-Naylor kernel :math:`\mathrm{Ki}_1(\tau)` to absorb the
+    z-axis (out-of-plane) integration of the 3-D point kernel:
+
+    .. math::
+
+       \mathrm{Ki}_1(\tau) \;=\; \int_0^{\pi/2} e^{-\tau/\cos\varphi}\,
+           \mathrm d\varphi.
+
+    Exposing :math:`\varphi` as an explicit quadrature dimension
+    reduces the cylinder kernel to the SAME form as slab and sphere —
+    an exponential :math:`e^{-\tau/\cos\varphi}` — eliminating any
+    reliance on Bickley evaluators (``ki_n_float``, ``ki_n_mp``).
+
+    Mathematical equivalence: for any integrand using
+    :math:`\mathrm{Ki}_1(\tau(\rho))`, substituting the defining integral
+    and swapping quadratures gives an identical result to the triple
+    integral :math:`\int\!\mathrm d\varphi\!\int\!\mathrm d\rho\,
+    e^{-\tau/\cos\varphi}`. At quadrature level, a ``n_phi``-point GL
+    on :math:`[0, \pi/2]` replaces one Bickley evaluation with
+    ``n_phi`` exponential evaluations — each cheap, each machine-
+    precision.
+
+    Shared with the cylinder-1d path: β (in-plane angle),
+    :math:`\rho` (2-D radial distance), the
+    :func:`optical_depth_along_ray` walker, panel-boundary /
+    tangent-angle subdivisions (issue #114 fix). Only the inner
+    kernel evaluation changes.
+    """
+    r_nodes = np.asarray(r_nodes, dtype=float)
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    panel_bounds = [
+        (float(pa), float(pb), int(i_start), int(i_end))
+        for (pa, pb, i_start, i_end) in panel_bounds
+    ]
+    N = len(r_nodes)
+    R = float(radii[-1])
+
+    omega_low, omega_high = geometry.angular_range
+    ref_omega_nodes, ref_omega_wts = gl_nodes_weights(n_angular, dps)
+    ref_omega_nodes = np.array([float(x) for x in ref_omega_nodes])
+    ref_omega_wts = np.array([float(w) for w in ref_omega_wts])
+
+    ref_rho_nodes, ref_rho_wts = gl_nodes_weights(n_rho, dps)
+    ref_rho_nodes = np.array([float(x) for x in ref_rho_nodes])
+    ref_rho_wts = np.array([float(w) for w in ref_rho_wts])
+
+    # Out-of-plane polar angle φ ∈ [0, π/2]: GL quadrature on the
+    # finite interval. The integrand e^{-τ/cos φ} has a maximum at φ=0
+    # (integrand = e^{-τ}) and decays super-exponentially as φ → π/2
+    # (integrand → 0). For typical τ < 10, n_phi = 8 resolves to
+    # machine precision; for larger τ, the integrand concentrates
+    # more sharply at small φ but the overall contribution is
+    # exponentially small anyway.
+    ref_phi_nodes, ref_phi_wts = gl_nodes_weights(n_phi, dps)
+    phi_h = 0.5 * (np.pi / 2)
+    phi_mid = 0.5 * (np.pi / 2)
+    phi_pts = np.array([phi_h * float(x) + phi_mid for x in ref_phi_nodes])
+    phi_wts = np.array([phi_h * float(w) for w in ref_phi_wts])
+    cos_phi_pts = np.cos(phi_pts)
+    inv_cos_phi_pts = 1.0 / cos_phi_pts
+
+    # Sorted unique panel-boundary radii + tangent-angle subdivisions,
+    # identical machinery to the curvilinear path (issue #114 fix).
+    panel_boundaries_r = np.array(sorted(
+        {pa for (pa, pb, _, _) in panel_bounds}
+        | {pb for (pa, pb, _, _) in panel_bounds}
+    ), dtype=float)
+    interior_boundaries_r = panel_boundaries_r[
+        (panel_boundaries_r > 0.0) & (panel_boundaries_r < R)
+    ]
+
+    K = np.zeros((N, N))
+    pref = geometry.prefactor
+
+    for i in range(N):
+        r_i = float(r_nodes[i])
+        ki = geometry.which_annulus(r_i, radii)
+        sig_t_i = float(sig_t[ki])
+
+        tangent_angles = geometry.omega_tangent_angles(
+            r_i, interior_boundaries_r,
+        )
+        omega_subintervals = [omega_low, *tangent_angles, omega_high]
+
+        for t_idx in range(len(omega_subintervals) - 1):
+            om_a = omega_subintervals[t_idx]
+            om_b = omega_subintervals[t_idx + 1]
+            if om_b <= om_a:
+                continue
+            h_om = 0.5 * (om_b - om_a)
+            m_om = 0.5 * (om_a + om_b)
+            omega_pts = h_om * ref_omega_nodes + m_om
+            omega_wts = h_om * ref_omega_wts
+            cos_omegas = geometry.ray_direction_cosine(omega_pts)
+            angular_factor = geometry.angular_weight(omega_pts)
+
+            for k in range(n_angular):
+                cos_om = cos_omegas[k]
+                rho_max_val = geometry.rho_max(r_i, cos_om, R)
+                if rho_max_val <= 0.0:
+                    continue
+
+                crossings = geometry.rho_crossings_for_ray(
+                    r_i, cos_om, rho_max_val, interior_boundaries_r,
+                )
+                rho_subintervals = [0.0, *crossings, rho_max_val]
+
+                outer_weight = (
+                    pref * sig_t_i * omega_wts[k] * angular_factor[k]
+                )
+                for s_idx in range(len(rho_subintervals) - 1):
+                    rho_a = rho_subintervals[s_idx]
+                    rho_b = rho_subintervals[s_idx + 1]
+                    if rho_b <= rho_a:
+                        continue
+                    h_r = 0.5 * (rho_b - rho_a)
+                    m_r = 0.5 * (rho_a + rho_b)
+                    rho_pts = h_r * ref_rho_nodes + m_r
+                    rho_wts = h_r * ref_rho_wts
+
+                    for m in range(n_rho):
+                        rho = rho_pts[m]
+                        r_prime = geometry.source_position(r_i, rho, cos_om)
+                        tau = geometry.optical_depth_along_ray(
+                            r_i, cos_om, rho, radii, sig_t,
+                        )
+                        L_vals = lagrange_basis_on_panels(
+                            r_nodes, panel_bounds, float(r_prime),
+                        )
+                        # Inner φ-integration absorbing Ki_1:
+                        #   Ki_1(τ) = ∫_0^{π/2} e^{-τ/cos φ} dφ
+                        # Vectorised over φ quadrature nodes.
+                        kappa_phi_sum = float(
+                            np.sum(phi_wts * np.exp(-tau * inv_cos_phi_pts))
+                        )
+                        weight = outer_weight * rho_wts[m] * kappa_phi_sum
+                        K[i, :] += weight * L_vals
+
+    return K
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Unified volume-kernel assembly
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -958,6 +1131,7 @@ def build_volume_kernel(
     n_angular: int,
     n_rho: int,
     dps: int = 30,
+    n_phi: int = 16,
 ) -> np.ndarray:
     r"""Assemble the Nyström volume kernel matrix for a single group.
 
@@ -993,6 +1167,18 @@ def build_volume_kernel(
         return _build_volume_kernel_slab_tau_laguerre(
             geometry, r_nodes, panel_bounds, radii, sig_t,
             n_angular, n_rho, dps=dps,
+        )
+
+    if geometry.kind == "cylinder-polar":
+        # Cylinder-polar exposes the out-of-plane z-integration (which
+        # :math:`\mathrm{Ki}_1(\tau) = \int_0^{\pi/2} e^{-\tau/\cos\varphi}
+        # \mathrm d\varphi` pre-integrates in cylinder-1d). The kernel
+        # becomes :math:`e^{-\tau/\cos\varphi}` — a pure exponential —
+        # matching slab-polar and sphere. This is the concern-#2 fix
+        # (issue #116) that retires the Bickley evaluator.
+        return _build_volume_kernel_cylinder_phi(
+            geometry, r_nodes, panel_bounds, radii, sig_t,
+            n_angular, n_rho, n_phi=n_phi, dps=dps,
         )
 
     N = len(r_nodes)

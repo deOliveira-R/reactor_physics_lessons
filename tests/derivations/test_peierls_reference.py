@@ -43,6 +43,7 @@ from orpheus.derivations.peierls_geometry import (
     SLAB_POLAR_1D,
     SPHERE_1D,
     CYLINDER_1D,
+    CYLINDER_POLAR_1D,
     build_volume_kernel,
     lagrange_basis_on_panels,
 )
@@ -581,4 +582,130 @@ class TestSlabPolarBuildVolumeKernel:
             f"Slab-polar row-sum error = {max_rel:.3e}, expected < 1e-3 "
             f"at n_angular=n_rho=64. Regression of the unified polar-form "
             f"slab assembly."
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Layer 5 — Cylinder-polar: Ki_1 → explicit φ integration (issue #116)
+# ═══════════════════════════════════════════════════════════════════════
+
+@pytest.mark.l1
+@pytest.mark.verifies("peierls-unified")
+class TestCylinderPolarEquivalence:
+    """``CYLINDER_POLAR_1D`` replaces the pre-integrated Bickley kernel
+    :math:`\\mathrm{Ki}_1(\\tau)` with an explicit out-of-plane angular
+    integration :math:`\\int_0^{\\pi/2} e^{-\\tau/\\cos\\varphi}
+    \\mathrm d\\varphi` (plan §0.2 — \"all kernels are exp\"). The
+    resulting K matrix must match the ``CYLINDER_1D`` K matrix to
+    high precision, since both are two numerical representations of
+    the SAME integral operator, differing only in which angle is
+    pre-integrated.
+
+    See issue #116 — this is \"concern #2\" of the session's unified-
+    framework refactor: once cylinder-polar is the default cylinder
+    path, the Bickley infrastructure (``ki_n_float``, ``ki_n_mp``,
+    the Chebyshev Ki_3 interpolant) can be retired.
+    """
+
+    def _build_sphere_like_cyl(self, R, sig_t, n_panels=2, p_order=3, dps=25):
+        import mpmath
+        with mpmath.workdps(dps):
+            gl_ref, gl_wt = peierls_slab._gl_nodes_weights(p_order, dps)
+            x_all, pbs = [], []
+            pw = mpmath.mpf(R) / n_panels
+            for pidx in range(n_panels):
+                pa = mpmath.mpf(pidx) * pw
+                pb = pa + pw
+                i_start = len(x_all)
+                xs, _ = peierls_slab._map_to_interval(gl_ref, gl_wt, pa, pb)
+                x_all.extend(xs)
+                pbs.append((float(pa), float(pb), i_start, len(x_all)))
+        x_nodes = np.array([float(x) for x in x_all])
+        radii = np.array([R])
+        sig_t_arr = np.array([sig_t])
+        return x_nodes, pbs, radii, sig_t_arr
+
+    def test_phi_GL_converges_to_Ki_1_spectrally(self):
+        """Standalone check: :math:`n`-point Gauss-Legendre on
+        :math:`\\varphi \\in [0, \\pi/2]` converges to
+        :math:`\\mathrm{Ki}_1(\\tau)` spectrally. This is the
+        mathematical reason cylinder-polar can replace cylinder-1d
+        with just 8-16 :math:`\\varphi` nodes."""
+        from orpheus.derivations.peierls_geometry import gl_nodes_weights
+        from orpheus.derivations._kernels import ki_n_mp
+
+        for tau in (0.5, 1.0, 2.0, 5.0):
+            ref = float(ki_n_mp(1, tau, 30))
+            # GL on [0, π/2]. Convergence is spectral; gate at 1e-8 at
+            # n=32 to avoid floating the ki_n_mp's own internal precision.
+            for n_phi, expected_precision in ((4, 1e-2), (8, 1e-3), (16, 1e-5), (32, 1e-8)):
+                nodes, wts = gl_nodes_weights(n_phi, 25)
+                h = np.pi / 4
+                phi_pts = np.array([h * float(x) + h for x in nodes])
+                phi_wts = np.array([h * float(w) for w in wts])
+                val = float(np.sum(phi_wts * np.exp(-tau / np.cos(phi_pts))))
+                rel = abs(val - ref) / abs(ref)
+                assert rel < expected_precision, (
+                    f"φ-GL(n={n_phi}) for Ki_1({tau}) = {val:.6e} vs ref {ref:.6e}, "
+                    f"rel_diff = {rel:.3e}, expected < {expected_precision}."
+                )
+
+    def test_K_matrix_elementwise_matches_cylinder_1d(self):
+        """Full K matrix via cylinder-polar (explicit φ) matches K via
+        cylinder-1d (Ki_1 kernel) to the precision of the shared
+        quadrature."""
+        R, sig_t = 1.0, 1.0
+        x_nodes, pbs, radii, sig_t_arr = self._build_sphere_like_cyl(
+            R, sig_t, n_panels=2, p_order=3, dps=25,
+        )
+
+        K_ki = build_volume_kernel(
+            CYLINDER_1D, x_nodes, pbs, radii, sig_t_arr,
+            n_angular=16, n_rho=16, dps=25,
+        )
+
+        # n_phi=16 GL nodes are sufficient for ~1e-5 equivalence
+        K_polar = build_volume_kernel(
+            CYLINDER_POLAR_1D, x_nodes, pbs, radii, sig_t_arr,
+            n_angular=16, n_rho=16, dps=25, n_phi=16,
+        )
+
+        diff = np.abs(K_polar - K_ki)
+        rel_diff = diff / (np.abs(K_ki) + 1e-30)
+        max_rel = rel_diff.max()
+        assert max_rel < 1e-4, (
+            f"cylinder-polar (n_phi=16) vs cylinder-1d disagree at "
+            f"max rel {max_rel:.3e}; expected < 1e-4. The φ-integration "
+            f"should converge to Ki_1 spectrally."
+        )
+
+    def test_K_matrix_converges_to_cylinder_1d_under_n_phi_refinement(self):
+        """Increasing ``n_phi`` monotonically reduces the cylinder-polar
+        vs cylinder-1d discrepancy to near machine precision (limited
+        by cylinder-1d's own ki_n_float tolerance at ~1e-13)."""
+        R, sig_t = 1.0, 1.0
+        x_nodes, pbs, radii, sig_t_arr = self._build_sphere_like_cyl(
+            R, sig_t, n_panels=2, p_order=3, dps=25,
+        )
+        K_ki = build_volume_kernel(
+            CYLINDER_1D, x_nodes, pbs, radii, sig_t_arr,
+            n_angular=16, n_rho=16, dps=25,
+        )
+        errors = []
+        for n_phi in (4, 8, 16, 32):
+            K_polar = build_volume_kernel(
+                CYLINDER_POLAR_1D, x_nodes, pbs, radii, sig_t_arr,
+                n_angular=16, n_rho=16, dps=25, n_phi=n_phi,
+            )
+            errors.append(
+                float(np.max(np.abs(K_polar - K_ki) / (np.abs(K_ki) + 1e-30)))
+            )
+        for k in range(len(errors) - 1):
+            assert errors[k + 1] <= errors[k] * 0.5 + 1e-13, (
+                f"cylinder-polar does not converge monotonically to "
+                f"cylinder-1d under n_phi refinement: errors = {errors}"
+            )
+        assert errors[-1] < 1e-5, (
+            f"At n_phi=32, cylinder-polar vs cylinder-1d rel diff = "
+            f"{errors[-1]:.3e}, expected < 1e-5."
         )

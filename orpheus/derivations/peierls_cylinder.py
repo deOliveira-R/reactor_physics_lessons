@@ -57,7 +57,13 @@ from ._xs_library import LAYOUTS, get_mixture, get_xs
 # Cylinder geometry singleton (binds the unified infrastructure)
 # ═══════════════════════════════════════════════════════════════════════
 
-GEOMETRY = _pg.CYLINDER_1D
+# Production cylinder path: ``CYLINDER_POLAR_1D`` with explicit
+# out-of-plane φ integration (issue #116). The kernel is
+# :math:`e^{-\tau/\cos\varphi}` — a pure exponential, matching
+# slab-polar and sphere — eliminating the legacy Ki_1 dependency.
+# ``n_phi=16`` gives ~1e-5 equivalence to the Ki_1 kernel (sufficient
+# for all downstream cylinder tests).
+GEOMETRY = _pg.CYLINDER_POLAR_1D
 
 
 # ═══════════════════════════════════════════════════════════════════════
