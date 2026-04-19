@@ -1160,6 +1160,102 @@ its derivation.
 
 ---
 
+## ERR-027 — Peierls slab K-matrix: naive GL collocation for cross-panel entries
+
+**Failure mode:** #3 Missing factor — missing quadrature resolution
+(one-point rule where adaptive is required)
+**Date:** 2026-04-19
+**Solver:** CP / Peierls (`orpheus.derivations.peierls_slab._build_kernel_matrix`).
+
+**Bug:** For cross-panel entries ``K[i, j]`` (observer node *i* and
+source node *j* in different panels) the assembly used the one-point
+collocation rule
+
+    K[i, j] = (1/2) * E_1(σ_t * |x_i - x_j|) * w_j
+
+i.e. the integral ∫_panel E_1(σ_t|x_i - x'|) L_j(x') dx' was
+approximated by evaluating the kernel at the single node x_j and
+multiplying by the GL weight w_j. This is only exact when the
+integrand R(σ_t|x_i - x'|) × L_j(x') is polynomial of degree ≤ 2p−1.
+E_1 is transcendental with a near-log spike at x' → x_i; the one-point
+rule leaves ~1% quadrature error even for panel pairs with modest
+optical separation, worst when x_i is within a small optical distance
+of the source panel boundary (where the near-log spike sits just
+outside the panel).
+
+**Impact:** K[i, j] cross-panel entries wrong by 0.5–1.5% at 2 panels
+× p=4; refining panels reduces this only at O(h) rate (non-spectral).
+Downstream: slab k-eff tests showed ~0.4% tie-point offsets in the
+Sanchez R≈1.98 case.
+
+**How it hid from higher-level tests:**
+- Row-sum K·[1, 1, …] is exact to O(1e-15) even with buggy cross-panel
+  entries because ∑_j L_j(x') = 1 (partition of unity) kills the kink
+  in the summed integrand. Every existing row-sum test was blind.
+- k-eff test tolerance was 2% — absorbed the ~0.4% propagated error.
+- 1-group and uniform-source tests also cancel the bug via partition
+  of unity.
+
+**L1 test that catches it:**
+`tests/derivations/test_peierls_reference.py::TestSlabKMatrixElementwiseVsReference::test_cross_panel_boundary_neighbour_elementwise`
+— element-wise `K[4, 3]` at n_panels=2, p=4 vs the adaptive
+`slab_K_vol_element` reference at 1e-10.
+
+**Fix:** Unified basis-aware Nyström assembly — every ``K[i, j]`` is
+``(1/2) ∫_panel E_1(τ(x_i, x')) L_j(x') dx'`` evaluated via adaptive
+``mpmath.quad``. Mirrors the adaptive reference
+`peierls_reference.slab_K_vol_element`. See issue #113.
+
+**Lesson:** "Row-sum conservation" tests are systematically blind to
+basis-individual quadrature errors that happen to sum to zero under
+partition-of-unity of the Lagrange basis. Element-wise K[i, j]
+verification against an adaptive reference is the only reliable
+L0/L1 gate for Nyström kernel assembly.
+
+---
+
+## ERR-028 — Peierls slab K-matrix: GL collocation of remainder R(τ) has unresolved kink at x'=x_i
+
+**Failure mode:** #3 Missing factor — missing subdivision hint
+**Date:** 2026-04-19
+**Solver:** CP / Peierls (`orpheus.derivations.peierls_slab._build_kernel_matrix`).
+
+**Bug:** The same-panel singularity-subtraction branch split the kernel
+into ``E_1(τ) = R(τ) − ln τ − γ`` with ``R(τ) = E_1(τ) + ln τ + γ``
+the smooth remainder, then used GL collocation for the ``R`` integral
+and exact product-integration weights for the ``−ln`` integral. The
+flaw: ``R(σ_t|x_i - x'|)`` is smooth in τ but its argument ``|x_i - x'|``
+has a C⁰ kink in x' at x'=x_i. GL cannot integrate a function with a
+derivative discontinuity in the interior of the interval — produces
+~1% error on the diagonal panel.
+
+**Impact:** Diagonal-panel entries (~40% of all K entries for p=4,
+n_panels=8) wrong by ~1% relative. The row-sum identity survives by
+partition of unity (see ERR-027), but element-wise K[i, i] deviates
+by ~1.2e-2 at n=2, p=4.
+
+**How it hid from higher-level tests:** Same cause as ERR-027 —
+partition-of-unity of the Lagrange basis cancels the kink in the
+row-sum, hiding from every conservation-style test.
+
+**L1 test that catches it:**
+`tests/derivations/test_peierls_reference.py::TestSlabKMatrixElementwiseVsReference::test_small_case_elementwise_agreement`
+— element-wise K[i, j] including diagonal entries vs the adaptive
+`slab_K_vol_element` reference at 1e-10.
+
+**Fix:** Unified with ERR-027: adaptive `mpmath.quad` with the
+subdivision hint ``[panel_a, x_i, panel_b]`` for same-panel entries.
+mpmath handles both the log singularity and the derivative kink
+natively. See issue #113.
+
+**Lesson:** Singularity subtraction splits a kernel into "smooth" and
+"singular" parts — but "smooth in τ" is not the same as "smooth in x'".
+A change of variables that folds the singularity into a kink instead
+of removing it merely trades one unresolved feature for another. The
+adaptive-with-hint approach is more robust and unifies all cases.
+
+---
+
 ## Meta-Lessons
 
 1. **1-group is degenerate.** k = νΣ_f/Σ_a regardless of flux shape.

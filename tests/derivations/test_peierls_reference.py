@@ -139,7 +139,12 @@ class TestSlabKernelRowSum:
         )
 
     def test_row_sum_convergence_with_panels(self):
-        """Refining n_panels drives the row-sum error to zero."""
+        """Refining n_panels drives the row-sum error to zero.
+
+        With the unified basis-aware adaptive-quadrature assembly (issue
+        #113), even at n_panels=2, p=4 the row-sum hits the dps=30 floor
+        (~1e-16). Monotonicity is only required above the noise floor.
+        """
         L, sig_t = 2.0, 1.0
         errors = []
         for n_panels in (2, 4, 8, 16):
@@ -156,13 +161,16 @@ class TestSlabKernelRowSum:
                     max_err = max(max_err, err)
             errors.append(max_err)
 
-        # Errors should decrease monotonically with refinement
+        # Monotonicity: enforce only above the mpmath dps=30 noise floor.
+        noise_floor = 1e-13
         for k in range(len(errors) - 1):
+            if errors[k] < noise_floor:
+                continue  # already at floor — permutations of O(1e-16) are noise
             assert errors[k + 1] <= errors[k] * 1.1, (
                 f"Row-sum error did not decrease under panel refinement: "
                 f"errors = {errors}"
             )
-        # Finest mesh reaches < 1e-10
+        # Finest mesh reaches < 1e-10 (with the fix, actually near 1e-16)
         assert errors[-1] < 1e-10, (
             f"At n_panels=16, row-sum error = {errors[-1]:.3e}, expected < 1e-10"
         )
@@ -178,6 +186,7 @@ class TestSlabKMatrixElementwiseVsReference:
     production code's kernel assembly is free of implementation bugs.
     """
 
+    @pytest.mark.catches("ERR-028")
     def test_small_case_elementwise_agreement(self):
         L, sig_t = 1.0, 1.0
         dps = 40
@@ -202,3 +211,77 @@ class TestSlabKMatrixElementwiseVsReference:
                 f"K[{i},{j}] disagreement: production = {got}, "
                 f"reference (adaptive) = {ref}, rel diff = {float(rel_diff):.3e}"
             )
+
+    @pytest.mark.catches("ERR-027")
+    def test_cross_panel_boundary_neighbour_elementwise(self):
+        """Regression gate for :issue:`113` — cross-panel K[i,j] entries
+        at 1e-10 vs the adaptive reference, specifically around the
+        panel-boundary neighbour that used to fail at ~1.4e-2.
+
+        Before the fix: production used ``(1/2) E_1(τ_ij)·w_j``
+        (one-point GL collocation) for cross-panel entries; for
+        2 panels × p=4 with L=Σ_t=1 the panel-boundary neighbour
+        K[4, 3] disagreed with the adaptive reference at 1.4e-2
+        because the :math:`E_1` near-log structure at :math:`x'=x_i`
+        sits just 0.035 outside the source panel.
+        """
+        L, sig_t = 1.0, 1.0
+        n_panels, p_order, dps = 2, 4, 40
+        K, x_nodes, _, panel_bounds = _build_slab_K_and_nodes(
+            L, sig_t, n_panels=n_panels, p_order=p_order, dps=dps,
+        )
+
+        # Node layout for n_panels=2, p=4: nodes 0..3 in panel 0, 4..7 in panel 1.
+        # Node 3 (panel 0) ↔ Node 4 (panel 1) straddle the boundary at x=0.5.
+        for i, j in [(4, 3), (3, 4), (3, 3), (4, 4)]:
+            ref = slab_K_vol_element(
+                i, j, x_nodes, panel_bounds, L, sig_t, dps=dps,
+            )
+            got = K[i, j]
+            rel = float(abs(got - ref) / abs(ref)) if abs(ref) > 1e-30 else 0.0
+            assert rel < 1e-10, (
+                f"K[{i},{j}] production vs adaptive reference disagree: "
+                f"rel_diff = {rel:.3e} (panels=2, p=4). "
+                f"Regression of issue #113 cross-panel near-singular bug."
+            )
+
+    @pytest.mark.catches("ERR-027")
+    @pytest.mark.parametrize("n_panels", [2, 4, 8, 16])
+    def test_cross_panel_scaling_gates_at_1e10(self, n_panels):
+        """Regression gate for :issue:`113` — the worst adjacent-panel
+        K[i,j] must match the adaptive reference at 1e-10 under any
+        panel refinement. Before the fix, this error scaled only as
+        O(h) / was even non-monotonic.
+        """
+        L, sig_t = 1.0, 1.0
+        p_order, dps = 4, 30
+        K, x_nodes, _, panel_bounds = _build_slab_K_and_nodes(
+            L, sig_t, n_panels=n_panels, p_order=p_order, dps=dps,
+        )
+        N = len(x_nodes)
+        # node_panel from panel_bounds
+        node_panel = []
+        for pidx, (_, _, i0, i1) in enumerate(panel_bounds):
+            node_panel.extend([pidx] * (i1 - i0))
+
+        max_rel = 0.0
+        worst = None
+        for i in range(N):
+            for j in range(N):
+                if node_panel[i] == node_panel[j]:
+                    continue
+                if abs(node_panel[i] - node_panel[j]) > 1:
+                    continue  # only adjacent panels
+                ref = slab_K_vol_element(
+                    i, j, x_nodes, panel_bounds, L, sig_t, dps=dps,
+                )
+                got = K[i, j]
+                if abs(ref) > 1e-30:
+                    rel = float(abs(got - ref) / abs(ref))
+                    if rel > max_rel:
+                        max_rel, worst = rel, (i, j)
+        assert max_rel < 1e-10, (
+            f"At n_panels={n_panels}, worst adjacent-panel K entry "
+            f"K[{worst}] differs from adaptive ref by {max_rel:.3e}. "
+            f"Regression of issue #113."
+        )

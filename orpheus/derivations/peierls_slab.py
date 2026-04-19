@@ -101,6 +101,66 @@ def _product_log_weights(panel_a, panel_b, x_eval, nodes, dps):
     return weights
 
 
+def _basis_kernel_weights(
+    panel_a, panel_b, x_eval, nodes, optical_path_fn, dps,
+):
+    r"""Basis-aware weights for the half-:math:`E_1` Peierls integral.
+
+    Returns
+
+    .. math::
+
+       w_j = \int_{p_a}^{p_b} E_1\!\bigl(\tau(x_i,x')\bigr)\,L_j(x')\,
+              \mathrm d x'
+
+    for each Lagrange basis node ``j`` supported on the source panel
+    :math:`[p_a, p_b]`. The observer :math:`x_{\rm eval}` may lie
+    inside or outside the source panel:
+
+    * **Outside** (cross-panel): integrand is smooth but non-polynomial;
+      naive fixed-order GL collocation (``E_1(τ_ij)·w_j``) gives ~1%
+      error at p=4. Adaptive :func:`mpmath.quad` on :math:`[p_a, p_b]`
+      is accurate to machine :math:`\mathrm{dps}`.
+
+    * **Inside** (same-panel): :math:`E_1` has an integrable log
+      singularity at :math:`x'=x_{\rm eval}` AND the smooth remainder
+      :math:`R(\tau) = E_1(\tau)+\ln\tau+\gamma` has a derivative
+      discontinuity there. Providing :math:`[p_a, x_{\rm eval}, p_b]`
+      as subdivision hint to :func:`mpmath.quad` lets the adaptive
+      rule resolve both the kink and the log in one shot — replaces
+      the older singularity-subtraction scheme with a unified
+      implementation that exactly mirrors the adaptive reference in
+      :func:`peierls_reference.slab_K_vol_element`.
+    """
+    p = len(nodes)
+    weights = []
+    inside = panel_a <= x_eval <= panel_b
+    with mpmath.workdps(dps + 10):
+        for j in range(p):
+            def _basis(x, _j=j):
+                val = mpmath.mpf(1)
+                for m in range(p):
+                    if m == _j:
+                        continue
+                    val *= (x - nodes[m]) / (nodes[_j] - nodes[m])
+                return val
+
+            def integrand(x):
+                tau = optical_path_fn(x)
+                if tau <= 0:
+                    # Integrable log singularity at x = x_eval; mpmath.quad
+                    # with the subdivision hint below avoids endpoint evals.
+                    return mpmath.mpf(0)
+                return _basis(x) * e_n_mp(1, tau, dps)
+
+            if inside:
+                w = mpmath.quad(integrand, [panel_a, x_eval, panel_b])
+            else:
+                w = mpmath.quad(integrand, [panel_a, panel_b])
+            weights.append(+w)
+    return weights
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Nyström kernel builder
 # ═══════════════════════════════════════════════════════════════════════
@@ -128,12 +188,6 @@ def _build_kernel_matrix(
     """
     N = len(x_nodes)
 
-    def region_of(x):
-        for r in range(n_regions):
-            if x <= boundaries[r + 1] or r == n_regions - 1:
-                return r
-        return n_regions - 1  # pragma: no cover
-
     def optical_path(xi, xj, g):
         if xi == xj:
             return mpmath.mpf(0)
@@ -146,57 +200,40 @@ def _build_kernel_matrix(
                 tau += sig_t_per_region[rr][g] * (ob - oa)
         return tau
 
-    euler_gamma = mpmath.euler
     K_per_group: list[object] = []
 
+    # Unified basis-aware Nyström assembly. Every K[i, j] is
+    #     (1/2) ∫_{source panel} E_1(τ(x_i, x')) L_j(x') dx'
+    # evaluated with adaptive :func:`mpmath.quad`. This mirrors the
+    # adaptive reference in :func:`peierls_reference.slab_K_vol_element`
+    # and replaces two previously-buggy fixed-GL code paths:
+    #
+    # * **Cross-panel** used ``E_1(τ_ij)·w_j`` (one-point collocation)
+    #   which fails at ~1% for p=4 on any pair with modest optical
+    #   distance, worst at panel-boundary neighbours.
+    # * **Same-panel** used singularity subtraction with GL collocation
+    #   of the smooth remainder R(τ) = E_1(τ)+ln τ+γ — but R has a
+    #   derivative kink at x'=x_i that GL cannot resolve, producing
+    #   ~1% error on the diagonal panel too.
+    #
+    # See issues #113 and diag_slab_kvol_panel_boundary_bug.py.
     with mpmath.workdps(dps):
         for g in range(ng):
             K = mpmath.matrix(N, N)
 
-            # Off-diagonal panels: standard GL + E₁
-            for i in range(N):
-                for j in range(N):
-                    if node_panel[i] == node_panel[j]:
-                        continue  # handled below
-                    tau = optical_path(x_nodes[i], x_nodes[j], g)
-                    if tau > 0:
-                        K[i, j] = e_n_mp(1, tau, dps) * w_nodes[j] / 2
-                    # tau == 0 off-panel shouldn't happen
+            for s_pidx, (pa_s, pb_s, j_start, j_end) in enumerate(panel_bounds):
+                source_nodes = x_nodes[j_start:j_end]
+                for i in range(N):
+                    x_i = x_nodes[i]
 
-            # Diagonal panels: singularity subtraction
-            for pa, pb, i_start, i_end in panel_bounds:
-                pnodes = x_nodes[i_start:i_end]
-                pweights = w_nodes[i_start:i_end]
-                p_count = i_end - i_start
+                    def op_path(x_prime, _xi=x_i, _g=g):
+                        return optical_path(_xi, x_prime, _g)
 
-                for i_loc in range(p_count):
-                    i_glob = i_start + i_loc
-                    xi = x_nodes[i_glob]
-                    sig_t_g = sig_t_at_node[i_glob][g]
-                    ln_sig_t = mpmath.log(sig_t_g) if sig_t_g > 0 else mpmath.mpf(0)
-
-                    # Product-integration weights for -ln|x_i - x'|
-                    log_w = _product_log_weights(pa, pb, xi, pnodes, dps)
-
-                    for j_loc in range(p_count):
-                        j_glob = i_start + j_loc
-                        xj = x_nodes[j_glob]
-                        dist = abs(xi - xj)
-                        tau = sig_t_g * dist  # same region within panel
-
-                        # Smooth remainder R(τ) = E₁(τ) + ln(τ) + γ
-                        if tau > 0:
-                            R_val = e_n_mp(1, tau, dps) + mpmath.log(tau) + euler_gamma
-                        else:
-                            R_val = mpmath.mpf(0)
-
-                        # Full kernel weight via singularity subtraction:
-                        # (1/2) * [R(τ)*w_j + (-ln Σ_t - γ)*w_j + log_w_j]
-                        K[i_glob, j_glob] = (
-                            R_val * pweights[j_loc]
-                            + (-ln_sig_t - euler_gamma) * pweights[j_loc]
-                            + log_w[j_loc]
-                        ) / 2
+                    ws = _basis_kernel_weights(
+                        pa_s, pb_s, x_i, source_nodes, op_path, dps,
+                    )
+                    for j_loc, w in enumerate(ws):
+                        K[i, j_start + j_loc] = w / 2
 
             K_per_group.append(K)
 
