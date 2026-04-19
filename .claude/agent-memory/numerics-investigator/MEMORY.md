@@ -1,0 +1,3 @@
+- [Lessons](lessons.md) — Diagnostic cascade lessons from past investigations including sweep vs operator inconsistency at r=0
+- [Peierls rank-N investigation](peierls_rank_n.md) — Sphere G_bc = 4·P_esc identity, α coefficients scan, cylinder α=1 partial success
+- [Peierls K_vol bugs](peierls_kvol_bugs.md) — Slab cross-panel + sphere/cyl ray-crossing integration bugs; row-sum K·1 blind on sphere via partition-of-unity
