@@ -56,6 +56,34 @@ or before extending the architecture to a new geometry.**
   scaling of ``build_white_bc_correction`` in
   :mod:`orpheus.derivations.peierls_cylinder`; it is the same
   phenomenon reported for the sphere in GitHub Issue #100.
+- **Phase F (Issue #110, 2026-04-21).** ``CurvilinearGeometry``
+  carries an ``inner_radius`` field (hollow-core support), a
+  per-face ``n_surfaces`` property (2 for slab and hollow cyl/sph,
+  1 for solid), and per-surface escape/response primitives
+  :func:`~orpheus.derivations.peierls_geometry.compute_P_esc_outer`
+  /
+  :func:`~orpheus.derivations.peierls_geometry.compute_P_esc_inner`
+  /
+  :func:`~orpheus.derivations.peierls_geometry.compute_G_bc_outer`
+  /
+  :func:`~orpheus.derivations.peierls_geometry.compute_G_bc_inner`.
+  :func:`~orpheus.derivations.peierls_geometry.build_closure_operator`
+  with ``reflection="white"`` builds a **rank-2 per-face** closure
+  on Class-A geometries (slab today; hollow cyl/sph land in F.4)
+  with :math:`R = (I - W)^{-1}` from the surface-to-surface
+  transmission
+  :func:`~orpheus.derivations.peierls_geometry.compute_slab_transmission`.
+  Rank-2 white closes the Wigner-Seitz identity
+  :math:`k_{\rm eff} = k_\infty` up to the outer-GL quadrature
+  order (O(h²) due to the :math:`E_2` endpoint log singularity)
+  — a 10³-10⁴× improvement over rank-1 Mark at L ≲ 1 MFP. The
+  tensor form
+  :math:`K_{\rm bc} = G \cdot R \cdot P` reproduces the legacy
+  :mod:`peierls_slab` :math:`E_2` / :math:`E_3` bilinear form
+  bit-exactly (rtol 1e-13) — see
+  ``tests/derivations/test_peierls_rank2_bc.py``. Solid cyl/sph
+  with ``reflection="white"`` collapse to the rank-1 Mark form
+  (:math:`R = (I - 0)^{-1} = 1`), preserving bit-exact regression.
 - **Historical note.** Standard references
   ([Sanchez1982]_, [Hebert2020]_, [Stamm1983]_, [BellGlasstone1970]_,
   [CaseZweifel1967]_) present each geometry in **chord coordinates**

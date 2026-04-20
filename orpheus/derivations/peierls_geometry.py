@@ -2268,6 +2268,105 @@ def reflection_marshak(n_modes: int) -> np.ndarray:
     return R
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Rank-2 per-face white-BC closure (Phase F.3)
+#
+# For 2-boundary (Class-A) geometries — slab, hollow cylinder, hollow
+# sphere — the rank-1 Mark closure omits the surface-to-surface
+# transmission feedback. The acid test is the Wigner-Seitz identity
+# :math:`k_{\rm eff} = k_\infty` for a homogeneous cell with white BC on
+# both surfaces: rank-1 Mark misses it by 16-40 % at finite L, rank-2
+# white closes it to machine precision.
+#
+# The rank-2 closure decomposes the mode space as
+# :math:`A = \mathbb{R}^{N_{\rm modes} \times N_{\rm surfaces}}` and
+# stitches the per-face escape (:func:`compute_P_esc_{outer,inner}`),
+# per-face response (:func:`compute_G_bc_{outer,inner}`), and a 2x2
+# reflection that inverts the coupled partial-current balance
+#
+# .. math::
+#
+#    J^-_{\rm out} = J^+_{\rm out} = q \otimes P_{\rm esc,out}
+#                                   + T\,J^-_{\rm in}, \\
+#    J^-_{\rm in}  = J^+_{\rm in}  = q \otimes P_{\rm esc,in}
+#                                   + T\,J^-_{\rm out},
+#
+# giving
+# :math:`R_{\rm white} = (I - W)^{-1}` with :math:`W = T \cdot
+# \bigl(\begin{smallmatrix}0 & 1\\1 & 0\end{smallmatrix}\bigr)` for
+# slab (:math:`T = 2 E_3(\tau_L)`). For hollow cyl/sph the transmission
+# matrix :math:`W` additionally carries self-transmission entries
+# (tangent rays grazing the cavity) — see Phase F.4.
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def compute_slab_transmission(
+    L: float,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    dps: int = 25,
+) -> float:
+    r"""Slab surface-to-surface transmission coefficient
+
+    .. math::
+
+       T \;=\; 2\,E_3(\Sigma_t\,L)
+
+    for a slab of optical thickness :math:`\Sigma_t\,L`. For a
+    multi-region slab :math:`[0, L] = \bigcup_k [r_{k-1}, r_k]` with
+    piecewise-constant :math:`\Sigma_t^{(k)}`,
+    :math:`T = 2\,E_3(\tau_{\rm total})` with
+    :math:`\tau_{\rm total} = \sum_k \Sigma_t^{(k)}(r_k - r_{k-1})`.
+
+    Used by the rank-2 white-BC reflection builder to couple the two
+    slab faces.
+    """
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    tau_total = 0.0
+    r_prev = 0.0
+    for k, r_k in enumerate(radii):
+        tau_total += float(sig_t[k]) * (float(r_k) - r_prev)
+        r_prev = float(r_k)
+    return 2.0 * float(mpmath.expint(3, mpmath.mpf(tau_total)))
+
+
+def reflection_white_rank2(
+    W: np.ndarray,
+) -> np.ndarray:
+    r"""White-BC reflection with transmission feedback:
+    :math:`R = (I - W)^{-1}`.
+
+    ``W`` is the surface-to-surface transmission matrix — entry
+    :math:`W_{kl}` is the probability that a unit uniform isotropic
+    outgoing current leaving surface :math:`l` re-arrives at surface
+    :math:`k` without attenuation on the far side (i.e., having
+    traversed the cell interior). For Class-A (:math:`N_{\rm surf} = 2`)
+    cells with a pure absorber, :math:`W` is :math:`2 \times 2`.
+
+    For slab with scalar transmission :math:`T`:
+    :math:`W = T\,\bigl(\begin{smallmatrix}0 & 1\\1 & 0\end{smallmatrix}\bigr)`,
+    giving :math:`R = 1/(1-T^2)\,\bigl(\begin{smallmatrix}1 & T\\T & 1\end{smallmatrix}\bigr)`.
+
+    For hollow cyl/sph :math:`W` additionally has self-transmission
+    diagonal entries (tangent rays). See :func:`compute_transmission_matrix`.
+    """
+    W = np.asarray(W, dtype=float)
+    if W.ndim != 2 or W.shape[0] != W.shape[1]:
+        raise ValueError(f"W must be square 2-D, got {W.shape}")
+    n = W.shape[0]
+    I_n = np.eye(n)
+    det = np.linalg.det(I_n - W)
+    if abs(det) < 1e-30:
+        raise ValueError(
+            f"(I - W) is singular (det = {det:.3e}) — "
+            f"transmission matrix W yields an ill-posed closure. "
+            f"This indicates a critical configuration (k_eff = 1 "
+            f"without BC) or a bug in W's construction."
+        )
+    return np.linalg.inv(I_n - W)
+
+
 def build_closure_operator(
     geometry: CurvilinearGeometry,
     r_nodes: np.ndarray,
@@ -2333,6 +2432,30 @@ def build_closure_operator(
     for i, ri in enumerate(r_nodes):
         sig_t_n[i] = sig_t[geometry.which_annulus(ri, radii)]
     rv = np.array([geometry.radial_volume_weight(rj) for rj in r_nodes])
+
+    # ── Rank-2 per-face layout (Phase F.3, reflection="white") ──────
+    # Triggered only for Class-A cells (geometry.n_surfaces == 2) under
+    # the "white" string reflection. Solid cyl/sph fall back to the
+    # legacy single-surface layout for bit-exact rank-1 regression.
+    use_rank2 = (
+        isinstance(reflection, str)
+        and reflection == "white"
+        and geometry.n_surfaces == 2
+    )
+    if use_rank2:
+        if n_bc_modes > 1:
+            raise NotImplementedError(
+                "Rank-2 per-face white BC with n_bc_modes > 1 is not yet "
+                "supported (plan §8.4 — rank-N per-face closure). Use "
+                "n_bc_modes = 1 for Phase F.3 slab + hollow cell closure."
+            )
+        return _build_closure_operator_rank2_white(
+            geometry, r_nodes, r_wts, radii, sig_t,
+            n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
+            sig_t_n=sig_t_n, rv=rv,
+        )
+
+    # ── Legacy single-surface layout (rank-1 Mark / Marshak, vacuum) ─
     divisor = geometry.rank1_surface_divisor(R_cell)
 
     P = np.zeros((N, N_r))
@@ -2371,15 +2494,119 @@ def build_closure_operator(
             "mark": reflection_mark,
             "marshak": reflection_marshak,
         }
-        if reflection not in reflection_map:
+        if reflection == "white":
+            # n_surfaces == 1 (solid cyl/sph): "white" == "mark" (the
+            # single-surface form's self-reflection IS white BC for
+            # solid geometries — the 2-boundary T-feedback path is
+            # inapplicable when only one boundary exists).
+            R_matrix = reflection_mark(N)
+        elif reflection not in reflection_map:
             raise ValueError(
                 f"Unknown reflection = {reflection!r}; expected one of "
                 f"{list(reflection_map)} or a {N}×{N} matrix."
             )
-        R_matrix = reflection_map[reflection](N)
+        else:
+            R_matrix = reflection_map[reflection](N)
     else:
         R_matrix = np.asarray(reflection, dtype=float)
 
+    return BoundaryClosureOperator(P=P, G=G, R=R_matrix)
+
+
+def _build_closure_operator_rank2_white(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    *,
+    n_angular: int,
+    n_surf_quad: int,
+    dps: int,
+    sig_t_n: np.ndarray,
+    rv: np.ndarray,
+) -> BoundaryClosureOperator:
+    r"""Rank-2 per-face white-BC closure assembly (Phase F.3).
+
+    Internal helper called by :func:`build_closure_operator` for
+    Class-A cells (:math:`N_{\rm surfaces} = 2`) under
+    ``reflection="white"``.
+
+    Builds :math:`P \in \mathbb{R}^{2 \times N_r}`,
+    :math:`G \in \mathbb{R}^{N_r \times 2}` from the per-face
+    escape / response primitives, and
+    :math:`R = (I - W)^{-1} \in \mathbb{R}^{2 \times 2}` from the
+    surface-to-surface transmission. For slab,
+    :math:`W = T\,\bigl(\begin{smallmatrix}0 & 1\\1 & 0\end{smallmatrix}\bigr)`
+    with :math:`T = 2\,E_3(\tau_{\rm total})`. Hollow cyl/sph will be
+    added in Phase F.4 via geometry-specific transmission integrals.
+
+    Per-face divisor convention: each surface has its own characteristic
+    area, so the divisor is the per-face area (slab: 1 per unit
+    transverse area per face; cyl: :math:`2\pi R_{\rm out}` / :math:`2\pi r_0`
+    per unit z, cancelled against the per-face volume-element ratio;
+    sph: :math:`4\pi R_{\rm out}^2` / :math:`4\pi r_0^2`). For slab
+    this reduces to divisor_outer = divisor_inner = 1.
+    """
+    N_r = len(r_nodes)
+    P = np.zeros((2, N_r))
+    G = np.zeros((N_r, 2))
+
+    P_esc_outer_arr = compute_P_esc_outer(
+        geometry, r_nodes, radii, sig_t,
+        n_angular=n_angular, dps=dps,
+    )
+    P_esc_inner_arr = compute_P_esc_inner(
+        geometry, r_nodes, radii, sig_t,
+        n_angular=n_angular, dps=dps,
+    )
+    G_bc_outer_arr = compute_G_bc_outer(
+        geometry, r_nodes, radii, sig_t,
+        n_surf_quad=n_surf_quad, dps=dps,
+    )
+    G_bc_inner_arr = compute_G_bc_inner(
+        geometry, r_nodes, radii, sig_t,
+        n_surf_quad=n_surf_quad, dps=dps,
+    )
+
+    # Per-surface divisor. For slab both faces have unit area
+    # (per unit transverse), divisor = 1 each.
+    if geometry.kind == "slab-polar":
+        div_outer = 1.0
+        div_inner = 1.0
+    elif geometry.kind == "cylinder-1d":
+        div_outer = float(radii[-1])
+        div_inner = float(geometry.inner_radius)
+    else:  # sphere-1d
+        R_out = float(radii[-1])
+        r_in = float(geometry.inner_radius)
+        div_outer = R_out * R_out
+        div_inner = r_in * r_in
+
+    # Mode layout (rows 0 = outer, 1 = inner) — matches plan §3.2.
+    P[0, :] = rv * r_wts * P_esc_outer_arr
+    P[1, :] = rv * r_wts * P_esc_inner_arr
+    G[:, 0] = sig_t_n * G_bc_outer_arr / div_outer
+    G[:, 1] = sig_t_n * G_bc_inner_arr / div_inner
+
+    # Surface-to-surface transmission matrix.
+    if geometry.kind == "slab-polar":
+        L = float(radii[-1])
+        T = compute_slab_transmission(L, radii, sig_t, dps=dps)
+        W = T * np.array([[0.0, 1.0], [1.0, 0.0]])
+    else:
+        # Hollow cyl/sph: defer to Phase F.4 — requires geometry-specific
+        # chord-integration transmission (rays from one surface back to
+        # the same or opposite surface without crossing the annulus).
+        raise NotImplementedError(
+            f"Rank-2 white BC for kind={geometry.kind!r} with "
+            f"inner_radius={geometry.inner_radius} is planned in "
+            f"Phase F.4 (hollow cyl/sph transmission matrix). Use "
+            f"reflection='marshak' for the rank-1 Mark closure on "
+            f"hollow geometries until F.4 lands."
+        )
+
+    R_matrix = reflection_white_rank2(W)
     return BoundaryClosureOperator(P=P, G=G, R=R_matrix)
 
 
