@@ -18,7 +18,7 @@ Layer-by-layer:
 
 2. **Cylinder K matrix row-sum identity** (next). Built on the
    ``Ki_1`` kernel; analytical row-sum via
-   :func:`~orpheus.derivations.peierls_reference.curvilinear_K_vol_element`
+   :func:`~orpheus.derivations.peierls_geometry.K_vol_element_adaptive`
    adaptive mpmath.quad reference.
 
 3. **Sphere K matrix row-sum identity** (after cylinder). Same
@@ -36,14 +36,13 @@ import pytest
 from orpheus.derivations.peierls_reference import (
     slab_uniform_source_analytical,
     slab_K_vol_element,
-    slab_polar_K_vol_element,
 )
 from orpheus.derivations import peierls_slab
 from orpheus.derivations.peierls_geometry import (
     SLAB_POLAR_1D,
     SPHERE_1D,
     CYLINDER_1D,
-    CYLINDER_POLAR_1D,
+    K_vol_element_adaptive,
     build_volume_kernel,
     lagrange_basis_on_panels,
 )
@@ -435,41 +434,44 @@ class TestSphereKMatrixElementwise:
 @pytest.mark.l1
 @pytest.mark.verifies("peierls-unified")
 class TestSlabPolarReferenceEquivalence:
-    """The **slab polar-form reference** (:func:`slab_polar_K_vol_element`)
-    uses the SAME adaptive-mpmath methodology as the curvilinear reference
-    (:func:`curvilinear_K_vol_element`): observer-centred (μ, ρ)
-    integration of the exp-kernel times the Lagrange basis. It is
-    *mathematically equivalent* to the classical E₁ form
-    (:func:`slab_K_vol_element`) but gives the unified ``CurvilinearGeometry``
-    framework a common reference shape across all three geometries.
+    """Two independent constructions of the slab K matrix must agree
+    at machine precision:
 
-    This test is the architectural invariant: ONE methodology (adaptive
-    mpmath.quad on the polar form with appropriate breakpoint hints)
-    produces the K matrix for slab, cylinder, AND sphere. See
-    ``.claude/plans/post-cp-topology-and-coordinate-transforms.md`` §4
-    and :doc:`/theory/peierls_unified` §4.
+    * :func:`slab_K_vol_element` — adaptive ``mpmath.quad`` in real-space
+      against the classical :math:`E_1` Nyström integrand.
+    * :func:`K_vol_element_adaptive(SLAB_POLAR_1D, ...)` — adaptive
+      ``mpmath.quad`` in observer-centred polar :math:`(\\mu, \\rho)`
+      coordinates, the unified verification primitive.
+
+    The polar form has a :math:`\\Sigma_t` prefactor from the unified
+    operator :math:`\\Sigma_t \\varphi = K q`; the :math:`E_1` form
+    does not. So the equivalence statement is
+
+    .. math:: K_{\\rm polar} = \\Sigma_t \\cdot K_{E_1}.
+
+    This is the "two independent formulations agree" verification —
+    any bug in either construction breaks agreement.
     """
 
-    def test_polar_reference_matches_E1_reference(self):
-        """Adaptive polar-form slab K (with Σ_t pre-factor from the
-        unified operator ``Σ_t·φ = K·q``) equals Σ_t times the classical
-        E₁ slab K to machine precision."""
+    def test_adaptive_polar_matches_E1_reference(self):
+        """Unified polar primitive equals :math:`\\Sigma_t` times the
+        classical :math:`E_1` real-space reference to machine precision."""
         L, sig_t = 1.0, 1.0
+        radii = np.array([L])
+        sig_t_arr = np.array([sig_t])
         dps = 25
-        K, x_nodes, _, panel_bounds = _build_slab_K_and_nodes(
+        _, x_nodes, _, panel_bounds = _build_slab_K_and_nodes(
             L, sig_t, n_panels=2, p_order=4, dps=dps,
         )
 
-        # Four strategic entries: diagonal (same-panel same-basis),
-        # neighbor-straddling-boundary, far cross-panel, off-diagonal.
         for i, j in [(0, 0), (3, 3), (4, 3), (0, 5)]:
             ref_e1 = float(slab_K_vol_element(
-                i, j, x_nodes, panel_bounds, L, sig_t, dps=25,
+                i, j, x_nodes, panel_bounds, L, sig_t, dps=dps,
             ))
-            ref_polar = float(slab_polar_K_vol_element(
-                i, j, x_nodes, panel_bounds, L, sig_t, dps=25,
+            ref_polar = float(K_vol_element_adaptive(
+                SLAB_POLAR_1D, i, j, x_nodes, panel_bounds, radii,
+                sig_t_arr, dps=dps,
             ))
-            # Unified operator: Σ_t·φ = K·q ⇒ K_polar = Σ_t · K_E1
             expected_polar = sig_t * ref_e1
             if abs(expected_polar) > 1e-30:
                 rel = abs(ref_polar - expected_polar) / abs(expected_polar)
@@ -485,87 +487,64 @@ class TestSlabPolarReferenceEquivalence:
 @pytest.mark.l1
 @pytest.mark.verifies("peierls-unified")
 class TestSlabPolarBuildVolumeKernel:
-    """The **slab polar-form production assembly** (via
-    :func:`build_volume_kernel` with ``SLAB_POLAR_1D``) uses:
+    """``build_volume_kernel(SLAB_POLAR_1D, ...)`` routes through the
+    unified adaptive primitive (one ``mpmath.quad`` per K element,
+    machine precision by construction). The earlier
+    moment-form / τ-Laguerre fast paths have been archived (Issue
+    #117 captures the moment form for future production CP).
 
-    * τ-coordinate transform + subdivided Gauss-Legendre on each
-      panel-boundary-bounded sub-interval, with a dyadic τ-cap on the
-      open tail for grazing rays (plan §5 / Chapter 5).
-    * Exp-stretched μ (``v = -ln|μ|``) + Gauss-Laguerre on
-      :math:`v \\in [0, \\infty)` (plan §6 / Chapter 6).
-
-    This is the PRINCIPLED quadrature for the slab polar form and
-    replaces the legacy :math:`E_1` Nyström's ad-hoc singularity
-    subtraction with one uniform scheme that also serves sphere and
-    (pending #114 follow-up) cylinder.
+    These two tests are the production-tier verification: K matrix
+    elements match the legacy :math:`E_1` form at machine precision,
+    and row-sum identity matches the analytical vacuum-BC flux.
+    Small N (one panel × p=2 = 2 nodes) keeps the adaptive cost
+    bounded.
     """
 
-    def test_converges_to_E1_reference(self):
-        """Unified slab K via ``build_volume_kernel(SLAB_POLAR_1D,...)``
-        converges to the legacy E₁ reference as (n_angular, n_rho)
-        increase. Gate at 1e-3 for n=64 — the τ-GL + v-Laguerre scheme
-        converges algebraically (~O(N⁻²)) due to residual outer-integrand
-        structure; machine precision requires either adaptive quadrature
-        (the slab_polar_K_vol_element reference does this) or
-        outer-μ subdivision at specific kink angles (future work)."""
+    def test_matches_E1_reference_at_machine_precision(self):
+        """Unified slab K via ``build_volume_kernel(SLAB_POLAR_1D, ...)``
+        matches the legacy :math:`E_1` reference to machine precision
+        (adaptive `mpmath.quad` is exact)."""
         L, sig_t = 1.0, 1.0
         dps = 25
         K_legacy, x_nodes, _, panel_bounds = _build_slab_K_and_nodes(
-            L, sig_t, n_panels=2, p_order=4, dps=dps,
+            L, sig_t, n_panels=1, p_order=2, dps=dps,
         )
-        import numpy as np
         radii = np.array([L])
         sig_t_arr = np.array([sig_t])
 
-        errors = []
-        for n_q in (16, 32, 64):
-            K_unified = build_volume_kernel(
-                SLAB_POLAR_1D, x_nodes, panel_bounds, radii, sig_t_arr,
-                n_angular=n_q, n_rho=n_q, dps=dps,
-            )
-            N = len(x_nodes)
-            max_rel = 0.0
-            for i in range(N):
-                for j in range(N):
-                    # Unified operator: K_unified ≡ Σ_t · K_legacy
-                    ref = sig_t * float(K_legacy[i, j])
-                    if abs(ref) > 1e-30:
-                        rel = abs(K_unified[i, j] - ref) / abs(ref)
-                        if rel > max_rel:
-                            max_rel = rel
-            errors.append(max_rel)
-
-        # Monotone decrease required
-        for k in range(len(errors) - 1):
-            assert errors[k + 1] <= errors[k], (
-                f"Unified slab-polar K does not converge monotonically "
-                f"to legacy E_1: errors = {errors}."
-            )
-        # Finest gate
-        assert errors[-1] < 1e-3, (
-            f"At n_angular=n_rho=64, unified slab-polar K vs legacy E_1 "
-            f"max rel err = {errors[-1]:.3e}, expected < 1e-3."
+        K_unified = build_volume_kernel(
+            SLAB_POLAR_1D, x_nodes, panel_bounds, radii, sig_t_arr,
+            n_angular=0, n_rho=0, dps=dps,
         )
+        N = len(x_nodes)
+        for i in range(N):
+            for j in range(N):
+                # Unified operator: K_unified ≡ Σ_t · K_legacy
+                ref = sig_t * float(K_legacy[i, j])
+                if abs(ref) > 1e-30:
+                    rel = abs(K_unified[i, j] - ref) / abs(ref)
+                    assert rel < 1e-10, (
+                        f"K[{i},{j}] disagreement: unified={K_unified[i,j]:.6e}, "
+                        f"σ·E_1={ref:.6e}, rel={rel:.3e}"
+                    )
 
     def test_row_sum_identity(self):
         """``K · [1,1,...]`` equals :math:`\\Sigma_t \\varphi(x)` for
         uniform unit source on a pure-absorber vacuum-BC slab. Tests
-        the full assembly (kernel, weights, subdivision logic) in one
-        shot, independent of the legacy E_1 reference."""
+        the full assembly in one shot, independent of the legacy E_1
+        reference."""
         L, sig_t = 1.0, 1.0
         dps = 25
-        import numpy as np
         _, x_nodes, _, panel_bounds = _build_slab_K_and_nodes(
-            L, sig_t, n_panels=2, p_order=4, dps=dps,
+            L, sig_t, n_panels=1, p_order=2, dps=dps,
         )
         radii = np.array([L])
         sig_t_arr = np.array([sig_t])
         K = build_volume_kernel(
             SLAB_POLAR_1D, x_nodes, panel_bounds, radii, sig_t_arr,
-            n_angular=64, n_rho=64, dps=dps,
+            n_angular=0, n_rho=0, dps=dps,
         )
         N = len(x_nodes)
-        max_rel = 0.0
         for i in range(N):
             ref = sig_t * float(slab_uniform_source_analytical(
                 x_nodes[i], L, sig_t, dps=dps,
@@ -573,139 +552,14 @@ class TestSlabPolarBuildVolumeKernel:
             got = float(K[i].sum())
             if abs(ref) > 1e-30:
                 rel = abs(got - ref) / abs(ref)
-                if rel > max_rel:
-                    max_rel = rel
-        # Row-sum is a weaker test than element-wise (partition-of-unity
-        # cancels basis-individual errors) — should be well below the
-        # element-wise gate.
-        assert max_rel < 1e-3, (
-            f"Slab-polar row-sum error = {max_rel:.3e}, expected < 1e-3 "
-            f"at n_angular=n_rho=64. Regression of the unified polar-form "
-            f"slab assembly."
-        )
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Layer 5 — Cylinder-polar: Ki_1 → explicit φ integration (issue #116)
-# ═══════════════════════════════════════════════════════════════════════
-
-@pytest.mark.l1
-@pytest.mark.verifies("peierls-unified")
-class TestCylinderPolarEquivalence:
-    """``CYLINDER_POLAR_1D`` replaces the pre-integrated Bickley kernel
-    :math:`\\mathrm{Ki}_1(\\tau)` with an explicit out-of-plane angular
-    integration :math:`\\int_0^{\\pi/2} e^{-\\tau/\\cos\\varphi}
-    \\mathrm d\\varphi` (plan §0.2 — \"all kernels are exp\"). The
-    resulting K matrix must match the ``CYLINDER_1D`` K matrix to
-    high precision, since both are two numerical representations of
-    the SAME integral operator, differing only in which angle is
-    pre-integrated.
-
-    See issue #116 — this is \"concern #2\" of the session's unified-
-    framework refactor: once cylinder-polar is the default cylinder
-    path, the Bickley infrastructure (``ki_n_float``, ``ki_n_mp``,
-    the Chebyshev Ki_3 interpolant) can be retired.
-    """
-
-    def _build_sphere_like_cyl(self, R, sig_t, n_panels=2, p_order=3, dps=25):
-        import mpmath
-        with mpmath.workdps(dps):
-            gl_ref, gl_wt = peierls_slab._gl_nodes_weights(p_order, dps)
-            x_all, pbs = [], []
-            pw = mpmath.mpf(R) / n_panels
-            for pidx in range(n_panels):
-                pa = mpmath.mpf(pidx) * pw
-                pb = pa + pw
-                i_start = len(x_all)
-                xs, _ = peierls_slab._map_to_interval(gl_ref, gl_wt, pa, pb)
-                x_all.extend(xs)
-                pbs.append((float(pa), float(pb), i_start, len(x_all)))
-        x_nodes = np.array([float(x) for x in x_all])
-        radii = np.array([R])
-        sig_t_arr = np.array([sig_t])
-        return x_nodes, pbs, radii, sig_t_arr
-
-    def test_phi_GL_converges_to_Ki_1_spectrally(self):
-        """Standalone check: :math:`n`-point Gauss-Legendre on
-        :math:`\\varphi \\in [0, \\pi/2]` converges to
-        :math:`\\mathrm{Ki}_1(\\tau)` spectrally. This is the
-        mathematical reason cylinder-polar can replace cylinder-1d
-        with just 8-16 :math:`\\varphi` nodes."""
-        from orpheus.derivations.peierls_geometry import gl_nodes_weights
-        from orpheus.derivations._kernels import ki_n_mp
-
-        for tau in (0.5, 1.0, 2.0, 5.0):
-            ref = float(ki_n_mp(1, tau, 30))
-            # GL on [0, π/2]. Convergence is spectral; gate at 1e-8 at
-            # n=32 to avoid floating the ki_n_mp's own internal precision.
-            for n_phi, expected_precision in ((4, 1e-2), (8, 1e-3), (16, 1e-5), (32, 1e-8)):
-                nodes, wts = gl_nodes_weights(n_phi, 25)
-                h = np.pi / 4
-                phi_pts = np.array([h * float(x) + h for x in nodes])
-                phi_wts = np.array([h * float(w) for w in wts])
-                val = float(np.sum(phi_wts * np.exp(-tau / np.cos(phi_pts))))
-                rel = abs(val - ref) / abs(ref)
-                assert rel < expected_precision, (
-                    f"φ-GL(n={n_phi}) for Ki_1({tau}) = {val:.6e} vs ref {ref:.6e}, "
-                    f"rel_diff = {rel:.3e}, expected < {expected_precision}."
+                assert rel < 1e-10, (
+                    f"Row-sum K[{i}, :].sum() = {got:.10e} vs "
+                    f"σ·φ_analytical = {ref:.10e}, rel={rel:.3e}"
                 )
 
-    def test_K_matrix_elementwise_matches_cylinder_1d(self):
-        """Full K matrix via cylinder-polar (explicit φ) matches K via
-        cylinder-1d (Ki_1 kernel) to the precision of the shared
-        quadrature."""
-        R, sig_t = 1.0, 1.0
-        x_nodes, pbs, radii, sig_t_arr = self._build_sphere_like_cyl(
-            R, sig_t, n_panels=2, p_order=3, dps=25,
-        )
 
-        K_ki = build_volume_kernel(
-            CYLINDER_1D, x_nodes, pbs, radii, sig_t_arr,
-            n_angular=16, n_rho=16, dps=25,
-        )
+# (Cylinder-polar equivalence tests were retired 2026-04-19: cylinder-polar
+# is mathematically equivalent to cylinder-1d; the assembly was archived to
+# ``derivations/archive/peierls_cylinder_polar_assembly.py``.)
 
-        # n_phi=16 GL nodes are sufficient for ~1e-5 equivalence
-        K_polar = build_volume_kernel(
-            CYLINDER_POLAR_1D, x_nodes, pbs, radii, sig_t_arr,
-            n_angular=16, n_rho=16, dps=25, n_phi=16,
-        )
 
-        diff = np.abs(K_polar - K_ki)
-        rel_diff = diff / (np.abs(K_ki) + 1e-30)
-        max_rel = rel_diff.max()
-        assert max_rel < 1e-4, (
-            f"cylinder-polar (n_phi=16) vs cylinder-1d disagree at "
-            f"max rel {max_rel:.3e}; expected < 1e-4. The φ-integration "
-            f"should converge to Ki_1 spectrally."
-        )
-
-    def test_K_matrix_converges_to_cylinder_1d_under_n_phi_refinement(self):
-        """Increasing ``n_phi`` monotonically reduces the cylinder-polar
-        vs cylinder-1d discrepancy to near machine precision (limited
-        by cylinder-1d's own ki_n_float tolerance at ~1e-13)."""
-        R, sig_t = 1.0, 1.0
-        x_nodes, pbs, radii, sig_t_arr = self._build_sphere_like_cyl(
-            R, sig_t, n_panels=2, p_order=3, dps=25,
-        )
-        K_ki = build_volume_kernel(
-            CYLINDER_1D, x_nodes, pbs, radii, sig_t_arr,
-            n_angular=16, n_rho=16, dps=25,
-        )
-        errors = []
-        for n_phi in (4, 8, 16, 32):
-            K_polar = build_volume_kernel(
-                CYLINDER_POLAR_1D, x_nodes, pbs, radii, sig_t_arr,
-                n_angular=16, n_rho=16, dps=25, n_phi=n_phi,
-            )
-            errors.append(
-                float(np.max(np.abs(K_polar - K_ki) / (np.abs(K_ki) + 1e-30)))
-            )
-        for k in range(len(errors) - 1):
-            assert errors[k + 1] <= errors[k] * 0.5 + 1e-13, (
-                f"cylinder-polar does not converge monotonically to "
-                f"cylinder-1d under n_phi refinement: errors = {errors}"
-            )
-        assert errors[-1] < 1e-5, (
-            f"At n_phi=32, cylinder-polar vs cylinder-1d rel diff = "
-            f"{errors[-1]:.3e}, expected < 1e-5."
-        )

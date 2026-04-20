@@ -35,35 +35,35 @@ handling of multi-region Σ_t, and the Lagrange basis evaluation.
 
 Disagreement localises the bug to exactly one of those components.
 
-Applicability
--------------
+Scope after the 2026-04-19 cleanup
+----------------------------------
 
-All three 1-D geometries via :class:`~.peierls_geometry.CurvilinearGeometry`:
+This module now contains ONLY the slab :math:`E_1`-form references and
+the analytical vacuum-BC slab flux. The polar-form K element (slab,
+cylinder, sphere) is now subsumed by the unified verification
+primitive :func:`~.peierls_geometry.K_vol_element_adaptive`.
 
-- ``kind = "slab-1d"`` — via κ_d = E₁, Ω ∈ {±1} two-face integration
-  (NOT CURRENTLY IMPLEMENTED by CurvilinearGeometry — slab has its
-  own solver :mod:`orpheus.derivations.peierls_slab`; this module
-  therefore provides a separate slab reference path using the same
-  mpmath-adaptive methodology).
-- ``kind = "cylinder-1d"`` — via κ_d = Ki₁, Ω = β polar angle.
-- ``kind = "sphere-1d"`` — via κ_d = exp, Ω = θ polar angle.
+- :func:`slab_kernel_point_to_point` — exact :math:`E_1` slab point
+  kernel.
+- :func:`slab_K_vol_element` — adaptive ``mpmath.quad`` in real-space
+  against the :math:`E_1` integrand. Used as the second independent
+  formulation in the slab "two paths agree" verification gate
+  (the polar form is the unified primitive).
+- :func:`slab_uniform_source_analytical` — closed-form vacuum-BC
+  uniform-source flux for slab; the analytical reference for the
+  K-row-sum identity.
+- :func:`slab_row_sum_uniform_identity` — convenience alias.
+
+For cylinder and sphere analogs of the analytical vacuum-BC reference,
+see TODO (the 2026-04-20 strategic-milestone work).
 """
 
 from __future__ import annotations
 
-from typing import Callable
-
 import mpmath
 import numpy as np
 
-from ._kernels import ki_n_mp
-from .peierls_geometry import (
-    CurvilinearGeometry,
-    CYLINDER_1D,
-    SLAB_POLAR_1D,
-    SPHERE_1D,
-    lagrange_basis_on_panels,
-)
+from .peierls_geometry import lagrange_basis_on_panels  # noqa: F401  (re-exported for downstream)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -140,111 +140,6 @@ def slab_K_vol_element(
     return K_ij
 
 
-def slab_polar_K_vol_element(
-    i: int, j: int,
-    x_nodes: list, panel_bounds: list[tuple[float, float, int, int]],
-    L: float, sig_t: float,
-    *, dps: int = 50,
-) -> mpmath.mpf:
-    r"""Reference :math:`K[i, j]` for slab Peierls via the **unified
-    polar form** with adaptive :func:`mpmath.quad`.
-
-    Computes, with :math:`\Sigma_t` assumed constant on each panel:
-
-    .. math::
-
-       K_{ij} \;=\; \tfrac{1}{2}\,\Sigma_t\,
-                    \int_{-1}^{1}\!\mathrm d\mu\!
-                    \int_0^{\rho_{\max}(x_i, \mu)}
-                    e^{-\Sigma_t \rho}\,L_j(x_i + \rho\mu)\,
-                    \mathrm d\rho
-
-    This is the **same adaptive-quadrature methodology** used by
-    :func:`curvilinear_K_vol_element` for sphere / cylinder — only the
-    geometry primitives differ. Agreement between this and
-    :func:`slab_K_vol_element` (the ``E_1``-direct reference) is the
-    mathematical equivalence statement: the unified polar form and
-    the classical :math:`E_1` Nyström form are equal to machine
-    precision.
-
-    The unified form has a ``Σ_t`` prefactor in the operator
-    (because the polar form writes
-    :math:`\Sigma_t\,\varphi = K\,q`, not :math:`\varphi = K\,q`),
-    so this returns :math:`\Sigma_t` times :func:`slab_K_vol_element`
-    for homogeneous problems.
-    """
-    x_i = float(x_nodes[i])
-    sig_t_mp = mpmath.mpf(sig_t)
-    x_nodes_f = np.array([float(x) for x in x_nodes], dtype=float)
-
-    # Panel-boundary breakpoints for ρ-subdivision; identical to the
-    # `rho_crossings_for_ray` machinery for cylinder/sphere, but with
-    # the linear map r'(ρ) = x + ρμ.
-    panel_boundaries_r = sorted({pa for (pa, pb, _, _) in panel_bounds}
-                                | {pb for (pa, pb, _, _) in panel_bounds})
-    panel_boundaries_r = [float(r) for r in panel_boundaries_r]
-
-    def rho_crossings(mu: float, rho_max_val: float) -> list[float]:
-        if mu == 0.0:
-            return []
-        out = []
-        for r_b in panel_boundaries_r:
-            rho = (r_b - x_i) / mu
-            if 1e-12 < rho < rho_max_val - 1e-12:
-                out.append(rho)
-        return sorted(out)
-
-    def integrand_rho(rho, mu):
-        mu_f = float(mu)
-        rho_f = float(rho)
-        if mu_f > 0:
-            rho_max_val = (L - x_i) / mu_f
-        elif mu_f < 0:
-            rho_max_val = -x_i / mu_f
-        else:
-            return mpmath.mpf(0)
-        if rho_f >= rho_max_val or rho_f <= 0:
-            return mpmath.mpf(0)
-        x_prime = x_i + rho_f * mu_f
-        tau = sig_t_mp * rho
-        kappa = mpmath.exp(-tau)
-        L_vals = lagrange_basis_on_panels(x_nodes_f, panel_bounds, float(x_prime))
-        return kappa * mpmath.mpf(float(L_vals[j]))
-
-    def outer_mu(mu):
-        mu_f = float(mu)
-        if mu_f > 0:
-            rho_max_val = (L - x_i) / mu_f
-        elif mu_f < 0:
-            rho_max_val = -x_i / mu_f
-        else:
-            return mpmath.mpf(0)
-        if rho_max_val <= 0:
-            return mpmath.mpf(0)
-        crossings = rho_crossings(mu_f, rho_max_val)
-        breaks = ([mpmath.mpf(0)]
-                  + [mpmath.mpf(r) for r in crossings]
-                  + [mpmath.mpf(rho_max_val)])
-        return mpmath.quad(
-            lambda rho: integrand_rho(rho, mu),
-            breaks,
-        )
-
-    with mpmath.workdps(dps):
-        # Split at μ=0 so tanh-sinh densifies nodes near the grazing-ray
-        # stiffness (ρ_max → ∞ as μ → 0). The *principled* solution is
-        # the τ-coordinate transform (:doc:`/theory/peierls_unified` §5
-        # / post-CP plan Chapter 5) — with τ = Σ_t ρ as the inner
-        # integration variable and Gauss-Laguerre on [0, ∞), the e^{-τ}
-        # weight naturally absorbs the stiffness. That path is used by
-        # :func:`~peierls_geometry.build_volume_kernel` in production;
-        # here we use the adaptive mpmath.quad equivalent, which is
-        # slower per evaluation but guaranteed convergent.
-        mu_integral = mpmath.quad(
-            outer_mu,
-            [mpmath.mpf(-1), mpmath.mpf(0), mpmath.mpf(1)],
-        )
-        return sig_t_mp * mu_integral / 2
 
 
 def slab_uniform_source_analytical(
@@ -275,120 +170,6 @@ def slab_uniform_source_analytical(
                   - mpmath.expint(2, sig_t_mp * (L_mp - x_mp))) / (2 * sig_t_mp)
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Curvilinear (cylinder, sphere) reference — unified polar form
-# ═══════════════════════════════════════════════════════════════════════
-
-def curvilinear_K_vol_element(
-    geometry: CurvilinearGeometry,
-    i: int, j: int,
-    r_nodes: np.ndarray,
-    panel_bounds: list[tuple[float, float, int, int]],
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    *,
-    dps: int = 50,
-) -> mpmath.mpf:
-    r"""Reference K[i, j] for curvilinear Peierls via unified polar form
-    with adaptive :func:`mpmath.quad`.
-
-    Integrates the same observer-centred double integral that
-    :func:`~.peierls_geometry.build_volume_kernel` approximates with
-    Gauss-Legendre, but adaptively and at ``dps=50`` precision:
-
-    .. math::
-
-       K_{ij} = \Sigma_t(r_i)\,C_d \int_{\Omega_d} W_\Omega(\Omega)
-                \int_0^{\rho_{\max}(r_i,\Omega)}
-                \kappa_d(\tau(r_i,\Omega,\rho))\,L_j(r'(\rho,\Omega,r_i))\,
-                \mathrm d\rho\,\mathrm d\Omega.
-
-    Uses :meth:`.CurvilinearGeometry.volume_kernel_mp` for
-    :math:`\kappa_d`, :meth:`.CurvilinearGeometry.optical_depth_along_ray`
-    for :math:`\tau`, and the existing Lagrange basis. **Fully
-    vectorial-to-scalar**: one :func:`mpmath.quad` call per (i, j) pair.
-    """
-    r_i = float(r_nodes[i])
-    R = float(radii[-1])
-    radii_arr = np.asarray(radii, dtype=float)
-    sig_t_arr = np.asarray(sig_t, dtype=float)
-
-    ki = geometry.which_annulus(r_i, radii_arr)
-    sig_t_i = float(sig_t_arr[ki])
-
-    omega_low, omega_high = geometry.angular_range
-    r_nodes_f = np.asarray(r_nodes, dtype=float)
-
-    def integrand_rho(rho, omega):
-        cos_om = float(mpmath.cos(omega))
-        rho_f = float(rho)
-        rho_max_val = geometry.rho_max(r_i, cos_om, R)
-        if rho_f >= rho_max_val or rho_f <= 0:
-            return mpmath.mpf(0)
-        # Compute r' in mpmath, guarding against float underflow near r'=0
-        r_prime_sq = (mpmath.mpf(r_i) ** 2
-                      + 2 * r_i * rho * cos_om
-                      + rho ** 2)
-        if r_prime_sq <= 0:
-            r_prime = mpmath.mpf(0)
-        else:
-            r_prime = mpmath.sqrt(r_prime_sq)
-        tau = geometry.optical_depth_along_ray(
-            r_i, cos_om, rho_f, radii_arr, sig_t_arr,
-        )
-        kappa = geometry.volume_kernel_mp(tau, dps)
-        L_vals = lagrange_basis_on_panels(r_nodes_f, panel_bounds, float(r_prime))
-        return mpmath.mpf(float(L_vals[j])) * kappa
-
-    panel_boundaries_r = sorted({pa for (pa, pb, _, _) in panel_bounds}
-                                | {pb for (pa, pb, _, _) in panel_bounds})
-
-    def rho_crossings_for_ray(cos_om, rho_max_val):
-        """Compute ρ values where r'(ρ) crosses a panel boundary.
-
-        For sphere / cylinder, r'(ρ)² = r_i² + 2 r_i ρ cos_ω + ρ² = r_b²
-        gives ρ = -r_i cos_ω ± √(r_i² cos_om² + r_b² - r_i²). Keeps
-        the positive roots in (0, ρ_max).
-        """
-        crossings = set()
-        for r_b in panel_boundaries_r:
-            disc = r_i * r_i * cos_om * cos_om + r_b * r_b - r_i * r_i
-            if disc < 0:
-                continue
-            sqrt_disc = disc ** 0.5
-            for sign in (+1, -1):
-                rho = -r_i * cos_om + sign * sqrt_disc
-                if 1e-12 < rho < rho_max_val - 1e-12:
-                    crossings.add(rho)
-        return sorted(crossings)
-
-    def outer_omega(omega):
-        cos_om = float(mpmath.cos(omega))
-        rho_max_val = geometry.rho_max(r_i, cos_om, R)
-        if rho_max_val <= 0:
-            return mpmath.mpf(0)
-        ang_factor = float(geometry.angular_weight(
-            np.array([float(omega)]),
-        )[0])
-        # Subdivide ρ integration at panel crossings so mpmath.quad
-        # can handle the derivative discontinuities of the Lagrange basis.
-        crossings = rho_crossings_for_ray(cos_om, rho_max_val)
-        breaks = ([mpmath.mpf(0)]
-                  + [mpmath.mpf(rho) for rho in crossings]
-                  + [mpmath.mpf(rho_max_val)])
-        inner = mpmath.quad(
-            lambda rho: integrand_rho(rho, omega),
-            breaks,
-        )
-        return ang_factor * inner
-
-    pref = mpmath.mpf(geometry.prefactor)
-    with mpmath.workdps(dps):
-        omega_integral = mpmath.quad(
-            outer_omega,
-            [mpmath.mpf(omega_low), mpmath.mpf(omega_high)],
-        )
-        return sig_t_i * pref * omega_integral
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -411,8 +192,6 @@ def slab_row_sum_uniform_identity(
 __all__ = [
     "slab_kernel_point_to_point",
     "slab_K_vol_element",
-    "slab_polar_K_vol_element",
     "slab_uniform_source_analytical",
     "slab_row_sum_uniform_identity",
-    "curvilinear_K_vol_element",
 ]

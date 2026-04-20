@@ -66,6 +66,963 @@ or before extending the architecture to a new geometry.**
   averaging. For pointwise Nyström with general polynomial sources the
   observer-centred polar form is the cleaner choice, and this page is
   the written record of that choice.
+- **Production status (2026-04-20).** The slab K matrix is now
+  assembled by the **unified verification primitive**
+  :func:`~orpheus.derivations.peierls_geometry.K_vol_element_adaptive`
+  — adaptive ``mpmath.quad`` over the polar form, polymorphic across
+  all three geometries via :class:`CurvilinearGeometry`. This is the
+  single ground-truth K-element computation; production-tier
+  curvilinear paths (cylinder-1d, sphere-1d) verify against it at
+  spectral-but-finite-rate convergence. The slab moment-form Nyström
+  architecture (closed-form polynomial moments via
+  Lewis–Miller / Hébert / Stamm'ler integration-by-parts) was archived
+  on 2026-04-19 to
+  :file:`derivations/archive/peierls_slab_moments_assembly.py`
+  and tracked under
+  `GitHub Issue #117 <https://github.com/deOliveira-R/ORPHEUS/issues/117>`_
+  for future application to a higher-order production discrete CP
+  solver. The cylinder-polar variant (explicit out-of-plane
+  :math:`\varphi`-quadrature) was likewise archived to
+  :file:`derivations/archive/peierls_cylinder_polar_assembly.py` —
+  cylinder-1d (with :math:`\mathrm{Ki}_1` evaluated directly) is the
+  natural-kernel form and the active production path.
+
+
+.. _theory-peierls-moment-form:
+
+Moment-form Nyström assembly (closed-form polynomial moments) — ARCHIVED
+=======================================================================
+
+.. note::
+
+   **Status (2026-04-20):** The implementation described in this
+   section has been **archived** to
+   :file:`derivations/archive/peierls_moments.py` and
+   :file:`derivations/archive/peierls_slab_moments_assembly.py`,
+   tracked under
+   `GitHub Issue #117 <https://github.com/deOliveira-R/ORPHEUS/issues/117>`_.
+
+   The verification side of the CP module no longer needs a fast slab
+   K assembly — it uses adaptive ``mpmath.quad`` per element via
+   :func:`~orpheus.derivations.peierls_geometry.K_vol_element_adaptive`,
+   the single unified verification primitive across all geometries.
+   The moment-form architecture is preserved here as the **expected
+   production path** for a future higher-order discrete CP solver
+   (where performance matters); the math, derivations, and
+   conditioning analysis below are the architectural reference for
+   that future work.
+
+This section documents the **moment-form Nyström architecture** as
+implemented and verified in commit history ``investigate/peierls-solver-bugs``
+(2026-04-19). It supersedes the τ-coordinate Gauss–Laguerre approach
+of the original "slab-polar" prototype (commit 4395cb8); the historical
+content of that prototype is preserved in :ref:`theory-peierls-moment-form-failed-polar`
+below as a cautionary record.
+
+The architecture rests on a single observation:
+
+   The polar-form Peierls integral equation
+   :eq:`peierls-unified` collapses, after one substitution, to a
+   contraction between a vector of **polynomial coefficients of the
+   panel basis** and a vector of **polynomial moments of the kernel**.
+   Both factors admit closed-form expressions whose joint cost scales
+   linearly in the panel order :math:`p` and incurs **zero inner
+   quadrature** for the slab. The cylinder and sphere reuse the same
+   contraction at every Gauss–Legendre :math:`u`-node when the chord
+   :math:`r'(\rho)` is non-polynomial in :math:`u`.
+
+The remainder of this section presents the unified statement, the
+slab specialisation in full, the cylinder/sphere variant, the
+investigation history that pinned down the polynomial-in-:math:`e^{-v}`
+defect of the predecessor τ-Laguerre quadrature, and the numerical
+evidence backing the production gates.
+
+
+Subsection — The unified moment-form statement
+----------------------------------------------
+
+For an observer at radial coordinate :math:`r_i`, the unified-form K
+matrix entry is (Section 4 / :eq:`peierls-unified`)
+
+.. math::
+   :label: peierls-moment-K-source-form
+
+   K[i, j] \;=\; \Sigma_t(r_i)\,C_d
+   \int_{\mathrm \Omega_d} W_\Omega(\Omega)\,\mathrm d\Omega
+   \int_0^{\rho_{\max}(r_i,\Omega)}
+       \frac{1}{\Sigma_t(r'(s,\Omega,r_i))}\,
+       \kappa_d\!\bigl(\tau(s)\bigr)\,L_j\!\bigl(r'(s,\Omega,r_i)\bigr)\,\mathrm ds
+
+with :math:`C_d` the geometry prefactor, :math:`\kappa_d \in \{E_1,
+\mathrm{Ki}_1, e^{-u}\}`, and :math:`\tau(s) =
+\int_0^{s}\Sigma_t(r'(t,\Omega,r_i))\,\mathrm dt` the cumulative
+optical depth from the observer.
+
+Substitute the **optical-depth coordinate** :math:`u = \tau(s)`. On
+each homogeneous segment of the ray :math:`u` is linear in :math:`s`
+with slope :math:`\Sigma_t`, so :math:`\mathrm ds = \mathrm du /
+\Sigma_t`. The inner integral over a single segment with optical-depth
+range :math:`[u_a, u_b]` becomes
+
+.. math::
+   :label: peierls-moment-segment
+
+   \int_{u_a}^{u_b}\,\kappa_d(u)\,L_j\!\bigl(r'(u)\bigr)\,
+   \frac{\mathrm du}{\Sigma_{t,\text{seg}}^{\,2}},
+
+after one factor of :math:`1/\Sigma_t` from the :math:`1/\Sigma_t(r'_{ikm})`
+already in :eq:`peierls-moment-K-source-form` and one from :math:`\mathrm
+ds = \mathrm du / \Sigma_{t,\text{seg}}`. (The unified-form prefactor
+:math:`\Sigma_t(r_i)` absorbs the second :math:`1/\Sigma_t` so the
+matrix entry stays dimensionless.)
+
+If the panel basis :math:`L_j` is polynomial of degree :math:`p-1`
+in :math:`u`, expand it in monomials,
+
+.. math::
+
+   L_j(r'(u)) \;=\; \sum_{m=0}^{p-1} c^{(j)}_m\,u^m,
+
+so the segment integral collapses to the inner product
+
+.. math::
+   :label: peierls-moment-contraction
+
+   \boxed{\;
+   \int_{u_a}^{u_b}\!\kappa_d(u)\,L_j(r'(u))\,\mathrm du
+   \;=\;
+   \sum_{m=0}^{p-1} c^{(j)}_m\,\bigl[J_m^{\kappa_d}(u_b) - J_m^{\kappa_d}(u_a)\bigr]
+   \;=\;
+   \langle\,\mathbf c^{(j)}\,,\,\mathbf M^{(\kappa_d)}\,\rangle.
+   \;}
+
+The two factors play distinct roles:
+
+- :math:`\mathbf c^{(j)}` — **basis coefficients**, geometry-specific
+  through the chord map :math:`r'(u)` but kernel-independent. Built
+  once per (observer, segment) pair.
+- :math:`\mathbf M^{(\kappa_d)}_m = J_m^{\kappa_d}(u_b) - J_m^{\kappa_d}(u_a)`
+  — **kernel moments**, geometry-independent functions of the optical-depth
+  endpoints :math:`(u_a, u_b)` only. The cumulative moment
+  :math:`J_m^{\kappa_d}(z)\equiv\int_0^z u^m\,\kappa_d(u)\,\mathrm du`
+  admits a closed-form recursion for every kernel of interest
+  (see Subsection — *Closed-form moment recursions* below).
+
+This is the **unified moment-form statement**. Each geometry instantiates
+the kernel choice (and, for curvilinear, the way the basis coefficients
+are obtained — see Subsection — *Curvilinear status* below). The
+overall K-matrix assembly then reads, in pseudocode:
+
+.. code-block:: text
+
+   for each observer i:
+       for each source panel p:
+           build segments of the ray from x_i intersecting panel p
+           for each segment with [u_a, u_b]:
+               M       = kernel_moments(u_a, u_b, p_order)         # closed form
+               c[a,m]  = basis_coeffs_in_u(panel_nodes, segment)   # Vandermonde solve
+               K[i, panel_node_a] += prefactor · c[a,:] · M
+
+with no inner quadrature. The Vandermonde solve is the subject of the
+slab specialisation that follows.
+
+When the chord :math:`r'(u)` is non-polynomial in :math:`u` (cylinder,
+sphere), :math:`L_j(r'(u))` is no longer a polynomial in :math:`u`,
+and the closed-form contraction requires *interpolation* to recover
+polynomial coefficients. This recovers the standard Gauss–Legendre
+Nyström — but applied at the kernel-moment-weighted level rather than
+the kernel-evaluation level. The Subsection — *Curvilinear status*
+explains the trade-off in detail.
+
+
+Subsection — Closed-form moment recursions
+------------------------------------------
+
+The cumulative kernel moments :math:`J_m^{\kappa_d}(z)` are derived
+once per kernel by integration by parts. The derivations are pure
+calculus and the implementations live in
+:mod:`orpheus.derivations.peierls_moments` with element-wise gates
+against :func:`mpmath.quad` to :math:`10^{-15}` relative
+(:mod:`tests.derivations.test_peierls_moments`).
+
+**Slab — :math:`E_1` moments.** From :math:`E_1'(u) = -e^{-u}/u`
+and :math:`(u^{m+1})' = (m+1)\,u^m`, integration by parts of
+:math:`\int_0^z u^m E_1(u)\,\mathrm du` gives
+
+.. math::
+   :label: peierls-moment-J-E1
+
+   J_m^{E_1}(z) \;\equiv\; \int_0^z u^m\,E_1(u)\,\mathrm du
+   \;=\; \frac{z^{m+1}\,E_1(z) \;+\; \gamma(m+1, z)}{m+1},
+
+where :math:`\gamma(a, z) = \int_0^z t^{a-1} e^{-t}\,\mathrm dt` is
+the lower incomplete gamma function. The intermediate step is
+
+.. math::
+
+   \int_0^z u^m E_1(u)\,\mathrm du
+   = \left[\frac{u^{m+1}}{m+1}\,E_1(u)\right]_0^z
+     - \frac{1}{m+1}\int_0^z u^{m+1}\cdot\!\left(-\frac{e^{-u}}{u}\right)\!\mathrm du
+   = \frac{z^{m+1} E_1(z)}{m+1} + \frac{1}{m+1}\int_0^z u^m e^{-u}\,\mathrm du.
+
+The boundary term at :math:`u=0` vanishes because
+:math:`u^{m+1}E_1(u) \sim -u^{m+1}\ln u \to 0` for :math:`m \ge 0`.
+This identity is [LewisMiller1984]_ Appendix C (slab CP polynomial
+sources), [Hebert2020]_ §3.2–3.3 (general slab polynomial-source CP),
+and [AbramowitzStegun1964]_ §5.1.32 (the underlying recursion of the
+:math:`E_n` family). Implemented in
+:func:`~orpheus.derivations.peierls_moments.e_n_cumulative_moments`
+(float-out) and
+:func:`~orpheus.derivations.peierls_moments.slab_segment_moments_mp`
+(mpmath-out for chaining into the linear solve below).
+
+**Cylinder — :math:`\mathrm{Ki}_1` moments.** From :math:`\mathrm{Ki}_n'(u) =
+-\mathrm{Ki}_{n-1}(u)` and :math:`\int\mathrm{Ki}_n(u)\,\mathrm du =
+-\mathrm{Ki}_{n+1}(u)`, repeated integration by parts of
+:math:`\int_0^z u^m \mathrm{Ki}_1(u)\,\mathrm du` gives
+
+.. math::
+   :label: peierls-moment-J-Ki1
+
+   J_m^{\mathrm{Ki}_1}(z) \;=\; -\sum_{q=0}^{m}
+     \frac{m!}{(m-q)!}\,z^{m-q}\,\mathrm{Ki}_{q+2}(z)
+     \;+\; m!\,\mathrm{Ki}_{m+2}(0).
+
+Each integration by parts trades one power of :math:`u` for one
+increment of the Bickley index, telescoping :math:`u^m\mathrm{Ki}_1`
+all the way down to :math:`m!\,\mathrm{Ki}_{m+2}` in the boundary terms.
+The endpoint constants :math:`\mathrm{Ki}_n(0) = (\sqrt{\pi}/2)\,
+\Gamma(n/2)/\Gamma((n+1)/2)` come from Wallis' formula evaluated at the
+explicit definition :math:`\mathrm{Ki}_n(0) = \int_0^{\pi/2}
+\cos^{n-1}\theta\,\mathrm d\theta`. The recursion itself is implicit in
+[Stamm1983]_ Chapters 4–6 (higher-order CP cylinder spatial expansions)
+and is restated in modern notation by [Hebert2020]_ §3.4–3.5; the
+underlying Bickley identities are [AbramowitzStegun1964]_ §11.2 and
+[Bickley]_. Implemented in
+:func:`~orpheus.derivations.peierls_moments.ki_n_cumulative_moments`
+and :func:`~orpheus.derivations.peierls_moments.cylinder_segment_moments_mp`.
+
+The :math:`\mathrm{Ki}_n(0)` constants are computed at the caller's
+mpmath ``workdps`` precision via the Wallis closed form (helper
+:func:`~orpheus.derivations.peierls_moments._ki_n_at_zero_mp`)
+because the small-:math:`z` regime exhibits cancellation between the
+boundary :math:`m!\,\mathrm{Ki}_{m+2}(0)` term and the sum of
+:math:`u^{m-q}\mathrm{Ki}_{q+2}(z)` terms, amplifying any roundoff
+in the boundary constants. A float-precision constant would limit the
+moment recursion to :math:`\sim10^{-9}` relative at small :math:`z`;
+the mpmath-native constant gives full :math:`\mathrm{dps}` precision.
+
+**Sphere — exponential moments.** :math:`\int_0^z u^m e^{-u}\,\mathrm du
+= \gamma(m+1, z)` directly; no integration by parts needed. Implemented
+in :func:`~orpheus.derivations.peierls_moments.exp_cumulative_moments`
+and :func:`~orpheus.derivations.peierls_moments.sphere_segment_moments_mp`.
+
+Per-segment differences (used by the K assembly):
+
+.. math::
+
+   \mathbf M^{(\kappa)}_m \;\equiv\;
+   \int_{u_a}^{u_b}\!u^m\,\kappa(u)\,\mathrm du
+   \;=\; J_m^{\kappa}(u_b) - J_m^{\kappa}(u_a),
+   \qquad m = 0, 1, \dots, p-1.
+
+For the slab, computing :math:`\mathbf M^{(E_1)}` requires exactly two
+:math:`E_1` evaluations and :math:`2p` lower-incomplete-gamma
+evaluations — entirely closed-form, no quadrature.
+
+
+Subsection — The slab specialisation (production)
+-------------------------------------------------
+
+The slab is the "easy" geometry because the chord map is linear:
+:math:`r'(s) = x_i + s\,\sigma`, where :math:`\sigma = \pm 1` is the
+ray-direction sign. With :math:`u = \Sigma_{t,\text{seg}}\,s` (single
+homogeneous segment along the ray), :math:`r'(u) = x_i +
+\sigma\,u/\Sigma_{t,\text{seg}}` is **linear in** :math:`u`. A panel
+Lagrange basis :math:`L_a(r')` of degree :math:`p-1` in :math:`r'`
+remains degree :math:`p-1` in :math:`u` — exactly the polynomial form
+that :eq:`peierls-moment-contraction` requires.
+
+The implementation
+:func:`~orpheus.derivations.peierls_geometry._build_volume_kernel_slab_moments`
+processes each (observer, source panel) pair as follows:
+
+**Step 1 — Walk the ray.** For each observer :math:`x_i`, walk the ray
+to the source panel and accumulate the cumulative-:math:`\tau` offset
+:math:`\Delta = \Sigma_{t}\,(x_l - x_i)` (right-going) or :math:`\Sigma_{t}\,(x_i - x_r)`
+(left-going), using a piecewise-linear cumulative-tau table over the
+material regions of the slab:
+
+.. math::
+
+   \Delta \;=\; \int_{x_i}^{\text{ray-entry into panel}}
+                  \Sigma_t(\xi)\,\mathrm d\xi.
+
+This handles heterogeneous material boundaries between observer and
+source panel without unnecessary subdivision: the cumulative-tau table
+is built once per K assembly. (Source panels do not span material
+boundaries by construction, since the composite-GL panel grid respects
+material regions.)
+
+**Step 2 — Self-panel splitting.** When the observer sits inside the
+source panel (:math:`x_l \le x_i \le x_r`), the ray-from-observer
+naturally leaves the panel in two opposite directions. Split into two
+ray pieces:
+
+.. math::
+
+   \text{piece A: } [x_i, x_r],\ \sigma=+1,\ \Delta = 0; \qquad
+   \text{piece B: } [x_l, x_i],\ \sigma=-1,\ \Delta = 0.
+
+Each piece is C\ :sup:`∞` in :math:`u`; no log-singularity subtraction
+is needed because :math:`E_1(u)` itself is :math:`\sim -\ln u + O(1)`
+near the origin and our **moment** recursion :eq:`peierls-moment-J-E1`
+already absorbs that singularity into the closed form (the boundary
+term :math:`z^{m+1}E_1(z)/(m+1)` carries the log analytically). This
+is the central reason the slab-moment form succeeds where the legacy
+:math:`E_1` Nyström needed Atkinson's product-integration recipe
+([Atkinson1997]_): the closed form integrates the singularity in
+*symbolic* form, so the residual integrand the quadrature would have
+seen is already exactly :math:`\gamma(m+1, z) / (m+1)` — finite and
+smooth.
+
+**Step 3 — Build the per-segment moment vector.** With segment
+optical-depth range :math:`[u_a = \Delta,\,u_b = \Delta + \Sigma_{t,\text{panel}}\,
+(x_r - x_l)\bigr]` (or piece-specific endpoints for self-panel halves),
+compute
+
+.. math::
+
+   \mathbf M_m \;=\; J_m^{E_1}(u_b) - J_m^{E_1}(u_a),
+   \qquad m = 0, 1, \dots, p-1,
+
+via the closed form :eq:`peierls-moment-J-E1` evaluated at mpmath ``dps``
+precision (default :math:`30`).
+
+**Step 4 — Vandermonde solve for cardinal Nyström weights.** The panel
+nodes :math:`\xi_a` (for :math:`a = 0, 1, \dots, p-1`) define cardinal
+Lagrange polynomials :math:`L_a(r') = \prod_{b\neq a}(r' - \xi_b)/(\xi_a -
+\xi_b)`. In the segment's optical-depth coordinate, each node sits at
+
+.. math::
+
+   u_k \;=\; \Delta + \Sigma_{t,\text{panel}}\,\sigma\,(\xi_k - x_{\text{a,seg}})
+
+(with :math:`x_{\text{a,seg}} = x_l` for :math:`\sigma=+1`,
+:math:`x_{\text{a,seg}} = x_r` for :math:`\sigma=-1` — i.e. the
+ray-entry point of the segment). We want the contribution of each
+basis function :math:`L_a` to the segment integral, i.e. weights
+:math:`w_a` such that
+
+.. math::
+
+   \int_{u_a}^{u_b} \kappa_d(u)\,L_a(r'(u))\,\mathrm du \;=\; w_a.
+
+By the cardinal property and :eq:`peierls-moment-contraction`,
+
+.. math::
+   :label: peierls-moment-vandermonde
+
+   \mathbf V^\top\,\mathbf w \;=\; \mathbf M,
+   \qquad \mathbf V[k, m] = u_k^m,
+
+where :math:`\mathbf V` is the :math:`p\times p` Vandermonde matrix at
+the panel-node :math:`u`-coordinates and :math:`\mathbf w =
+(w_0, w_1, \dots, w_{p-1})`. The transpose comes from the dual
+cardinal-vs-monomial relation: the monomial expansion
+:math:`L_a(r'(u)) = \sum_m c^{(a)}_m\,u^m` has coefficients
+:math:`c^{(a)} = (\mathbf V^{-1})_{a,:}` (cardinal at :math:`u_k`),
+so :math:`w_a = \sum_m (\mathbf V^{-1})_{a,m}\,M_m =
+(\mathbf V^{-\top}\mathbf M)_a`.
+
+The system :eq:`peierls-moment-vandermonde` is solved at mpmath ``dps``
+precision with :func:`mpmath.lu_solve`. The Vandermonde matrix is
+notoriously ill-conditioned in floating point — for distant source
+panels (large :math:`\Delta`) the panel-node :math:`u`-coordinates
+cluster (relative spread :math:`(\xi_p - \xi_0)\,\Sigma_t /
+\Delta` becomes small), and a float-precision solve loses 6-10 digits.
+Solving at :math:`\mathrm{dps}=30` gives single-digit ULP loss in the
+final K entry — well below the :math:`10^{-12}` test gate.
+
+**Step 5 — Accumulate into K.** With the Nyström weights in hand,
+
+.. math::
+   :label: peierls-moment-K-assembly
+
+   K[i, j_{\text{start}+a}] \;\mathrel{+}=\;
+   \frac{\Sigma_t(r_i)\,C_d}{\Sigma_{t,\text{panel}}}\;w_a,
+   \qquad a = 0, 1, \dots, p-1,
+
+where :math:`C_d = 1/2` for the slab. The :math:`1/\Sigma_{t,\text{panel}}`
+absorbs the :math:`\mathrm ds = \mathrm du / \Sigma_t` Jacobian; the
+:math:`\Sigma_t(r_i)` is the unified-form left-hand-side prefactor
+from :eq:`peierls-unified` and is **observer-side** (different from the
+segment :math:`\Sigma_{t,\text{panel}}` for heterogeneous slabs).
+
+The full algorithm is :math:`O(N \cdot N_{\text{panels}} \cdot p^3)` —
+linear in number of (observer, source-panel) pairs and cubic in panel
+order through the LU. For typical :math:`N=24, p=4` it builds in
+:math:`\sim 60` ms at :math:`\mathrm{dps}=30`; at :math:`p=6` and
+:math:`N=24`, :math:`\sim 200` ms.
+
+.. note::
+
+   The slab moment-form is **exact in the inner integration**: there is
+   no inner quadrature, no inner discretization error, no inner
+   convergence sweep to perform. The only sources of error are (a) the
+   panel basis order :math:`p-1` (truncation of the source expansion;
+   converges spectrally for smooth solutions), (b) the mpmath
+   precision of the moment evaluations and Vandermonde solve (default
+   :math:`\mathrm{dps}=30` gives :math:`\sim10^{-28}` relative; well
+   below any practical gate). Compare with the legacy :math:`E_1`
+   Nyström, which used adaptive :math:`\texttt{mpmath.quad}` in the
+   inner — also "exact" but at a much higher cost (see Subsection —
+   *Performance characteristics* below).
+
+
+.. _theory-peierls-moment-form-failed-polar:
+
+Subsection — Why the predecessor τ-Laguerre polar form failed
+-------------------------------------------------------------
+
+The first attempt at unifying the slab into the polar-form Nyström
+framework (commit 4395cb8, "feat(derivations): add slab-polar as
+first-class CurvilinearGeometry kind") used a **τ-coordinate
+Gauss–Laguerre** outer integration in the substitution :math:`v =
+-\ln|\mu|`. **That implementation has been retired** because it does
+not converge to machine precision — it plateaus at relative error
+:math:`\sim 9 \times 10^{-4}` regardless of how many quadrature nodes
+are added. Diagnostic scripts
+:file:`derivations/diagnostics/diag_slab_polar_outer_mu_structure.py`
+and :file:`derivations/diagnostics/diag_slab_polar_glaguerre.py`
+isolate the cause; this subsection records the result so future
+sessions do not re-attempt the failed approach.
+
+**The slab-polar formulation.** With observer at :math:`x_i` and
+direction-cosine :math:`\mu`, the polar-form slab K is
+
+.. math::
+
+   K[i, j] \;=\; \tfrac{1}{2}\,\Sigma_t(r_i)
+   \int_{-1}^{1}\!\mathrm d\mu
+     \int_0^{\rho_{\max}(x_i,\mu)}
+       \frac{e^{-\Sigma_t \rho}}{\Sigma_t(r')}\,L_j(x_i + \rho\mu)\,\mathrm d\rho.
+
+Substitute :math:`v = -\ln|\mu|` so :math:`\mu = \pm e^{-v}` with
+Jacobian :math:`|\mathrm d\mu/\mathrm dv| = e^{-v}`. The outer integral
+on each branch becomes :math:`\int_0^\infty g(e^{-v})\,e^{-v}\,\mathrm dv`,
+where :math:`g(\mu)` is the inner ρ-integral as a function of :math:`\mu`.
+Apply Gauss–Laguerre to the outer :math:`v`.
+
+**The defect.** Gauss–Laguerre is *spectrally* accurate when the
+integrand on :math:`(0, \infty)` has the form
+:math:`p(v)\cdot e^{-v}` with :math:`p` polynomial in :math:`v` —
+that is the rule's definition of "polynomial-exact." Our integrand
+has the form
+
+.. math::
+
+   g(e^{-v})\,e^{-v},
+
+where :math:`g(\mu)` admits the small-:math:`\mu` Laplace expansion
+
+.. math::
+
+   g(\mu) \;=\; \frac{L_j(x_i)}{\Sigma_t}
+              + \mu\,\frac{L_j'(x_i)}{\Sigma_t^2}
+              + \mu^2\,\frac{L_j''(x_i)}{\Sigma_t^3}
+              + \dots
+
+(from differentiating the absorption integral by parts in :math:`\mu`),
+so :math:`g(\mu)` is a polynomial of degree :math:`p-1` *in*
+:math:`\mu = e^{-v}`. The full integrand is therefore a sum of terms
+:math:`e^{-kv}` for :math:`k = 1, 2, \dots, p`, **not** a polynomial
+in :math:`v`.
+
+Gauss–Laguerre :math:`n`-point integrates :math:`p(v)\,e^{-v}` exactly
+for :math:`\deg p \le 2n - 1`; on a generic :math:`e^{-kv}` integrand
+it converges only **algebraically** at rate :math:`O(n^{-2})` from the
+remainder bound for non-polynomial integrands (the relevant stationary-phase
+analysis: Gauss-Laguerre is asymptotic in :math:`1/n` for any
+:math:`e^{-kv}` with :math:`k\neq 1`). Our integrand mixes :math:`k=1`
+through :math:`k=p`, so the leading-order error is set by the worst
+:math:`k`.
+
+**Diagnostic confirmation** (table from
+:file:`derivations/diagnostics/diag_slab_polar_outer_mu_structure.py`,
+:math:`L=1`, :math:`\Sigma_t=1`, two-panel :math:`p=4`, exact-inner
+:func:`mpmath.quad` so the outer is isolated):
+
+.. list-table:: Outer-only convergence with EXACT inner. Each scheme
+   uses :math:`n_v` outer nodes; relative error in :math:`K[0,0]`
+   against the adaptive reference :math:`K[0,0] = 1.107\times10^{-1}`.
+   :header-rows: 1
+
+   * - :math:`n_v`
+     - v-Laguerre
+     - v-GL on :math:`[0, 30]`
+     - GL on :math:`[-1,0]\cup[0,1]`
+   * - 8
+     - 6.6e-3
+     - 5.2e-3
+     - 1.1e-3
+   * - 16
+     - 1.6e-3
+     - 1.3e-3
+     - 7.4e-5
+   * - 32
+     - 4.0e-4
+     - 3.4e-4
+     - 6.2e-6
+   * - 64
+     - 1.0e-4
+     - 8.7e-5
+     - 7.1e-4
+
+Two readings of this table are essential:
+
+1. The **v-Laguerre and v-GL** rates are both :math:`O(n^{-2})` —
+   confirming the polynomial-in-:math:`e^{-v}` defect is
+   substitution-independent (any rule chosen for the polynomial-in-:math:`v`
+   weight :math:`e^{-v}` shares the same exactness class).
+
+2. The **standard GL** convergence is *non-monotonic*: it drops to
+   :math:`6\times 10^{-6}` at :math:`n=32` then *jumps back up*
+   to :math:`7\times 10^{-4}` at :math:`n=64`. This is the smoking
+   gun of an outer-integrand kink that the GL node placement straddles
+   differently at each :math:`n`. The kink has not been identified
+   analytically but is the predicted signature of the dyadic-:math:`\tau`-cap
+   on the inner subdivision (see hypothesis H3 in the diagnostic
+   docstring) — a discrete change in the number of inner sub-intervals
+   creates a discontinuity in :math:`g(\mu)` as :math:`\mu` moves past
+   the cap-trigger threshold. The moment-form sidesteps this entirely
+   because the inner integral is closed-form; no cap is needed.
+
+**Generalised Laguerre does not help.** The diagnostic
+:file:`diag_slab_polar_glaguerre.py` sweeps the :math:`\alpha`
+parameter of the generalised Laguerre weight :math:`v^\alpha\,e^{-v}`
+(intuition: shifting nodes toward small :math:`v` should help because
+the integrand is concentrated there). Result (relative error in
+:math:`K[0,0]`, :math:`n_v=32`, exact inner):
+
+.. list-table:: Generalised Laguerre with :math:`\alpha`-sweep. The
+   :math:`v^{-\alpha}` factor is folded into the integrand to
+   compensate for the weight; quadrature acts on
+   :math:`v^\alpha\,e^{-v}` directly.
+   :header-rows: 1
+
+   * - :math:`n_v`
+     - :math:`\alpha = -0.5`
+     - :math:`\alpha = 0.0`
+     - :math:`\alpha = +0.5`
+     - :math:`\alpha = +1.0`
+     - :math:`\alpha = +2.0`
+     - :math:`\alpha = +5.0`
+   * - 8
+     - 6.5e-3
+     - 6.6e-3
+     - 7.1e-3
+     - 8.1e-3
+     - 1.1e-2
+     - 2.5e-2
+   * - 16
+     - 1.6e-3
+     - 1.6e-3
+     - 1.8e-3
+     - 2.2e-3
+     - 3.4e-3
+     - 9.5e-3
+   * - 32
+     - 4.0e-4
+     - 4.0e-4
+     - 4.5e-4
+     - 5.7e-4
+     - 1.0e-3
+     - 3.6e-3
+   * - 64
+     - 1.0e-4
+     - 1.0e-4
+     - 1.1e-4
+     - 1.5e-4
+     - 2.8e-4
+     - 1.1e-3
+
+Every value of :math:`\alpha` is in the same algebraic-convergence
+class as standard Laguerre, with :math:`\alpha > 0` strictly worse
+(node clustering toward large :math:`v` is precisely the wrong place
+for an integrand concentrated at small :math:`v`) and :math:`\alpha < 0`
+giving no measurable improvement. The theoretical reason is that **all
+Laguerre flavours, regardless of** :math:`\alpha`, **are spectral only
+for polynomial-in-**:math:`v` **integrands** — the weight :math:`v^\alpha
+e^{-v}` does not change the rule's polynomial-exactness class. Our
+integrand is polynomial in :math:`e^{-v}`, not in :math:`v`. There is
+no Laguerre flavour that fixes this.
+
+**The architectural realisation.** The legacy :math:`E_1` Nyström
+(:func:`~orpheus.derivations.peierls_slab._basis_kernel_weights`) does
+not exhibit this convergence pathology because it integrates the
+angular variable **analytically** — the classical slab equation
+:eq:`peierls-equation` already has :math:`E_1(\Sigma_t|x-x'|)` as the
+kernel, and :math:`E_1` *is* the analytical result of
+:math:`\int_0^\infty e^{-u}/u\,\mathrm du` along the angular direction.
+The polar form was undoing that analytical integration and trying to
+recover it numerically.
+
+The unified moment form re-uses :math:`E_1` *as the kernel* (the way
+the classical slab Nyström does) but re-writes the angular-then-radial
+integration as a single optical-depth-coordinate integral with a
+polynomial source. The result is the polynomial-coefficient × kernel-moment
+contraction :eq:`peierls-moment-contraction` — exact, closed-form,
+no quadrature.
+
+Reading the diagnostic scripts will reproduce these tables and confirm
+the analysis end-to-end.
+
+
+Subsection — Curvilinear status (cylinder and sphere)
+-----------------------------------------------------
+
+For the cylinder and sphere geometries the chord map :math:`r'(\rho) =
+\sqrt{r_i^2 + \rho^2 - 2 r_i \rho \cos\Omega}` is non-linear in
+:math:`\rho`, hence non-linear in the optical-depth coordinate
+:math:`u = \Sigma_t\,\rho` even within a homogeneous segment. A panel
+basis :math:`L_j(r')` polynomial of degree :math:`p-1` in :math:`r'`
+is **not** polynomial in :math:`u` once composed with the chord map.
+Equation :eq:`peierls-moment-contraction` therefore does not give a
+closed-form K entry; the polynomial coefficients of :math:`L_j(r'(u))`
+are not a finite list.
+
+The way the unified architecture handles this — implemented in
+:func:`~orpheus.derivations.peierls_geometry._build_volume_kernel_curvilinear_moments`
+— is to **interpolate** :math:`L_j(r'(u))` at :math:`n_\rho`
+Gauss–Legendre nodes inside each segment, recover the polynomial
+coefficients :math:`c^{(j)}_m` from a Vandermonde solve at those
+:math:`u`-nodes, and contract against the closed-form
+:math:`\mathrm{Ki}_n` / :math:`e^{-u}` moments
+:eq:`peierls-moment-J-Ki1`:
+
+.. math::
+
+   K[i, j] \;\mathrel{+}=\;
+   \frac{\Sigma_t(r_i)\,C_d}{\Sigma_{t,\text{seg}}}\,
+   \sum_{k=0}^{n_\rho-1} w_k\,L_j\!\bigl(r'(u_k)\bigr),
+
+with :math:`w_k = \langle (\mathbf V^{-\top})_{k,:}, \mathbf
+M^{(\kappa)}\rangle` the Nyström weight at node :math:`u_k`, computed
+once per segment from the closed-form moment vector and the
+GL-:math:`u`-node Vandermonde.
+
+The relationship to the slab form is precise: **same architecture, same
+moment recursions, same Vandermonde solve**, but the polynomial
+coefficients are obtained by interpolation rather than from the
+panel basis directly. We call this the *kernel-natural moment form*
+because the kernel evaluation reduces to closed-form moments at segment
+endpoints — but the source expansion is GL-based, not panel-cardinal.
+
+**Why this is not a regression.** The legacy curvilinear path
+(:func:`~orpheus.derivations.peierls_geometry._build_volume_kernel_curvilinear_moments`
+*precursor* — the GL-inner-then-:math:`\kappa_d`-evaluation path
+documented in Section 6) evaluates the kernel :math:`\kappa_d(u_k)` at
+each Gauss–Legendre node and quadrature-sums. The kernel evaluation at
+isolated nodes is just a numerical approximation of the closed-form
+moment :math:`\int_{u_a}^{u_b}\!u^m \kappa_d(u)\,\mathrm du` accurate
+to the GL polynomial-exactness class :math:`(2 n_\rho - 1)` in :math:`u`.
+The natural-kernel moment form **uses the closed form directly** — it
+is one architectural step *more* accurate per node, and reduces the
+required :math:`n_\rho` for a given precision. Otherwise the spectral
+convergence in :math:`n_\rho` is identical (set by the smoothness of
+:math:`L_j(r'(u))`).
+
+In summary, all three geometries instantiate the same architecture:
+
+.. list-table:: Architecture instantiation by geometry.
+   :header-rows: 1
+
+   * - Geometry
+     - Kernel :math:`\kappa_d`
+     - Moment recursion
+     - Polynomial coeffs
+     - Inner quadrature
+   * - Slab
+     - :math:`E_1`
+     - :eq:`peierls-moment-J-E1`
+     - panel-cardinal (closed)
+     - **none**
+   * - Cylinder
+     - :math:`\mathrm{Ki}_1`
+     - :eq:`peierls-moment-J-Ki1`
+     - GL-:math:`u`-cardinal
+     - :math:`n_\rho` GL on :math:`L_j(r'(u))`
+   * - Sphere
+     - :math:`e^{-u}`
+     - :math:`\gamma(m+1, z)`
+     - GL-:math:`u`-cardinal
+     - :math:`n_\rho` GL on :math:`L_j(r'(u))`
+
+
+Subsection — Numerical evidence
+-------------------------------
+
+The slab moment-form K matrix is gated against three independent
+references in :mod:`tests.derivations.test_peierls_slab_moments`
+(L1 equivalence, all marked
+``@pytest.mark.verifies("peierls-equation")``). All gates pass to the
+indicated tolerances on commit ``investigate/peierls-solver-bugs``.
+
+**Gate 1 — moment vs legacy E\ :sub:`1` Nyström, homogeneous slabs.**
+Element-wise relative error :math:`< 10^{-12}` across five
+parametrizations:
+
+.. list-table:: Homogeneous-slab moment vs legacy-:math:`E_1` Nyström
+   gate (:func:`test_slab_moments_match_legacy_E1`).
+   Tolerance :math:`10^{-12}` element-wise relative.
+   :header-rows: 1
+
+   * - :math:`L`
+     - :math:`\Sigma_t`
+     - :math:`n_{\text{panels}}`
+     - :math:`p`
+     - status
+   * - 1.0
+     - 1.0
+     - 2
+     - 4
+     - pass
+   * - 1.0
+     - 1.0
+     - 4
+     - 6
+     - pass
+   * - 2.0
+     - 0.5
+     - 3
+     - 4
+     - pass
+   * - 1.0
+     - 5.0
+     - 2
+     - 4
+     - pass (optically thick, :math:`\Sigma_t L = 5`)
+   * - 0.5
+     - 2.0
+     - 4
+     - 4
+     - pass (short slab)
+
+The :math:`p=6` parametrisation is particularly informative: the
+moment recursion :eq:`peierls-moment-J-E1` is exercised at
+:math:`m=0,1,\dots,5` and the Vandermonde
+:eq:`peierls-moment-vandermonde` is the :math:`6\times 6` system
+hardest to condition in float arithmetic. The mpmath-:math:`\mathrm{dps}=30`
+solve preserves :math:`\sim 28` digits, comfortably below the
+:math:`10^{-12}` test gate.
+
+**Gate 2 — moment vs legacy E\ :sub:`1` Nyström, heterogeneous slabs.**
+Same gate, three two-region parametrizations:
+
+.. list-table:: Heterogeneous-slab moment vs legacy gate
+   (:func:`test_slab_moments_heterogeneous_match_legacy`).
+   Two regions, panel grid respects material boundary.
+   :header-rows: 1
+
+   * - region thicknesses
+     - :math:`\Sigma_t` regions
+     - :math:`n_{\text{panels per region}}`
+     - :math:`p`
+     - status
+   * - [1.0, 1.0]
+     - [1.0, 0.5]
+     - 2
+     - 4
+     - pass
+   * - [0.5, 1.5]
+     - [2.0, 0.3]
+     - 3
+     - 4
+     - pass
+   * - [1.0, 0.5]
+     - [0.8, 4.0]
+     - 4
+     - 4
+     - pass
+
+The third parametrisation is the most demanding: a thin
+optically-thick region (:math:`\Sigma_t L = 4 \cdot 0.5 = 2`) directly
+adjacent to a thicker optically-thin region (:math:`\Sigma_t L = 0.8`).
+The cumulative-tau walker (:math:`\Delta` from Step 1 of the slab
+specialisation above) must compose the two regions correctly to give
+the right segment-:math:`u` endpoints; a sign-flip or material-region
+indexing bug would surface here as a per-cross-region :math:`K[i,j]`
+discrepancy. All :math:`(i, j)` entries pass :math:`10^{-12}`.
+
+**Gate 3 — moment vs adaptive polar reference, element-wise.** Spot-check
+five entries against
+:func:`~orpheus.derivations.peierls_reference.slab_polar_K_vol_element`,
+which performs the polar-form integral with nested adaptive
+:math:`\texttt{mpmath.quad}` (:func:`test_slab_moments_element_matches_polar_reference`,
+:math:`L=1`, :math:`\Sigma_t=1`, 2 panels :math:`p=4`):
+
+.. list-table:: Moment-form K vs adaptive polar reference,
+   element-wise. Tolerance :math:`10^{-10}`.
+   :header-rows: 1
+
+   * - :math:`(i, j)`
+     - role
+     - status
+   * - :math:`(0, 0)`
+     - leftmost-observer self-contribution
+     - pass
+   * - :math:`(0, N-1)`
+     - leftmost observer to rightmost source
+     - pass
+   * - :math:`(N/2, N/2)`
+     - middle-of-slab self-contribution
+     - pass
+   * - :math:`(N-1, 0)`
+     - rightmost observer to leftmost source
+     - pass
+   * - :math:`(1, 3)`
+     - cross-panel arbitrary entry
+     - pass
+
+The :math:`10^{-10}` floor (vs :math:`10^{-12}` in Gates 1–2) reflects
+the adaptive :math:`\texttt{mpmath.quad}` reference's own discretisation
+limit; the moment form itself is closer to mpmath ULP.
+
+**Gate 0 — moment recursion vs mpmath.quad (term verification).**
+Underneath all of the above sits :mod:`tests.derivations.test_peierls_moments`,
+which verifies the closed-form moment recursions term-by-term against
+:func:`mpmath.quad` of the same integrand:
+
+.. list-table:: L0 term-verification gates for the closed-form
+   moment recursions. 32 parametrisations total
+   (:math:`z \in \{10^{-3}, 10^{-2}, 0.1, 0.5, 1, 2.5, 5, 10, 25\}`,
+   :math:`m \in \{0, 1, \dots, 6\}`).
+   :header-rows: 1
+
+   * - moment family
+     - tolerance
+     - basis
+   * - :math:`J_m^{E_1}` (slab)
+     - :math:`10^{-13}`
+     - integration by parts → :eq:`peierls-moment-J-E1`
+   * - :math:`J_m^{\mathrm{Ki}_1}` (cylinder)
+     - :math:`10^{-12}`
+     - repeated IBP → :eq:`peierls-moment-J-Ki1`
+   * - :math:`J_m^{e^{-u}}` (sphere)
+     - :math:`10^{-15}`
+     - direct via :math:`\gamma(m+1, z)`
+
+The slightly looser :math:`\mathrm{Ki}_1` tolerance reflects the
+small-:math:`z` cancellation in :eq:`peierls-moment-J-Ki1` between the
+boundary :math:`m!\,\mathrm{Ki}_{m+2}(0)` term and the sum of
+:math:`\mathrm{Ki}_{q+2}(z)` terms; even with mpmath-native :math:`\mathrm{Ki}_n(0)`
+constants, the cancellation reduces working precision by 2-3 digits
+at :math:`z = 10^{-3}`. This does not affect the K-matrix gate because
+the segment endpoint optical depths in any practical slab/cylinder
+geometry are :math:`> 10^{-3}` by orders of magnitude.
+
+Together these four gates establish that the moment-form K matrix
+**equals** the legacy adaptive references at the :math:`10^{-12}`
+level, with the underlying recursions verified at :math:`10^{-13}` or
+better. The :math:`10^{-12}` gate is well below the tolerance of the
+power-iteration eigenvalue solver (:math:`10^{-10}` typical) so the
+moment form is a drop-in replacement.
+
+
+Subsection — Performance characteristics
+----------------------------------------
+
+The moment-form slab K assembly is dominated by two costs:
+
+1. The closed-form moment vector evaluation
+   :func:`~orpheus.derivations.peierls_moments.slab_segment_moments_mp`,
+   which performs :math:`2 (p+1)` evaluations of
+   :math:`\mathrm{mpmath.gammainc}` per segment plus two
+   :math:`\mathrm{mpmath.expint}(1, \cdot)` evaluations.
+2. The :math:`p \times p` Vandermonde LU solve at mpmath ``dps`` precision.
+
+For a representative :math:`N = 24, p = 4, n_{\text{panels}} = 6`
+homogeneous problem at :math:`\mathrm{dps} = 30`, the K assembly takes
+:math:`\sim 60` ms wall-clock; for :math:`p = 6` the same problem takes
+:math:`\sim 200` ms. By comparison the legacy :math:`E_1` Nyström at
+the same precision and same K size takes :math:`\sim 800` ms, dominated
+by adaptive :math:`\texttt{mpmath.quad}` calls (each adaptive call
+spends :math:`\sim 50` integrand evaluations at :math:`\mathrm{dps}=25`).
+The moment form is therefore both **simpler** (closed form vs
+adaptive) and **faster** (no adaptive sub-grid management).
+
+A future optimisation is to perform the Vandermonde solve in
+**float precision** when the panel-node :math:`u`-spread is wide
+enough that the system is well-conditioned (i.e. for self-panels and
+near-observer source panels). The conditioning is
+:math:`\kappa_2(\mathbf V) \sim ((\xi_p - \xi_0)\,\Sigma_t / \langle u \rangle)^{-(p-1)}`
+roughly; for :math:`\langle u \rangle \lesssim 5` (within a few mean
+free paths) the condition number is :math:`\le 10^{8}` at :math:`p=4`
+and a float solve is safe. For more distant source panels the mpmath
+solve is required; a hybrid switch could shave another :math:`\sim 3\times`
+off the wall-clock without compromising precision.
+
+This optimisation is **not** currently scheduled — the :math:`200`-ms
+build at :math:`p=6` is a one-shot cost amortised across many
+power-iteration steps, and rank-:math:`N` BC-mode K builds reuse the
+same volume kernel. Profile first if K-build time becomes a bottleneck.
+
+
+Subsection — References
+-----------------------
+
+The moment-form architecture and its implementation rest on the
+following primary sources:
+
+- [LewisMiller1984]_ Appendix C — slab CP polynomial-source
+  integration-by-parts identity for :math:`\int_0^z u^m E_1(u)\,\mathrm du`.
+  Closest single-source statement of the slab moment recursion
+  :eq:`peierls-moment-J-E1`. See also Chapter 5 of the same volume for the
+  "exponential integral identity" used here at :math:`m=0`.
+- [Hebert2020]_ §3.2-3.5 — modern restatement of the slab
+  (§3.2-3.3) and cylindrical (§3.4-3.5) polynomial-source CP recursions
+  in the language of integration-by-parts moment expansions. Hébert is
+  the most accessible textbook reference for a reader implementing the
+  moment form from scratch.
+- [Stamm1983]_ Chapters 4-6 — the canonical derivation of the
+  cylinder Bickley-recursion family, including the Wallis closed form
+  :math:`\mathrm{Ki}_n(0) = (\sqrt\pi/2)\,\Gamma(n/2)/\Gamma((n+1)/2)`
+  used to seed the boundary terms in :eq:`peierls-moment-J-Ki1`.
+- [AbramowitzStegun1964]_ §5.1.32 — the underlying recursion
+  :math:`E_n'(u) = -E_{n-1}(u)` and the boundary behaviour
+  :math:`u^{m+1} E_1(u) \to 0` as :math:`u \to 0` that justifies dropping
+  the lower limit in the integration by parts. §11.2 covers the
+  Bickley-Naylor :math:`\mathrm{Ki}_n` identities used in
+  :eq:`peierls-moment-J-Ki1`.
+- [Bickley]_ — original 1935 introduction of the Bickley-Naylor family
+  with closed-form differentiation and integration rules. The identities
+  :math:`\mathrm{Ki}_n'=-\mathrm{Ki}_{n-1}` and
+  :math:`\int\mathrm{Ki}_n\,\mathrm du = -\mathrm{Ki}_{n+1}` come from
+  this paper.
+
+Implementations and tests:
+
+- :mod:`orpheus.derivations.peierls_moments` — closed-form moment
+  vector implementations (:func:`~orpheus.derivations.peierls_moments.e_n_cumulative_moments`
+  / :func:`~orpheus.derivations.peierls_moments.ki_n_cumulative_moments`
+  / :func:`~orpheus.derivations.peierls_moments.exp_cumulative_moments`)
+  and per-segment differences (:func:`~orpheus.derivations.peierls_moments.slab_segment_moments_mp`
+  / :func:`~orpheus.derivations.peierls_moments.cylinder_segment_moments_mp`
+  / :func:`~orpheus.derivations.peierls_moments.sphere_segment_moments_mp`).
+- :func:`~orpheus.derivations.peierls_geometry._build_volume_kernel_slab_moments` —
+  slab K assembly via :eq:`peierls-moment-K-assembly`.
+- :func:`~orpheus.derivations.peierls_geometry._build_volume_kernel_curvilinear_moments` —
+  cylinder/sphere K assembly via the kernel-natural moment form.
+- :mod:`tests.derivations.test_peierls_moments` — L0 gates for the
+  closed-form moment recursions (32 parametrisations).
+- :mod:`tests.derivations.test_peierls_slab_moments` — L1 equivalence
+  gates for the slab K matrix (8 parametrisations + element-wise spot
+  check).
+- :file:`derivations/diagnostics/diag_slab_polar_outer_mu_structure.py`
+  and :file:`derivations/diagnostics/diag_slab_polar_glaguerre.py` —
+  diagnostic scripts confirming the polynomial-in-:math:`e^{-v}` defect
+  of the predecessor τ-Laguerre approach.
 
 
 Motivation and scope

@@ -59,8 +59,6 @@ from ._kernels import (  # noqa: F401
     ki_n_float,
     ki_n_mp,
 )
-
-
 # ═══════════════════════════════════════════════════════════════════════
 # Gauss-Legendre helpers (geometry-agnostic)
 # ═══════════════════════════════════════════════════════════════════════
@@ -251,9 +249,7 @@ class CurvilinearGeometry:
     kind: str
 
     def __post_init__(self) -> None:
-        if self.kind not in (
-            "slab-polar", "cylinder-1d", "cylinder-polar", "sphere-1d",
-        ):
+        if self.kind not in ("slab-polar", "cylinder-1d", "sphere-1d"):
             raise ValueError(f"Unsupported geometry kind {self.kind!r}")
 
     # ── geometric constants ───────────────────────────────────────────
@@ -264,7 +260,6 @@ class CurvilinearGeometry:
         return {
             "slab-polar": 3,
             "cylinder-1d": 2,
-            "cylinder-polar": 3,  # the z-integration is exposed explicitly
             "sphere-1d": 3,
         }[self.kind]
 
@@ -274,7 +269,6 @@ class CurvilinearGeometry:
         return {
             "slab-polar": 4.0 * np.pi,
             "cylinder-1d": 2.0 * np.pi,
-            "cylinder-polar": 2.0 * np.pi,
             "sphere-1d": 4.0 * np.pi,
         }[self.kind]
 
@@ -283,17 +277,10 @@ class CurvilinearGeometry:
         """Composite prefactor absorbing :math:`1/S_d` + azimuth fold + :math:`\\pm` fold.
 
         See the class docstring for the derivation.
-
-        ``cylinder-polar`` shares the ``1/π`` prefactor with ``cylinder-1d``:
-        both represent the same integral operator; cylinder-polar exposes
-        the out-of-plane z-integration as an explicit :math:`\\varphi`
-        integration so the kernel is :math:`e^{-\\tau/\\cos\\varphi}` instead
-        of the pre-integrated :math:`\\mathrm{Ki}_1(\\tau)`.
         """
         return {
             "slab-polar": 0.5,
             "cylinder-1d": 1.0 / np.pi,
-            "cylinder-polar": 1.0 / np.pi,
             "sphere-1d": 0.5,
         }[self.kind]
 
@@ -648,7 +635,7 @@ class CurvilinearGeometry:
         a consequence of both escape and emergence being angular integrals
         of the same point kernel over the same solid-angle domain.
         """
-        if self.kind in ("cylinder-1d", "cylinder-polar"):
+        if self.kind == "cylinder-1d":
             return float(ki_n_mp(2, float(tau), dps))
         return float(mpmath.exp(-mpmath.mpf(tau)))
 
@@ -662,7 +649,7 @@ class CurvilinearGeometry:
         :math:`r\,\mathrm d r\,\mathrm d\beta`).
         Sphere (:math:`d = 3`): returns :math:`r^2`.
         """
-        if self.kind in ("cylinder-1d", "cylinder-polar"):
+        if self.kind == "cylinder-1d":
             return r
         return r * r
 
@@ -674,7 +661,7 @@ class CurvilinearGeometry:
         - Cylinder: :math:`2\\pi R` (lateral surface per unit z).
         - Sphere:   :math:`4\\pi R^2` (full spherical surface area).
         """
-        if self.kind in ("cylinder-1d", "cylinder-polar"):
+        if self.kind == "cylinder-1d":
             return 2.0 * np.pi * R
         return 4.0 * np.pi * R * R
 
@@ -694,7 +681,7 @@ class CurvilinearGeometry:
         - Sphere (:math:`A_d = 4\pi R^2`, :math:`A_j = 4\pi r_j^2 w_j`):
           ratio :math:`A_j / A_d = r_j^2 w_j / R^{2}`, divisor :math:`R^{2}`.
         """
-        if self.kind in ("cylinder-1d", "cylinder-polar"):
+        if self.kind == "cylinder-1d":
             return R
         return R * R
 
@@ -702,420 +689,194 @@ class CurvilinearGeometry:
 # Convenience singletons
 SLAB_POLAR_1D = CurvilinearGeometry(kind="slab-polar")
 CYLINDER_1D = CurvilinearGeometry(kind="cylinder-1d")
-CYLINDER_POLAR_1D = CurvilinearGeometry(kind="cylinder-polar")
 SPHERE_1D = CurvilinearGeometry(kind="sphere-1d")
 
 
+
 # ═══════════════════════════════════════════════════════════════════════
-# Slab polar-form assembly — τ-coordinate Gauss-Laguerre (principled)
+# Unified verification: adaptive mpmath.quad over polar form
 # ═══════════════════════════════════════════════════════════════════════
 
-def _build_volume_kernel_slab_tau_laguerre(
+def K_vol_element_adaptive(
     geometry: CurvilinearGeometry,
+    i: int,
+    j: int,
     r_nodes: np.ndarray,
     panel_bounds: list[tuple[float, float, int, int]],
     radii: np.ndarray,
     sig_t: np.ndarray,
-    n_angular: int,
-    n_rho: int,
-    dps: int = 30,
-) -> np.ndarray:
-    r"""Slab K-matrix via the plan's principled quadrature.
+    *,
+    dps: int = 50,
+) -> "mpmath.mpf":
+    r"""Unified K-matrix element via adaptive :func:`mpmath.quad` over
+    the polar form. **The single verification primitive** for slab,
+    cylinder, and sphere Peierls operators (and, by extension, future
+    2-D MoC verification).
 
-    * **Outer (μ)**: exp-stretched :math:`v = -\ln|\mu|` substitution
-      (plan §6). Gauss-Laguerre on :math:`v \in [0, \infty)` absorbs
-      the :math:`e^{-v}` Jacobian and handles the integrable log-like
-      structure at :math:`\mu = 0`. Two branches (:math:`\mu>0` and
-      :math:`\mu<0`).
-
-    * **Inner (τ)**: τ-coordinate transform (plan §5 / Chapter 5). The
-      kernel becomes :math:`e^{-\tau}`. Subdivide :math:`\tau` at
-      panel-boundary crossings where the Lagrange basis
-      :math:`L_j(r'(\tau))` STEPS (it is zero outside its support
-      panel), then apply Gauss-Legendre on each smooth sub-interval.
-      The final sub-interval extends to :math:`\tau_{\max}` (ray exit
-      from the slab); for grazing rays :math:`\tau_{\max}` is large
-      but the :math:`e^{-\tau}` factor kills contributions beyond a
-      few MFP, so a dyadic :math:`\tau`-cap on the final sub-interval
-      handles the open-ended tail with just a handful of
-      Gauss-Legendre segments.
-
-    For each ray :math:`\mu_\pm`:
+    Computes
 
     .. math::
 
-       \int_0^{\tau_{\max}}\!e^{-\tau}\,
-           \frac{L_j(r'(\tau))}{\Sigma_t(r'(\tau))}\,\mathrm d\tau
-       \;=\; \sum_{\text{sub-int } s}
-         \int_{\tau_s}^{\tau_{s+1}}\!e^{-\tau}\,\frac{L_j}{\Sigma_t}\,
-         \mathrm d\tau.
+       K_{ij} \;=\; \Sigma_t(r_i)\,C_d \int_{\Omega_d}\!\!
+                    W_\Omega(\Omega)\,\mathrm d\Omega
+                    \int_0^{\rho_{\max}(r_i, \Omega)}\!\!
+                    \kappa_d(\tau(r_i, \Omega, \rho))\,
+                    L_j(r'(\rho, \Omega, r_i))\,\mathrm d\rho
 
-    Gauss-Legendre with :math:`n_\rho` nodes on each sub-interval of
-    length :math:`\le \tau_{\rm cap}` resolves the
-    :math:`e^{-\tau}\cdot\text{polynomial}(\tau)` integrand
-    spectrally.
+    via nested adaptive :func:`mpmath.quad` with breakpoint hints at:
 
-    This assembly is **mathematically equivalent** to the legacy
-    :math:`E_1` Nyström in :mod:`peierls_slab`: plan §6.2's identity
-    :math:`\int_0^\infty e^{-\Sigma_t L e^v}\,\mathrm dv = E_1(\Sigma_t L)`
-    is the scalar version of the equivalence, and
-    :func:`~peierls_reference.slab_polar_K_vol_element` is the
-    adaptive-mpmath verification of it at machine precision.
+    - **Outer angular**: tangent-to-interior-boundary critical angles
+      for cylinder / sphere; ``μ = 0`` split for slab (grazing-ray
+      stiffness).
+    - **Inner radial**: panel-boundary crossings of :math:`r'(\rho)`
+      along the ray.
+
+    Achieves machine precision uniformly across geometries; the only
+    geometry-specific code is the four primitives (``ray_direction_cosine``,
+    ``rho_max``, ``source_position``, ``optical_depth_along_ray``,
+    ``volume_kernel_mp``) on :class:`CurvilinearGeometry`. Performance
+    is intentionally not optimized — this is the verification reference,
+    cached by callers as needed.
+
+    Parameters
+    ----------
+    geometry
+        Geometry instance providing the polar primitives.
+    i, j
+        Observer node index, source basis index.
+    r_nodes, panel_bounds, radii, sig_t
+        Standard Nyström inputs.
+    dps
+        mpmath working precision (decimal digits).
+
+    Returns
+    -------
+    mpmath.mpf
+        :math:`K[i, j]` at ``dps`` precision.
     """
-    r_nodes = np.asarray(r_nodes, dtype=float)
-    radii = np.asarray(radii, dtype=float)
-    sig_t = np.asarray(sig_t, dtype=float)
-    # Force panel_bounds endpoints to Python float (mpmath.mpf inputs
-    # would propagate through the inner loop as `object` dtype and crash
-    # the numpy K += ... update).
-    panel_bounds = [
+    r_nodes_arr = np.asarray(r_nodes, dtype=float)
+    radii_arr = np.asarray(radii, dtype=float)
+    sig_t_arr = np.asarray(sig_t, dtype=float)
+    panel_bounds_f = [
         (float(pa), float(pb), int(i_start), int(i_end))
         for (pa, pb, i_start, i_end) in panel_bounds
     ]
-    N = len(r_nodes)
-    L = float(radii[-1])
+    R = float(radii_arr[-1])
 
-    # Panel-boundary radii (Lagrange-basis step locations along the ray).
+    r_i = float(r_nodes_arr[i])
+    ki = geometry.which_annulus(r_i, radii_arr)
+    sig_t_i = float(sig_t_arr[ki])
+
     panel_boundaries_r = sorted(
-        {pa for (pa, pb, _, _) in panel_bounds}
-        | {pb for (pa, pb, _, _) in panel_bounds}
+        {pa for (pa, pb, _, _) in panel_bounds_f}
+        | {pb for (pa, pb, _, _) in panel_bounds_f}
     )
-    interior_boundaries_r = [
-        r for r in panel_boundaries_r if 0.0 < r < L
-    ]
-
-    # Inner quadrature: Gauss-Legendre reference nodes (used on each
-    # τ-sub-interval). The integrand on each sub-interval is
-    # e^{-τ} × polynomial(τ) which GL handles spectrally for moderate
-    # n_rho.
-    ref_gl_nodes, ref_gl_wts = gl_nodes_weights(n_rho, dps)
-    ref_gl_nodes = np.array([float(x) for x in ref_gl_nodes])
-    ref_gl_wts = np.array([float(w) for w in ref_gl_wts])
-
-    # Outer quadrature: Gauss-Laguerre in v (= -ln|μ|).
-    v_nodes, v_weights = gauss_laguerre_nodes_weights(n_angular, dps)
-
-    # Dyadic τ-cap for the open tail (the final sub-interval from the
-    # last panel crossing out to τ_max). Keeps each GL chunk well-
-    # resolved when τ_max is large (grazing rays).
-    tau_cap = 4.0
-
-    def _tau_subintervals_for_ray(x_i: float, mu: float) -> list[float]:
-        """τ values where ρ(τ) crosses a panel boundary or reaches
-        the slab exit (τ_max). Used as GL subdivision breakpoints."""
-        if mu > 0.0:
-            rho_max = (L - x_i) / mu
-        else:
-            rho_max = -x_i / mu
-        # Interior crossings as ρ values
-        rho_cross: list[float] = []
-        for r_b in interior_boundaries_r:
-            rho = (r_b - x_i) / mu
-            if 1e-15 < rho < rho_max - 1e-15:
-                rho_cross.append(rho)
-        rho_cross.sort()
-
-        # Convert ρ breakpoints to τ, walking through regions
-        tau_breaks = [0.0]
-        ρ_prev = 0.0
-        for ρ in (*rho_cross, rho_max):
-            x_mid = x_i + 0.5 * (ρ_prev + ρ) * mu
-            k = geometry.which_annulus(x_mid, radii)
-            sigma_k = float(sig_t[k])
-            tau_breaks.append(tau_breaks[-1] + sigma_k * (ρ - ρ_prev))
-            ρ_prev = ρ
-
-        # Dyadic τ-cap on the last sub-interval (from last panel
-        # crossing out to τ_max). Handles grazing rays.
-        out = tau_breaks[:-1]
-        t_last = tau_breaks[-1]
-        t_prev = out[-1]
-        cap = tau_cap
-        while t_last - t_prev > cap:
-            out.append(t_prev + cap)
-            t_prev = out[-1]
-            cap *= 2.0
-        out.append(t_last)
-        return out
-
-    K = np.zeros((N, N))
-
-    for i in range(N):
-        x_i = float(r_nodes[i])
-        sig_t_i_idx = geometry.which_annulus(x_i, radii)
-        sig_t_i = float(sig_t[sig_t_i_idx])
-
-        for sign in (+1.0, -1.0):
-            for vk in range(n_angular):
-                v = float(v_nodes[vk])
-                mu = sign * math.exp(-v)
-                # Gauss-Laguerre absorbs the e^{-v} Jacobian of the
-                # μ = ±e^{-v} substitution, so the outer weight is just
-                # v_weights[vk] on each branch.
-                outer_w = 0.5 * sig_t_i * float(v_weights[vk])
-
-                tau_subs = _tau_subintervals_for_ray(x_i, mu)
-                # GL on each [τ_s, τ_{s+1}] sub-interval
-                for s_idx in range(len(tau_subs) - 1):
-                    τ_lo = tau_subs[s_idx]
-                    τ_hi = tau_subs[s_idx + 1]
-                    if τ_hi - τ_lo < 1e-18:
-                        continue
-                    h = 0.5 * (τ_hi - τ_lo)
-                    mid = 0.5 * (τ_lo + τ_hi)
-                    for m in range(n_rho):
-                        τ = h * ref_gl_nodes[m] + mid
-                        τ_w = h * ref_gl_wts[m]
-                        # Invert τ → ρ along this ray
-                        rho = _invert_tau_slab(x_i, mu, τ, radii, sig_t)
-                        if rho is None:
-                            continue
-                        x_prime = x_i + rho * mu
-                        if x_prime < 0.0 or x_prime > L:
-                            continue
-                        kp = geometry.which_annulus(x_prime, radii)
-                        sig_t_src = float(sig_t[kp])
-                        if sig_t_src <= 0.0:
-                            continue
-                        L_vals = lagrange_basis_on_panels(
-                            r_nodes, panel_bounds, x_prime,
-                        )
-                        # Integrand: e^{-τ} × L_j / Σ_t(r'). The e^{-τ}
-                        # factor is NOT embedded in the GL weight (we
-                        # use standard GL, not Laguerre-in-sub-interval),
-                        # so apply it explicitly.
-                        K[i, :] += (
-                            outer_w * τ_w * math.exp(-τ) / sig_t_src
-                            * L_vals
-                        )
-
-    return K
-
-
-def _invert_tau_slab(
-    x_i: float,
-    mu: float,
-    tau: float,
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-) -> float | None:
-    r"""Invert the slab optical-depth map: given ``x_i``, direction
-    cosine ``μ``, and cumulative optical depth ``τ``, return the
-    :math:`\rho` such that :math:`\int_0^\rho \Sigma_t(x_i + s\mu)\,
-    \mathrm ds = \tau`.
-
-    Returns ``None`` if :math:`\tau` exceeds the ray's total optical
-    depth through the slab (ray has exited).
-
-    Piecewise-linear inverse: step through slab regions along the ray,
-    accumulating τ; when the target τ lies in a region, solve linearly
-    within that region.
-    """
-    if mu == 0.0:
-        return None  # ray parallel to slab face — zero-measure case
-    radii = np.asarray(radii, dtype=float)
-    sig_t = np.asarray(sig_t, dtype=float)
-    L = float(radii[-1])
-    # Slab endpoints: 0 and L. Interior boundaries: radii[:-1] (r_1..r_{N-1})
-    # where N = number of regions.
-    n_regions = len(radii)
-    # Ray hits slab boundaries at ρ values
-    if mu > 0.0:
-        rho_exit = (L - x_i) / mu
-    else:
-        rho_exit = -x_i / mu
-    # Step through interior crossings along the ray, sorted by ρ
-    crossings = [0.0]
-    for r_b in radii[:-1]:
-        r_b_f = float(r_b)
-        s = (r_b_f - x_i) / mu
-        if 1e-18 < s < rho_exit:
-            crossings.append(s)
-    crossings.append(rho_exit)
-    crossings.sort()
-    # Walk each segment accumulating τ
-    tau_accum = 0.0
-    for seg_idx in range(len(crossings) - 1):
-        s_lo = crossings[seg_idx]
-        s_hi = crossings[seg_idx + 1]
-        x_mid = x_i + 0.5 * (s_lo + s_hi) * mu
-        # Find the slab region this segment lies in
-        k_region = 0
-        for kk in range(n_regions):
-            if x_mid < float(radii[kk]):
-                k_region = kk
-                break
-            k_region = n_regions - 1
-        sigma = float(sig_t[k_region])
-        tau_seg = sigma * (s_hi - s_lo)
-        if tau_accum + tau_seg >= tau:
-            # τ target is in this segment
-            if sigma <= 0.0:
-                return None  # cavity — τ doesn't advance here, skip
-            return s_lo + (tau - tau_accum) / sigma
-        tau_accum += tau_seg
-    return None  # τ target exceeds ray's total optical depth
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Cylinder polar-form assembly — explicit out-of-plane φ integration
-# ═══════════════════════════════════════════════════════════════════════
-
-def _build_volume_kernel_cylinder_phi(
-    geometry: CurvilinearGeometry,
-    r_nodes: np.ndarray,
-    panel_bounds: list[tuple[float, float, int, int]],
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    n_angular: int,
-    n_rho: int,
-    n_phi: int = 8,
-    dps: int = 30,
-) -> np.ndarray:
-    r"""Cylinder K-matrix with the out-of-plane :math:`\varphi`
-    integration exposed explicitly (issue #116).
-
-    The cylindrical Peierls operator's 2-D in-plane polar form uses the
-    Bickley-Naylor kernel :math:`\mathrm{Ki}_1(\tau)` to absorb the
-    z-axis (out-of-plane) integration of the 3-D point kernel:
-
-    .. math::
-
-       \mathrm{Ki}_1(\tau) \;=\; \int_0^{\pi/2} e^{-\tau/\cos\varphi}\,
-           \mathrm d\varphi.
-
-    Exposing :math:`\varphi` as an explicit quadrature dimension
-    reduces the cylinder kernel to the SAME form as slab and sphere —
-    an exponential :math:`e^{-\tau/\cos\varphi}` — eliminating any
-    reliance on Bickley evaluators (``ki_n_float``, ``ki_n_mp``).
-
-    Mathematical equivalence: for any integrand using
-    :math:`\mathrm{Ki}_1(\tau(\rho))`, substituting the defining integral
-    and swapping quadratures gives an identical result to the triple
-    integral :math:`\int\!\mathrm d\varphi\!\int\!\mathrm d\rho\,
-    e^{-\tau/\cos\varphi}`. At quadrature level, a ``n_phi``-point GL
-    on :math:`[0, \pi/2]` replaces one Bickley evaluation with
-    ``n_phi`` exponential evaluations — each cheap, each machine-
-    precision.
-
-    Shared with the cylinder-1d path: β (in-plane angle),
-    :math:`\rho` (2-D radial distance), the
-    :func:`optical_depth_along_ray` walker, panel-boundary /
-    tangent-angle subdivisions (issue #114 fix). Only the inner
-    kernel evaluation changes.
-    """
-    r_nodes = np.asarray(r_nodes, dtype=float)
-    radii = np.asarray(radii, dtype=float)
-    sig_t = np.asarray(sig_t, dtype=float)
-    panel_bounds = [
-        (float(pa), float(pb), int(i_start), int(i_end))
-        for (pa, pb, i_start, i_end) in panel_bounds
-    ]
-    N = len(r_nodes)
-    R = float(radii[-1])
+    interior_boundaries_r = np.array(
+        [r for r in panel_boundaries_r if 0.0 < r < R],
+        dtype=float,
+    )
 
     omega_low, omega_high = geometry.angular_range
-    ref_omega_nodes, ref_omega_wts = gl_nodes_weights(n_angular, dps)
-    ref_omega_nodes = np.array([float(x) for x in ref_omega_nodes])
-    ref_omega_wts = np.array([float(w) for w in ref_omega_wts])
+    pref = mpmath.mpf(geometry.prefactor)
 
-    ref_rho_nodes, ref_rho_wts = gl_nodes_weights(n_rho, dps)
-    ref_rho_nodes = np.array([float(x) for x in ref_rho_nodes])
-    ref_rho_wts = np.array([float(w) for w in ref_rho_wts])
-
-    # Out-of-plane polar angle φ ∈ [0, π/2]: GL quadrature on the
-    # finite interval. The integrand e^{-τ/cos φ} has a maximum at φ=0
-    # (integrand = e^{-τ}) and decays super-exponentially as φ → π/2
-    # (integrand → 0). For typical τ < 10, n_phi = 8 resolves to
-    # machine precision; for larger τ, the integrand concentrates
-    # more sharply at small φ but the overall contribution is
-    # exponentially small anyway.
-    ref_phi_nodes, ref_phi_wts = gl_nodes_weights(n_phi, dps)
-    phi_h = 0.5 * (np.pi / 2)
-    phi_mid = 0.5 * (np.pi / 2)
-    phi_pts = np.array([phi_h * float(x) + phi_mid for x in ref_phi_nodes])
-    phi_wts = np.array([phi_h * float(w) for w in ref_phi_wts])
-    cos_phi_pts = np.cos(phi_pts)
-    inv_cos_phi_pts = 1.0 / cos_phi_pts
-
-    # Sorted unique panel-boundary radii + tangent-angle subdivisions,
-    # identical machinery to the curvilinear path (issue #114 fix).
-    panel_boundaries_r = np.array(sorted(
-        {pa for (pa, pb, _, _) in panel_bounds}
-        | {pb for (pa, pb, _, _) in panel_bounds}
-    ), dtype=float)
-    interior_boundaries_r = panel_boundaries_r[
-        (panel_boundaries_r > 0.0) & (panel_boundaries_r < R)
-    ]
-
-    K = np.zeros((N, N))
-    pref = geometry.prefactor
-
-    for i in range(N):
-        r_i = float(r_nodes[i])
-        ki = geometry.which_annulus(r_i, radii)
-        sig_t_i = float(sig_t[ki])
-
-        tangent_angles = geometry.omega_tangent_angles(
-            r_i, interior_boundaries_r,
+    def integrand_rho(rho_mp, cos_om: float):
+        rho_f = float(rho_mp)
+        rho_max_val = float(geometry.rho_max(r_i, cos_om, R))
+        if rho_f >= rho_max_val or rho_f <= 0:
+            return mpmath.mpf(0)
+        r_prime = float(geometry.source_position(r_i, rho_f, cos_om))
+        if r_prime < 0.0 or r_prime > R:
+            return mpmath.mpf(0)
+        tau = float(geometry.optical_depth_along_ray(
+            r_i, cos_om, rho_f, radii_arr, sig_t_arr,
+        ))
+        kappa = geometry.volume_kernel_mp(tau, dps)
+        L_vals = lagrange_basis_on_panels(
+            r_nodes_arr, panel_bounds_f, r_prime,
         )
-        omega_subintervals = [omega_low, *tangent_angles, omega_high]
+        return mpmath.mpf(kappa) * mpmath.mpf(float(L_vals[j]))
 
-        for t_idx in range(len(omega_subintervals) - 1):
-            om_a = omega_subintervals[t_idx]
-            om_b = omega_subintervals[t_idx + 1]
-            if om_b <= om_a:
-                continue
-            h_om = 0.5 * (om_b - om_a)
-            m_om = 0.5 * (om_a + om_b)
-            omega_pts = h_om * ref_omega_nodes + m_om
-            omega_wts = h_om * ref_omega_wts
-            cos_omegas = geometry.ray_direction_cosine(omega_pts)
-            angular_factor = geometry.angular_weight(omega_pts)
+    def outer_integrand(angular_mp):
+        cos_om = float(geometry.ray_direction_cosine(
+            np.array([float(angular_mp)]),
+        )[0])
+        rho_max_val = float(geometry.rho_max(r_i, cos_om, R))
+        if rho_max_val <= 0.0:
+            return mpmath.mpf(0)
+        # Inner ρ subdivision at panel-boundary crossings.
+        crossings = geometry.rho_crossings_for_ray(
+            r_i, cos_om, rho_max_val, interior_boundaries_r,
+        )
+        breaks = [mpmath.mpf(0)]
+        for rho in crossings:
+            breaks.append(mpmath.mpf(float(rho)))
+        breaks.append(mpmath.mpf(rho_max_val))
+        inner = mpmath.quad(
+            lambda rho: integrand_rho(rho, cos_om),
+            breaks,
+        )
+        ang_factor = float(geometry.angular_weight(
+            np.array([float(angular_mp)]),
+        )[0])
+        return mpmath.mpf(ang_factor) * inner
 
-            for k in range(n_angular):
-                cos_om = cos_omegas[k]
-                rho_max_val = geometry.rho_max(r_i, cos_om, R)
-                if rho_max_val <= 0.0:
-                    continue
+    with mpmath.workdps(dps):
+        # Outer angular subdivision:
+        #   Slab: split at μ = 0 (grazing-ray stiffness).
+        #   Curvilinear: split at tangent angles to interior shells.
+        if geometry.kind == "slab-polar":
+            outer_breaks = [
+                mpmath.mpf(omega_low),
+                mpmath.mpf(0),
+                mpmath.mpf(omega_high),
+            ]
+        else:
+            tangent_angles = geometry.omega_tangent_angles(
+                r_i, interior_boundaries_r,
+            )
+            outer_breaks = [mpmath.mpf(omega_low)]
+            for ang in tangent_angles:
+                outer_breaks.append(mpmath.mpf(float(ang)))
+            outer_breaks.append(mpmath.mpf(omega_high))
 
-                crossings = geometry.rho_crossings_for_ray(
-                    r_i, cos_om, rho_max_val, interior_boundaries_r,
-                )
-                rho_subintervals = [0.0, *crossings, rho_max_val]
+        omega_integral = mpmath.quad(outer_integrand, outer_breaks)
 
-                outer_weight = (
-                    pref * sig_t_i * omega_wts[k] * angular_factor[k]
-                )
-                for s_idx in range(len(rho_subintervals) - 1):
-                    rho_a = rho_subintervals[s_idx]
-                    rho_b = rho_subintervals[s_idx + 1]
-                    if rho_b <= rho_a:
-                        continue
-                    h_r = 0.5 * (rho_b - rho_a)
-                    m_r = 0.5 * (rho_a + rho_b)
-                    rho_pts = h_r * ref_rho_nodes + m_r
-                    rho_wts = h_r * ref_rho_wts
+    return mpmath.mpf(sig_t_i) * pref * omega_integral
 
-                    for m in range(n_rho):
-                        rho = rho_pts[m]
-                        r_prime = geometry.source_position(r_i, rho, cos_om)
-                        tau = geometry.optical_depth_along_ray(
-                            r_i, cos_om, rho, radii, sig_t,
-                        )
-                        L_vals = lagrange_basis_on_panels(
-                            r_nodes, panel_bounds, float(r_prime),
-                        )
-                        # Inner φ-integration absorbing Ki_1:
-                        #   Ki_1(τ) = ∫_0^{π/2} e^{-τ/cos φ} dφ
-                        # Vectorised over φ quadrature nodes.
-                        kappa_phi_sum = float(
-                            np.sum(phi_wts * np.exp(-tau * inv_cos_phi_pts))
-                        )
-                        weight = outer_weight * rho_wts[m] * kappa_phi_sum
-                        K[i, :] += weight * L_vals
 
+def build_volume_kernel_adaptive(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    panel_bounds: list[tuple[float, float, int, int]],
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    *,
+    dps: int = 30,
+) -> np.ndarray:
+    r"""Assemble the K matrix by calling :func:`K_vol_element_adaptive`
+    once per (i, j) pair. **The unified verification assembly** for all
+    geometries.
+
+    Returns float array (cast from mpmath at end). For mpmath-typed
+    output, call :func:`K_vol_element_adaptive` directly per element.
+
+    No ``n_angular`` / ``n_rho`` / ``n_phi`` parameters — adaptive
+    quadrature self-determines node counts to reach machine precision.
+    Performance scales as :math:`O(N^2 \cdot \text{cost per quad})`;
+    not intended as a production hot path.
+    """
+    r_nodes_arr = np.asarray(r_nodes, dtype=float)
+    N = len(r_nodes_arr)
+    K = np.zeros((N, N))
+    for i in range(N):
+        for j in range(N):
+            K[i, j] = float(K_vol_element_adaptive(
+                geometry, i, j, r_nodes, panel_bounds, radii, sig_t,
+                dps=dps,
+            ))
     return K
+
+
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1157,28 +918,14 @@ def build_volume_kernel(
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
 
+    # Slab routes through the unified adaptive primitive — there is no
+    # fast slab path in the active code base (the moment-form K assembly
+    # has been archived per GitHub Issue #117 for future production
+    # discrete-CP application). ``n_angular`` / ``n_rho`` / ``n_phi``
+    # are accepted but ignored (mpmath.quad self-determines node count).
     if geometry.kind == "slab-polar":
-        # Slab polar form has μ=0 grazing-ray stiffness that fixed-order
-        # GL on [-1, 1] cannot resolve efficiently — the integrand
-        # concentrates log-like near μ=0. Use the plan's principled
-        # quadrature: exp-stretched μ (outer) + τ-coordinate
-        # Gauss-Laguerre (inner). See :doc:`/theory/peierls_unified` §5,
-        # §6 and post-CP plan Chapters 5 and 6.
-        return _build_volume_kernel_slab_tau_laguerre(
-            geometry, r_nodes, panel_bounds, radii, sig_t,
-            n_angular, n_rho, dps=dps,
-        )
-
-    if geometry.kind == "cylinder-polar":
-        # Cylinder-polar exposes the out-of-plane z-integration (which
-        # :math:`\mathrm{Ki}_1(\tau) = \int_0^{\pi/2} e^{-\tau/\cos\varphi}
-        # \mathrm d\varphi` pre-integrates in cylinder-1d). The kernel
-        # becomes :math:`e^{-\tau/\cos\varphi}` — a pure exponential —
-        # matching slab-polar and sphere. This is the concern-#2 fix
-        # (issue #116) that retires the Bickley evaluator.
-        return _build_volume_kernel_cylinder_phi(
-            geometry, r_nodes, panel_bounds, radii, sig_t,
-            n_angular, n_rho, n_phi=n_phi, dps=dps,
+        return build_volume_kernel_adaptive(
+            geometry, r_nodes, panel_bounds, radii, sig_t, dps=dps,
         )
 
     N = len(r_nodes)

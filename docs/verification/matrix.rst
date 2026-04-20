@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **925**
+Total tests collected: **938**
 
 V&V level distribution
 ----------------------
@@ -16,11 +16,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 520, 56.2%
-   L1, 241, 26.1%
-   L2, 36, 3.9%
+   L0, 520, 55.4%
+   L1, 254, 27.1%
+   L2, 36, 3.8%
    L3, 0, 0.0%
-   foundation, 117, 12.6%
+   foundation, 117, 12.5%
    unmarked, 11, 1.2%
 
 Tagging source
@@ -32,7 +32,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 835
+   explicit, 848
    verify, 0
    class-name, 46
    func-name, 0
@@ -69,11 +69,12 @@ Module × level grid
    derivations/test_peierls_rank_n_bc, 59, 15, 0, 0, 0, 0
    derivations/test_peierls_rank_n_conservation, 0, 0, 0, 0, 4, 0
    derivations/test_peierls_rank_n_primitives, 19, 0, 0, 0, 0, 0
-   derivations/test_peierls_reference, 0, 16, 0, 0, 0, 0
+   derivations/test_peierls_reference, 0, 25, 0, 0, 0, 0
    derivations/test_peierls_sphere_eigenvalue, 0, 4, 0, 0, 0, 0
    derivations/test_peierls_sphere_geometry, 21, 0, 0, 0, 0, 0
    derivations/test_peierls_sphere_prefactor, 6, 0, 0, 0, 0, 0
    derivations/test_peierls_sphere_white_bc, 0, 4, 0, 0, 0, 0
+   derivations/test_peierls_unified_verification, 0, 4, 0, 0, 0, 0
    diffusion/test_continuous_reference, 0, 8, 0, 0, 0, 0
    diffusion/test_diffusion, 0, 2, 0, 0, 0, 0
    diffusion/test_properties, 3, 0, 0, 0, 0, 0
@@ -131,10 +132,10 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``collision-rate``, 91
    ``alpha-cylindrical``, 74
    ``mm-weights``, 74
+   ``peierls-unified``, 66
    ``multigroup``, 65
    ``ki3-def``, 61
    ``e3-def``, 58
-   ``peierls-unified``, 55
    ``self-slab``, 52
    ``balance-general``, 51
    ``chord-length``, 51
@@ -148,6 +149,7 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``wigner-seitz``, 46
    ``cp-kernel-differential-identities``, 36
    ``keff-mean``, 33
+   ``peierls-equation``, 33
    ``sigma-keff``, 33
    ``flat-source``, 32
    ``cp-keff-update``, 31
@@ -158,7 +160,6 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``neutron-balance``, 31
    ``optical-path``, 31
    ``pcell-from-smat``, 31
-   ``peierls-equation``, 31
    ``pin-from-reciprocity``, 31
    ``rcp-from-double-antideriv``, 31
    ``s-integral``, 31
@@ -287,11 +288,18 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
 Orphan equations
 ----------------
 
-Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **15** of the testable equations found on theory pages are orphan.
+Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **27** of the testable equations found on theory pages are orphan.
 
 - ``e1-decomposition``
 - ``peierls-bc-operator``
 - ``peierls-factored-kernel``
+- ``peierls-moment-J-E1``
+- ``peierls-moment-J-Ki1``
+- ``peierls-moment-K-assembly``
+- ``peierls-moment-K-source-form``
+- ``peierls-moment-contraction``
+- ``peierls-moment-segment``
+- ``peierls-moment-vandermonde``
 - ``peierls-operator-factorisation``
 - ``peierls-operator-form``
 - ``peierls-rank-n-P-esc-moment``
@@ -303,6 +311,11 @@ Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding
 - ``peierls-svd``
 - ``peierls-tensor-G-definition``
 - ``peierls-tensor-P-definition``
+- ``peierls-vacuum-bc-cylinder``
+- ``peierls-vacuum-bc-flux``
+- ``peierls-vacuum-bc-row-sum-gate``
+- ``peierls-vacuum-bc-slab``
+- ``peierls-vacuum-bc-sphere``
 - ``vacuum-bc``
 
 Documented-only equations
