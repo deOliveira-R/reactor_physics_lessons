@@ -325,6 +325,109 @@ class TestRank2SlabKEffKInfConvergence:
                 n_angular=16, n_rho=16, n_surf_quad=16, dps=15,
             )
 
+    @pytest.mark.parametrize("r0", [0.1, 0.2, 0.3])
+    def test_hollow_cyl_rank2_beats_rank1_mark(self, r0):
+        r"""Phase F.4: rank-2 white BC on hollow cylinder beats rank-1
+        Mark for all tested :math:`r_0`. The exact :math:`k_{\rm eff} =
+        k_\infty` identity does NOT close at rank-1-per-face (scalar
+        Lambertian at each surface): on curved surfaces the outgoing
+        angular distribution after reflection carries higher Legendre
+        moments that the scalar-mode closure omits. For small
+        :math:`r_0/R` the residual is already a 10-20× improvement
+        over rank-1 Mark; for larger :math:`r_0` the scalar-mode
+        limitation dominates (rank-N per-face closure — Phase F.5 —
+        would lift it).
+        """
+        from orpheus.derivations.peierls_geometry import (
+            CurvilinearGeometry,
+            build_volume_kernel,
+        )
+
+        sig_t_v, sig_s_v, nu_sig_f_v = 1.0, 0.5, 0.75
+        k_inf = nu_sig_f_v / (sig_t_v - sig_s_v)
+        R_out = 1.0
+        geom = CurvilinearGeometry(kind="cylinder-1d", inner_radius=r0)
+        radii = np.array([R_out])
+        sig_t = np.array([sig_t_v])
+        r_nodes, r_wts, panels = composite_gl_r(
+            radii, 2, 4, dps=15, inner_radius=r0,
+        )
+        K_vol = build_volume_kernel(
+            geom, r_nodes, panels, radii, sig_t,
+            n_angular=24, n_rho=24, dps=15,
+        )
+        N = len(r_nodes)
+        results = {}
+        for tag, refl in (("mark", "mark"), ("white", "white")):
+            K = K_vol + build_closure_operator(
+                geom, r_nodes, r_wts, radii, sig_t,
+                reflection=refl, n_angular=24, n_surf_quad=24, dps=15,
+            ).as_matrix()
+            results[tag] = _solve_k_eff(K, sig_t_v, sig_s_v, nu_sig_f_v)
+        e_mark = abs(results["mark"] - k_inf) / k_inf
+        e_white = abs(results["white"] - k_inf) / k_inf
+        assert e_white < e_mark, (
+            f"r_0={r0}: rank-2 white err={e_white:.3e} must beat "
+            f"rank-1 Mark err={e_mark:.3e}"
+        )
+
+    def test_hollow_cyl_rank2_partial_current_balance_closes(self):
+        r"""The rank-2 tensor :math:`K_{\rm bc} = G R P` on hollow cylinder
+        agrees with the reference partial-current balance
+
+        .. math::
+
+           e = (I - W)^{-1}\,s, \qquad
+           \Sigma_t\,\phi_{\rm bc}(r_i) = \Sigma_t\sum_l \frac{G_{{\rm bc},l}(r_i)}{A_l}\,e_l
+
+        to within quadrature tolerance. This is the algebraic consistency
+        test: whether or not the Wigner-Seitz identity closes to machine
+        precision (it doesn't, per
+        :meth:`test_hollow_cyl_rank2_beats_rank1_mark`), the tensor
+        factorisation itself must be correct.
+        """
+        from orpheus.derivations.peierls_geometry import (
+            CurvilinearGeometry,
+            compute_G_bc_inner,
+            compute_G_bc_outer,
+            compute_P_esc_inner,
+            compute_P_esc_outer,
+            compute_hollow_cyl_transmission,
+        )
+
+        r0, R_out, sig_t_v = 0.3, 1.0, 1.0
+        geom = CurvilinearGeometry(kind="cylinder-1d", inner_radius=r0)
+        radii = np.array([R_out])
+        sig_t = np.array([sig_t_v])
+        r_nodes, r_wts, _ = composite_gl_r(
+            radii, 2, 4, dps=15, inner_radius=r0,
+        )
+        bc = build_closure_operator(
+            geom, r_nodes, r_wts, radii, sig_t,
+            reflection="white", n_angular=24, n_surf_quad=24, dps=15,
+        )
+        # Reference partial-current path
+        W = compute_hollow_cyl_transmission(r0, R_out, radii, sig_t, dps=15)
+        R_eff = np.linalg.inv(np.eye(2) - W)
+        P_out = compute_P_esc_outer(geom, r_nodes, radii, sig_t, n_angular=32, dps=15)
+        P_in = compute_P_esc_inner(geom, r_nodes, radii, sig_t, n_angular=32, dps=15)
+        G_out = compute_G_bc_outer(geom, r_nodes, radii, sig_t, n_surf_quad=32, dps=15)
+        G_in = compute_G_bc_inner(geom, r_nodes, radii, sig_t, n_surf_quad=32, dps=15)
+        s = np.array([
+            np.sum(r_wts * r_nodes * P_out) * 2 * np.pi,
+            np.sum(r_wts * r_nodes * P_in) * 2 * np.pi,
+        ])
+        e_vec = R_eff @ s
+        ref_Kbc_1 = sig_t_v * (
+            G_out * e_vec[0] / (2 * np.pi * R_out)
+            + G_in * e_vec[1] / (2 * np.pi * r0)
+        )
+        Kbc_1 = bc.as_matrix() @ np.ones(len(r_nodes))
+        rel = np.max(np.abs(Kbc_1 - ref_Kbc_1)) / np.max(np.abs(ref_Kbc_1))
+        assert rel < 5e-3, (
+            f"Tensor K_bc·1 vs partial-current reference rel err = {rel:.3e}"
+        )
+
     @pytest.mark.slow
     def test_rank2_error_converges_monotonically_under_refinement(self):
         r"""Mesh-refinement convergence check: doubling n_panels reduces

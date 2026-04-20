@@ -117,8 +117,18 @@ def composite_gl_r(
     n_panels_per_region: int,
     p_order: int,
     dps: int = 30,
+    *,
+    inner_radius: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, list[tuple[float, float, int, int]]]:
-    r"""Composite GL on :math:`[0, R]` with panel breakpoints at annular radii.
+    r"""Composite GL on :math:`[r_0, R]` with panel breakpoints at
+    annular radii.
+
+    For solid geometries (``inner_radius == 0``, the default), nodes
+    cover the full disk :math:`[0, R]`. For hollow cells
+    (``inner_radius > 0``, Phase F.4) nodes cover the annulus
+    :math:`[r_0, R]` only — the cavity :math:`[0, r_0]` carries no
+    source and is excluded from the radial mesh. The inner endpoint
+    :math:`r_0` becomes an additional panel breakpoint.
 
     Shared by cylindrical and spherical Peierls solvers; the panel
     structure accommodates the :math:`\Sigma_t(r)` discontinuities at
@@ -129,9 +139,18 @@ def composite_gl_r(
     composite rule's panels.
     """
     radii = np.asarray(radii, dtype=float)
+    if inner_radius < 0.0:
+        raise ValueError(f"inner_radius must be >= 0, got {inner_radius}")
+    if inner_radius >= float(radii[-1]):
+        raise ValueError(
+            f"inner_radius ({inner_radius}) must be < outer radius "
+            f"({float(radii[-1])})"
+        )
     gl_ref, gl_wt = gl_nodes_weights(p_order, dps)
 
-    breakpoints = [mpmath.mpf(0)] + [mpmath.mpf(float(r)) for r in radii]
+    breakpoints = [mpmath.mpf(inner_radius)] + [
+        mpmath.mpf(float(r)) for r in radii if float(r) > inner_radius
+    ]
     r_all: list = []
     w_all: list = []
     panel_bounds: list[tuple[float, float, int, int]] = []
@@ -1110,6 +1129,21 @@ def build_volume_kernel(
                 if rho_max_val <= 0.0:
                     continue
 
+                # Phase F.4: for a hollow cell, the ray's first-flight
+                # stop is the inner shell r = r_0 if it intersects before
+                # the outer boundary. Cap ρ accordingly — any contribution
+                # beyond that is "after the ray escapes" and must not be
+                # counted in the volumetric integral.
+                if geometry.inner_radius > 0.0:
+                    rho_in_minus, _ = geometry.rho_inner_intersections(
+                        r_i, cos_om,
+                    )
+                    if (
+                        rho_in_minus is not None
+                        and rho_in_minus < rho_max_val
+                    ):
+                        rho_max_val = rho_in_minus
+
                 # Subdivide ρ at panel-boundary crossings — without this,
                 # the Lagrange-basis kinks along the ray are unresolved
                 # and the fixed-order GL rule leaves ~1–5% error per
@@ -1139,6 +1173,16 @@ def build_volume_kernel(
                     for m in range(n_rho):
                         rho = rho_pts[m]
                         r_prime = geometry.source_position(r_i, rho, cos_om)
+                        # Skip source contributions from inside the
+                        # cavity of a hollow cell (Phase F.4): the cavity
+                        # is void and carries no source; the Lagrange
+                        # basis over annular nodes would otherwise
+                        # extrapolate a spurious contribution.
+                        if (
+                            geometry.inner_radius > 0.0
+                            and float(r_prime) < geometry.inner_radius
+                        ):
+                            continue
                         tau = geometry.optical_depth_along_ray(
                             r_i, cos_om, rho, radii, sig_t,
                         )
@@ -1458,6 +1502,7 @@ def compute_P_esc_outer(
 
     P = np.zeros(N)
     is_slab = geometry.kind == "slab-polar"
+    is_hollow = (not is_slab) and geometry.inner_radius > 0.0
     for i in range(N):
         r_i = float(r_nodes[i])
         total = 0.0
@@ -1469,6 +1514,17 @@ def compute_P_esc_outer(
             if is_slab:
                 # Slab outer = face at x=L, reached only for µ > 0.
                 if cos_om <= 0.0:
+                    continue
+            if is_hollow:
+                # Hollow cyl/sph (Phase F.4): rays that strike the inner
+                # shell first exit through the inner boundary and are
+                # counted by compute_P_esc_inner; exclude them here so
+                # that P_esc_outer + P_esc_inner sum to the total escape
+                # probability without double-counting.
+                rho_in_minus, _ = geometry.rho_inner_intersections(
+                    r_i, cos_om,
+                )
+                if rho_in_minus is not None and rho_in_minus < rho_to_outer:
                     continue
             tau = geometry.optical_depth_along_ray(
                 r_i, cos_om, rho_to_outer, radii, sig_t,
@@ -2331,6 +2387,132 @@ def compute_slab_transmission(
     return 2.0 * float(mpmath.expint(3, mpmath.mpf(tau_total)))
 
 
+def compute_hollow_cyl_transmission(
+    r_0: float,
+    R: float,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    dps: int = 25,
+) -> np.ndarray:
+    r"""Surface-to-surface transmission matrix :math:`W` for a
+    homogeneous hollow cylindrical annulus :math:`[r_0, R]` with a
+    pure absorber.
+
+    Returns the :math:`2 \times 2` matrix whose entry :math:`W_{k,l}`
+    is the probability that a unit uniform-isotropic (Lambertian)
+    outgoing current leaving surface :math:`l` re-arrives at surface
+    :math:`k` without collision. The mode convention is:
+    index 0 = outer surface (:math:`r = R`), index 1 = inner
+    (:math:`r = r_0`).
+
+    Closed-form chord decomposition under Lambertian emission
+    (3-D angle fold into :math:`\mathrm{Ki}_3`):
+
+    .. math::
+
+       W_{\rm oo} = \frac{4}{\pi}\!\int_{\alpha_c}^{\pi/2}\!
+           \cos\alpha \,\mathrm{Ki}_3(2\Sigma_t R\cos\alpha)\,\mathrm d\alpha,
+           \qquad \alpha_c = \arcsin(r_0/R),
+
+    (rays from :math:`R` grazing past the cavity, chord
+    :math:`2R\cos\alpha`);
+
+    .. math::
+
+       W_{\rm io} = \frac{4}{\pi}\!\int_0^{\alpha_c}\!
+           \cos\alpha \,\mathrm{Ki}_3\!\bigl(\Sigma_t(R\cos\alpha
+               - \sqrt{r_0^2 - R^2\sin^2\alpha})\bigr)\,\mathrm d\alpha,
+
+    (rays from :math:`R` hitting the inner shell before the opposite
+    outer face, chord only the annular leg). The inner-to-outer
+    transmission follows by reciprocity (the surface-areas enter via
+    :math:`2\pi R \cdot W_{\rm io} = 2\pi r_0 \cdot W_{\rm oi}`):
+
+    .. math::
+
+       W_{\rm oi} = \frac{R}{r_0}\,W_{\rm io}.
+
+    Self-transmission at the inner surface is :math:`W_{\rm ii} = 0`:
+    rays leaving :math:`r_0` outward travel through the annulus and
+    either exit through :math:`R` or are absorbed; a convex cavity
+    cannot route a ray back to :math:`r_0` without a BC reflection.
+
+    For multi-region annuli the integral replaces :math:`\Sigma_t\cdot
+    \text{chord}` by the piecewise optical depth
+    :math:`\int_{\rm annulus} \Sigma_t(r(s))\,\mathrm ds`; this function
+    handles the homogeneous single-region case directly and defers
+    multi-region to the general
+    :meth:`CurvilinearGeometry.optical_depth_along_ray` walker.
+
+    Parameters
+    ----------
+    r_0, R
+        Inner and outer radii (:math:`0 < r_0 < R`).
+    radii
+        Outer edges of annular regions (length 1 for homogeneous,
+        longer for multi-region). For multi-region the Ki_3 argument
+        becomes the actual piecewise-integrated optical depth.
+    sig_t
+        Region-wise total macroscopic XS.
+    dps
+        mpmath working precision.
+
+    Returns
+    -------
+    W : ndarray, shape (2, 2)
+        Transmission matrix with rows/cols indexed [outer, inner].
+    """
+    if not (0.0 < r_0 < R):
+        raise ValueError(
+            f"Hollow cylinder requires 0 < r_0 < R; got r_0={r_0}, R={R}"
+        )
+    sig_t = np.asarray(sig_t, dtype=float)
+    radii = np.asarray(radii, dtype=float)
+    if len(radii) != 1 or len(sig_t) != 1:
+        raise NotImplementedError(
+            "Multi-region hollow cylinder transmission is planned but "
+            "not yet implemented — pass a single-region annulus "
+            "(len(radii) == 1). For multi-region, the Ki_3 chord "
+            "integral must be replaced by the piecewise optical depth."
+        )
+    sig_t_val = float(sig_t[0])
+
+    alpha_c = float(np.arcsin(r_0 / R))
+
+    def _Ki3(x):
+        return float(ki_n_mp(3, float(x), dps))
+
+    with mpmath.workdps(dps):
+        # W_outer_outer: grazing-cavity rays hit outer again.
+        W_oo = float(mpmath.quad(
+            lambda a: mpmath.cos(a) * _Ki3(
+                2.0 * sig_t_val * R * float(mpmath.cos(a))
+            ),
+            [mpmath.mpf(alpha_c), mpmath.pi / 2],
+        ))
+        W_oo *= 4.0 / float(mpmath.pi)
+
+        # W_outer_inner: rays hitting inner shell before opposite
+        # outer face. Chord from R to the first inner intersection.
+        def _chord_out_to_in(a):
+            h_sq = R * R * float(mpmath.sin(a)) ** 2
+            return R * float(mpmath.cos(a)) - float(
+                mpmath.sqrt(mpmath.mpf(r_0 * r_0 - h_sq))
+            )
+
+        W_io = float(mpmath.quad(
+            lambda a: mpmath.cos(a) * _Ki3(
+                sig_t_val * _chord_out_to_in(a)
+            ),
+            [mpmath.mpf(0.0), mpmath.mpf(alpha_c)],
+        ))
+        W_io *= 4.0 / float(mpmath.pi)
+
+    # Reciprocity for outer←inner; convex-cavity inner←inner = 0.
+    W_oi = (R / r_0) * W_io
+    return np.array([[W_oo, W_oi], [W_io, 0.0]])
+
+
 def reflection_white_rank2(
     W: np.ndarray,
 ) -> np.ndarray:
@@ -2594,16 +2776,25 @@ def _build_closure_operator_rank2_white(
         L = float(radii[-1])
         T = compute_slab_transmission(L, radii, sig_t, dps=dps)
         W = T * np.array([[0.0, 1.0], [1.0, 0.0]])
+    elif geometry.kind == "cylinder-1d":
+        # Hollow cylinder (Phase F.4): Lambert-emission chord transmission
+        # with the out-of-plane θ fold into Ki_3. See
+        # :func:`compute_hollow_cyl_transmission` docstring for the full
+        # derivation; the 2×2 W matrix below drives the partial-current
+        # inversion R = (I - W)^{-1}.
+        r0 = float(geometry.inner_radius)
+        R_out = float(radii[-1])
+        W = compute_hollow_cyl_transmission(r0, R_out, radii, sig_t, dps=dps)
     else:
-        # Hollow cyl/sph: defer to Phase F.4 — requires geometry-specific
-        # chord-integration transmission (rays from one surface back to
-        # the same or opposite surface without crossing the annulus).
+        # Hollow sphere: analogous chord decomposition but with sphere's
+        # 3-D kernel (bare exp(-τ), no Ki). Planned in Phase F.4 part 2.
         raise NotImplementedError(
             f"Rank-2 white BC for kind={geometry.kind!r} with "
-            f"inner_radius={geometry.inner_radius} is planned in "
-            f"Phase F.4 (hollow cyl/sph transmission matrix). Use "
-            f"reflection='marshak' for the rank-1 Mark closure on "
-            f"hollow geometries until F.4 lands."
+            f"inner_radius={geometry.inner_radius} is planned in Phase "
+            f"F.4 (sphere — chord decomposition via exp(-τ) kernel). "
+            f"Hollow cylinder IS supported; hollow sphere lands next. "
+            f"Use reflection='marshak' for rank-1 Mark on hollow sphere "
+            f"until the sphere branch ships."
         )
 
     R_matrix = reflection_white_rank2(W)

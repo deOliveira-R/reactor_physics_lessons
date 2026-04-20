@@ -84,6 +84,30 @@ or before extending the architecture to a new geometry.**
   ``tests/derivations/test_peierls_rank2_bc.py``. Solid cyl/sph
   with ``reflection="white"`` collapse to the rank-1 Mark form
   (:math:`R = (I - 0)^{-1} = 1`), preserving bit-exact regression.
+  **Phase F.4 (hollow cylinder).** Extended rank-2 white to
+  hollow cylindrical annuli via
+  :func:`~orpheus.derivations.peierls_geometry.compute_hollow_cyl_transmission`
+  — Lambert-emission chord decomposition with the out-of-plane
+  :math:`\theta` fold into the :math:`\mathrm{Ki}_3` Bickley
+  function: :math:`W_{\rm oo} = (4/\pi)\!\int_{\alpha_c}^{\pi/2}
+  \!\cos\alpha\,\mathrm{Ki}_3(2\Sigma_t R\cos\alpha)\,\mathrm d\alpha`
+  (grazing past cavity),
+  :math:`W_{\rm io} = (4/\pi)\!\int_0^{\alpha_c}\!\cos\alpha\,
+  \mathrm{Ki}_3(\Sigma_t\ell_{\rm annulus}(\alpha))\,\mathrm d\alpha`
+  (hitting inner shell), reciprocity
+  :math:`W_{\rm oi} = (R/r_0)\,W_{\rm io}`, and convex-cavity
+  constraint :math:`W_{\rm ii} = 0`. **The rank-1-per-face
+  (scalar) closure does NOT close the Wigner-Seitz identity
+  exactly on curved hollow surfaces** — unlike slab, where every
+  position on a face maps to the same angular geometry, the
+  cylinder's inward J⁻ at :math:`r_0` carries non-trivial
+  angular moments that the scalar mode omits. For
+  :math:`r_0 = 0.1 R` the rank-2 residual is 1.4 % (vs rank-1
+  Mark's 25 %); for :math:`r_0 = 0.3 R` it is 13 %. Closing to
+  machine precision requires rank-N per-face — planned in Phase
+  F.5. Hollow sphere rank-2 lands in a follow-up commit (same
+  chord decomposition but with :math:`e^{-\tau}` kernel instead
+  of :math:`\mathrm{Ki}_3`).
 - **Historical note.** Standard references
   ([Sanchez1982]_, [Hebert2020]_, [Stamm1983]_, [BellGlasstone1970]_,
   [CaseZweifel1967]_) present each geometry in **chord coordinates**
