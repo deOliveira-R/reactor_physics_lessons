@@ -341,84 +341,96 @@ def slab_uniform_source_white_bc_analytical(
 
     .. math::
 
-       \varphi_{\rm white}(x) \;=\; \frac{1}{2\,\Sigma_t}\!\left[\,
-           2 + (2\beta - 1)\bigl(E_2(\Sigma_t\,x)
-                               + E_2(\Sigma_t\,(L - x))\bigr)\,\right],
+       \varphi_{\rm white}(x) \;\equiv\; \frac{1}{\Sigma_t}
+       \qquad \text{(for all $x$, any $L$)}.
 
-    where
+    **Why the answer is the infinite-medium equilibrium.** White BC on
+    both faces of a uniform cell is the Wigner-Seitz exact equivalence:
+    it models a slab embedded in an infinite symmetric lattice, so the
+    cell cannot lose neutrons through the boundary. For a pure absorber
+    with uniform source :math:`S = 1`, the balance equation collapses
+    to the point-wise equilibrium :math:`\Sigma_t\,\varphi = S = 1`,
+    giving :math:`\varphi = 1/\Sigma_t` at every interior point —
+    independent of :math:`L`.
 
-    .. math::
-
-       \beta \;=\; \frac{1 - E_3(\Sigma_t L)}{1 - 2\,E_3(\Sigma_t L)}.
-
-    **Derivation.** The Peierls integral equation for the slab reads
+    **Self-consistent derivation from the partial-current balance.**
+    The slab Peierls integral equation with white BC is
 
     .. math::
 
        \varphi(x) \;=\; \tfrac{1}{2}\!\int_0^L\!
-                         E_1(\Sigma_t|x-x'|)\,\mathrm d x'
-                       + 2\,J^-\bigl[E_2(\Sigma_t x) + E_2(\Sigma_t(L-x))\bigr],
+                         E_1(\Sigma_t|x-x'|)\,S(x')\,\mathrm d x'
+                       + 2\,J^-\,\bigl[E_2(\Sigma_t x)
+                                     + E_2(\Sigma_t(L - x))\bigr],
 
-    where :math:`J^-` is the (symmetric) re-entering partial current at
-    each face and the factor 2 accounts for the inward-half-range
-    isotropic distribution (:math:`\psi_{\rm in} = 2 J^-`). The volume
-    term evaluates to :func:`slab_uniform_source_analytical` — the
-    vacuum-BC result. The partial-current balance at :math:`x = L` for
-    uniform :math:`S = 1`:
-
-    .. math::
-
-       J^+(L) \;=\; \tfrac{1}{2\Sigma_t}\bigl(1 - E_3(\Sigma_t L)\bigr)
-                  + 2\,E_3(\Sigma_t L)\,J^-(0),
-
-    together with symmetry (:math:`J^-(0) = J^-(L) = J^-`) and the Mark
-    white-BC closure (:math:`J^- = J^+`), closes to
+    with :math:`\psi_{\rm in} = 2\,J^-` (the half-range-isotropic
+    angular flux per unit inward partial current). The partial-current
+    balance at :math:`x = L` for uniform :math:`S = 1`, using the
+    identity
+    :math:`\int_0^{\tau_L} E_2(u)\,\mathrm du = E_3(0) - E_3(\tau_L)
+    = 1/2 - E_3(\tau_L)`:
 
     .. math::
 
-       J^- \;=\; \frac{1 - E_3(\Sigma_t L)}
-                      {2\,\Sigma_t\,(1 - 2\,E_3(\Sigma_t L))}.
+       J^+(L) \;=\; \tfrac{1}{2\Sigma_t}\bigl(\tfrac{1}{2} - E_3(\Sigma_t L)\bigr)
+                  + 2\,E_3(\Sigma_t L)\,J^-(0).
 
-    Substituting back and collecting terms gives the displayed form.
+    With symmetry :math:`J^-(0) = J^-(L) = J^-` and the Mark closure
+    :math:`J^- = J^+`:
 
-    **Sanity limits.**
+    .. math::
 
-    - :math:`\Sigma_t L \to \infty` (thick): :math:`E_3 \to 0`,
-      :math:`\beta \to 1`, :math:`(2\beta - 1) \to 1`; deep interior
-      :math:`(x = L/2)` has :math:`E_2 \to 0`, so
-      :math:`\varphi \to 1/\Sigma_t` — the infinite-medium limit.
-    - :math:`\Sigma_t L \to 0` (thin): :math:`E_3 \to 1/2`, the
-      denominator :math:`1 - 2 E_3 \to 0`, and :math:`\beta` diverges —
-      a non-absorbing cell with a volume source and reflection has
-      unbounded flux.
-    - :math:`\varphi_{\rm white}(x) > \varphi_{\rm vacuum}(x)` for all
-      :math:`x`, as the reflected boundary sources add to the flux.
+       J^- \;=\; \frac{1/2 - E_3(\Sigma_t L)}
+                      {2\,\Sigma_t\,(1 - 2\,E_3(\Sigma_t L))}
+             \;=\; \frac{1}{4\,\Sigma_t}
 
-    **Implementation.** Closed-form in :func:`mpmath.expint` — no
-    quadrature needed. Machine precision via ``dps``.
+    independent of :math:`\tau_L = \Sigma_t L` (the numerator and
+    denominator share the factor :math:`(1 - 2 E_3(\tau_L))`).
+    Substituting :math:`2 J^- = 1/(2\Sigma_t)` into the integral
+    equation collapses the :math:`E_2` terms:
+
+    .. math::
+
+       \varphi(x) \;=\; \tfrac{1}{2\Sigma_t}\!\bigl[2 - E_2(\Sigma_t x)
+                                                - E_2(\Sigma_t(L-x))\bigr]
+                  + \tfrac{1}{2\Sigma_t}\!\bigl[E_2(\Sigma_t x)
+                                              + E_2(\Sigma_t(L-x))\bigr]
+                  \;=\; \tfrac{1}{\Sigma_t}.
+
+    **History.** An earlier version of this file (commit ``2538cfe``)
+    shipped an incorrect closed form derived with
+    :math:`J^+(L)|_{\rm vol} = (1/(2\Sigma_t))(1 - E_3(\tau_L))` — off
+    by the antiderivative identity above
+    (:math:`\int_0^{\tau_L} E_2 = 1/2 - E_3`, not :math:`1 - E_3`).
+    The fixed-point diagnostic agreed with the wrong formula because
+    the fixed-point also used the same buggy :math:`J^+` update. The
+    error was caught when the first-order K_bc row-sum gate disagreed
+    with the published formula by a factor of 2.19 — a useful
+    reminder that "two independent derivations agreeing to 1e-39" is
+    worthless if both share a factor-of-2 algebra error.
+
+    **Testing leverage.** Because :math:`\varphi_{\rm white}` is
+    spatially *constant* for the slab, it supports two precise tests of
+    the Peierls white-BC tensor-network machinery:
+
+    1. The eigenvalue identity :math:`k_{\rm eff}({\rm white}) =
+       k_\infty` for any :math:`L`, for any homogeneous slab.
+    2. The K-matrix factor-level closed forms:
+       :math:`P_{\rm esc}(x) = (1/2)\,[E_2(\Sigma_t x) + E_2(\Sigma_t(L-x))]`
+       and
+       :math:`G_{\rm bc}(x) = 2\,[E_2(\Sigma_t x) + E_2(\Sigma_t(L-x))]`.
+
+    See the companion tests in :mod:`tests.derivations.test_peierls_reference`.
 
     References
     ----------
-    Davison (1957) "Neutron Transport Theory" Ch. 5; Case & Zweifel
-    (1967) "Linear Transport Theory" Ch. 6.
+    Wigner & Seitz lattice-cell approximation; Davison (1957) "Neutron
+    Transport Theory" Ch. 5; Case & Zweifel (1967) "Linear Transport
+    Theory" Ch. 6.
     """
     with mpmath.workdps(dps):
-        x_mp = x if isinstance(x, mpmath.mpf) else mpmath.mpf(x)
-        L_mp = mpmath.mpf(L)
         sig_t_mp = mpmath.mpf(sig_t)
-
-        tau = sig_t_mp * x_mp
-        tau_prime = sig_t_mp * (L_mp - x_mp)
-        tau_L = sig_t_mp * L_mp
-
-        E3_tau_L = mpmath.expint(3, tau_L)
-        denom = 1 - 2 * E3_tau_L
-        if denom == 0:
-            return mpmath.mpf("inf")
-        beta = (1 - E3_tau_L) / denom
-
-        E2_sum = mpmath.expint(2, tau) + mpmath.expint(2, tau_prime)
-        return (2 + (2 * beta - 1) * E2_sum) / (2 * sig_t_mp)
+        return 1 / sig_t_mp
 
 
 # ═══════════════════════════════════════════════════════════════════════

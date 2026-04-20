@@ -645,10 +645,14 @@ class CurvilinearGeometry:
         r"""Weight :math:`r^{d-1}` from the polar area/volume element
         :math:`\mathrm dV' = r^{d-1}\,\mathrm dr\,\mathrm d\Omega`.
 
+        Slab (1-D radial coordinate :math:`x`, :math:`\mathrm dV = \mathrm dx`):
+        returns :math:`1` (no geometric factor).
         Cylinder (:math:`d = 2`): returns :math:`r` (for
         :math:`r\,\mathrm d r\,\mathrm d\beta`).
         Sphere (:math:`d = 3`): returns :math:`r^2`.
         """
+        if self.kind == "slab-polar":
+            return 1.0
         if self.kind == "cylinder-1d":
             return r
         return r * r
@@ -671,16 +675,21 @@ class CurvilinearGeometry:
         The theoretical form :math:`K_{\rm bc}[i, j] = \Sigma_t(r_i)\,
         G_{\rm bc}(r_i) / A_d \cdot A_j\,P_{\rm esc}(r_j)` with
         :math:`A_j` the volume-element area and :math:`A_d` the cell's
-        surface area reduces — after the shared :math:`2\pi` (cylinder)
-        or :math:`4\pi` (sphere) azimuthal factor cancels between
-        :math:`A_d` and :math:`A_j` — to a divisor of :math:`R` for the
-        cylinder and :math:`R^{2}` for the sphere.
+        surface area reduces — after the shared azimuthal factor cancels
+        between :math:`A_d` and :math:`A_j` — to geometry-specific
+        divisors:
 
-        - Cylinder (:math:`A_d = 2\pi R`, :math:`A_j = 2\pi r_j w_j`):
+        - **Slab** (:math:`A_d = 2` per unit transverse area — two unit-area
+          faces at :math:`x = 0` and :math:`x = L`;
+          :math:`A_j = w_j` per-panel length): ratio :math:`A_j/A_d = w_j/2`,
+          divisor :math:`2`.
+        - **Cylinder** (:math:`A_d = 2\pi R`, :math:`A_j = 2\pi r_j w_j`):
           ratio :math:`A_j / A_d = r_j w_j / R`, divisor :math:`R`.
-        - Sphere (:math:`A_d = 4\pi R^2`, :math:`A_j = 4\pi r_j^2 w_j`):
+        - **Sphere** (:math:`A_d = 4\pi R^2`, :math:`A_j = 4\pi r_j^2 w_j`):
           ratio :math:`A_j / A_d = r_j^2 w_j / R^{2}`, divisor :math:`R^{2}`.
         """
+        if self.kind == "slab-polar":
+            return 2.0
         if self.kind == "cylinder-1d":
             return R
         return R * R
@@ -1087,9 +1096,37 @@ def compute_P_esc(
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
 
+    if geometry.kind == "slab-polar" and len(radii) == 1:
+        # Slab, homogeneous single region: P_esc reduces to the
+        # closed-form E_2 sum
+        #
+        #     P_esc_slab(x_i) = (1/2) · [E_2(Σ_t·x_i) + E_2(Σ_t·(L − x_i))]
+        #
+        # (escape through face 0 at µ < 0, through face L at µ > 0;
+        # each half-range contributes an E_2). Closed-form is
+        # machine-precision, bypassing the GL grazing-ray stiffness at
+        # µ = 0 that limits the unified quadrature branch.
+        L = float(radii[-1])
+        sig_t_val = float(sig_t[0])
+        N = len(r_nodes)
+        P_esc = np.zeros(N)
+        for i in range(N):
+            x_i = float(r_nodes[i])
+            tau_left = sig_t_val * x_i
+            tau_right = sig_t_val * (L - x_i)
+            e2_left = (float(mpmath.expint(2, tau_left))
+                       if tau_left > 0 else 1.0)
+            e2_right = (float(mpmath.expint(2, tau_right))
+                        if tau_right > 0 else 1.0)
+            P_esc[i] = 0.5 * (e2_left + e2_right)
+        return P_esc
+
     omega_low, omega_high = geometry.angular_range
     omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
-    cos_omegas = np.cos(omega_pts)
+    # Use the polymorphic direction-cosine map: identity for slab-polar
+    # (angular variable IS µ), cos(Ω) for curvilinear (angular variable
+    # is the polar angle Ω).
+    cos_omegas = geometry.ray_direction_cosine(omega_pts)
     angular_factor = geometry.angular_weight(omega_pts)
     pref = geometry.prefactor
 
@@ -1154,6 +1191,60 @@ def compute_G_bc(
 
     N = len(r_nodes)
     G_bc = np.zeros(N)
+
+    if geometry.kind == "slab-polar":
+        # Slab has TWO faces (x = 0 and x = L); the scalar flux at
+        # interior x_i from UNIT uniform isotropic inward partial
+        # currents at *each* face is
+        #
+        #   G_bc_slab(x_i) = 2·[E_2(Σ_t·x_i) + E_2(Σ_t·(L - x_i))]
+        #
+        # for a homogeneous slab. The factor 2 comes from
+        # :math:`\psi_{\rm in} = 2 J^{-}` for a half-range isotropic
+        # partial current. Each E_2 term is one face's contribution;
+        # :func:`mpmath.expint` gives machine precision.
+        L = R  # for slab, radii[-1] IS L
+        if len(radii) == 1:
+            sig_t_val = float(sig_t[0])
+            for i in range(N):
+                x_i = float(r_nodes[i])
+                tau_left = sig_t_val * x_i
+                tau_right = sig_t_val * (L - x_i)
+                e2_left = (float(mpmath.expint(2, tau_left))
+                           if tau_left > 0 else 1.0)
+                e2_right = (float(mpmath.expint(2, tau_right))
+                            if tau_right > 0 else 1.0)
+                G_bc[i] = 2.0 * (e2_left + e2_right)
+            return G_bc
+
+        # Multi-region slab: GL over the inward half-range µ ∈ (0, 1)
+        # for each face, with τ computed by the polymorphic ray walker
+        # (handles piecewise Σ_t crossings).
+        mu_pts, mu_wts = gl_float(n_surf_quad, 0.0, 1.0, dps)
+        for i in range(N):
+            x_i = float(r_nodes[i])
+            total_0 = 0.0
+            total_L = 0.0
+            for k in range(n_surf_quad):
+                mu = float(mu_pts[k])
+                if mu <= 1e-15:
+                    continue
+                # Face 0: ray enters at (x=0) in direction +µ, observer
+                # at x_i means ray length ρ = x_i/µ.
+                rho_0 = x_i / mu
+                tau_0 = geometry.optical_depth_along_ray(
+                    0.0, mu, rho_0, radii, sig_t,
+                )
+                total_0 += float(mu_wts[k]) * 2.0 * float(np.exp(-tau_0))
+                # Face L: ray enters at (x=L) in direction -µ, observer
+                # at x_i means ray length ρ = (L - x_i)/µ.
+                rho_L = (L - x_i) / mu
+                tau_L = geometry.optical_depth_along_ray(
+                    L, -mu, rho_L, radii, sig_t,
+                )
+                total_L += float(mu_wts[k]) * 2.0 * float(np.exp(-tau_L))
+            G_bc[i] = total_0 + total_L
+        return G_bc
 
     if geometry.kind == "sphere-1d":
         # Observer-centred angular integral.
@@ -1323,6 +1414,19 @@ def compute_P_esc_mode(
     moment for :math:`n \ge 1`; calling it at :math:`n = 0` returns
     the Jacobian-weighted moment, not :math:`P_{\rm esc}`.
     """
+    if geometry.kind == "slab-polar" and n_mode > 0:
+        # The current mode-n ≥ 1 formulation uses the curvilinear
+        # (ρ_max/R)² surface-to-observer Jacobian and a single-surface
+        # mode space A = R^N. For slab this requires per-face mode
+        # decomposition (A = R^(2·N)) because the two faces at x = 0
+        # and x = L carry independent Legendre moments. Not in scope
+        # for Issue #118; tracked separately.
+        raise NotImplementedError(
+            "Rank-N (n_mode > 0) BC closure for slab-polar requires "
+            "per-face mode decomposition; use n_bc_modes = 1 (rank-1 "
+            "Mark closure) for slab. See Issue #118 follow-up."
+        )
+
     r_nodes = np.asarray(r_nodes, dtype=float)
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
@@ -1331,7 +1435,9 @@ def compute_P_esc_mode(
 
     omega_low, omega_high = geometry.angular_range
     omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
-    cos_omegas = np.cos(omega_pts)
+    # Polymorphic direction cosine (identity for slab-polar where the
+    # angular variable IS µ; cos(Ω) for curvilinear).
+    cos_omegas = geometry.ray_direction_cosine(omega_pts)
     angular_factor = geometry.angular_weight(omega_pts)
     pref = geometry.prefactor
 
@@ -1398,6 +1504,15 @@ def compute_G_bc_mode(
     For :math:`n = 0`, :math:`\tilde P_0 \equiv 1` and this reduces to
     :func:`compute_G_bc`.
     """
+    if geometry.kind == "slab-polar" and n_mode > 0:
+        # Same scope limit as compute_P_esc_mode: rank-N slab needs
+        # per-face modes. Issue #118 follow-up.
+        raise NotImplementedError(
+            "Rank-N (n_mode > 0) G_bc for slab-polar requires per-face "
+            "mode decomposition; use n_bc_modes = 1 (rank-1 Mark closure) "
+            "for slab. See Issue #118 follow-up."
+        )
+
     r_nodes = np.asarray(r_nodes, dtype=float)
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)

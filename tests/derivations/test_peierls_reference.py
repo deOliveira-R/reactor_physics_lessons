@@ -35,6 +35,7 @@ import pytest
 
 from orpheus.derivations.peierls_reference import (
     slab_uniform_source_analytical,
+    slab_uniform_source_white_bc_analytical,
     slab_K_vol_element,
     cylinder_uniform_source_analytical,
     sphere_uniform_source_analytical,
@@ -45,12 +46,17 @@ from orpheus.derivations.peierls_geometry import (
     SPHERE_1D,
     CYLINDER_1D,
     K_vol_element_adaptive,
+    build_closure_operator,
     build_volume_kernel,
     build_volume_kernel_adaptive,
+    build_white_bc_correction_rank_n,
     composite_gl_r,
+    compute_G_bc,
+    compute_P_esc,
     gl_nodes_weights,
     lagrange_basis_on_panels,
     map_gl_to,
+    reflection_mark,
 )
 
 
@@ -683,3 +689,308 @@ class TestSphereKernelRowSum:
                     f"Localises bug to the analytical reference or the "
                     f"unified primitive's geometry primitives."
                 )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Layer 6 — Slab BC tensor-network (rank-1 Mark / white) verification
+# Closes Issue #118: compute_P_esc / compute_G_bc slab-polar gap. The
+# curvilinear BC machinery now supports slab-polar via:
+#   1. polymorphic `ray_direction_cosine` replacing hard-coded
+#      `np.cos(omega_pts)` in compute_P_esc / compute_P_esc_mode
+#   2. explicit slab-polar branch in compute_G_bc using the closed-form
+#      `2·[E_2(Σ_t x) + E_2(Σ_t(L − x))]` sum-of-faces expression
+#   3. slab cases for `radial_volume_weight` (→ 1) and
+#      `rank1_surface_divisor` (→ 2, two unit-area faces)
+#
+# Rank-1 Mark closure is INTENTIONALLY approximate — it omits the
+# `T = 2·E_3(τ_L)` self-feedback transmission in the partial-current
+# balance. The same approximation is present for cylinder and sphere
+# (see `TestWhiteBCThickLimit` classes). The slab fixes bring the
+# machinery to parity, not exactness.
+# ═══════════════════════════════════════════════════════════════════════
+
+@pytest.mark.l0
+@pytest.mark.verifies("peierls-unified")
+class TestSlabPescClosedForm:
+    r"""Factor-level verification — slab :math:`P_{\rm esc}`.
+
+    For a homogeneous slab :math:`[0, L]` the uncollided escape
+    probability from interior observer :math:`x_i` admits the closed
+    form
+
+    .. math::
+
+       P_{\rm esc}^{\rm slab}(x_i) \;=\;
+         \tfrac{1}{2}\bigl[E_2(\Sigma_t\,x_i)
+                         + E_2(\Sigma_t\,(L - x_i))\bigr],
+
+    deriving from the :math:`\mu`-integration of the isotropic point
+    kernel over the two half-spaces. The
+    :func:`~orpheus.derivations.peierls_geometry.compute_P_esc` slab
+    branch evaluates this via :func:`mpmath.expint` directly
+    (machine-precision; bypasses the grazing-ray GL stiffness of the
+    unified quadrature form).
+    """
+
+    @pytest.mark.parametrize("L, sig_t", [
+        (1.0, 1.0),
+        (2.0, 0.5),
+        (0.5, 2.0),
+    ])
+    def test_matches_E2_sum_at_machine_precision(self, L, sig_t):
+        radii = np.array([L])
+        sig_t_arr = np.array([sig_t])
+        r_nodes, _, _ = composite_gl_r(radii, 2, 4, dps=25)
+        P_esc = compute_P_esc(
+            SLAB_POLAR_1D, r_nodes, radii, sig_t_arr,
+            n_angular=32, dps=25,
+        )
+        for i, x_i in enumerate(r_nodes):
+            tau = sig_t * float(x_i)
+            tau_prime = sig_t * (L - float(x_i))
+            expected = 0.5 * (float(mpmath.expint(2, tau))
+                              + float(mpmath.expint(2, tau_prime)))
+            rel = abs(P_esc[i] - expected) / abs(expected)
+            assert rel < 1e-14, (
+                f"Slab P_esc(x={x_i:.4f}) deviates from closed-form "
+                f"(L={L}, Σ_t={sig_t}): got={P_esc[i]:.16e}, "
+                f"expected={expected:.16e}, rel={rel:.3e}"
+            )
+
+
+@pytest.mark.l0
+@pytest.mark.verifies("peierls-unified")
+class TestSlabGbcClosedForm:
+    r"""Factor-level verification — slab :math:`G_{\rm bc}`.
+
+    For a homogeneous slab with unit uniform isotropic inward partial
+    currents at *both* faces, the scalar flux at interior
+    :math:`x_i` is
+
+    .. math::
+
+       G_{\rm bc}^{\rm slab}(x_i) \;=\;
+           2\,\bigl[E_2(\Sigma_t\,x_i) + E_2(\Sigma_t\,(L - x_i))\bigr],
+
+    deriving from the :math:`\psi_{\rm in} = J^-/\pi` convention (2π
+    azimuthal factor absorbed) multiplied by two faces. The
+    :func:`~orpheus.derivations.peierls_geometry.compute_G_bc` slab
+    branch evaluates this closed form directly.
+    """
+
+    @pytest.mark.parametrize("L, sig_t", [
+        (1.0, 1.0),
+        (2.0, 0.5),
+        (0.5, 2.0),
+    ])
+    def test_matches_E2_sum_at_machine_precision(self, L, sig_t):
+        radii = np.array([L])
+        sig_t_arr = np.array([sig_t])
+        r_nodes, _, _ = composite_gl_r(radii, 2, 4, dps=25)
+        G_bc = compute_G_bc(
+            SLAB_POLAR_1D, r_nodes, radii, sig_t_arr,
+            n_surf_quad=32, dps=25,
+        )
+        for i, x_i in enumerate(r_nodes):
+            tau = sig_t * float(x_i)
+            tau_prime = sig_t * (L - float(x_i))
+            expected = 2.0 * (float(mpmath.expint(2, tau))
+                              + float(mpmath.expint(2, tau_prime)))
+            rel = abs(G_bc[i] - expected) / abs(expected)
+            assert rel < 1e-14, (
+                f"Slab G_bc(x={x_i:.4f}) deviates from closed-form "
+                f"(L={L}, Σ_t={sig_t}): got={G_bc[i]:.16e}, "
+                f"expected={expected:.16e}, rel={rel:.3e}"
+            )
+
+
+@pytest.mark.l0
+@pytest.mark.verifies("peierls-unified")
+class TestSlabKbcStructure:
+    r"""Structural checks on the rank-1 Mark K_bc for slab-polar.
+
+    1. Symmetry under :math:`x \leftrightarrow L - x` for symmetric
+       configurations: the homogeneous slab's K_bc row-sum must be
+       invariant under the mirror swap (diagnostic that caught the
+       pre-fix bug, where the cylinder fall-through produced
+       :math:`0.17` vs :math:`0.35`).
+
+    2. Row-sum closed form (first-order Mark, single region, uniform
+       Σ_t):
+
+       .. math::
+
+          \sum_j K_{\rm bc}[i, j]\cdot 1 \;=\;
+              \bigl(\tfrac{1}{2} - E_3(\Sigma_t L)\bigr)\,
+              \bigl[E_2(\Sigma_t\,x_i) + E_2(\Sigma_t\,(L - x_i))\bigr].
+
+       The factor :math:`1/2 - E_3(\tau_L)` comes from the
+       :math:`P_{\rm esc}` volume integral and the Peierls antiderivative
+       identity :math:`\int_0^{\tau_L} E_2\,\mathrm du = 1/2 - E_3(\tau_L)`.
+    """
+
+    def test_K_bc_row_sum_symmetric_under_mirror(self):
+        L, sig_t = 1.0, 1.0
+        radii = np.array([L])
+        sig_t_arr = np.array([sig_t])
+        r_nodes, r_wts, _ = composite_gl_r(radii, 2, 4, dps=25)
+        K_bc = build_white_bc_correction_rank_n(
+            SLAB_POLAR_1D, r_nodes, r_wts, radii, sig_t_arr,
+            n_angular=32, n_surf_quad=32, dps=25, n_bc_modes=1,
+        )
+        row_sums = K_bc.sum(axis=1)
+        N = len(r_nodes)
+        for i in range(N // 2):
+            rel = abs(row_sums[i] - row_sums[N - 1 - i]) / abs(row_sums[i])
+            assert rel < 1e-12, (
+                f"Slab K_bc row-sum not symmetric under x ↔ L−x at "
+                f"i={i}: got {row_sums[i]:.10e} vs {row_sums[N-1-i]:.10e}"
+            )
+
+    @pytest.mark.parametrize("L, sig_t", [
+        (1.0, 1.0),
+        (2.0, 0.5),
+        (0.5, 2.0),
+    ])
+    def test_K_bc_row_sum_matches_first_order_closed_form(self, L, sig_t):
+        # Tolerance is set by GL quadrature error on ∫ P_esc(x) dx,
+        # which has mild log singularities at x ∈ {0, L} from the E_2
+        # boundary behaviour. At n_panels=8, p=8 this converges to
+        # ~1e-6 relative error; the formula itself is exact.
+        radii = np.array([L])
+        sig_t_arr = np.array([sig_t])
+        r_nodes, r_wts, _ = composite_gl_r(radii, 8, 8, dps=25)
+        K_bc = build_white_bc_correction_rank_n(
+            SLAB_POLAR_1D, r_nodes, r_wts, radii, sig_t_arr,
+            n_angular=32, n_surf_quad=32, dps=25, n_bc_modes=1,
+        )
+        row_sums = K_bc.sum(axis=1)
+        tau_L = sig_t * L
+        E3_tau_L = float(mpmath.expint(3, tau_L))
+        prefactor = 0.5 - E3_tau_L
+        for i, x_i in enumerate(r_nodes):
+            tau = sig_t * float(x_i)
+            tau_prime = sig_t * (L - float(x_i))
+            E2_sum = (float(mpmath.expint(2, tau))
+                      + float(mpmath.expint(2, tau_prime)))
+            expected = prefactor * E2_sum
+            rel = abs(row_sums[i] - expected) / abs(expected)
+            assert rel < 1e-5, (
+                f"Slab K_bc row-sum(x={x_i:.4f}) disagrees with "
+                f"(1/2 − E_3(τ_L))·(E_2 + E_2) at rel={rel:.3e} "
+                f"(L={L}, Σ_t={sig_t}): got={row_sums[i]:.10e}, "
+                f"expected={expected:.10e}"
+            )
+
+    def test_K_bc_row_sum_converges_under_refinement(self):
+        """GL quadrature error on the P_esc integral decreases
+        algebraically with panel count (the E_2 log behaviour at the
+        faces keeps convergence sub-spectral)."""
+        L, sig_t = 1.0, 1.0
+        radii = np.array([L])
+        sig_t_arr = np.array([sig_t])
+        tau_L = sig_t * L
+        E3_tau_L = float(mpmath.expint(3, tau_L))
+        prefactor = 0.5 - E3_tau_L
+
+        prev_err = float("inf")
+        for n_panels, p_order in [(2, 4), (4, 6), (8, 8)]:
+            r_nodes, r_wts, _ = composite_gl_r(radii, n_panels, p_order, dps=25)
+            K_bc = build_white_bc_correction_rank_n(
+                SLAB_POLAR_1D, r_nodes, r_wts, radii, sig_t_arr,
+                n_angular=32, n_surf_quad=32, dps=25, n_bc_modes=1,
+            )
+            row_sums = K_bc.sum(axis=1)
+            max_rel = 0.0
+            for i, x_i in enumerate(r_nodes):
+                tau = sig_t * float(x_i)
+                tau_prime = sig_t * (L - float(x_i))
+                E2_sum = (float(mpmath.expint(2, tau))
+                          + float(mpmath.expint(2, tau_prime)))
+                expected = prefactor * E2_sum
+                max_rel = max(max_rel, abs(row_sums[i] - expected) / abs(expected))
+            assert max_rel < prev_err, (
+                f"K_bc row-sum error did not decrease: "
+                f"(n_panels={n_panels}, p={p_order}) → {max_rel:.3e}, "
+                f"previous {prev_err:.3e}"
+            )
+            prev_err = max_rel
+        assert prev_err < 1e-5, (
+            f"Finest refinement (n_panels=8, p=8) did not reach 1e-5: "
+            f"got {prev_err:.3e}"
+        )
+
+
+@pytest.mark.l0
+@pytest.mark.verifies("peierls-unified")
+class TestSlabWhiteBCInfiniteMediumIdentity:
+    r"""The Wigner-Seitz identity for slab white BC with uniform
+    source on a pure absorber:
+    :math:`\varphi_{\rm white}(x) \equiv 1/\Sigma_t` for all :math:`x`,
+    any :math:`L`. This is the
+    :func:`~orpheus.derivations.peierls_reference.slab_uniform_source_white_bc_analytical`
+    closed form (as of commit correcting the earlier algebra bug in
+    commit 2538cfe).
+
+    The identity holds because white BC conserves neutrons; for a
+    uniform material the cell is indistinguishable from an infinite
+    medium at equilibrium, where the pure-absorber balance
+    :math:`\Sigma_t\,\varphi = S` gives :math:`\varphi = 1/\Sigma_t`
+    pointwise.
+    """
+
+    @pytest.mark.parametrize("L, sig_t", [
+        (0.1, 1.0),   # thin cell
+        (1.0, 1.0),   # 1 MFP
+        (5.0, 2.0),   # thick, different Σ_t
+        (100.0, 0.5),
+    ])
+    def test_flux_equals_1_over_sigma_t(self, L, sig_t):
+        expected = 1.0 / sig_t
+        for x_frac in [0.0, 0.2, 0.5, 0.8, 1.0]:
+            x = x_frac * L
+            phi = float(slab_uniform_source_white_bc_analytical(
+                x, L, sig_t, dps=40,
+            ))
+            rel = abs(phi - expected) / abs(expected)
+            assert rel < 1e-30, (
+                f"Slab φ_white(x={x:.3f}, L={L}, Σ_t={sig_t}) = "
+                f"{phi:.20e}, expected {expected:.20e} (1/Σ_t), "
+                f"rel={rel:.3e}"
+            )
+
+
+@pytest.mark.l0
+@pytest.mark.verifies("peierls-unified")
+class TestSlabRankNNotImplementedGuard:
+    r"""Rank-N :math:`(n > 0)` BC for slab-polar requires per-face mode
+    decomposition (two faces → :math:`A = \mathbb{R}^{2N}` rather than
+    :math:`\mathbb{R}^{N}`). The unified
+    :func:`~orpheus.derivations.peierls_geometry.compute_P_esc_mode`
+    and :func:`~orpheus.derivations.peierls_geometry.compute_G_bc_mode`
+    explicitly raise :class:`NotImplementedError` for slab at
+    :math:`n_{\rm mode} > 0`; the rank-1 (:math:`n_{\rm bc\_modes} = 1`,
+    mode-0-only) path is the supported configuration.
+    """
+
+    def test_P_esc_mode_raises_for_slab_polar_at_mode_n(self):
+        from orpheus.derivations.peierls_geometry import compute_P_esc_mode
+        radii = np.array([1.0])
+        sig_t = np.array([1.0])
+        r_nodes, _, _ = composite_gl_r(radii, 1, 2, dps=20)
+        with pytest.raises(NotImplementedError, match="slab-polar"):
+            compute_P_esc_mode(
+                SLAB_POLAR_1D, r_nodes, radii, sig_t, n_mode=1,
+                n_angular=16, dps=20,
+            )
+
+    def test_G_bc_mode_raises_for_slab_polar_at_mode_n(self):
+        from orpheus.derivations.peierls_geometry import compute_G_bc_mode
+        radii = np.array([1.0])
+        sig_t = np.array([1.0])
+        r_nodes, _, _ = composite_gl_r(radii, 1, 2, dps=20)
+        with pytest.raises(NotImplementedError, match="slab-polar"):
+            compute_G_bc_mode(
+                SLAB_POLAR_1D, r_nodes, radii, sig_t, n_mode=1,
+                n_surf_quad=16, dps=20,
+            )

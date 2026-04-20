@@ -2299,81 +2299,159 @@ cylindrical and spherical cells with isotropic volume sources);
 
 .. _peierls-slab-white-bc-analytical:
 
-White-BC analytical flux — slab (2026-04-21)
---------------------------------------------
+White-BC analytical flux — slab (Wigner-Seitz identity)
+-------------------------------------------------------
 
-The slab white-BC (Mark / isotropic rank-1 closure) uniform-source
-flux admits a closed form in :math:`E_2` and :math:`E_3`. Starting
-from the Peierls integral equation with half-range isotropic re-entry
-:math:`J^{-}` at each face:
-
-.. math::
-
-   \varphi(x) \;=\; \tfrac{1}{2}\!\int_0^L E_1\!\bigl(\Sigma_t|x-x'|\bigr)\,
-                    \mathrm d x'
-              \;+\; 2\,J^{-}\bigl[E_2(\Sigma_t x) + E_2(\Sigma_t(L - x))\bigr],
-
-where the factor 2 arises from :math:`\psi_{\rm in} = 2 J^{-}` for
-unit inward-half-range partial current. The partial-current balance
-at :math:`x = L` for uniform :math:`S = 1`:
-
-.. math::
-
-   J^{+}(L) \;=\; \tfrac{1}{2\Sigma_t}\bigl(1 - E_3(\Sigma_t L)\bigr)
-              + 2\,E_3(\Sigma_t L)\,J^{-}(0),
-
-together with the symmetry :math:`J^{-}(0) = J^{-}(L) = J^{-}` and
-the Mark closure :math:`J^{-} = J^{+}`, closes to
-
-.. math::
-
-   J^{-} \;=\;
-     \frac{1 - E_3(\Sigma_t L)}{2\,\Sigma_t\,(1 - 2\,E_3(\Sigma_t L))}.
-
-Substituting and collecting:
+For a homogeneous pure-absorber slab :math:`[0, L]` with uniform unit
+source :math:`S = 1` and Mark white BC on both faces:
 
 .. math::
    :label: peierls-white-bc-slab
 
-   \varphi_{\rm white}(x) \;=\; \frac{1}{2\,\Sigma_t}\!\left[
-     \,2 + (2\beta - 1)\bigl(E_2(\Sigma_t x) + E_2(\Sigma_t(L - x))\bigr)
-     \,\right],
-   \qquad
-   \beta \;=\; \frac{1 - E_3(\Sigma_t L)}{1 - 2\,E_3(\Sigma_t L)}.
+   \varphi_{\rm white}(x) \;\equiv\; \frac{1}{\Sigma_t}
+   \qquad (\text{for all } x, \text{ any } L).
+
+This is the **Wigner-Seitz exact equivalence**: white BC models the
+cell embedded in an infinite symmetric lattice, so the cell cannot
+lose neutrons through the boundary. For a pure absorber with uniform
+source the balance equation collapses to the pointwise equilibrium
+:math:`\Sigma_t\,\varphi = S = 1`, giving :math:`\varphi = 1/\Sigma_t`
+independent of :math:`L`.
+
+**Self-consistent derivation.** The slab Peierls integral equation
+with white BC is
+
+.. math::
+
+   \varphi(x) \;=\; \tfrac{1}{2}\!\int_0^L E_1\!\bigl(\Sigma_t|x-x'|\bigr)\,
+                    S(x')\,\mathrm d x'
+              \;+\; 2\,J^{-}\,\bigl[E_2(\Sigma_t x) + E_2(\Sigma_t(L - x))\bigr],
+
+with :math:`\psi_{\rm in} = 2\,J^{-}` (the half-range-isotropic
+angular flux per unit inward partial current). The partial-current
+balance at :math:`x = L` for uniform :math:`S = 1`, using the
+antiderivative identity
+:math:`\int_0^{\tau_L} E_2(u)\,\mathrm du = E_3(0) - E_3(\tau_L)
+= \tfrac{1}{2} - E_3(\tau_L)`:
+
+.. math::
+
+   J^{+}(L) \;=\; \tfrac{1}{2\Sigma_t}\bigl(\tfrac{1}{2} - E_3(\Sigma_t L)\bigr)
+              + 2\,E_3(\Sigma_t L)\,J^{-}(0).
+
+With symmetry :math:`J^{-}(0) = J^{-}(L) = J^{-}` and the Mark closure
+:math:`J^{-} = J^{+}`:
+
+.. math::
+
+   J^{-} \;=\; \frac{\tfrac{1}{2} - E_3(\Sigma_t L)}
+                    {2\,\Sigma_t\,(1 - 2\,E_3(\Sigma_t L))}
+          \;=\; \frac{1}{4\,\Sigma_t}
+
+independent of :math:`\tau_L = \Sigma_t L` (numerator and denominator
+share the factor :math:`1 - 2 E_3(\tau_L)`). Substituting
+:math:`2 J^{-} = 1/(2\Sigma_t)` back into the integral equation
+collapses the :math:`E_2` terms and leaves :math:`\varphi \equiv
+1/\Sigma_t`.
 
 Implemented in
 :func:`~orpheus.derivations.peierls_reference.slab_uniform_source_white_bc_analytical`.
-Closed-form — zero quadrature; machine precision via ``dps``. The
-analytical is verified to :math:`10^{-39}` against an independent
-fixed-point iteration of the partial-current balance in
-:file:`derivations/diagnostics/diag_slab_white_bc_analytical.py`.
 
-**Sanity limits.**
+**History of the algebra bug.** Commit ``2538cfe`` shipped an
+incorrect closed form
 
-- :math:`\Sigma_t L \to \infty`: :math:`E_3 \to 0`,
-  :math:`(2\beta - 1) \to 1`, deep interior has :math:`E_2 \to 0`, so
-  :math:`\varphi \to 1/\Sigma_t` (infinite-medium).
-- :math:`\Sigma_t L \to 0`: :math:`E_3 \to 1/2`, :math:`\beta`
-  diverges — a thin non-absorbing cell with reflected volume source
-  has unbounded flux.
+.. math::
 
-.. note::
+   \varphi_{\rm wrong}(x) \;=\; \tfrac{1}{2\Sigma_t}\!\left[
+     2 + (2\beta - 1)\bigl(E_2(\Sigma_t x) + E_2(\Sigma_t(L - x))\bigr)
+   \right],
+   \qquad \beta = \tfrac{1 - E_3(\tau_L)}{1 - 2 E_3(\tau_L)},
 
-   **BC tensor-network gap (Issue #118).** This analytical is
-   **not yet gated as a row-sum identity test** against the unified
-   :class:`~orpheus.derivations.peierls_geometry.BoundaryClosureOperator`.
-   Diagnostic evaluation showed that
-   :func:`~orpheus.derivations.peierls_geometry.compute_P_esc` and
-   :func:`~orpheus.derivations.peierls_geometry.compute_G_bc` have two
-   specific slab-polar gaps: the former calls
-   ``np.cos(omega_pts)`` assuming the angular variable is a polar
-   angle (only true for curvilinear), and the latter has no
-   ``slab-polar`` branch and falls through to the cylinder code.
-   Fixing these unlocks the slab white-BC row-sum gate.
+derived with :math:`J^{+}(L)|_{\rm vol} = \tfrac{1}{2\Sigma_t}(1 -
+E_3(\tau_L))` — which uses the wrong antiderivative identity
+(:math:`\int E_2 \neq 1 - E_3`, it is :math:`\tfrac{1}{2} - E_3`). The
+accompanying fixed-point diagnostic agreed with the wrong formula to
+:math:`10^{-39}` because the fixed-point iteration had the *same
+bug*. The error was caught when the first-order :math:`K_{\rm bc}`
+row-sum disagreed with the published formula by a factor of
+:math:`\sim 2.2` — a concrete example of how "two independent
+derivations agreeing at 1e-39" is worthless if both share a
+factor-of-two algebra mistake. Re-derivation showed the algebraic
+simplification :math:`(\tfrac{1}{2} - E_3)/(1 - 2 E_3) = \tfrac{1}{2}`
+collapses :math:`J^{-}` to :math:`1/(4\Sigma_t)`, giving
+:math:`\varphi \equiv 1/\Sigma_t` exactly — the Wigner-Seitz
+identity for the uniform cell.
+
+**Testing leverage.** Because :math:`\varphi_{\rm white}` is spatially
+constant, it supports two precise tests of the Peierls white-BC
+tensor-network machinery (see
+:mod:`tests.derivations.test_peierls_reference`):
+
+1. **Factor-level closed forms** (machine-precision gates in
+   ``TestSlabPescClosedForm`` and ``TestSlabGbcClosedForm``):
+
+   .. math::
+
+      P_{\rm esc}^{\rm slab}(x_i) \;&=\; \tfrac{1}{2}\bigl[E_2(\Sigma_t x_i)
+                                  + E_2(\Sigma_t (L - x_i))\bigr], \\
+      G_{\rm bc}^{\rm slab}(x_i) \;&=\; 2\bigl[E_2(\Sigma_t x_i)
+                                  + E_2(\Sigma_t (L - x_i))\bigr].
+
+2. **Rank-1 first-order row-sum** (``TestSlabKbcStructure``, gated at
+   :math:`10^{-5}` owing to the algebraic GL convergence on the face
+   log-singularities of :math:`P_{\rm esc}`):
+
+   .. math::
+
+      \sum_j K_{\rm bc}[i, j] \;=\;
+        \bigl(\tfrac{1}{2} - E_3(\Sigma_t L)\bigr)\bigl[E_2(\Sigma_t x_i)
+                                     + E_2(\Sigma_t (L - x_i))\bigr].
+
+The rank-1 Mark closure — in slab exactly as for cylinder and sphere —
+is **intentionally approximate**: it omits the
+:math:`T \cdot J^{-} = 2\,E_3(\tau_L)\,J^{-}` self-feedback
+transmission term in the partial-current balance. Consequently
+:math:`k_{\rm eff}` converges to :math:`k_{\infty}` only in the
+optically-thick limit :math:`\Sigma_t L \to \infty`, not exactly at
+any finite :math:`L` — the same behaviour as the curvilinear cell
+white-BC eigenvalue (see ``TestWhiteBCThickLimit`` for cylinder /
+sphere).
+
+**Slab-polar BC machinery fix (Issue #118).** The
+:func:`~orpheus.derivations.peierls_geometry.compute_P_esc` and
+:func:`~orpheus.derivations.peierls_geometry.compute_G_bc` functions
+were originally implemented for curvilinear geometries only. Slab
+support landed with these fixes:
+
+1. :func:`compute_P_esc` replaces the hard-coded
+   ``np.cos(omega_pts)`` with the polymorphic
+   :meth:`CurvilinearGeometry.ray_direction_cosine` (identity for
+   slab-polar, :math:`\cos\Omega` for curvilinear), and adds a
+   homogeneous-slab closed-form branch that evaluates the
+   :math:`(1/2)(E_2 + E_2)` expression directly via
+   :func:`mpmath.expint`.
+
+2. :func:`compute_G_bc` gains an explicit ``slab-polar`` branch with
+   the closed-form :math:`2(E_2 + E_2)` expression for homogeneous
+   single-region slabs and a GL :math:`\mu`-quadrature fall-through
+   for multi-region slabs.
+
+3. :meth:`CurvilinearGeometry.radial_volume_weight` returns ``1`` for
+   slab-polar (no geometric factor in the Cartesian volume element);
+   :meth:`CurvilinearGeometry.rank1_surface_divisor` returns ``2``
+   (two unit-area faces).
+
+4. Rank-N :math:`(n > 0)` modes in
+   :func:`~orpheus.derivations.peierls_geometry.compute_P_esc_mode`
+   and :func:`~orpheus.derivations.peierls_geometry.compute_G_bc_mode`
+   raise :class:`NotImplementedError` for slab: rank-N slab requires
+   per-face mode decomposition (:math:`A = \mathbb{R}^{2N}` rather
+   than :math:`\mathbb{R}^N`), which is a scope extension tracked
+   separately.
 
 **References.** [Davison1957]_ Ch. 5 (half-range isotropic re-entry
 partial-current balance); [CaseZweifel1967]_ Ch. 6 (albedo-1 BC
-analytical solutions).
+analytical solutions); Wigner & Seitz lattice-cell approximation.
 
 
 Section 8 — White-BC closure, geometry-by-geometry
