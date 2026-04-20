@@ -280,6 +280,51 @@ class TestRank2SlabKEffKInfConvergence:
             f"L={L}: rank-2 err={e2:.3e} too large at moderate quadrature"
         )
 
+    def test_solve_peierls_1g_boundary_white_rank2_end_to_end(self):
+        r"""The :func:`solve_peierls_1g` ``boundary="white_rank2"`` option
+        routes through :func:`build_closure_operator` with
+        ``reflection="white"`` and produces the same k_eff as the
+        direct matrix assembly path. End-to-end regression: the public
+        solver API wires the new closure correctly."""
+        from orpheus.derivations.peierls_geometry import solve_peierls_1g
+
+        sig_t_v, sig_s_v, nu_sig_f_v = 1.0, 0.5, 0.75
+        k_inf = nu_sig_f_v / (sig_t_v - sig_s_v)
+        L = 0.5
+        sol = solve_peierls_1g(
+            SLAB_POLAR_1D,
+            radii=np.array([L]),
+            sig_t=np.array([sig_t_v]),
+            sig_s=np.array([sig_s_v]),
+            nu_sig_f=np.array([nu_sig_f_v]),
+            boundary="white_rank2",
+            n_panels_per_region=2, p_order=4,
+            n_angular=16, n_rho=16, n_surf_quad=16, dps=15,
+        )
+        rel = abs(float(sol.k_eff) - k_inf) / k_inf
+        # Rank-2 achieves ≤ 1e-3 at L = 0.5 MFP (rank-1 Mark has 40 % err).
+        assert rel < 1e-3, f"L={L} white_rank2 k_eff rel_err={rel:.3e}"
+
+    def test_solve_peierls_1g_white_rank2_rejects_n_bc_modes_gt_1(self):
+        r"""Rank-N per-face (``n_bc_modes > 1``) is explicitly deferred
+        to Phase F.5 — calling boundary='white_rank2' with higher modes
+        must fail clearly rather than silently computing something
+        wrong."""
+        from orpheus.derivations.peierls_geometry import solve_peierls_1g
+
+        with pytest.raises(NotImplementedError, match="n_bc_modes > 1"):
+            solve_peierls_1g(
+                SLAB_POLAR_1D,
+                radii=np.array([1.0]),
+                sig_t=np.array([1.0]),
+                sig_s=np.array([0.5]),
+                nu_sig_f=np.array([0.75]),
+                boundary="white_rank2",
+                n_bc_modes=2,
+                n_panels_per_region=2, p_order=4,
+                n_angular=16, n_rho=16, n_surf_quad=16, dps=15,
+            )
+
     @pytest.mark.slow
     def test_rank2_error_converges_monotonically_under_refinement(self):
         r"""Mesh-refinement convergence check: doubling n_panels reduces

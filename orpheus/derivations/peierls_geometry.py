@@ -2826,9 +2826,28 @@ def solve_peierls_1g(
             n_bc_modes=n_bc_modes,
         )
         K = K + K_bc
+    elif boundary == "white_rank2":
+        # Phase F.3: per-face white BC with transmission feedback.
+        # For 2-surface (Class-A) geometries — slab here; hollow cyl/sph
+        # under Phase F.4 — this captures the T·J⁻ self-feedback that
+        # rank-1 Mark omits, closing the Wigner-Seitz identity
+        # k_eff = k_inf up to outer-quadrature order.
+        if n_bc_modes > 1:
+            raise NotImplementedError(
+                "boundary='white_rank2' with n_bc_modes > 1 is not yet "
+                "supported (rank-N per-face planned in Phase F.5). Use "
+                "n_bc_modes=1."
+            )
+        op = build_closure_operator(
+            geometry, r_nodes, r_wts, radii, sig_t,
+            n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
+            n_bc_modes=1, reflection="white",
+        )
+        K = K + op.as_matrix()
     elif boundary != "vacuum":
         raise ValueError(
-            f"boundary must be 'vacuum' or 'white', got {boundary!r}"
+            f"boundary must be 'vacuum', 'white', or 'white_rank2', "
+            f"got {boundary!r}"
         )
 
     N = len(r_nodes)
