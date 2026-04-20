@@ -2513,6 +2513,101 @@ def compute_hollow_cyl_transmission(
     return np.array([[W_oo, W_oi], [W_io, 0.0]])
 
 
+def compute_hollow_sph_transmission(
+    r_0: float,
+    R: float,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    dps: int = 25,
+) -> np.ndarray:
+    r"""Surface-to-surface transmission matrix :math:`W` for a
+    homogeneous hollow spherical shell :math:`[r_0, R]` with a pure
+    absorber.
+
+    Mirrors :func:`compute_hollow_cyl_transmission` but with the
+    bare :math:`e^{-\tau}` kernel — the sphere's 3-D geometry
+    integrates directly over solid angle without the
+    :math:`\mathrm{Ki}_n` out-of-plane fold:
+
+    .. math::
+
+       W_{\rm oo} &= 2\!\int_{\theta_c}^{\pi/2}\!
+           \cos\theta\,\sin\theta\,
+           e^{-2\Sigma_t R\cos\theta}\,\mathrm d\theta, \\
+       W_{\rm io} &= 2\!\int_0^{\theta_c}\!
+           \cos\theta\,\sin\theta\,
+           e^{-\Sigma_t(R\cos\theta - \sqrt{r_0^2 - R^2\sin^2\theta})}\,
+           \mathrm d\theta,
+
+    :math:`\theta_c = \arcsin(r_0/R)`. Reciprocity on spherical
+    surface areas (:math:`A_{\rm out} = 4\pi R^2`,
+    :math:`A_{\rm in} = 4\pi r_0^2`) gives
+
+    .. math::
+
+       W_{\rm oi} = (R/r_0)^2\,W_{\rm io},
+
+    and :math:`W_{\rm ii} = 0` by convex-cavity reasoning identical
+    to cylinder.
+
+    Parameters
+    ----------
+    r_0, R
+        Inner and outer radii (:math:`0 < r_0 < R`).
+    radii, sig_t
+        Homogeneous single-region inputs: ``len(radii) == 1``.
+    dps
+        mpmath working precision.
+
+    Returns
+    -------
+    W : ndarray, shape (2, 2)
+        Transmission matrix [outer, inner] × [outer, inner].
+    """
+    if not (0.0 < r_0 < R):
+        raise ValueError(
+            f"Hollow sphere requires 0 < r_0 < R; got r_0={r_0}, R={R}"
+        )
+    sig_t = np.asarray(sig_t, dtype=float)
+    radii = np.asarray(radii, dtype=float)
+    if len(radii) != 1 or len(sig_t) != 1:
+        raise NotImplementedError(
+            "Multi-region hollow sphere transmission is planned but "
+            "not yet implemented — pass a single-region annulus "
+            "(len(radii) == 1)."
+        )
+    sig_t_val = float(sig_t[0])
+
+    theta_c = float(np.arcsin(r_0 / R))
+
+    with mpmath.workdps(dps):
+        W_oo = 2.0 * float(mpmath.quad(
+            lambda t: (
+                mpmath.cos(t) * mpmath.sin(t)
+                * mpmath.exp(-2.0 * sig_t_val * R * mpmath.cos(t))
+            ),
+            [mpmath.mpf(theta_c), mpmath.pi / 2],
+        ))
+
+        def _chord(t):
+            h_sq = R * R * float(mpmath.sin(t)) ** 2
+            return R * float(mpmath.cos(t)) - float(
+                mpmath.sqrt(mpmath.mpf(r_0 * r_0 - h_sq))
+            )
+
+        W_io = 2.0 * float(mpmath.quad(
+            lambda t: (
+                mpmath.cos(t) * mpmath.sin(t)
+                * mpmath.exp(-sig_t_val * _chord(t))
+            ),
+            [mpmath.mpf(0.0), mpmath.mpf(theta_c)],
+        ))
+
+    # Reciprocity on 4π R² / 4π r_0² — sphere area ratio is (R/r_0)².
+    W_oi = (R / r_0) ** 2 * W_io
+    return np.array([[W_oo, W_oi], [W_io, 0.0]])
+
+
 def reflection_white_rank2(
     W: np.ndarray,
 ) -> np.ndarray:
@@ -2785,16 +2880,17 @@ def _build_closure_operator_rank2_white(
         r0 = float(geometry.inner_radius)
         R_out = float(radii[-1])
         W = compute_hollow_cyl_transmission(r0, R_out, radii, sig_t, dps=dps)
-    else:
-        # Hollow sphere: analogous chord decomposition but with sphere's
-        # 3-D kernel (bare exp(-τ), no Ki). Planned in Phase F.4 part 2.
+    elif geometry.kind == "sphere-1d":
+        # Hollow sphere (Phase F.4): same chord decomposition as cylinder
+        # but with the bare exp(-τ) kernel (no Ki_3 θ-fold — sphere's
+        # 3-D angular integration is explicit). See
+        # :func:`compute_hollow_sph_transmission` for the derivation.
+        r0 = float(geometry.inner_radius)
+        R_out = float(radii[-1])
+        W = compute_hollow_sph_transmission(r0, R_out, radii, sig_t, dps=dps)
+    else:  # pragma: no cover
         raise NotImplementedError(
-            f"Rank-2 white BC for kind={geometry.kind!r} with "
-            f"inner_radius={geometry.inner_radius} is planned in Phase "
-            f"F.4 (sphere — chord decomposition via exp(-τ) kernel). "
-            f"Hollow cylinder IS supported; hollow sphere lands next. "
-            f"Use reflection='marshak' for rank-1 Mark on hollow sphere "
-            f"until the sphere branch ships."
+            f"Rank-2 white BC for kind={geometry.kind!r} not implemented."
         )
 
     R_matrix = reflection_white_rank2(W)

@@ -371,6 +371,80 @@ class TestRank2SlabKEffKInfConvergence:
             f"rank-1 Mark err={e_mark:.3e}"
         )
 
+    @pytest.mark.parametrize("r0, err_ceiling", [
+        (0.1, 1e-2),
+        (0.2, 2e-2),
+        (0.3, 5e-2),
+    ])
+    def test_hollow_sph_rank2_beats_rank1_mark(self, r0, err_ceiling):
+        r"""Phase F.4 part 2: rank-2 white BC on hollow sphere beats
+        rank-1 Mark and reaches the per-:math:`r_0` error ceiling at
+        default quadrature. Hollow sphere fares better than cylinder
+        under the same rank-1-per-face closure because the sphere's
+        higher symmetry captures more of the physics at the scalar
+        mode — see table in ``docs/theory/peierls_unified.rst``.
+        """
+        from orpheus.derivations.peierls_geometry import (
+            CurvilinearGeometry,
+            build_volume_kernel,
+        )
+
+        sig_t_v, sig_s_v, nu_sig_f_v = 1.0, 0.5, 0.75
+        k_inf = nu_sig_f_v / (sig_t_v - sig_s_v)
+        R_out = 1.0
+        geom = CurvilinearGeometry(kind="sphere-1d", inner_radius=r0)
+        radii = np.array([R_out])
+        sig_t = np.array([sig_t_v])
+        r_nodes, r_wts, panels = composite_gl_r(
+            radii, 2, 4, dps=15, inner_radius=r0,
+        )
+        K_vol = build_volume_kernel(
+            geom, r_nodes, panels, radii, sig_t,
+            n_angular=24, n_rho=24, dps=15,
+        )
+        results = {}
+        for tag, refl in (("mark", "mark"), ("white", "white")):
+            K = K_vol + build_closure_operator(
+                geom, r_nodes, r_wts, radii, sig_t,
+                reflection=refl, n_angular=24, n_surf_quad=24, dps=15,
+            ).as_matrix()
+            results[tag] = _solve_k_eff(K, sig_t_v, sig_s_v, nu_sig_f_v)
+        e_mark = abs(results["mark"] - k_inf) / k_inf
+        e_white = abs(results["white"] - k_inf) / k_inf
+        assert e_white < e_mark / 5, (
+            f"r_0={r0}: sphere rank-2 err={e_white:.3e} must beat "
+            f"rank-1 Mark err={e_mark:.3e} by ≥5×"
+        )
+        assert e_white < err_ceiling, (
+            f"r_0={r0}: rank-2 err={e_white:.3e} above ceiling "
+            f"{err_ceiling:.0e}"
+        )
+
+    def test_hollow_sph_transmission_zero_absorption_conservation(self):
+        r"""Zero-absorption sanity: with :math:`\Sigma_t = 0` every ray
+        returns to SOME surface.
+        :math:`W_{\rm oo} + W_{\rm io} = 1` (outer emissions all return);
+        :math:`W_{\rm oi} + W_{\rm ii} = 1` (inner emissions all return,
+        all to outer since :math:`W_{\rm ii} = 0`).
+        Sphere-area reciprocity :math:`W_{\rm oi} = (R/r_0)^2 W_{\rm io}`
+        must hold — catches a conceptual mis-port from the cylinder
+        case (where reciprocity is :math:`R/r_0`, not :math:`(R/r_0)^2`).
+        """
+        from orpheus.derivations.peierls_geometry import (
+            compute_hollow_sph_transmission,
+        )
+
+        r0, R_out = 0.3, 1.0
+        W = compute_hollow_sph_transmission(
+            r0, R_out, np.array([R_out]), np.array([0.0]), dps=15,
+        )
+        # Outer emissions go to outer (grazing) or inner: sum = 1.
+        assert abs(W[0, 0] + W[1, 0] - 1.0) < 1e-14
+        # Inner emissions all reach outer (convex cavity): W_oi = 1.
+        assert abs(W[0, 1] - 1.0) < 1e-14
+        # Reciprocity: W_oi = (R/r_0)² · W_io.
+        assert abs(W[0, 1] - (R_out / r0) ** 2 * W[1, 0]) < 1e-14
+
     def test_hollow_cyl_rank2_partial_current_balance_closes(self):
         r"""The rank-2 tensor :math:`K_{\rm bc} = G R P` on hollow cylinder
         agrees with the reference partial-current balance

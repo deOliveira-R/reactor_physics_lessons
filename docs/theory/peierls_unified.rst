@@ -105,9 +105,15 @@ or before extending the architecture to a new geometry.**
   :math:`r_0 = 0.1 R` the rank-2 residual is 1.4 % (vs rank-1
   Mark's 25 %); for :math:`r_0 = 0.3 R` it is 13 %. Closing to
   machine precision requires rank-N per-face — planned in Phase
-  F.5. Hollow sphere rank-2 lands in a follow-up commit (same
-  chord decomposition but with :math:`e^{-\tau}` kernel instead
-  of :math:`\mathrm{Ki}_3`).
+  F.5. **Hollow sphere** uses the same chord decomposition
+  (:func:`~orpheus.derivations.peierls_geometry.compute_hollow_sph_transmission`)
+  with the bare :math:`e^{-\tau}` kernel (no Bickley fold) and
+  reciprocity :math:`W_{\rm oi} = (R/r_0)^2\,W_{\rm io}` on
+  spherical surface areas. The sphere's higher symmetry yields
+  smaller scalar-mode residuals than cylinder:
+  :math:`r_0 = 0.1 R` → 0.4 % (70× over rank-1 Mark),
+  :math:`r_0 = 0.2 R` → 1.2 % (24×),
+  :math:`r_0 = 0.3 R` → 3.3 % (10×).
 - **Historical note.** Standard references
   ([Sanchez1982]_, [Hebert2020]_, [Stamm1983]_, [BellGlasstone1970]_,
   [CaseZweifel1967]_) present each geometry in **chord coordinates**
