@@ -3993,8 +3993,14 @@ def solve_peierls_1g(
     sig_s = np.asarray(sig_s, dtype=float)
     nu_sig_f = np.asarray(nu_sig_f, dtype=float)
 
+    # Forward hollow-cell cavity exclusion to the radial mesh builder.
+    # Without ``inner_radius`` the mesh spans [0, R] and erroneously
+    # places quadrature nodes inside the cavity (Issue #119 — inflated
+    # the Phase F.4 scalar N=1 residual from the quadrature-limited
+    # 0.077 % to ~1.5 % at r_0/R = 0.3).
     r_nodes, r_wts, panels = composite_gl_r(
         radii, n_panels_per_region, p_order, dps=dps,
+        inner_radius=getattr(geometry, "inner_radius", 0.0) or 0.0,
     )
     K = build_volume_kernel(
         geometry, r_nodes, panels, radii, sig_t,

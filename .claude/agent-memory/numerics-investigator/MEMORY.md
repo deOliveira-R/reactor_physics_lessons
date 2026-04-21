@@ -2,3 +2,5 @@
 - [Peierls rank-N investigation](peierls_rank_n.md) — Sphere G_bc = 4·P_esc identity, α coefficients scan, cylinder α=1 partial success
 - [Peierls K_vol bugs](peierls_kvol_bugs.md) — Slab cross-panel + sphere/cyl ray-crossing integration bugs; row-sum K·1 blind on sphere via partition-of-unity
 - [Rank-N hollow-sph measure bug](peierls_rank_n_measure_bug.md) — P/G primitives in Lambert basis, W in μ-weighted basis: root cause of 5-15% k_eff residual at N=2; diagnostic scripts committed
+- [Rank-N W mixed-basis proof](peierls_rank_n_W_mixed_basis.md) — MC + σ_t=0 closed form prove W is CORRECT as integral but MIXED-BASIS (Lambert-in, Marshak-out). Bug is in P/G primitives (missing surface Jacobian) and/or closure reflection operator.
+- [Rank-N closure NOT a factor fix](peierls_rank_n_closure_not_basis.md) — Empirical scaling scan: optimal mode-1 scale varies with sig_t × R, RULING OUT missing-constant fixes. Plan's Jacobian+B^µ recipe gives 3.87% not 0.1%. N=1 Model-P=A+G=B bit-exact. Inner_radius plumbing bug FIXED.

@@ -325,6 +325,72 @@ class TestRank2SlabKEffKInfConvergence:
                 n_angular=16, n_rho=16, n_surf_quad=16, dps=15,
             )
 
+    def test_solve_peierls_1g_hollow_sph_white_rank2_inner_radius_plumbing(self):
+        r"""Regression for an orthogonal bug (Issue #119 follow-up):
+        :func:`solve_peierls_1g` must forward the cell's
+        :attr:`inner_radius` to :func:`composite_gl_r` so that the radial
+        quadrature is restricted to the annulus :math:`[r_0, R]` rather
+        than the disk :math:`[0, R]`.
+
+        Without this fix, quadrature nodes landed inside the cavity and
+        the Phase F.4 rank-2 residual was spuriously inflated from the
+        quadrature-limited ~0.08 % to ~1.5 % at :math:`r_0/R = 0.3`.
+        The gate here is that the rank-2 closure reproduces the direct
+        :func:`build_closure_operator` + :func:`build_volume_kernel`
+        assembly path (same k_eff to 1e-10).
+        """
+        from orpheus.derivations.peierls_geometry import (
+            CurvilinearGeometry,
+            build_volume_kernel,
+            solve_peierls_1g,
+        )
+
+        R_out, r_0 = 5.0, 1.5
+        sig_t_v, sig_s_v, nu_sig_f_v = 1.0, 0.5, 0.75
+        geom = CurvilinearGeometry(kind="sphere-1d", inner_radius=r_0)
+        radii = np.array([R_out])
+        sig_t = np.array([sig_t_v])
+
+        # Direct path with explicit inner_radius on the radial mesh:
+        r_nodes, r_wts, panels = composite_gl_r(
+            radii, 2, 4, dps=15, inner_radius=r_0,
+        )
+        K_vol = build_volume_kernel(
+            geom, r_nodes, panels, radii, sig_t,
+            n_angular=24, n_rho=24, dps=15,
+        )
+        op = build_closure_operator(
+            geom, r_nodes, r_wts, radii, sig_t,
+            reflection="white", n_angular=24, n_surf_quad=24, dps=15,
+        )
+        K_ref = K_vol + op.as_matrix()
+        k_ref = _solve_k_eff(K_ref, sig_t_v, sig_s_v, nu_sig_f_v)
+
+        # Public-driver path:
+        sol = solve_peierls_1g(
+            geom, radii=radii, sig_t=sig_t,
+            sig_s=np.array([sig_s_v]),
+            nu_sig_f=np.array([nu_sig_f_v]),
+            boundary="white_rank2",
+            n_panels_per_region=2, p_order=4,
+            n_angular=24, n_rho=24, n_surf_quad=24, dps=15,
+        )
+
+        assert sol.r_nodes.min() >= r_0 - 1e-10, (
+            f"solve_peierls_1g placed a quadrature node inside the cavity: "
+            f"r_nodes.min()={sol.r_nodes.min():.6f} < r_0={r_0}. "
+            f"composite_gl_r call must receive inner_radius=geometry.inner_radius."
+        )
+        # 1e-8 tolerance accommodates the power iteration's convergence
+        # criterion (tol=1e-10 on k_eff between iterations plus floating
+        # rounding in the inner-product normalisation).
+        assert abs(float(sol.k_eff) - k_ref) < 1e-8, (
+            f"solve_peierls_1g k_eff={sol.k_eff:.12f} must match direct "
+            f"assembly k_eff={k_ref:.12f} to 1e-8 — the two paths go "
+            f"through the same closure machinery once inner_radius is "
+            f"plumbed through. Delta = {abs(float(sol.k_eff) - k_ref):.3e}."
+        )
+
     @pytest.mark.parametrize("r0", [0.1, 0.2, 0.3])
     def test_hollow_cyl_rank2_beats_rank1_mark(self, r0):
         r"""Phase F.4: rank-2 white BC on hollow cylinder beats rank-1
