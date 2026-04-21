@@ -103,9 +103,14 @@ or before extending the architecture to a new geometry.**
   cylinder's inward J⁻ at :math:`r_0` carries non-trivial
   angular moments that the scalar mode omits. For
   :math:`r_0 = 0.1 R` the rank-2 residual is 1.4 % (vs rank-1
-  Mark's 25 %); for :math:`r_0 = 0.3 R` it is 13 %. Closing to
-  machine precision requires rank-N per-face —
-  :ref:`Phase F.5 investigation <peierls-rank-n-per-face-marshak>`.
+  Mark's 25 %); for :math:`r_0 = 0.3 R` it is 13 %. The numerical
+  residual does **not** vanish under plain Legendre rank-N
+  refinement — see :ref:`Phase F.5 close-out
+  <peierls-rank-n-per-face-closeout>` for the five-reference
+  synthesis, the :math:`c_{\rm in}` structural obstruction, the
+  falsification of a novel per-mode Villarino-Stamm'ler extension,
+  and the production decision to keep F.4 rank-2 scalar as the
+  closure.
   **Hollow sphere** uses the same chord decomposition
   (:func:`~orpheus.derivations.peierls_geometry.compute_hollow_sph_transmission`)
   with the bare :math:`e^{-\tau}` kernel (no Bickley fold) and
@@ -2986,126 +2991,455 @@ uniformly. The
 fixtures gate this explicitly.
 
 
-.. _peierls-rank-n-per-face-marshak:
+.. _peierls-rank-n-per-face-closeout:
 
-Phase F.5 — Rank-N per-face Marshak primitives (Issue #119, open)
-==================================================================
+Phase F.5 — Rank-N per-face closure: five-reference synthesis and structural close-out (Issue #119, CLOSED 2026-04-21)
+======================================================================================================================
 
-**Status as of 2026-04-21**: Infrastructure landed; closure still
-open. The `NotImplementedError` guard in
+Status
+------
+
+**Issue #119 is CLOSED as of 2026-04-21.** The Phase F.4 *scalar
+rank-2 per-face* closure is the production path for hollow 2-surface
+cells under white BC. The :exc:`NotImplementedError` guard in
 :func:`~orpheus.derivations.peierls_geometry.build_closure_operator`
-remains in place for ``n_bc_modes > 1`` + ``reflection="white"`` on
-2-surface cells. ``n_bc_modes=1`` (Phase F.3 / F.4 rank-2 per face)
-continues to be the working path.
+(``n_bc_modes > 1`` + ``reflection="white"`` on 2-surface cells)
+**remains in place by design** — the guard is not a bug, it is the
+documented refusal of a structurally unreachable closure. Five
+independent authoritative references converge on scalar / DP-0 for
+1D curvilinear interface-current methods; a novel per-mode
+Villarino-Stamm'ler extension tested in this investigation does not
+break the plateau; two research-tag pathways remain open for future
+work. The Marshak/Sanchez rank-N primitives are retained as tested
+dead code for that future research.
 
-Motivation
------------
+Motivation (preserved from the original open-issue section)
+-----------------------------------------------------------
 
 The scalar rank-2 per-face white BC closes the Wigner-Seitz identity
 on slab exactly (via the legacy :math:`E_2` / :math:`E_3` bilinear
 form) but leaves a 1–13 % residual on curved hollow cells. Extending
 to rank-:math:`N` per face — so each surface's outgoing distribution
-is resolved into more than one angular moment — is expected to drive
-that residual toward machine precision. The single-surface rank-N
-Gelbard DP\ :sub:`N-1` path (`build_white_bc_correction_rank_n`)
-already converges monotonically with :math:`N` for solid cylinder
-/ sphere; the per-face generalisation inherits the same structure
-but across two surfaces, coupled by a :math:`(2N \times 2N)`
-transmission matrix :math:`W_N`.
+is resolved into more than one angular moment — was expected to drive
+that residual toward machine precision. The single-surface rank-:math:`N`
+Gelbard DP\ :sub:`N-1` path
+(:func:`~orpheus.derivations.peierls_geometry.build_white_bc_correction_rank_n`)
+converges monotonically with :math:`N` for the solid cylinder /
+sphere, so per-face generalisation — two surfaces coupled by a
+:math:`(2N \times 2N)` transmission matrix :math:`W_N` — looked
+inevitable. **It is not.** The remainder of this section is the
+archival record of why.
 
-Infrastructure landed
-----------------------
+Five-reference literature synthesis
+-----------------------------------
+
+Five authoritative reactor-physics references were scanned for an
+independent derivation of the Sanchez-McCormick 1982 §III.F.1
+Legendre-moment rank-:math:`N` ladder applied to curvilinear
+(hollow cylindrical / spherical) cells. The surprising finding is
+that **no such derivation exists in the canonical textbook corpus**.
+
+.. list-table:: Curvilinear interface-current closures across five references
+   :header-rows: 1
+   :widths: 28 26 26 20
+
+   * - Reference
+     - Location
+     - Closure form
+     - Verdict
+   * - Ligou (1982)
+     - Ch. 8 §8.2.3, Eq. 8.47
+     - Scalar :math:`j^-` with cosine return
+     - Scalar (= F.4)
+   * - Sanchez, Mao, Santandrea (2002)
+     - NSE 140:23, Eqs. 37, 40
+     - Piecewise-constant angular (PCA) sectors OR collocation-:math:`\delta_2`
+     - Sector-based, not Legendre
+   * - Stamm'ler & Abbate (1983)
+     - Ch. IV §10, Eqs. 29–34
+     - Scalar :math:`j^-` + cosine multi-reflection
+     - Scalar (= F.4)
+   * - Stacey (2007)
+     - Ch. 9 §9.4–§9.5, Eqs. 9.66–9.110
+     - DP-0 per face (isotropic hemisphere)
+     - Cartesian-only DP-0
+   * - Hébert (2009)
+     - Ch. 3 §3.8.1 (abstract) and §3.8.4 Eq. 3.323 (1D cyl)
+     - DP\ :sub:`N` machinery for 2D Cartesian pincells; scalar Eq. 3.323 for 1D curvilinear
+     - Cartesian-only DP\ :sub:`N`; 1D = F.4
+
+**The keystone fact.** Hébert 2009 Eq. 3.323 is the *modern textbook
+statement* of the 1D cylindrical interface-current closure under
+white BC:
+
+.. math::
+   :label: hebert-3-323
+
+   \tilde P \;=\; P \;+\; \frac{\beta^+}{1 - \beta^+ P_{SS}}\,
+      P_{iS}\, p_{Sj}^{\mathsf T}.
+
+With :math:`\beta^+ = 1` (white BC), this is **Stamm'ler Eq. 34** in
+modern notation, and it is **ORPHEUS F.4** in the rank-0 limit:
+rank-0 scalar :math:`P_{SS}` (cylinder face return probability) with
+the scalar geometric series :math:`(1 - P_{SS})^{-1}` is exactly the
+:math:`(I - W)^{-1}` we ship at :math:`N = 1`. Three independent
+textbook lineages (Ligou, Stamm'ler, Hébert) and one slab-response
+textbook (Stacey) arrive at the same scalar closure. The rank-:math:`N`
+Legendre ladder of Sanchez-McCormick 1982 §III.F.1 has **zero
+cross-validation** among these five references.
+
+See :file:`.claude/agent-memory/literature-researcher/rank_n_closure_four_references_synthesis.md`
+for the Ligou / Sanchez 2002 / Stamm'ler IV / Stacey 9
+side-by-side, and
+:file:`.claude/agent-memory/literature-researcher/hebert_2009_ch3_interface_currents.md`
+for the Hébert 2009 Ch. 3 extraction (5th reference, keystone).
+
+The structural obstruction — the :math:`c_{\rm in}` remapping
+----------------------------------------------------------------
+
+Why do all five textbooks refuse rank-:math:`N` on curvilinear
+cells? The answer is geometric. On a hollow spherical (or
+cylindrical) cell of outer radius :math:`R` and inner radius
+:math:`r_0`, a neutron leaving the outer surface with emission
+cosine :math:`\mu_{\rm emit}` (relative to the outer outward normal)
+strikes the inner surface with arrival cosine
+
+.. math::
+   :label: c-in-remapping
+
+   c_{\rm in}(\mu_{\rm emit}) \;=\;
+      \sqrt{1 - \left(\frac{R}{r_0}\right)^{\!2}\!
+         \bigl(1 - \mu_{\rm emit}^2\bigr)},
+
+relative to the inner outward normal. This is geometry, not
+physics. The Legendre basis at the outer surface is
+:math:`\{\tilde P_n(\mu_{\rm emit})\}_{n \ge 0}`; the Legendre basis
+at the inner surface is :math:`\{\tilde P_n(c_{\rm in})\}_{n \ge 0}`.
+The outer→inner transmission integrand therefore couples
+:math:`\tilde P_n(\mu_{\rm emit})` at emission with
+:math:`\tilde P_m(c_{\rm in}(\mu_{\rm emit}))` at arrival, with
+:math:`c_{\rm in}` a non-trivial nonlinear function of
+:math:`\mu_{\rm emit}` parameterised by :math:`R/r_0`.
+
+At :math:`\sigma_t = 0` (pure geometry), the conservation identity
+that F.4's physics requires at every mode is
+
+.. math::
+   :label: mode-conservation-target
+
+   W_{\rm oo}[n, n] \;+\; W_{\rm io}[n, n] \;=\; \delta_{n, 0}
+   \quad\text{(naive per-mode conservation)}.
+
+Direct numerical evaluation of the shipped (Monte-Carlo-verified)
+:func:`~orpheus.derivations.peierls_geometry.compute_hollow_sph_transmission_rank_n`
+at :math:`r_0/R = 0.3`, :math:`\sigma_t = 0` gives:
+
+.. list-table:: Per-mode conservation on hollow sphere (:math:`r_0/R = 0.3`, :math:`\sigma_t = 0`)
+   :header-rows: 1
+   :widths: 20 40 40
+
+   * - Mode :math:`n`
+     - :math:`W_{\rm oo}[n,n] + W_{\rm io}[n,n]`
+     - Status
+   * - 0
+     - 1.000
+     - F.4 identity — exact
+   * - 1
+     - 0.281
+     - Structural failure
+   * - 2
+     - 0.134
+     - Structural failure
+   * - 3
+     - 0.092
+     - Structural failure
+
+**Why mode 0 works**: :math:`\tilde P_0 = 1` is angle-independent.
+The :math:`c_{\rm in}` remapping is *invisible* at mode 0 because
+:math:`\tilde P_0(c_{\rm in}) = \tilde P_0(\mu_{\rm emit}) = 1`
+trivially, so the integrand factorises and conservation holds.
+
+**Why modes** :math:`n \ge 1` **fail**: the Legendre basis does
+*not* diagonalise the nonlinear :math:`\mu_{\rm emit} \mapsto
+c_{\rm in}` map. The :math:`W_{\rm io}` integrand couples
+:math:`\tilde P_n(\mu_{\rm emit})` (emission) with
+:math:`\tilde P_m(c_{\rm in}(\mu_{\rm emit}))` (arrival), and no
+placement of :math:`(2n+1)` Gelbard factors, no half-range Gram
+rescaling, no (Lambert ↔ Marshak) basis permutation can undo the
+geometric distortion inside the kernel. This was confirmed by the
+60-recipe empirical scan summarised in
+:file:`.claude/agent-memory/numerics-investigator/peierls_rank_n_sanchez_closure_failed.md`:
+every tested assembly reached the same 1.42 % plateau at
+:math:`\sigma_t \cdot R = 5`, :math:`N \ge 2`.
+
+Villarino-Stamm'ler per-mode extension (novel, falsified 2026-04-21)
+--------------------------------------------------------------------
+
+Hébert 2009 Ch. 3 explicitly warns (p. 129) that the rank-0 DP\
+:sub:`N` primitives are *not* guaranteed conservative and recommends
+an a-posteriori **Villarino-Stamm'ler normalisation**
+(Eqs. 3.347–3.352). Villarino-Stamm'ler (V-S) is a 30-line
+Gauss-Seidel fixed-point iteration that multiplies the symmetric
+rank-0 :math:`t` matrix by an additive symmetric correction to
+force row conservation while preserving reciprocity.
+
+.. math::
+   :label: hebert-3-350
+
+   \hat{t}_{\ell m} \;=\; (z_{\ell} + z_{m})\, t_{\ell m},
+   \qquad \ell,\, m \;=\; 1, \ldots, \Lambda + I.
+
+Reciprocity is preserved by construction because the scalar factor
+:math:`(z_{\ell} + z_{m})` is symmetric in :math:`\ell \leftrightarrow m`
+and :math:`t_{\ell m}` is already symmetric (Hébert p. 129).
+
+Hébert defines V-S only on rank-0 primitives. The novel extension
+tested here is **per-diagonal-mode V-S on the rank-:math:`N` W**:
+for each mode :math:`n \in \{0, \ldots, N{-}1\}`, extract the 2×2
+diagonal block
+
+.. math::
+
+   W_{\rm sub}[n] \;=\;
+   \begin{pmatrix}
+      W[n,\, n] & W[n,\, N{+}n] \\[2pt]
+      W[N{+}n,\, n] & W[N{+}n,\, N{+}n]
+   \end{pmatrix},
+
+solve the 2-unknown V-S system for :math:`(z_{\rm outer}^{(n)},
+z_{\rm inner}^{(n)})`, and apply the additive symmetric correction
+per mode. The target is the F.4 scalar row sum (mode-0 conserves
+against F.4's target as a sanity check; :math:`n \ge 1` is forced
+onto F.4's mode-0 target, which is the strongest possible demand
+for per-mode conservation). Off-diagonal cross-mode blocks
+:math:`n \ne m` are left untouched.
+
+.. list-table:: Per-mode V-S residuals on hollow sphere (:math:`r_0/R = 0.3`, :math:`\sigma_t \cdot R = 5`)
+   :header-rows: 1
+   :widths: 10 22 22 22 22
+
+   * - :math:`N`
+     - µ-ortho raw
+     - µ-ortho + V-S
+     - Shipped Marshak raw
+     - Shipped Marshak + V-S
+   * - 1
+     - 2.55 %
+     - 2.17 %
+     - 13.53 %
+     - 13.53 %
+   * - 2
+     - **1.42 %**
+     - **1.87 % WORSE**
+     - 10.86 %
+     - 10.83 %
+   * - 3
+     - 1.42 %
+     - 1.87 % WORSE
+     - 10.70 %
+     - 10.66 %
+   * - 4
+     - 1.43 %
+     - 1.88 % WORSE
+     - 10.70 %
+     - 10.66 %
+
+Reciprocity is preserved at machine precision
+(:math:`A_i\, W_{ij} - A_j\, W_{ji} \le 10^{-16}`) for every row of
+the table, both pre- and post-V-S, confirming that the additive
+symmetric form does what Hébert Eqs. 3.350 claim (p. 129). The V-S
+scheme *also* hits its design target: at :math:`\sigma_t = 0` the
+per-mode row sums are driven to the F.4 scalar targets for every
+mode :math:`n` (e.g., at :math:`N = 3`: outer row sum
+:math:`2.137 \to 1.910`, inner :math:`0.118 \to 0.090` for
+:math:`n = 0`; outer :math:`1.191 \to 1.910`,
+:math:`0.547 \to 1.910` for :math:`n = 1, 2`).
+
+**The falsification is unambiguous.** Enforcing per-mode
+conservation does not close the plateau — on the µ-ortho pipeline
+it makes k\ :sub:`eff` **worse** (1.42 % → 1.87 %); on the shipped
+Marshak pipeline it is essentially a no-op (10.86 % → 10.83 %).
+**The plateau is a cross-mode coupling failure, not a
+conservation-forcing failure.** Correcting the diagonal blocks
+distorts the balance between diagonal and off-diagonal coupling,
+shifting the closure further off rather than toward k\ :sub:`inf`.
+
+Diagnostic at
+:file:`derivations/diagnostics/diag_rank_n_villarino_stammler_per_mode.py`;
+full memo at
+:file:`.claude/agent-memory/numerics-investigator/peierls_villarino_stammler_per_mode.md`.
+
+Production closure decision
+---------------------------
+
+**F.4 scalar rank-2 per-face is production.** Its residual across
+optical thickness at :math:`r_0/R = 0.3` (from
+:file:`derivations/diagnostics/diag_rank_n_closure_characterization.py`):
+
+.. list-table:: F.4 scalar rank-2 residual, hollow sphere, :math:`r_0/R = 0.3`
+   :header-rows: 1
+   :widths: 20 20 60
+
+   * - :math:`\sigma_t \cdot R`
+     - :math:`|k_{\rm eff} - k_{\infty}| / k_{\infty}`
+     - Regime
+   * - 1
+     - 3.27 %
+     - Streaming limit (quadrature-dominated)
+   * - 2.5
+     - 0.55 %
+     - Intermediate
+   * - 5
+     - **0.077 %**
+     - Near quadrature floor (Mark DP\ :sub:`0` truncation ~0.04–0.1 %)
+   * - 10
+     - 0.26 %
+     - Forward-peaked flux
+   * - 20
+     - 0.45 %
+     - Strongly absorbing
+
+The 0.077 % minimum at :math:`\sigma_t \cdot R = 5` coincides with
+the Mark DP\ :sub:`0` truncation floor for this geometry, not a
+pure radial-quadrature floor — refining the radial Gauss-Legendre
+grid does not drive it below ~0.04 %. This is the expected
+expression of Stacey 2007's warning on p. 329 that
+:math:`[E_2(\Sigma)]^N \ne E_2(N\Sigma)` for DP-0 subdivision of
+forward-peaked boundary fluxes: the error class is geometric, baked
+into the DP-0 assumption, and cannot be removed without changing
+the angular representation.
+
+Infrastructure retained (dead-code-guarded for future research)
+----------------------------------------------------------------
+
+The following rank-:math:`N` primitives landed in Phase F.5 are kept
+in the source tree because they are tested, correct at
+:math:`\sigma_t \to 0`, and useful for the two open research paths
+documented below. They are unreachable through the public API
+while the :exc:`NotImplementedError` guard remains in place.
 
 - :func:`~orpheus.derivations.peierls_geometry.compute_hollow_sph_transmission_rank_n`
   — :math:`(2N \times 2N)` surface-to-surface transmission matrix
   for hollow sphere; bit-exact reduction to the scalar transmission
   at :math:`N = 1`; Sanchez-McCormick reciprocity
-  :math:`A_k\,W_{jk}^{(m,n)} = A_j\,W_{kj}^{(n,m)}` (transposed mode
-  indices) verified to 1e-14.
+  :math:`A_k\,W_{jk}^{(m,n)} = A_j\,W_{kj}^{(n,m)}` (transposed
+  mode indices) verified to :math:`10^{-14}`; Monte-Carlo
+  cross-checked to (m, n) = (2, 2) at 4 M samples.
 
 - Lambert-basis per-face mode primitives
-  (``compute_{P_esc,G_bc}_{outer,inner}_mode``): integrand
+  (``compute_{P_esc, G_bc}_{outer, inner}_mode``): integrand
   :math:`\sin\theta\,\tilde P_n(\mu_{\rm exit})\,K_{\rm esc}(\tau)`
   — no :math:`\mu` weight. At :math:`n = 0` these reduce bit-exactly
   to the scalar primitives used by the Phase F.4 rank-2 closure.
 
-- **Marshak-basis per-face mode primitives**
-  (``compute_{P_esc,G_bc}_{outer,inner}_mode_marshak``, added
-  2026-04-21): integrand
+- Marshak-basis per-face mode primitives
+  (``compute_{P_esc, G_bc}_{outer, inner}_mode_marshak``): integrand
   :math:`\sin\theta\,\mu\,\tilde P_n(\mu)\,K_{\rm esc}(\tau)` — with
-  :math:`\mu` weight for every mode including :math:`n = 0`. This
-  places P, G, and :math:`W` in the same partial-current-moment
-  half-range inner product (half-range Gram matrix
-  :math:`B^{\mu}_{mn} = \int_0^1 \mu\,\tilde P_m\,\tilde P_n\,\mathrm d\mu`).
+  :math:`\mu` weight for every mode including :math:`n = 0`.
   Verified at :math:`\sigma_t \to 0` against independent
-  ``mpmath.quad`` references.
+  ``mpmath.quad`` references. Places :math:`P`, :math:`G`, and
+  :math:`W` in the same partial-current-moment half-range inner
+  product (half-range Gram matrix
+  :math:`B^{\mu}_{mn} = \int_0^1 \mu\,\tilde P_m\,\tilde P_n\,\mathrm d\mu`).
 
-Investigation so far
----------------------
+- ``_build_closure_operator_rank_n_white`` — rank-:math:`N` assembly
+  helper using Marshak primitives; reachable only if the
+  :exc:`NotImplementedError` guard is lifted.
 
-The numerics-investigator diagnosis (commit ``b9bc3df``) isolated a
-**measure mismatch** between the Lambert-basis P/G primitives and
-the Marshak-basis :math:`W`: their Gram matrices differ (:math:`B^L`
-is diagonal, :math:`B^\mu` is not), and at :math:`N \ge 2` the
-matrix product :math:`G\,(I - W)^{-1}\,P` couples incompatible inner
-products. That diagnosis motivated the Marshak-basis primitives
-above.
+These primitives would be the starting point for a Sanchez 2002
+piecewise-constant angular sector closure or a geometry-adapted
+basis — they are retained so that future work does not need to
+reproduce ~1500 lines of peer-reviewed infrastructure.
 
-A 16-recipe scan (commit 2026-04-21) tested:
+Open research (not production-blocking)
+---------------------------------------
 
-- P and G in either Lambert or Marshak basis, independently.
-- Optional :math:`(2n + 1)` Gelbard weight applied to the mode
-  dimension of P and/or G.
-- :math:`R` formulas including :math:`(I - W)^{-1}`,
-  :math:`(I - W D)^{-1}`, :math:`(I - D W)^{-1} D`,
-  :math:`D (I - W)^{-1} D`, etc.
+Two paths might break the 1.42 % plateau. Both require novel
+mathematics outside the five-reference corpus. A ``research`` tag
+GitHub issue is filed against each.
 
-with :math:`D = \mathrm{diag}(1, 3, \ldots, 2N-1, 1, 3, \ldots, 2N-1)`.
-None reached the ≤ 0.1 % residual gate at
-:math:`r_0 / R = 0.3`, :math:`N = 2`. The best recipes
-(mixed Lambert/Marshak with Gelbard on one side) achieved ≈ 1.4 %;
-all-Marshak gave ≈ 11 %; shipped all-Lambert gave ≈ 3.9 %.
+1. **Geometry-adapted Legendre basis.** Use
+   :math:`\{\tilde P_n(\mu_{\rm emit})\}` at the outer surface and
+   :math:`\{\tilde P_n(c_{\rm in}(\mu_{\rm emit}))\}` at the inner
+   surface, with the Jacobian
 
-**Key finding**: the mode-1 contribution *degrades* accuracy in
-every recipe tested — the correct scalar N=1 result (0.077 % at
-quadrature limit) gets worse when mode 1 is added via any tested
-assembly. The plan's measure-mismatch hypothesis is a *necessary but
-not sufficient* diagnosis. A deeper bug exists in either the mode-1
-primitive definition, the :math:`W_N` cross-face blocks at
-:math:`n \ge 1`, or the per-face normalisation divisor.
+   .. math::
+      :label: c-in-jacobian
 
-Next-session candidates
-------------------------
+      \frac{\mathrm d c_{\rm in}}{\mathrm d \mu_{\rm emit}}
+      \;=\; \left(\frac{R}{r_0}\right)^{\!2}
+         \frac{\mu_{\rm emit}}{c_{\rm in}(\mu_{\rm emit})},
 
-1. **Monte-Carlo cross-check of** :math:`W_N`. Independently compute
-   :math:`W_{oi}^{(0,1)}` and :math:`W_{io}^{(1,0)}` on hollow sphere
-   via 1M-sample ray tracing. If MC disagrees with
-   :func:`compute_hollow_sph_transmission_rank_n`, the transmission
-   matrix itself is wrong at :math:`n \ge 1`.
+   folded into the transmission integrand. This *diagonalises* the
+   outer→inner geometric map at the basis level, which the plain
+   Legendre ladder fails to do. The closure would need to reduce to
+   F.4 at :math:`N = 1` and then converge to k\ :sub:`inf` as
+   :math:`N \to \infty`. Genuinely novel — not in Ligou, Sanchez
+   2002, Stamm'ler IV, Stacey 9, or Hébert 2009.
 
-2. **Derive per-face mode-n primitives from Sanchez-McCormick 1982
-   §III.F from scratch**, verifying the angular-flux vs
-   partial-current moment convention they use, the exact placement
-   of the :math:`(2n+1)` Gelbard factor, and the Jacobian at the
-   single-surface → per-face generalisation.
+2. **Piecewise-constant angular (PCA) sectors, Sanchez 2002
+   style.** Partition each hemisphere into :math:`N_\theta \times
+   N_\phi` angular sectors and use characteristic functions as the
+   basis (Sanchez 2002 Eq. 37). Conservation is exact by
+   construction because the basis elements are indicator functions
+   and the measure is handled per-sector. Closure reduces to F.4 at
+   :math:`N_\theta \times N_\phi = 1 \times 1`. This is the angular
+   representation APOLLO2's TDT module actually uses in production
+   pin-cell solvers. Major infrastructure lift
+   (~1–2 engineering weeks) because it requires new sector data
+   structures, sector-averaged P/G/W primitives, and new
+   trajectory-tracking.
 
-3. **Compare single-surface rank-N** (`compute_P_esc_mode`,
-   `compute_G_bc_mode` — which converge correctly on solid geometry)
-   **against per-face rank-1 primitives** at a known-good geometry to
-   isolate the structural difference.
+Session trail
+-------------
 
-Orthogonal bug
----------------
+The investigation spanned ~150 k tokens across three sessions on
+``investigate/peierls-solver-bugs``:
 
-`solve_peierls_1g` calls
-:func:`~orpheus.derivations.peierls_geometry.composite_gl_r` without
-``inner_radius`` (:file:`orpheus/derivations/peierls_geometry.py:3978`).
-For hollow cells this places radial quadrature nodes inside the
-cavity, inflating the Phase F.4 N=1 residual from the
-quadrature-limited 0.077 % to 1.5 %. A separate single-line fix is
-filed alongside this issue. Until fixed, benchmark numbers cited
-through the public API are systematically too pessimistic for
-hollow geometries.
+- ``b9bc3df`` — measure-mismatch diagnostics (earlier hypothesis).
+- ``d890a1e`` — feat: rank-:math:`N` per-face infrastructure
+  (Lambert primitives + :math:`(2N \times 2N)` W).
+- ``ca9d68f`` — feat: Marshak partial-current per-face primitives
+  (dead code behind guard).
+- ``53fae60`` — fix: ``solve_peierls_1g`` forwards ``inner_radius``
+  to ``composite_gl_r`` (one-line pre-existing bug) + 33 MC
+  cross-check tests of :math:`W` (all pass — :math:`W` is correct).
+- ``cf6ab48`` — docs: earlier Marshak rank-:math:`N` plan
+  (superseded by four-reference synthesis).
+- ``0b0533b`` — diag: Sanchez-McCormick §III.F.1 recipe
+  investigation (60+ variants, plateaus at 1.43 %).
+- ``a2e2205`` — diag: closure characterisation + cross-:math:`\sigma_t
+  \cdot R` parameter scan.
+- ``a640a83`` — docs: four-reference synthesis (Ligou, Sanchez
+  2002, Stamm'ler IV, Stacey 9). **Headline commit.**
+- ``4a169ea`` — docs: F.4 quadrature-floor data added to close-out.
+- ``ed69a09`` — docs: next-session plan for Hébert extraction.
+- **This commit** — docs: five-reference synthesis + V-S
+  falsification + Issue #119 close-out.
+
+Diagnostic scripts in :file:`derivations/diagnostics/`:
+
+- ``diag_rank_n_W_mc_crosscheck.py`` — :math:`W_N` Monte-Carlo
+  cross-check (33 tests, all pass).
+- ``diag_rank_n_sph_marshak_primitives_sigt_zero.py`` — Marshak
+  primitive :math:`\sigma_t = 0` verification.
+- ``diag_rank_n_closure_characterization.py`` — F.4 vs Sanchez
+  :math:`\sigma_t \cdot R` scan (source of the production residual
+  table above).
+- ``diag_rank_n_sanchez_conservation_probe.py`` — structural
+  diagnosis (per-mode conservation table above).
+- ``diag_sanchez_N_convergence.py`` — Sanchez :math:`N = 1,\ldots,4`
+  plateau proof.
+- ``diag_rank_n_villarino_stammler_per_mode.py`` — V-S per-mode
+  falsification (source of the V-S table above).
+
+Memory files consulted:
+
+- :file:`.claude/agent-memory/literature-researcher/rank_n_closure_four_references_synthesis.md`
+- :file:`.claude/agent-memory/literature-researcher/hebert_2009_ch3_interface_currents.md`
+- :file:`.claude/agent-memory/literature-researcher/sanchez_mccormick_rank_n_per_face.md`
+- :file:`.claude/agent-memory/numerics-investigator/peierls_rank_n_sanchez_closure_failed.md`
+- :file:`.claude/agent-memory/numerics-investigator/peierls_villarino_stammler_per_mode.md`
 
 .. _peierls-rank-n-bc-closure-section:
 

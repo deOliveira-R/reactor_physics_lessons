@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **1059**
+Total tests collected: **1060**
 
 V&V level distribution
 ----------------------
@@ -17,10 +17,10 @@ V&V level distribution
    :widths: 15, 10, 10
 
    L0, 569, 53.7%
-   L1, 274, 25.9%
+   L1, 275, 25.9%
    L2, 36, 3.4%
    L3, 0, 0.0%
-   foundation, 169, 16.0%
+   foundation, 169, 15.9%
    unmarked, 11, 1.0%
 
 Tagging source
@@ -32,7 +32,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 969
+   explicit, 970
    verify, 0
    class-name, 46
    func-name, 0
@@ -67,7 +67,7 @@ Module × level grid
    derivations/test_peierls_cylinder_prefactor, 4, 0, 0, 0, 0, 0
    derivations/test_peierls_cylinder_white_bc, 4, 3, 0, 0, 0, 0
    derivations/test_peierls_geometry, 0, 0, 0, 0, 32, 0
-   derivations/test_peierls_rank2_bc, 9, 20, 0, 0, 4, 0
+   derivations/test_peierls_rank2_bc, 9, 21, 0, 0, 4, 0
    derivations/test_peierls_rank_n_bc, 59, 15, 0, 0, 0, 0
    derivations/test_peierls_rank_n_conservation, 0, 0, 0, 0, 4, 0
    derivations/test_peierls_rank_n_primitives, 19, 0, 0, 0, 0, 0
@@ -125,7 +125,7 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
 
    ``mg-balance``, 165
    ``matrix-eigenvalue``, 160
-   ``peierls-unified``, 135
+   ``peierls-unified``, 136
    ``one-group-kinf``, 132
    ``reflective-bc``, 110
    ``alpha-recursion``, 100
@@ -290,9 +290,14 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
 Orphan equations
 ----------------
 
-Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **28** of the testable equations found on theory pages are orphan.
+Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **33** of the testable equations found on theory pages are orphan.
 
+- ``c-in-jacobian``
+- ``c-in-remapping``
 - ``e1-decomposition``
+- ``hebert-3-323``
+- ``hebert-3-350``
+- ``mode-conservation-target``
 - ``peierls-bc-operator``
 - ``peierls-factored-kernel``
 - ``peierls-moment-J-E1``
