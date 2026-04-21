@@ -95,6 +95,23 @@ F.4 wins at practical cells; both converge to ~0.44 % at thick optical cells.
 
 F.4 mode-0 conservation holds EXACTLY because P̃_0 = 1 is angle-independent. All higher modes fail due to c_in ≠ µ_emit.
 
+### F.4 quadrature convergence (σ_t·R = 5, r_0/R = 0.3)
+
+| n_p | p_order | n_angular | N_r | err % | Time |
+|-----|---------|-----------|-----|-------|------|
+| 2 | 4 | 16 | 8 | 0.27 % | 0.2s |
+| 2 | 4 | 24 | 8 | 0.077 % | 0.4s |
+| 4 | 4 | 24 | 16 | 0.036 % | 1.4s |
+| 4 | 6 | 24 | 24 | 0.082 % | 3.2s |
+| 4 | 6 | 32 | 24 | 0.095 % | 5.6s |
+| 8 | 6 | 32 | 48 | 0.044 % | 34s |
+
+F.4's residual **does not converge to machine precision** under refinement — it fluctuates around a ~0.04-0.1 % FLOOR. This is a Mark DP_0 truncation error intrinsic to the scalar closure, NOT pure quadrature error.
+
+At σ_t·R = 5 the truncation floor is lower than at other parameters (per the cross-parameter scan), explaining why F.4's N=1 is best at this specific operating point. The ~0.04 % floor is the fundamental limit of F.4's approach for curvilinear cells.
+
+The same floor exists for Sanchez rank-N but at a MUCH higher level (~1.42 %) due to the c_in remapping structural failure documented above.
+
 ## Artefacts updated this session
 
 ### New
