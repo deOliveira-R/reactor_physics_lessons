@@ -1,3 +1,4 @@
 - [Lessons](lessons.md) — Diagnostic cascade lessons from past investigations including sweep vs operator inconsistency at r=0
 - [Peierls rank-N investigation](peierls_rank_n.md) — Sphere G_bc = 4·P_esc identity, α coefficients scan, cylinder α=1 partial success
 - [Peierls K_vol bugs](peierls_kvol_bugs.md) — Slab cross-panel + sphere/cyl ray-crossing integration bugs; row-sum K·1 blind on sphere via partition-of-unity
+- [Rank-N hollow-sph measure bug](peierls_rank_n_measure_bug.md) — P/G primitives in Lambert basis, W in μ-weighted basis: root cause of 5-15% k_eff residual at N=2; diagnostic scripts committed
