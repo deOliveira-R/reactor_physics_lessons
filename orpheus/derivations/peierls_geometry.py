@@ -2165,6 +2165,325 @@ def compute_G_bc_inner_mode(
     return G
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Marshak partial-current-moment per-face primitives (Phase F.5, Issue #119)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# These variants add the partial-current weight µ to the integrand of
+# both P_esc and G_bc for every mode (including n = 0). They live in
+# the same moment basis as :func:`compute_hollow_sph_transmission_rank_n`
+# (which has `cos θ · sin θ · P̃_m · P̃_n · e^{-τ}` — i.e. µ dµ with
+# P̃_n(µ) test functions). Using a consistent basis across P, G, and W
+# is the fix for the Phase F.5 closure failure at N ≥ 2 identified in
+# Issue #119: the Lambert / angular-flux primitives have a different
+# inner-product Gram matrix than the Marshak / partial-current ones
+# that W sits in, so the matrix product `G (I − W)⁻¹ P` couples
+# incompatible bases at rank > 1.
+#
+# At N = 1 these new primitives do NOT reduce bit-exactly to the
+# scalar :func:`compute_P_esc_outer` etc. — the scalar primitives are
+# Mark-Lambert (no µ weight). The rank-2 Phase F.4 assembly
+# (:func:`_build_closure_operator_rank2_white`) keeps the scalar
+# primitives, so Phase F.4 regression remains bit-exact; the rank-N
+# (N ≥ 2) assembly in
+# :func:`_build_closure_operator_rank_n_white` uses these Marshak
+# variants instead.
+
+
+def compute_P_esc_outer_mode_marshak(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    n_mode: int,
+    n_angular: int = 32,
+    dps: int = 25,
+) -> np.ndarray:
+    r"""Marshak partial-current moment :math:`n` of the escape
+    probability to the **outer** surface (Phase F.5 / Issue #119).
+
+    .. math::
+
+       P_{\rm esc, out, marshak}^{(n)}(r_i)
+         = C_d \!\int_{\rm rays\ reaching\ outer}\!
+                 W_\Omega\,\mu_{\rm exit}\,\tilde P_n(\mu_{\rm exit})
+                 \,K_{\rm esc}(\tau)\,\mathrm d\Omega
+
+    with :math:`\mu_{\rm exit} = (\rho_{\rm out} + r_i\cos\Omega)/R`,
+    :math:`C_d =` :attr:`CurvilinearGeometry.prefactor`, and
+    :math:`W_\Omega =` :meth:`CurvilinearGeometry.angular_weight`.
+
+    Unlike :func:`compute_P_esc_outer_mode` (Lambert basis, no
+    :math:`\mu` weight), this integrand carries the emission direction
+    cosine :math:`\mu_{\rm exit}` explicitly, placing it in the same
+    partial-current moment basis as
+    :func:`compute_hollow_sph_transmission_rank_n` (which has
+    :math:`\cos\theta\,\sin\theta = \mu\,\mathrm d\mu\,/\,\mathrm d\theta`).
+
+    Model A: rays that would hit the inner shell before the outer
+    surface are excluded (those contribute to
+    :func:`compute_P_esc_inner_mode_marshak`).
+
+    Currently implemented for ``kind = "sphere-1d"`` with
+    ``inner_radius > 0``; slab and cylinder raise
+    :class:`NotImplementedError`.
+    """
+    if geometry.kind != "sphere-1d" or geometry.inner_radius <= 0.0:
+        raise NotImplementedError(
+            f"compute_P_esc_outer_mode_marshak is implemented for "
+            f"hollow sphere only; got kind={geometry.kind!r}, "
+            f"inner_radius={geometry.inner_radius}. Slab and cyl "
+            f"per-face Marshak primitives — Issue #119 follow-up."
+        )
+    r_nodes = np.asarray(r_nodes, dtype=float)
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    R = float(radii[-1])
+    omega_low, omega_high = geometry.angular_range
+    omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
+    cos_omegas = geometry.ray_direction_cosine(omega_pts)
+    angular_factor = geometry.angular_weight(omega_pts)
+    pref = geometry.prefactor
+    N = len(r_nodes)
+    P = np.zeros(N)
+    for i in range(N):
+        r_i = float(r_nodes[i])
+        total = 0.0
+        for k in range(n_angular):
+            cos_om = cos_omegas[k]
+            rho_out = geometry.rho_max(r_i, cos_om, R)
+            if rho_out <= 0.0:
+                continue
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, cos_om)
+            if rho_in_minus is not None and rho_in_minus < rho_out:
+                continue
+            tau = geometry.optical_depth_along_ray(
+                r_i, cos_om, rho_out, radii, sig_t,
+            )
+            K_esc = geometry.escape_kernel_mp(tau, dps)
+            mu_exit = (rho_out + r_i * cos_om) / R
+            p_tilde = float(
+                _shifted_legendre_eval(n_mode, np.array([mu_exit]))[0]
+            )
+            total += (
+                omega_wts[k] * angular_factor[k]
+                * mu_exit * p_tilde * K_esc
+            )
+        P[i] = pref * total
+    return P
+
+
+def compute_P_esc_inner_mode_marshak(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    n_mode: int,
+    n_angular: int = 32,
+    dps: int = 25,
+) -> np.ndarray:
+    r"""Marshak partial-current moment :math:`n` of the escape
+    probability to the **inner** surface (Phase F.5 / Issue #119).
+
+    .. math::
+
+       P_{\rm esc, in, marshak}^{(n)}(r_i)
+         = C_d \!\int_{\rm hit}\!
+                 W_\Omega\,\mu_{\rm exit, in}\,
+                 \tilde P_n(\mu_{\rm exit, in})\,
+                 K_{\rm esc}(\tau)\,\mathrm d\Omega
+
+    with :math:`\mu_{\rm exit, in} = \sqrt{r_0^2 - h^2}/r_0` and
+    :math:`h = r_i|\sin\Omega|`.
+
+    Integration is restricted to directions for which the ray hits the
+    inner shell before exiting via the outer.
+
+    Currently implemented for ``kind = "sphere-1d"`` with
+    ``inner_radius > 0``.
+    """
+    if geometry.kind != "sphere-1d" or geometry.inner_radius <= 0.0:
+        raise NotImplementedError(
+            f"compute_P_esc_inner_mode_marshak for "
+            f"kind={geometry.kind!r} not yet implemented."
+        )
+    r_nodes = np.asarray(r_nodes, dtype=float)
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    r_0 = float(geometry.inner_radius)
+    omega_low, omega_high = geometry.angular_range
+    omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
+    cos_omegas = geometry.ray_direction_cosine(omega_pts)
+    angular_factor = geometry.angular_weight(omega_pts)
+    pref = geometry.prefactor
+    N = len(r_nodes)
+    P = np.zeros(N)
+    for i in range(N):
+        r_i = float(r_nodes[i])
+        total = 0.0
+        for k in range(n_angular):
+            cos_om = cos_omegas[k]
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, cos_om)
+            if rho_in_minus is None:
+                continue
+            tau = geometry.optical_depth_along_ray(
+                r_i, cos_om, rho_in_minus, radii, sig_t,
+            )
+            K_esc = geometry.escape_kernel_mp(tau, dps)
+            sin_om = np.sqrt(max(0.0, 1.0 - cos_om * cos_om))
+            h_sq = r_i * r_i * sin_om * sin_om
+            mu_exit_sq = max(0.0, (r_0 * r_0 - h_sq) / (r_0 * r_0))
+            mu_exit = float(np.sqrt(mu_exit_sq))
+            p_tilde = float(
+                _shifted_legendre_eval(n_mode, np.array([mu_exit]))[0]
+            )
+            total += (
+                omega_wts[k] * angular_factor[k]
+                * mu_exit * p_tilde * K_esc
+            )
+        P[i] = pref * total
+    return P
+
+
+def compute_G_bc_outer_mode_marshak(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    n_mode: int,
+    n_surf_quad: int = 32,
+    dps: int = 25,
+) -> np.ndarray:
+    r"""Marshak partial-current response at observer :math:`r_i` from a
+    unit mode-:math:`n` (partial-current-moment) outward-normal incident
+    current on the **outer** surface (Phase F.5 / Issue #119).
+
+    .. math::
+
+       G_{\rm bc, out, marshak}^{(n)}(r_i) = 2\!\int_{\rm hit\ outer}
+           \sin\theta\,\mu_s\,\tilde P_n(\mu_s)\,e^{-\tau}\,
+           \mathrm d\theta
+
+    where :math:`\mu_s = (\rho_{\rm out} + r_i\cos\theta)/R` is the
+    cosine at the outer surface emission point (by chord symmetry on
+    outer-outer grazing rays).
+
+    The integrand is µ-weighted consistent with
+    :func:`compute_P_esc_outer_mode_marshak` and
+    :func:`compute_hollow_sph_transmission_rank_n`.
+
+    Model A: rays blocked by the inner shell are excluded.
+    """
+    if geometry.kind != "sphere-1d" or geometry.inner_radius <= 0.0:
+        raise NotImplementedError(
+            f"compute_G_bc_outer_mode_marshak for kind="
+            f"{geometry.kind!r} not yet implemented."
+        )
+    r_nodes = np.asarray(r_nodes, dtype=float)
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    R = float(radii[-1])
+    theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
+    cos_thetas = np.cos(theta_pts)
+    sin_thetas = np.sin(theta_pts)
+    N = len(r_nodes)
+    G = np.zeros(N)
+    for i in range(N):
+        r_i = r_nodes[i]
+        total = 0.0
+        for k in range(n_surf_quad):
+            ct = cos_thetas[k]
+            st = sin_thetas[k]
+            rho_out = geometry.rho_max(r_i, ct, R)
+            if rho_out <= 0.0:
+                continue
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, ct)
+            if rho_in_minus is not None and rho_in_minus < rho_out:
+                continue
+            if len(radii) == 1:
+                tau = sig_t[0] * rho_out
+            else:
+                tau = geometry.optical_depth_along_ray(
+                    r_i, ct, rho_out, radii, sig_t,
+                )
+            mu_s = (rho_out + r_i * ct) / R
+            p_tilde = float(
+                _shifted_legendre_eval(n_mode, np.array([mu_s]))[0]
+            )
+            total += (
+                theta_wts[k] * st * mu_s * p_tilde
+                * float(np.exp(-tau))
+            )
+        G[i] = 2.0 * total
+    return G
+
+
+def compute_G_bc_inner_mode_marshak(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    n_mode: int,
+    n_surf_quad: int = 32,
+    dps: int = 25,
+) -> np.ndarray:
+    r"""Marshak partial-current response at observer :math:`r_i` from a
+    unit mode-:math:`n` outward current on the **inner** surface
+    (Phase F.5 / Issue #119).
+
+    .. math::
+
+       G_{\rm bc, in, marshak}^{(n)}(r_i) = 2\!\int_{\rm hit\ inner}
+           \sin\theta\,\mu_s\,\tilde P_n(\mu_s)\,e^{-\tau}\,
+           \mathrm d\theta
+
+    with :math:`\mu_s = \sqrt{r_0^2 - h^2}/r_0` the cosine at the
+    inner surface emission point.
+    """
+    if geometry.kind != "sphere-1d" or geometry.inner_radius <= 0.0:
+        raise NotImplementedError(
+            f"compute_G_bc_inner_mode_marshak for kind="
+            f"{geometry.kind!r} not yet implemented."
+        )
+    r_nodes = np.asarray(r_nodes, dtype=float)
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    r_0 = float(geometry.inner_radius)
+    theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
+    cos_thetas = np.cos(theta_pts)
+    sin_thetas = np.sin(theta_pts)
+    N = len(r_nodes)
+    G = np.zeros(N)
+    for i in range(N):
+        r_i = r_nodes[i]
+        total = 0.0
+        for k in range(n_surf_quad):
+            ct = cos_thetas[k]
+            st = sin_thetas[k]
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, ct)
+            if rho_in_minus is None:
+                continue
+            if len(radii) == 1:
+                tau = sig_t[0] * rho_in_minus
+            else:
+                tau = geometry.optical_depth_along_ray(
+                    r_i, ct, rho_in_minus, radii, sig_t,
+                )
+            sin_om = float(np.sqrt(max(0.0, 1.0 - ct * ct)))
+            h_sq = r_i * r_i * sin_om * sin_om
+            mu_s_sq = max(0.0, (r_0 * r_0 - h_sq) / (r_0 * r_0))
+            mu_s = float(np.sqrt(mu_s_sq))
+            p_tilde = float(
+                _shifted_legendre_eval(n_mode, np.array([mu_s]))[0]
+            )
+            total += (
+                theta_wts[k] * st * mu_s * p_tilde
+                * float(np.exp(-tau))
+            )
+        G[i] = 2.0 * total
+    return G
+
+
 def build_white_bc_correction(
     geometry: CurvilinearGeometry,
     r_nodes: np.ndarray,
@@ -3163,24 +3482,31 @@ def build_closure_operator(
     )
     if use_rank2:
         if n_bc_modes > 1:
-            # Phase F.5 / Issue #119 — rank-N per-face. The mode
-            # primitives (compute_{P_esc,G_bc}_{outer,inner}_mode) and
-            # the (2N×2N) transmission matrix
-            # (compute_hollow_sph_transmission_rank_n) are implemented
-            # and verified at N=1 (matches the scalar case bit-exactly).
-            # Full rank-N closure assembly has an unresolved
-            # normalisation question between the Mark (no Jacobian) and
-            # Gelbard DP_{N-1} ((ρ/R)² Jacobian + (2n+1) weight)
-            # conventions when combined with the white-BC (I - W)^{-1}
-            # inversion — see _build_closure_operator_rank_n_white
-            # docstring. Tracked in Issue #119 follow-up.
+            # Phase F.5 / Issue #119 — rank-N per-face white BC.
+            # Infrastructure is present (mode primitives both Lambert
+            # and Marshak variants, (2N × 2N) transmission matrix,
+            # assembly helper) but the final closure
+            # `K_bc = G · (I − W)⁻¹ · P` does NOT close the Wigner-Seitz
+            # identity at N ≥ 2 regardless of basis choice. A 16-recipe
+            # scan at R=5, r_0/R=0.3, homogeneous Σ_t=1 gives best-case
+            # ~1.4 % residual vs the Phase F.4 N=1 scalar result of
+            # 0.077 % — adding mode-1 DEGRADES accuracy instead of
+            # improving it, indicating a deeper bug beyond the measure
+            # mismatch originally diagnosed. Candidates for follow-up
+            # investigation: (a) mode-1 primitive sign/normalisation,
+            # (b) transmission matrix indexing at cross-face blocks,
+            # (c) reciprocity / surface-area factor in W_oi at n ≥ 1.
+            # Tracked in Issue #119 follow-up (see the measure-mismatch
+            # memo + recipe scan in `derivations/diagnostics/`).
             raise NotImplementedError(
                 "Rank-N per-face white BC (n_bc_modes > 1) infrastructure "
-                "is present but the final closure assembly requires "
-                "reconciling the Mark/Gelbard normalisation conventions "
-                "between the per-face mode primitives and the "
-                "transmission matrix. Tracked in Issue #119. Use "
-                "n_bc_modes=1 for rank-1 per-face (Phase F.3/F.4)."
+                "is present but the final closure DEGRADES k_eff instead "
+                "of converging it (best recipe ~1.4 % residual at r_0/R=0.3 "
+                "vs 0.077 % at N=1). The measure-mismatch fix from Issue "
+                "#119 is necessary but not sufficient — the mode-1 "
+                "primitive or transmission-matrix off-diagonal entries "
+                "have a second bug. Tracked in Issue #119 follow-up. "
+                "Use n_bc_modes=1 for rank-2 per-face (Phase F.3/F.4)."
             )
         return _build_closure_operator_rank2_white(
             geometry, r_nodes, r_wts, radii, sig_t,
@@ -3367,40 +3693,56 @@ def _build_closure_operator_rank_n_white(
     sig_t_n: np.ndarray,
     rv: np.ndarray,
 ) -> BoundaryClosureOperator:
-    r"""Rank-:math:`N` per-face white-BC closure (Phase F.5 / Issue #119).
+    r"""Rank-:math:`N` per-face Marshak white-BC closure (Phase F.5 /
+    Issue #119).
 
     Implemented for hollow sphere. Mode layout ``[outer_0, ...,
     outer_{N-1}, inner_0, ..., inner_{N-1}]`` gives a :math:`(2N)`-wide
-    mode space. The reflection
+    mode space, all modes in the **Marshak / partial-current-moment**
+    basis.
+
+    The reflection
 
     .. math::
 
-       R_{\rm eff} = (I_{2N} - W_N)^{-1}\,D,
-       \qquad D = \mathrm{diag}\bigl(1, 3, 5, \ldots, 2N-1, 1, 3, 5, \ldots, 2N-1\bigr)
+       R_{\rm eff} = (I_{2N} - W_N)^{-1}
 
-    combines the surface-to-surface transmission inversion with the
-    Gelbard DP\ :sub:`N-1` :math:`(2n+1)` normalisation on each
-    surface (consistent with :func:`reflection_marshak` for the
-    rank-N single-surface case).
+    combines the surface-to-surface transmission feedback with the
+    mode-wise white BC :math:`J^-_m = J^+_m`. In the Marshak basis
+    this BC is diagonal; the transmission matrix
+    :func:`compute_hollow_sph_transmission_rank_n` is already in the
+    Marshak basis (cos θ · sin θ integrand = µ dµ), so the closure
+    requires no basis conversion once the per-face primitives are in
+    the same basis.
 
     The :math:`P` and :math:`G` tensors stack mode-by-mode per-face
     primitives:
 
     .. math::
 
-       P[kN + n, j] &= r_j^{d-1}\,w_j\,P_{\rm esc, face_k}^{(n)}(r_j), \\
-       G[i, kN + m] &= \Sigma_t(r_i)\,G_{{\rm bc}, {\rm face_k}}^{(m)}(r_i) / A_k.
+       P[kN + n, j] &= r_j^{d-1}\,w_j\,P_{\rm esc, face_k, marshak}^{(n)}(r_j), \\
+       G[i, kN + m] &= \Sigma_t(r_i)\,G_{{\rm bc}, {\rm face_k}, {\rm marshak}}^{(m)}(r_i) / A_k,
+
+    where the primitives are the
+    :func:`compute_P_esc_{outer,inner}_mode_marshak` /
+    :func:`compute_G_bc_{outer,inner}_mode_marshak` variants that
+    include the :math:`µ` partial-current weight in the integrand.
+    This is the **Phase F.5 fix for Issue #119** — the Lambert-basis
+    (no-µ) mode primitives used by
+    :func:`_build_closure_operator_rank2_white` mismatch the Marshak
+    basis of the transmission matrix at N ≥ 2, producing a :math:`G
+    (I−W)^{-1} P` product that couples incompatible inner products.
 
     Currently implemented: sphere-1d (hollow). Slab and cylinder raise
-    :class:`NotImplementedError` from the mode primitives.
+    :class:`NotImplementedError` from the Marshak mode primitives.
     """
     if geometry.kind != "sphere-1d" or geometry.inner_radius <= 0.0:
         raise NotImplementedError(
             f"Rank-N per-face white BC implemented for hollow sphere "
             f"only (Phase F.5 initial scope); got kind="
             f"{geometry.kind!r}, inner_radius={geometry.inner_radius}. "
-            f"Slab and cylinder rank-N per-face are Issue #119 "
-            f"follow-up."
+            f"Slab and cylinder rank-N per-face are Issue #120 / #121 "
+            f"follow-ups."
         )
     N = int(n_bc_modes)
     N_r = len(r_nodes)
@@ -3413,19 +3755,19 @@ def _build_closure_operator_rank_n_white(
     div_inner = r_in * r_in
 
     for n in range(N):
-        P_out_n = compute_P_esc_outer_mode(
+        P_out_n = compute_P_esc_outer_mode_marshak(
             geometry, r_nodes, radii, sig_t, n,
             n_angular=n_angular, dps=dps,
         )
-        P_in_n = compute_P_esc_inner_mode(
+        P_in_n = compute_P_esc_inner_mode_marshak(
             geometry, r_nodes, radii, sig_t, n,
             n_angular=n_angular, dps=dps,
         )
-        G_out_n = compute_G_bc_outer_mode(
+        G_out_n = compute_G_bc_outer_mode_marshak(
             geometry, r_nodes, radii, sig_t, n,
             n_surf_quad=n_surf_quad, dps=dps,
         )
-        G_in_n = compute_G_bc_inner_mode(
+        G_in_n = compute_G_bc_inner_mode_marshak(
             geometry, r_nodes, radii, sig_t, n,
             n_surf_quad=n_surf_quad, dps=dps,
         )
@@ -3438,13 +3780,14 @@ def _build_closure_operator_rank_n_white(
     W = compute_hollow_sph_transmission_rank_n(
         r_in, R_out, radii, sig_t, n_bc_modes=N, dps=dps,
     )
-    # Rank-N reflection: R = (I - W)^{-1}. At N=1 this reduces to the
-    # proven scalar rank-2 white form. At N>1 the Gelbard (2n+1)
-    # normalisation is NOT applied here because mode primitives use the
-    # Mark-Lambert scalar-consistent measure (sin θ dθ · P̃_n, no
-    # Jacobian) — the (2n+1) Gelbard factor arises in the DIAGONAL
-    # Marshak closure without T feedback; with full white-BC inversion
-    # the moment coupling is captured by W directly.
+    # Rank-N white-BC reflection in the Marshak partial-current-moment
+    # basis. The (2n+1) Gelbard factor is NOT applied here: both P, G,
+    # and W use the same µ-weighted half-range inner product, so the
+    # closure `G · (I − W)^{-1} · P` is basis-consistent. The Gelbard
+    # (2n+1) weighting is a property of a DIFFERENT choice (the
+    # Lambert / angular-flux-moment basis, used by the legacy
+    # single-surface :func:`reflection_marshak` helper) — conflating
+    # the two was the Phase F.5 measure-mismatch bug.
     R_matrix = np.linalg.inv(np.eye(2 * N) - W)
     return BoundaryClosureOperator(P=P, G=G, R=R_matrix)
 
@@ -3674,8 +4017,8 @@ def solve_peierls_1g(
         if n_bc_modes > 1:
             raise NotImplementedError(
                 "boundary='white_rank2' with n_bc_modes > 1 is not yet "
-                "supported (rank-N per-face planned in Phase F.5). Use "
-                "n_bc_modes=1."
+                "supported (rank-N per-face planned in Phase F.5 — see "
+                "Issue #119). Use n_bc_modes=1."
             )
         op = build_closure_operator(
             geometry, r_nodes, r_wts, radii, sig_t,

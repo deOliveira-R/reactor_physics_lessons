@@ -104,8 +104,9 @@ or before extending the architecture to a new geometry.**
   angular moments that the scalar mode omits. For
   :math:`r_0 = 0.1 R` the rank-2 residual is 1.4 % (vs rank-1
   Mark's 25 %); for :math:`r_0 = 0.3 R` it is 13 %. Closing to
-  machine precision requires rank-N per-face — planned in Phase
-  F.5. **Hollow sphere** uses the same chord decomposition
+  machine precision requires rank-N per-face —
+  :ref:`Phase F.5 investigation <peierls-rank-n-per-face-marshak>`.
+  **Hollow sphere** uses the same chord decomposition
   (:func:`~orpheus.derivations.peierls_geometry.compute_hollow_sph_transmission`)
   with the bare :math:`e^{-\tau}` kernel (no Bickley fold) and
   reciprocity :math:`W_{\rm oi} = (R/r_0)^2\,W_{\rm io}` on
@@ -2984,6 +2985,129 @@ uniformly. The
 ``tests/derivations/test_peierls_rank_n_conservation.py``
 fixtures gate this explicitly.
 
+
+.. _peierls-rank-n-per-face-marshak:
+
+Phase F.5 — Rank-N per-face Marshak primitives (Issue #119, open)
+==================================================================
+
+**Status as of 2026-04-21**: Infrastructure landed; closure still
+open. The `NotImplementedError` guard in
+:func:`~orpheus.derivations.peierls_geometry.build_closure_operator`
+remains in place for ``n_bc_modes > 1`` + ``reflection="white"`` on
+2-surface cells. ``n_bc_modes=1`` (Phase F.3 / F.4 rank-2 per face)
+continues to be the working path.
+
+Motivation
+-----------
+
+The scalar rank-2 per-face white BC closes the Wigner-Seitz identity
+on slab exactly (via the legacy :math:`E_2` / :math:`E_3` bilinear
+form) but leaves a 1–13 % residual on curved hollow cells. Extending
+to rank-:math:`N` per face — so each surface's outgoing distribution
+is resolved into more than one angular moment — is expected to drive
+that residual toward machine precision. The single-surface rank-N
+Gelbard DP\ :sub:`N-1` path (`build_white_bc_correction_rank_n`)
+already converges monotonically with :math:`N` for solid cylinder
+/ sphere; the per-face generalisation inherits the same structure
+but across two surfaces, coupled by a :math:`(2N \times 2N)`
+transmission matrix :math:`W_N`.
+
+Infrastructure landed
+----------------------
+
+- :func:`~orpheus.derivations.peierls_geometry.compute_hollow_sph_transmission_rank_n`
+  — :math:`(2N \times 2N)` surface-to-surface transmission matrix
+  for hollow sphere; bit-exact reduction to the scalar transmission
+  at :math:`N = 1`; Sanchez-McCormick reciprocity
+  :math:`A_k\,W_{jk}^{(m,n)} = A_j\,W_{kj}^{(n,m)}` (transposed mode
+  indices) verified to 1e-14.
+
+- Lambert-basis per-face mode primitives
+  (``compute_{P_esc,G_bc}_{outer,inner}_mode``): integrand
+  :math:`\sin\theta\,\tilde P_n(\mu_{\rm exit})\,K_{\rm esc}(\tau)`
+  — no :math:`\mu` weight. At :math:`n = 0` these reduce bit-exactly
+  to the scalar primitives used by the Phase F.4 rank-2 closure.
+
+- **Marshak-basis per-face mode primitives**
+  (``compute_{P_esc,G_bc}_{outer,inner}_mode_marshak``, added
+  2026-04-21): integrand
+  :math:`\sin\theta\,\mu\,\tilde P_n(\mu)\,K_{\rm esc}(\tau)` — with
+  :math:`\mu` weight for every mode including :math:`n = 0`. This
+  places P, G, and :math:`W` in the same partial-current-moment
+  half-range inner product (half-range Gram matrix
+  :math:`B^{\mu}_{mn} = \int_0^1 \mu\,\tilde P_m\,\tilde P_n\,\mathrm d\mu`).
+  Verified at :math:`\sigma_t \to 0` against independent
+  ``mpmath.quad`` references.
+
+Investigation so far
+---------------------
+
+The numerics-investigator diagnosis (commit ``b9bc3df``) isolated a
+**measure mismatch** between the Lambert-basis P/G primitives and
+the Marshak-basis :math:`W`: their Gram matrices differ (:math:`B^L`
+is diagonal, :math:`B^\mu` is not), and at :math:`N \ge 2` the
+matrix product :math:`G\,(I - W)^{-1}\,P` couples incompatible inner
+products. That diagnosis motivated the Marshak-basis primitives
+above.
+
+A 16-recipe scan (commit 2026-04-21) tested:
+
+- P and G in either Lambert or Marshak basis, independently.
+- Optional :math:`(2n + 1)` Gelbard weight applied to the mode
+  dimension of P and/or G.
+- :math:`R` formulas including :math:`(I - W)^{-1}`,
+  :math:`(I - W D)^{-1}`, :math:`(I - D W)^{-1} D`,
+  :math:`D (I - W)^{-1} D`, etc.
+
+with :math:`D = \mathrm{diag}(1, 3, \ldots, 2N-1, 1, 3, \ldots, 2N-1)`.
+None reached the ≤ 0.1 % residual gate at
+:math:`r_0 / R = 0.3`, :math:`N = 2`. The best recipes
+(mixed Lambert/Marshak with Gelbard on one side) achieved ≈ 1.4 %;
+all-Marshak gave ≈ 11 %; shipped all-Lambert gave ≈ 3.9 %.
+
+**Key finding**: the mode-1 contribution *degrades* accuracy in
+every recipe tested — the correct scalar N=1 result (0.077 % at
+quadrature limit) gets worse when mode 1 is added via any tested
+assembly. The plan's measure-mismatch hypothesis is a *necessary but
+not sufficient* diagnosis. A deeper bug exists in either the mode-1
+primitive definition, the :math:`W_N` cross-face blocks at
+:math:`n \ge 1`, or the per-face normalisation divisor.
+
+Next-session candidates
+------------------------
+
+1. **Monte-Carlo cross-check of** :math:`W_N`. Independently compute
+   :math:`W_{oi}^{(0,1)}` and :math:`W_{io}^{(1,0)}` on hollow sphere
+   via 1M-sample ray tracing. If MC disagrees with
+   :func:`compute_hollow_sph_transmission_rank_n`, the transmission
+   matrix itself is wrong at :math:`n \ge 1`.
+
+2. **Derive per-face mode-n primitives from Sanchez-McCormick 1982
+   §III.F from scratch**, verifying the angular-flux vs
+   partial-current moment convention they use, the exact placement
+   of the :math:`(2n+1)` Gelbard factor, and the Jacobian at the
+   single-surface → per-face generalisation.
+
+3. **Compare single-surface rank-N** (`compute_P_esc_mode`,
+   `compute_G_bc_mode` — which converge correctly on solid geometry)
+   **against per-face rank-1 primitives** at a known-good geometry to
+   isolate the structural difference.
+
+Orthogonal bug
+---------------
+
+`solve_peierls_1g` calls
+:func:`~orpheus.derivations.peierls_geometry.composite_gl_r` without
+``inner_radius`` (:file:`orpheus/derivations/peierls_geometry.py:3978`).
+For hollow cells this places radial quadrature nodes inside the
+cavity, inflating the Phase F.4 N=1 residual from the
+quadrature-limited 0.077 % to 1.5 %. A separate single-line fix is
+filed alongside this issue. Until fixed, benchmark numbers cited
+through the public API are systematically too pessimistic for
+hollow geometries.
+
+.. _peierls-rank-n-bc-closure-section:
 
 Section 9 — Test-bed evidence from Phase 4.2 (cylinder)
 ========================================================

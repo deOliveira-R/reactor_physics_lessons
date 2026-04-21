@@ -606,6 +606,80 @@ class TestRank2SlabKEffKInfConvergence:
             s = scalar_fn(geom, r_nodes, radii, sig_t, **kw_dict)
             np.testing.assert_array_equal(m0, s, err_msg=f"{name} mode=0")
 
+    def test_sphere_marshak_G_equals_4x_P_sigt_zero(self):
+        r"""Sanchez-McCormick sphere identity carries into the Marshak
+        partial-current-moment primitives:
+        :math:`G_{\rm bc,*,marshak}^{(n)} = 4\cdot P_{\rm esc,*,marshak}^{(n)}`
+        for every mode and every observer node, under :math:`\sigma_t = 0`.
+
+        Both primitives share the observer-centred integrand
+        :math:`\sin\theta\,\mu\,\tilde P_n(\mu)\,e^{-\tau}` on sphere;
+        only the outer prefactor differs (G uses 2.0, P uses
+        sphere :attr:`prefactor` = 0.5, ratio = 4.0). This holds in the
+        Marshak basis exactly as it does in the Lambert basis — the
+        foundation identity that the rank-N per-face Marshak closure
+        builds on (Phase F.5 / Issue #119).
+        """
+        from orpheus.derivations.peierls_geometry import (
+            CurvilinearGeometry,
+            compute_P_esc_outer_mode_marshak,
+            compute_P_esc_inner_mode_marshak,
+            compute_G_bc_outer_mode_marshak,
+            compute_G_bc_inner_mode_marshak,
+        )
+        geom = CurvilinearGeometry(kind="sphere-1d", inner_radius=0.3)
+        radii = np.array([1.0])
+        sig_t = np.array([0.0])
+        r_nodes = np.array([0.4, 0.6, 0.9])
+        for n in range(3):
+            for face, P_fn, G_fn in [
+                ("outer", compute_P_esc_outer_mode_marshak,
+                 compute_G_bc_outer_mode_marshak),
+                ("inner", compute_P_esc_inner_mode_marshak,
+                 compute_G_bc_inner_mode_marshak),
+            ]:
+                P = P_fn(geom, r_nodes, radii, sig_t, n,
+                         n_angular=64, dps=20)
+                G = G_fn(geom, r_nodes, radii, sig_t, n,
+                         n_surf_quad=64, dps=20)
+                for i in range(len(r_nodes)):
+                    if abs(P[i]) > 1e-10:
+                        ratio = G[i] / P[i]
+                        assert abs(ratio - 4.0) < 1e-10, (
+                            f"{face} n={n} r_i={r_nodes[i]}: "
+                            f"G/P = {ratio:.10f}, expected 4.0"
+                        )
+
+    def test_sphere_marshak_mode0_smaller_than_lambert_mode0(self):
+        r"""At :math:`\sigma_t = 0`, the Marshak primitive has a
+        :math:`\mu_{\rm exit} \le 1` weight the Lambert primitive lacks,
+        so the Marshak mode-0 value is strictly smaller than the Lambert
+        mode-0 value at every r_i (in absolute value). A sanity check
+        that the new µ weight really IS in the integrand.
+        """
+        from orpheus.derivations.peierls_geometry import (
+            CurvilinearGeometry,
+            compute_P_esc_outer_mode,
+            compute_P_esc_outer_mode_marshak,
+        )
+        geom = CurvilinearGeometry(kind="sphere-1d", inner_radius=0.3)
+        radii = np.array([1.0])
+        sig_t = np.array([0.0])
+        r_nodes = np.array([0.4, 0.6, 0.9])
+        P_lambert = compute_P_esc_outer_mode(
+            geom, r_nodes, radii, sig_t, 0, n_angular=128, dps=20,
+        )
+        P_marshak = compute_P_esc_outer_mode_marshak(
+            geom, r_nodes, radii, sig_t, 0, n_angular=128, dps=20,
+        )
+        # Both are positive for mode 0 at σ_t = 0. Marshak adds µ ≤ 1,
+        # so it's strictly smaller.
+        for i in range(len(r_nodes)):
+            assert P_marshak[i] < P_lambert[i], (
+                f"r_i={r_nodes[i]}: Marshak={P_marshak[i]:.6f} must be "
+                f"smaller than Lambert={P_lambert[i]:.6f} (µ weight)"
+            )
+
     @pytest.mark.slow
     def test_rank2_error_converges_monotonically_under_refinement(self):
         r"""Mesh-refinement convergence check: doubling n_panels reduces

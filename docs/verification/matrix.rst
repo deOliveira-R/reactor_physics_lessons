@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **955**
+Total tests collected: **1059**
 
 V&V level distribution
 ----------------------
@@ -16,12 +16,12 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 537, 56.2%
-   L1, 254, 26.6%
-   L2, 36, 3.8%
+   L0, 569, 53.7%
+   L1, 274, 25.9%
+   L2, 36, 3.4%
    L3, 0, 0.0%
-   foundation, 117, 12.3%
-   unmarked, 11, 1.2%
+   foundation, 169, 16.0%
+   unmarked, 11, 1.0%
 
 Tagging source
 --------------
@@ -32,7 +32,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 865
+   explicit, 969
    verify, 0
    class-name, 46
    func-name, 0
@@ -66,10 +66,12 @@ Module × level grid
    derivations/test_peierls_cylinder_multi_region, 7, 0, 0, 0, 3, 0
    derivations/test_peierls_cylinder_prefactor, 4, 0, 0, 0, 0, 0
    derivations/test_peierls_cylinder_white_bc, 4, 3, 0, 0, 0, 0
+   derivations/test_peierls_geometry, 0, 0, 0, 0, 32, 0
+   derivations/test_peierls_rank2_bc, 9, 20, 0, 0, 4, 0
    derivations/test_peierls_rank_n_bc, 59, 15, 0, 0, 0, 0
    derivations/test_peierls_rank_n_conservation, 0, 0, 0, 0, 4, 0
    derivations/test_peierls_rank_n_primitives, 19, 0, 0, 0, 0, 0
-   derivations/test_peierls_reference, 17, 25, 0, 0, 0, 0
+   derivations/test_peierls_reference, 40, 25, 0, 0, 16, 0
    derivations/test_peierls_sphere_eigenvalue, 0, 4, 0, 0, 0, 0
    derivations/test_peierls_sphere_geometry, 21, 0, 0, 0, 0, 0
    derivations/test_peierls_sphere_prefactor, 6, 0, 0, 0, 0, 0
@@ -123,6 +125,7 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
 
    ``mg-balance``, 165
    ``matrix-eigenvalue``, 160
+   ``peierls-unified``, 135
    ``one-group-kinf``, 132
    ``reflective-bc``, 110
    ``alpha-recursion``, 100
@@ -130,7 +133,6 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``wdd-face``, 100
    ``peierls-rank-n-bc-closure``, 93
    ``collision-rate``, 91
-   ``peierls-unified``, 83
    ``alpha-cylindrical``, 74
    ``mm-weights``, 74
    ``multigroup``, 65
