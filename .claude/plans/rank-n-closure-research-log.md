@@ -787,4 +787,86 @@ yield the 1/(3ρ) rule from first principles.
   (split fails at thin τ). Directions M (regime-switched closure), N
   (physical derivation of 1/(3ρ) rule).
 
+---
+
+### Experiment 6 — PCA sectors (quick probe, Direction C)
+
+Quick test of piecewise-constant angular sector basis (Sanchez-Santandrea 2002
+paradigm) on INNER surface only. Outer still uses split-basis (grazing + steep).
+NO scale calibration — uniform Jacobi orthonormality under c-weight.
+
+Results at σ_t·R ∈ {5, 10, 20}, ρ ∈ {0.3, 0.5, 0.7}:
+
+| σ_t·R | ρ   | F.4    | M=1    | M=2 uni | M=2 phys | M=3 uni |
+|-------|-----|--------|--------|---------|----------|---------|
+| 5.0   | 0.30| 0.122% | 1.290% | 1.009%  | 1.052%   | 1.004%  |
+| 10.0  | 0.30| 0.246% | 0.934% | 0.773%  | 0.810%   | 0.810%  |
+| 20.0  | 0.30| 0.365% | 0.427% | **0.324%**| 0.362% | 0.358%  |
+| 5.0   | 0.50| 0.155% | 1.795% | 1.245%  | 1.088%   | 0.908%  |
+| 10.0  | 0.50| 0.268% | 1.322% | 1.068%  | 1.008%   | 0.880%  |
+| 5.0   | 0.70| 2.645% | 3.524% | 2.268%  | 2.531%   | 2.250%  |
+| 10.0  | 0.70| 0.318% | 2.306% | 1.669%  | 1.803%   | 1.646%  |
+
+**Verdict**: PCA at uniform M=2 marginally beats F.4 only at σ_t·R=20, ρ=0.3.
+Otherwise plateau at ~1% regardless of M. **Same ~1% plateau as Legendre
+without scale calibration** — strong confirmation that L8 (metric/scale is
+the load-bearing knob) applies universally across basis choices.
+
+Physics-informed split (at c = 1/√2 Eddington mean) does not beat uniform.
+Adaptive PCA sectors with per-sector scale DOF untested but potentially
+relevant for future work.
+
+### L12 — Plateau ≈ 1% is universal across basis TYPES without scale calibration
+
+Legendre, Jacobi c^α, asymptote exp(-β·s), PCA sectors — ALL rank-(1,1,M)
+closures on the hollow sphere plateau at ~0.8–1.3% residual at σ_t·R=5,
+ρ=0.3 (without explicit scale calibration). The plateau moves with M slightly
+(M=2 ~10% better than M=1) but converges by M=3. **The plateau is a basis-
+metric barrier, not a basis-shape or basis-type barrier.** Scale calibration
+is the only knob that breaks it, as empirically demonstrated in E3.1 / E3.5.
+
+File: `derivations/diagnostics/diag_pca_sectors_hollow_sph.py`.
+
+### Literature check (2026-04-22)
+
+Literature-researcher agent report (25 min Zotero + CrossRef ANE/NSE +
+OpenAlex + Semantic Scholar search):
+
+**No direct match** for "Eddington-factor-weighted rank-1 IC closure with
+`2 + 1/(3ρ)` basis-scale formula." The Eddington-factor connection to IC
+(not diffusion) appears genuinely novel in the searched corpus.
+
+**Three leads worth chasing** (not verified with PDFs yet):
+
+1. **Bogado Leite, S.Q. (1998), "Revised interface-current relations for
+   the unit-cell transport problem in cylindrical and spherical geometries,"
+   Annals of Nuclear Energy 25 (6), 347–356, DOI 10.1016/S0306-4549(97)00026-1**
+   — exact-domain match, 1 citation total (orphaned; possible forgotten
+   prior art). PDF not OA. Worth interlibrary loan.
+
+2. **Krishnani, P.D. (1982), "Interface current method for PHWR cluster
+   geometry with anisotropy in the angular flux at interfaces," ANE 9 (5)**
+   — explicit rank-N anisotropic IC, cluster (not hollow shell) geometry.
+
+3. **Mohanakrishnan, P. (1982), "Choice of angular current approximations
+   for solving neutron transport problems in 2-D by interface current
+   approach," ANE 9 (5)** — title matches "basis-scale calibration"
+   concept, 2D not 1D curvilinear.
+
+4. **Sanchez, R. (2014), "On P_N Interface and Boundary Conditions,"
+   NSE 177 (1), DOI 10.13182/NSE12-95** — rigorous IC-BC degeneracy
+   theory via solid harmonics; closest theoretical framework for a
+   gauge-DOF argument.
+
+**Adjacent literature for the 1/ρ analytical derivation**:
+- Corngold (2002+2004) — Peierls/Bickley-Naylor algebra in cylinder.
+- Wio (1984) / Krishnani (1985) — CP kernel transformation laws under
+  geometric scaling. If 1/ρ has a clean geometric meaning, one of these
+  is where it lives.
+
+**Recommendation**: pursue Bogado Leite 1998 PDF via interlibrary loan
+before claiming novelty. If it doesn't derive a `2 + 1/(3ρ)`-type scale
+AND the Krishnani 1982 anisotropic-IC paper uses flat (rank-0) per-sector
+basis, the novelty hypothesis stands.
+
 <!-- Next session appends below this line. -->
