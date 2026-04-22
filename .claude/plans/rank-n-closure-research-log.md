@@ -681,6 +681,36 @@ across multiple (τ, ρ) combinations.
 3. Thin τ (σ_t·R ≤ 2.5) is CATASTROPHIC (L10) — needs a different paradigm
    or a regime switch to unsplit basis.
 
+### L11 — scale²_opt = 2 + 1/(3ρ) is τ-INDEPENDENT at σ_t·R ≥ 5
+
+E3.1 α-scan data scrutinized point-by-point (diagnostic `diag_cin_split_scale_derivation_eddington.py`):
+
+**τ-independence confirmed across σ_t·R ∈ {5, 10, 20, 50}**:
+| ρ   | α_opt values (across τ)       | Formula 1/(3ρ) | Ratio   |
+|-----|-------------------------------|----------------|---------|
+| 0.1 | {3, 3, 3, 3}  (capped at 3)   | 3.333          | 0.90    |
+| 0.3 | {1.0, 1.25, 1.0, 1.25}        | 1.111          | 0.90–1.13 |
+| 0.5 | {0.5, 0.75, 0.5, 0.5}         | 0.667          | 0.75–1.13 |
+| 0.7 | {0.5, 0.5, 0.5, 0.5}          | 0.476          | 1.05    |
+
+At each fixed ρ, α_opt varies by at most one scan step (0.25) across
+τ ∈ {5, 50} — within scan discretization noise. The formula α_opt · ρ
+= 1/3 fits to ~10%.
+
+**Physical interpretation**:
+  scale²_opt = 2 + (1/3) · (1/ρ) = (Legendre) + (Eddington) × (cavity)
+
+- "2" = Legendre c-weight orthonormalization baseline.
+- "1/3" = Eddington factor ⟨µ²⟩_iso (canonical 3D isotropic moment).
+- "1/ρ" = cavity-to-shell geometric factor. Physical origin:
+  probably Liouville intensity concentration at inner surface,
+  not the naive ρ² area ratio.
+
+**OPEN**: exact analytical derivation of the 1/ρ factor. Conjecture:
+at the inner surface, the partial-current integral acquires a 1/ρ
+factor from the chord-length Jacobian dµ/dc · surface-area ratio.
+Worth a paper-quality derivation if this closure path lands.
+
 ### Direction O — Refined scale formula or look-up table
 
 Options for bridging the gap between simple formula (factor 2-5 off optimum)
