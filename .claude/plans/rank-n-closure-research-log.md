@@ -1,11 +1,31 @@
 # Rank-N per-face white-BC closure on hollow sphere — research log
 
+> **CURRENT STATE (2026-04-22 late, after retraction of commit `fba6835`)**
+>
+> **F.4 scalar (Issue #119 close-out) remains the production closure.**
+> The c_in-aware split-basis rank-(1,1,1) adaptive-scale closure (Issue
+> #120) was thought to beat F.4 by 100–1000× based on BASE-quadrature
+> measurements, but RICH-quadrature verification showed this was a
+> quadrature-noise cancellation artifact. At matched RICH quadrature,
+> **F.4 wins 6/6 points at σ_t·R ≥ 5 by 2–88×**; split has a structural
+> floor ~0.07% vs F.4's ~0.003%.
+>
+> **For the next-session hand-off plan, see**:
+> `.claude/plans/next-session-post-retraction.md`.
+>
+> **The structural observations in L1–L12 still stand.** The scale gauge
+> DOF (L8) is real; it just doesn't reach below F.4's structural floor.
+> Remaining research angles are Issue #121 (Sanchez 2002 PCA sectors,
+> Direction C — untouched at matched quadrature) and Direction Q
+> (principled derivation of F.4's Lambert/Marshak mismatch).
+
 **Purpose**: living document for the long-running research effort to break F.4's
-~0.12% k_eff residual plateau at σ_t·R = 5, r_0/R = 0.3 for the hollow-sphere
-Peierls rank-N closure. Every experiment, diagnosis, lesson, and rejected
+k_eff residual at σ_t·R = 5, r_0/R = 0.3 for the hollow-sphere Peierls
+rank-N closure. Every experiment, diagnosis, lesson, and rejected
 hypothesis lives here so future sessions don't re-derive what we already know.
 
-**First session**: 2026-04-21. **Author**: Claude Opus 4.7 (1M context).
+**First session**: 2026-04-21. **Last update**: 2026-04-22. **Author**:
+Claude Opus 4.7 (1M context).
 
 **Related artifacts**:
 - Issue #119 (CLOSED): F.4 scalar as production; five-reference synthesis.
@@ -908,137 +928,33 @@ basis with adaptive scale is ~0.07%, well above F.4's ~0.003% floor.
 **Net**: the split-basis rank-(1,1,1) adaptive closure does NOT beat
 F.4 at production-grade quadrature. **F.4 remains the production closure.**
 
-## 📉 ORIGINAL (FALSE) BREAKTHROUGH CLAIM — retained below for history
+## 📉 Archived context — false breakthrough (now retracted)
 
-The following headline is WRONG. Retained for documentation of the failed
-hypothesis so future sessions understand what was tried and why it failed.
+The detailed BASE-quadrature tables that originally supported the
+"breakthrough" have been deleted here to avoid misleading future sessions.
+They are preserved in the git history of commit `fba6835` for anyone who
+wants the raw numbers. The structural truth lives in the RICH-quadrature
+table above and the "E4 REVISED VERDICT" section further below.
 
-### ~~Headline finding~~ (FALSE)
+**What was deleted from this section**: E5 rank-(1,1,2) BASE-quad table
+(all "0.0000%" from quadrature noise), E4 BASE-quad scan table (same),
+and L13/L14 as originally formulated ("CRACK" / "extends precision
+further"). Their content is all falsified by E4.2 RICH-quad results
+(see below, the "E4 REVISED VERDICT" section — line ~1129).
 
-~~**Rank-(1,1,1) closure with 1D Brent-optimized inner-basis scale achieves
-sub-display-precision k_eff error (< 5e-5% = 0.5 ppm) at ALL tested points
-in σ_t·R ∈ {5, 10, 20, 50} × ρ ∈ {0.1, 0.3, 0.5, 0.7}.**~~
+**What survives** (and is independent of the retraction):
+- L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12 — all stand.
+- L11's formula `scale²_opt = (1+6ρ)/(3ρ)` is still an empirically
+  observed pattern, but represents a CONDITIONAL minimum of the closure
+  at BASE quadrature, not a production formula.
+- The scale gauge DOF (L8) is real, but it only reaches into the
+  quadrature-noise floor — not into F.4's structural floor.
 
-~~F.4 at matched MED quadrature (3, 6, 48) gives 0.08-0.36% in this regime.
-Scale-calibrated rank-(1,1,1) beats F.4 by **1000× or more** universally
-at thick τ.~~
-
-~~Combined with regime switch (F.4 at σ_t·R ≤ 3, split+scale at σ_t·R ≥ 5),
-this is a **shippable universal closure** that beats F.4 at every (τ, ρ).~~
-
-### E5 — rank-(1,1,2) adaptive scales (BASE quadrature, full scan)
-
-| σ_t·R | ρ   | F.4      | sc_111 | err_111    | (α_0, α_1)         | err_112    | ratio   |
-|-------|-----|----------|--------|------------|--------------------|------------|---------|
-| 5.0   | 0.3 | 0.1219%  | 1.7184 | 0.0000%    | (1.6421, 1.0255)   | 0.0000%    | 1507×   |
-| 5.0   | 0.5 | 0.1551%  | 1.5851 | 0.0000%    | (1.5018, 1.0170)   | 0.0000%    | 530×    |
-| 5.0   | 0.7 | 2.6450%  | 1.5527 | 0.0002%    | (1.4729, 1.0215)   | 0.0000%    | 54×     |
-| 10.0  | 0.3 | 0.2464%  | 1.8066 | 0.0000%    | (1.7280, 1.0452)   | 0.0000%    | 982×    |
-| 10.0  | 0.5 | 0.2679%  | 1.6622 | 0.0000%    | (1.5827, 1.0107)   | 0.0000%    | 5255×   |
-| 10.0  | 0.7 | 0.3179%  | 1.6050 | 0.0001%    | (1.5234, 1.0177)   | 0.0000%    | 1646×   |
-| 20.0  | 0.3 | 0.3646%  | 1.7087 | 0.0000%    | (1.6215, 1.0342)   | 0.0000%    | 17×     |
-| 20.0  | 0.5 | 0.2799%  | 1.6165 | 0.0000%    | (1.5310, 1.0226)   | 0.0000%    | 1769×   |
-| 20.0  | 0.7 | 0.0866%  | 1.5891 | 0.0001%    | (1.5073, 1.0066)   | 0.0000%    | 7434×   |
-| 50.0  | 0.3 | 0.2547%  | 1.7783 | 0.0000%    | (1.6763, 1.0153)   | 0.0000%    | 253×    |
-
-**err display precision = 4 decimals** → 0.0000% means err < 5e-5% = 0.5 ppm.
-**ratio = err_111 / err_112** → rank-(1,1,2) improves 17-7000× over
-rank-(1,1,1) which is ALREADY at sub-ppm precision. rank-(1,1,2) is
-effectively machine precision on the k_eff computation.
-
-### E4 — Regime-switched closure (COMPLETE 2026-04-22)
-
-Full (σ_t·R, ρ) scan at BASE quadrature (n_panels=2, p_order=4, n_ang=32).
-RS_brent = regime-switched closure with Brent-optimized scale:
-
-| σ_t·R | ρ   | F.4      | err_form  | err_brent  | RS_brent | Win vs F.4 |
-|-------|-----|----------|-----------|------------|----------|------------|
-| 0.5   | 0.1 | 0.569%   | 44.8%     | nan        | 0.569%   | MATCH      |
-| 0.5   | 0.3 | 4.34%    | 9.32%     | nan        | 4.34%    | MATCH      |
-| 0.5   | 0.5 | 11.71%   | 7.72%     | nan        | 11.71%   | MATCH      |
-| 0.5   | 0.7 | 28.47%   | 25.98%    | nan        | 28.47%   | MATCH      |
-| 1.0   | 0.1 | 0.274%   | 103544%   | nan        | 0.274%   | MATCH      |
-| 1.0   | 0.3 | 2.36%    | 282.0%    | nan        | 2.36%    | MATCH      |
-| 1.0   | 0.5 | 7.00%    | 265.0%    | nan        | 7.00%    | MATCH      |
-| 1.0   | 0.7 | 21.00%   | 361.0%    | nan        | 21.00%   | MATCH      |
-| 2.5   | 0.3 | 0.347%   | 10.04%    | nan        | 0.347%   | MATCH      |
-| 2.5   | 0.5 | 1.42%    | 11.03%    | nan        | 1.42%    | MATCH      |
-| 2.5   | 0.7 | 9.05%    | 11.82%    | nan        | 9.05%    | MATCH      |
-| 5.0   | 0.3 | 0.122%   | 0.244%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 5.0   | 0.5 | 0.155%   | 0.575%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 5.0   | 0.7 | 2.65%    | 0.580%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 10.0  | 0.3 | 0.246%   | 0.161%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 10.0  | 0.5 | 0.268%   | 0.198%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 10.0  | 0.7 | 0.318%   | 0.427%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 20.0  | 0.3 | 0.365%   | 0.209%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 20.0  | 0.5 | 0.280%   | 0.081%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 20.0  | 0.7 | 0.087%   | 0.123%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 50.0  | 0.3 | 0.255%   | 0.025%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 50.0  | 0.5 | 0.329%   | 0.056%    | **0.0000%**| 0.0000%  | **∞×**     |
-| 50.0  | 0.7 | 0.304%   | 0.094%    | **0.0000%**| 0.0000%  | **∞×**     |
-
-**Verdict**: **UNIVERSAL WIN**. RS_brent ≤ F.4 at every (τ, ρ) where both
-converge. At σ_t·R ≥ 5: **RS_brent = 0.0000% uniformly** (beats F.4 by
-100-1000×). At σ_t·R ≤ 2.5: RS = F.4 (thin τ regime uses F.4 directly).
-
-Notes:
-- F.4 fails numerically (nan) at small cavities (ρ=0.1) due to extreme
-  geometry; the new split-brent closure ALSO handles these points
-  (err = 0.0000%) at σ_t·R ≥ 5 even where F.4 breaks.
-- err_form (simple 1/(3ρ) formula) is bounded at σ_t·R ≥ 5 but catastrophic
-  at thin τ (L10). Regime switch is ESSENTIAL.
-
-**The regime-switched closure is a SHIPPABLE universal solution.**
-
-### L13 — Brent-optimized rank-(1,1,1) scale is the CRACK
-
-**The scale DOF at rank-(1,1,1) is not a minor calibration — it IS the closure.**
-1D Brent optimization of the inner-basis scale absorbs ALL rank-truncation
-error at σ_t·R ≥ 5 across all tested ρ. The result is sub-ppm k_eff error
-— effectively machine precision — from a 3-mode closure (grazing+steep
-outer, 1 inner).
-
-**Physical interpretation**: at thick τ, transport is asymptotically
-diffusion-like. The 1-mode inner basis has a gauge DOF that corresponds
-to choosing the "effective Eddington factor" for the rank-1 truncation.
-When tuned correctly, the closure becomes EXACT (not just Eddington-P1,
-but exact).
-
-**Production implications**:
-- Cost of Brent tuning: ~10-20 k_eff solves per problem ≈ 10-30 s. Cheap.
-- Simple formula `scale²_opt = (1+6ρ)/(3ρ)` gives ~3% scale accuracy
-  (err ~1e-3 to 1e-4%) — fast, still beats F.4 most places.
-- Regime switch at σ_t·R = 3-5 is essential (L10: split basis catastrophic
-  at thin τ).
-
-### L14 — rank-(1,1,2) with adaptive (α_0, α_1) extends precision further
-
-rank-(1,1,2) with both scales tuned: ratio 17-7000× improvement over
-rank-(1,1,1). Since rank-(1,1,1) is already at sub-ppm, rank-(1,1,2) is
-effectively at the solver's numerical noise floor. Not needed for
-practical shipping but proves the scale-calibration paradigm extends to
-higher ranks.
-
-### Next actions (in priority order)
-
-1. **Verify E4 completes with universal RS_brent ≤ F.4** across all (τ, ρ).
-2. **Commit E4+E5 breakthrough** with full narrative.
-3. **Design verification plan**: test_architect agent for the new closure.
-4. **Production implementation**: lift `NotImplementedError` guard and ship
-   as `boundary="white_split_adaptive"` in `solve_peierls_1g`.
-5. **Update Sphinx docs**: archivist agent to write the new Phase F.5
-   narrative replacing the close-out stub.
-6. **Literature follow-up**: pursue Bogado Leite 1998 PDF to confirm novelty.
-7. **Extend to cylindrical geometry** (Issue #120 extension).
-8. **Paper draft**: if novel, write up the Eddington-plus-cavity gauge
-   calibration.
-
-### Files
-
+Files — unchanged:
 - `derivations/diagnostics/diag_cin_split_regime_switched.py` (E4).
 - `derivations/diagnostics/diag_cin_split_rank112_adaptive.py` (E5).
 - `derivations/diagnostics/diag_cin_split_scale_precision_check.py`
-  (precision probe — killed by timeout, to re-run later).
+  (precision probe — killed by timeout, to re-run at RICH if needed).
 
 ---
 
@@ -1243,16 +1159,17 @@ the improvement ratio from this data suggests it's unlikely to beat 2×.
 
 ---
 
-## New lessons (L11+)
+## New lessons (L13+ — renumbered to avoid collision with retracted L11-L14)
 
-### L11 — Regime-switched(brent) is UNIVERSAL across full (τ, ρ) range at BASE quadrature
+### L13 — RS_brent at BASE was UNIVERSAL across full (τ, ρ) range — BUT IT WAS QUADRATURE NOISE (L16 below)
 
 Rank-(1,1,1) split basis with Brent-optimized scale, switched against F.4
-at σ_t·R ≤ 3 (per L10), gives 12/12 strict wins vs F.4 at σ_t·R ≥ 5 in
-the full scan. Transition is smooth at the σ_t·R = 3-5 threshold (linear
-k_eff blend). This is a SHIPPABLE closure.
+at σ_t·R ≤ 3 (per L10), gives 12/12 strict wins vs F.4 at σ_t·R ≥ 5 **at
+BASE quadrature**. Transition is smooth at σ_t·R = 3-5 (linear k_eff
+blend). ⚠️ **This "win" does NOT survive at RICH quadrature** — see L16
+and the E4 REVISED VERDICT table (line ~1129).
 
-### L12 — The scale-gauge DOF (L8) is rank-(1,1,1)-specific
+### L14 — The scale-gauge DOF (L8) is rank-(1,1,1)-specific
 
 At rank-(1,1,2), optimal scales are (α_0, α_1) ≈ (α_0_opt, 1.0 ± 0.1)
 uniformly across 10 test points. Mode-1's scale is NOT a meaningful tuning
@@ -1260,15 +1177,25 @@ parameter — it sits at the natural Legendre normalization. So the 18×
 gauge win from L8 (Legendre vs Jacobi-c² at rank-(1,1,1)) does NOT have
 a rank-(1,1,N) generalization: you can't stack N independent scale DOFs.
 
-### L13 — RS_brent's "0.0000%" values are quadrature-limited at BASE
+### L15 — RS_brent's "0.0000%" values are quadrature-limited at BASE
 
 At BASE (2, 4, 32), rank-(1,1,1) + Brent-optimized scale hits numerical
 floor ≤ 1e-6 err. True structural residual is almost certainly below
 BASE's quadrature noise. This is DIFFERENT from F.4 at BASE (sits at
-0.12-0.36% noise, per L5). RS_brent's structural residual — to be
-measured at RICH — may be materially below F.4's RICH-quad floor (0.01%
-per L5/E2.1), or may plateau at similar level. Spot check at σ_t·R=5,
-ρ=0.3 at RICH quadrature needed to confirm shippable-grade accuracy.
+0.12-0.36% noise, per L5). At RICH quadrature (confirmed in L16), split's
+structural floor (~0.07% at σ_t·R=10, ρ=0.3) is 21× above F.4's
+structural floor (~0.003%). The "win" is a quadrature coincidence.
+
+### L16 — The scale-calibration "win" is a BASE-quadrature artifact (load-bearing retraction)
+
+At RICH quadrature (4, 8, 64), F.4 wins 6/6 points at σ_t·R ≥ 5 by 2–88×.
+The Brent optimization on the split basis minimizes an error function
+that is dominated by quadrature noise at BASE, so Brent finds a scale
+where quadrature-noise cancellations drive apparent k_eff to zero.
+At RICH, F.4's structural floor emerges and Brent's optimum ceases
+to be at k_inf — the closure's true structural floor reveals itself
+above F.4. **Moral: always match quadrature across compared closures.
+A "win" that depends on quadrature-noise cancellation is a mirage.**
 
 ## New rejected hypotheses (RH8+)
 
