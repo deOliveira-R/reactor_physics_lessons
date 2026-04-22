@@ -148,7 +148,7 @@ p_order=8, n_ang=64) to avoid the BASE-noise trap.
 
 ## 2. The next two research directions — ranked
 
-### Direction Q (NEW; proposed 2026-04-22): principled derivation of F.4's Lambert/Marshak mismatch
+### Direction Q (Issue #122; filed 2026-04-22): principled derivation of F.4's Lambert/Marshak mismatch
 
 **Why this is highest priority**: L2 says F.4's win over all our
 formally-consistent closures comes from a specific basis asymmetry
