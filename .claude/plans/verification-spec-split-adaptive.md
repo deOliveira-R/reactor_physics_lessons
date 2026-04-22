@@ -1,3 +1,18 @@
+# ⚠️ OBSOLETE — Verification spec — split-basis adaptive-scale rank-(1,1,1) closure
+
+**RETRACTED 2026-04-22**: This spec was written against the breakthrough
+claim in commit `fba6835`. That claim has been falsified at RICH
+quadrature (see `rank-n-closure-research-log.md` "RETRACTION" section).
+The closure does NOT beat F.4 at production-grade quadrature. **Do NOT
+implement these tests** — the premise is wrong.
+
+Keep this file for historical reference. A future closure that genuinely
+beats F.4 will need its own verification spec from scratch.
+
+---
+
+ORIGINAL SPEC FOLLOWS (based on the falsified claim):
+
 # Verification spec — split-basis adaptive-scale rank-(1,1,1) closure
 
 **Target feature**: `boundary="white_split_adaptive"` in `solve_peierls_1g`

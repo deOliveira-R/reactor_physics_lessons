@@ -871,20 +871,60 @@ basis, the novelty hypothesis stands.
 
 ---
 
-## 🎉 BREAKTHROUGH — Experiments 4 & 5 (2026-04-22)
+## ⚠️ RETRACTION — The "BREAKTHROUGH" was a BASE-quadrature artifact
 
-### Headline finding
+**2026-04-22 late**: My claim below (appearing in commit `fba6835`) was
+**WRONG**. The RS_brent closure's `0.0000%` result at BASE quadrature
+(2, 4, 32) is a numerical cancellation artifact, NOT a structural
+improvement over F.4.
 
-**Rank-(1,1,1) closure with 1D Brent-optimized inner-basis scale achieves
+**Revised finding (post E4.2 at RICH quadrature)**: at RICH quad (4, 8, 64),
+**F.4 wins 6/6 points at σ_t·R ≥ 5** by 2–88× over the split-brent closure.
+
+| σ_t·R | ρ   | scale  | F.4 RICH | split RICH | who wins   |
+|-------|-----|--------|----------|------------|------------|
+| 5.0   | 0.3 | 1.7184 | 0.058%   | 0.076%     | F.4 (0.8×) |
+| 10.0  | 0.3 | 1.8066 | 0.003%   | 0.041%     | F.4 (13×)  |
+| 20.0  | 0.3 | 1.7087 | 0.006%   | 0.016%     | F.4 (2.7×) |
+| 50.0  | 0.3 | 1.7783 | 0.017%   | 1.507%     | F.4 (88×)  |
+| 20.0  | 0.5 | 1.6165 | 0.005%   | 0.060%     | F.4 (11×)  |
+| 10.0  | 0.5 | 1.6622 | 0.017%   | 0.039%     | F.4 (2.3×) |
+
+Scale scan at σ_t·R=10, ρ=0.3 at RICH: optimum scale = 1.800 (matches
+BASE-Brent's 1.8066 to 3 digits). Floor err = 0.069%. **F.4's 0.003% is
+21× below this floor.** The structural residual of rank-(1,1,1) split
+basis with adaptive scale is ~0.07%, well above F.4's ~0.003% floor.
+
+**Why the RS_brent "0.0000%" looked like a win at BASE**:
+- F.4 at BASE has err ~0.08–0.37% (quadrature noise, NOT structural).
+- Brent on split scales the closure until its k_eff crosses k_inf —
+  which happens at a scale dictated by quadrature cancellation, not the
+  true structural minimum.
+- Both methods are quadrature-limited at BASE but in different ways;
+  their relative "winner" at BASE is meaningless.
+- At RICH, F.4's true structural floor emerges (≤0.01%); split's
+  structural floor (0.07%) is unmasked.
+
+**Net**: the split-basis rank-(1,1,1) adaptive closure does NOT beat
+F.4 at production-grade quadrature. **F.4 remains the production closure.**
+
+## 📉 ORIGINAL (FALSE) BREAKTHROUGH CLAIM — retained below for history
+
+The following headline is WRONG. Retained for documentation of the failed
+hypothesis so future sessions understand what was tried and why it failed.
+
+### ~~Headline finding~~ (FALSE)
+
+~~**Rank-(1,1,1) closure with 1D Brent-optimized inner-basis scale achieves
 sub-display-precision k_eff error (< 5e-5% = 0.5 ppm) at ALL tested points
-in σ_t·R ∈ {5, 10, 20, 50} × ρ ∈ {0.1, 0.3, 0.5, 0.7}.**
+in σ_t·R ∈ {5, 10, 20, 50} × ρ ∈ {0.1, 0.3, 0.5, 0.7}.**~~
 
-F.4 at matched MED quadrature (3, 6, 48) gives 0.08-0.36% in this regime.
+~~F.4 at matched MED quadrature (3, 6, 48) gives 0.08-0.36% in this regime.
 Scale-calibrated rank-(1,1,1) beats F.4 by **1000× or more** universally
-at thick τ.
+at thick τ.~~
 
-Combined with regime switch (F.4 at σ_t·R ≤ 3, split+scale at σ_t·R ≥ 5),
-this is a **shippable universal closure** that beats F.4 at every (τ, ρ).
+~~Combined with regime switch (F.4 at σ_t·R ≤ 3, split+scale at σ_t·R ≥ 5),
+this is a **shippable universal closure** that beats F.4 at every (τ, ρ).~~
 
 ### E5 — rank-(1,1,2) adaptive scales (BASE quadrature, full scan)
 
@@ -1041,12 +1081,104 @@ limited noise, not structural).
 **RS_form: 8/12 wins, 4 losses/ties** — formula is WORSE than F.4 at σ_t·R=5
 (borderline). Only kicks in as a universal win at σ_t·R ≥ 10.
 
-#### E4.2 — RICH-quadrature spot check (pending)
+#### E4.2 — RICH-quadrature validation: FALSIFIES the BASE-quad wins
 
-Note that at BASE quadrature, F.4 sits on its quadrature floor ~0.12-0.36%
-per L5. RS_brent's rank-(1,1,1) 1D scale is a STRUCTURALLY PRINCIPLED
-Petrov-Galerkin weighting (L8) that dominates the BC-closure error.
-Need to verify at RICH (4, 8, 64) that RS_brent still wins — pending run.
+**Critical finding (2026-04-22 late)**: transferred the BASE-optimized
+scales from E4.1 to the RICH quadrature (4, 8, 64) and compared F.4 vs
+split-basis-rank-(1,1,1) at those fixed scales:
+
+| σ_t·R | ρ    | scale | F.4 (RICH) | split (RICH) | ratio F.4/split |
+|-------|------|-------|------------|--------------|-----------------|
+| 5.0   | 0.30 | 1.7184 | 0.0578%   | 0.0762%      | 0.8× (F.4 wins) |
+| 10.0  | 0.30 | 1.8066 | 0.0033%   | 0.0413%      | 0.1× (F.4 wins 13×) |
+| 20.0  | 0.30 | 1.7087 | 0.0060%   | 0.0160%      | 0.4× (F.4 wins 2.7×) |
+| 50.0  | 0.30 | 1.7783 | 0.0171%   | 1.5065%      | 0.01× (F.4 wins 88×) |
+| 20.0  | 0.50 | 1.6165 | 0.0054%   | 0.0601%      | 0.1× (F.4 wins 11×) |
+| 10.0  | 0.50 | 1.6622 | 0.0167%   | 0.0386%      | 0.4× (F.4 wins 2.3×) |
+
+**6/6 LOSSES at RICH quadrature.** The BASE-quad Brent wins were
+quadrature-error cancellation artifacts, not structural wins.
+
+Companion **full scale-scan** at σ_t·R=10, ρ=0.3, RICH (scale 1.2 → 2.3):
+
+| scale | err (RICH) |
+|-------|------------|
+| 1.2   | 1.259%     |
+| 1.4   | 1.042%     |
+| 1.6   | 0.690%     |
+| **1.8** | **0.0692%** (MINIMUM) |
+| 2.0   | 1.127%     |
+| 2.2   | 3.484%     |
+| 2.3   | 5.297%     |
+
+**Critical result**: RICH-optimum scale (1.8) coincides with BASE-optimum
+scale (1.8066) to 3 digits. The scale IS physics-reflective — the L8
+gauge DOF optimum is the SAME at BASE and RICH. BUT the error at the
+RICH-optimum scale is 0.069%, which is **21× WORSE than F.4 at RICH
+(0.003%)**. So even with PERFECT scale calibration, rank-(1,1,1) split
+cannot beat F.4. This is the definitive falsification of Direction M.
+
+**Revised L14**: scale calibration at BASE DOES transfer to RICH
+(scales match to 3 sig figs) — but the RICH residual at the optimum
+scale is dominated by F.4's. The previous E4.2 conclusion that "BASE
+scales don't transfer" was wrong: they DO transfer (scale is truly
+physics-defined), but the closure itself plateaus at 0.07% err at
+σ_t·R=10 — above F.4's 0.003% quadrature floor. **Rank-(1,1,1) split
+has a hard structural floor above F.4.**
+
+### E4 REVISED VERDICT (2026-04-22 late)
+
+**DIRECTION M (regime-switched closure) DOES NOT UNIVERSALLY BEAT F.4.**
+The BASE-quad "wins" were quadrature-error cancellation artifacts.
+
+At production-grade RICH quadrature:
+- F.4 consistently beats split-rank-(1,1,1)+scale_BASE
+- F.4 sits at its quadrature floor (0.003-0.017%) as expected per L5
+- split+BASE-scale actively HARMS accuracy at RICH (2-88× worse)
+- Running Brent at RICH itself is VERY expensive (~15-30 min per point,
+  based on timing at 45s/k_eff-call × 25 maxiter)
+- No shippable universal closure emerges from E4 at matched quadrature.
+
+**Ship status**: F.4 scalar remains the production closure; no evidence
+that rank-(1,1,1)+scale beats F.4 at matched (RICH) quadrature.
+Recommend closing Issue #120 (c_in-aware split basis) with:
+"empirical falsification at matched quadrature — BASE-quad wins were
+quadrature artifacts (L13 / new L14)."
+
+### L14 — rank-(1,1,1) split has a STRUCTURAL FLOOR above F.4's
+
+**Fundamental finding**: the rank-(1,1,1)+scale optimum at BASE quad
+(scale≈1.8066) coincides with RICH optimum (scale≈1.8000) at σ_t·R=10,
+ρ=0.3 — so scale IS physics-defined. But even at RICH-optimum scale,
+split-rank-(1,1,1) gives 0.069% err, while F.4 at RICH gives 0.003%.
+
+**Rank-(1,1,1) split has a hard structural floor ~0.07% err at this
+point that F.4 structurally passes through.** The split's residual
+closure error is dominated by its mode truncation (N_i=1 inner mode),
+not by quadrature or scale. F.4, despite using just a scalar white-BC
+correction, has a structural residual that approaches machine precision
+with refinement (L5 / E2.1).
+
+### Why is F.4 structurally better than rank-(1,1,1)?
+
+F.4 uses Lambert P/G + Marshak W (basis mismatch). The empirical win
+that was unexplained in L2 is precisely this: F.4's basis mismatch
+implicitly captures MORE angular detail than Marshak-consistent rank-1
+(or rank-(1,1,1) split). It's a 1-dimensional subspace the split basis
+doesn't span — NOT because it has more modes, but because its
+effective inner-product weight is anisotropic in a way that rank-N
+Marshak/split cannot reproduce.
+
+Per L6, this anisotropy is algebraically N=1-specific — you can't just
+Lambert-ify the split basis either. So F.4 sits on a structurally
+special 1-parameter family that rank-N bases cannot access.
+
+### RH10 — "rank-(1,1,1) split with scale-optimum beats F.4 at matched quadrature"
+
+Falsified 2026-04-22 (E4.2). 6/6 losses at RICH quadrature using
+BASE-optimal scales AND confirmed by single-point RICH scale scan:
+optimum scale at RICH is 1.8 but err = 0.069% still loses to F.4's
+0.003% by 21×. See L14.
 
 ### E4 verdict
 
@@ -1157,16 +1289,22 @@ F.4 up to σ_t·R=10; then RS_form becomes universal at σ_t·R ≥ 10.
 
 ## Direction updates
 
-### Direction M (ACTIVE-SHIP): Regime-switched(brent) ready for production
+### Direction M (REJECTED, 2026-04-22 late): Regime-switched(brent) FAILS at matched quadrature
 
-After RICH-quad validation (E4.2 pending):
-- Implementation: regime switch at σ_t·R = 3 (F.4) / 5 (split+brent) with
-  linear k_eff blend in transition.
-- Scale calibration: Brent minimization on [1.0, 2.8] at solve time
-  (~10-20 k_eff evaluations per problem, acceptable cost).
-- Tests: regression tests at 12 (τ, ρ) points with <0.1% max err target
-  (loose to account for quad floor); adversarial test at σ_t·R=0.5 to
-  verify F.4 fallback.
+**Post-E4.2 verdict**: regime-switched closure with BASE-optimized scale
+produces wins only at BASE quadrature; at RICH quadrature it LOSES to F.4
+by 2-88×. The scale Brent optimization is entangled with quadrature error
+(L14). Not a shippable path.
+
+If someone wants to revive this approach, would need to:
+1. Run Brent at the PRODUCTION quadrature directly (very expensive:
+   ~15-30 min per point at RICH).
+2. Cache per-problem scales in a lookup table indexed by (τ, ρ, n_panels,
+   p_order, n_ang).
+3. Prove at RICH that RICH-optimized scale still beats F.4 at RICH —
+   currently untested but plausible ONLY if the Brent genuinely finds
+   a non-trivial minimum at RICH, which the scale scan suggests it does
+   NOT in the [1.2, 2.3] bracket at σ_t·R=10.
 
 ### Direction O (PROPOSED): Principled scale formula beyond (1+6ρ)/(3ρ)
 

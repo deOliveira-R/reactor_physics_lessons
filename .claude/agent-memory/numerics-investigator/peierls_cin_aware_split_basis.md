@@ -258,3 +258,135 @@ Adaptive basis is the frontier.
 4. (LOW) Direction G — non-white BC (anisotropic albedo). Break the
    rank-1 BC bottleneck L1 by using a non-physical BC that populates more
    outer modes. Information-theoretic exercise only; not production-relevant.
+
+---
+
+## EXPERIMENT 4 + 5 (2026-04-22): Regime-switched + rank-(1,1,2) 2D
+
+### E4 — Regime-switched closure (Direction M ACTIVE-SHIP)
+
+Design: σ_t·R ≤ 3 → F.4, σ_t·R ≥ 5 → split-basis rank-(1,1,1)
+with SCALE calibrated either by formula `(1+6ρ)/(3ρ)` or by bounded
+1D Brent on [1.0, 2.8]; linear k_eff blend in 3 < σ_t·R < 5.
+
+**E4.1 main scan (BASE quadrature)**:
+- RS_brent: **12/12 wins vs F.4** at σ_t·R ≥ 5, ratios 87k-2.6M×
+- RS_form: 8/12 wins; LOSES at σ_t·R=5 (2-5× worse than F.4)
+- Thin regime (σ_t·R ≤ 2.5): safely reduces to F.4 by design
+
+**CAVEAT**: at BASE quad, both rank-(1,1,1)+Brent and F.4 sit on their
+quadrature floors. "0.0000%" values are noise. RS_brent's structural
+advantage over F.4-at-RICH pending E4.2 validation.
+
+### E5 — rank-(1,1,2) 2D adaptive scales
+
+Nelder-Mead 2D optim of (α_0, α_1) where basis = [α_0, α_1·(2c-1)].
+13/14 points before timeout. α_1 UNIVERSALLY ≈ 1.01-1.08 (the natural
+Legendre normalization). 2D optim gives SAME err as 1D Brent on α_0
+at all tested points.
+
+**Verdict**: rank-(1,1,2) 2D adaptive does NOT beat rank-(1,1,1) 1D
+Brent. The scale-gauge DOF lives in mode-0 ONLY — higher modes don't
+have independent tuning freedom that matters. This is consistent with
+E2.3 (mode-1 carries only 10% of inner-flux energy) and L4 (rank-(1,1,N)
+plateau at 0.99% for N ≥ 2).
+
+### New lessons
+
+**L11 (ship-track)**: Regime-switched(brent) is a universal closure
+at BASE quad. Ready for production-grade pytests after RICH-quad validation.
+
+**L12**: Scale-gauge DOF (L8) is rank-(1,1,1)-specific. α_1 ≈ 1
+optimal uniformly → no 2D gauge freedom to exploit.
+
+**L13**: RS_brent at BASE quad is quadrature-limited (≤ 1e-6 err),
+NOT structural. Must validate at RICH quad before shipping claim.
+
+### Files produced in E4+E5
+
+- `/workspaces/ORPHEUS/derivations/diagnostics/diag_cin_split_regime_switched.py`
+  — Regime-switched scan; both formula and brent variants; 32-point scan.
+  Pytest tests included (`@pytest.mark.slow`).
+- `/workspaces/ORPHEUS/derivations/diagnostics/diag_cin_split_rank112_adaptive.py`
+  — rank-(1,1,2) 2D Nelder-Mead optim; 14-point scan.
+
+### E4.2 RICH validation — FALSIFIED
+
+Transferred BASE-optimized scales to RICH quadrature (4, 8, 64) and
+compared F.4 vs split-rank-(1,1,1) at those same scales:
+
+| σ_t·R | ρ   | scale   | F.4 RICH | split RICH | F.4 wins by |
+|-------|-----|---------|----------|------------|-------------|
+| 5.0   | 0.3 | 1.7184  | 0.058%   | 0.076%     | 1.3×        |
+| 10.0  | 0.3 | 1.8066  | 0.003%   | 0.041%     | 13×         |
+| 20.0  | 0.3 | 1.7087  | 0.006%   | 0.016%     | 2.7×        |
+| 50.0  | 0.3 | 1.7783  | 0.017%   | 1.507%     | 88×         |
+| 20.0  | 0.5 | 1.6165  | 0.005%   | 0.060%     | 11×         |
+| 10.0  | 0.5 | 1.6622  | 0.017%   | 0.039%     | 2.3×        |
+
+**6/6 F.4 wins at RICH quad.** The BASE-quad "wins" (87k-2.6M× ratios)
+were quadrature-error cancellation artifacts, not structural.
+
+Companion RICH scale scan at σ_t·R=10, ρ=0.3 (full bracket [1.2, 2.3]):
+
+| scale | err @ RICH |
+|-------|------------|
+| 1.2   | 1.259%     |
+| 1.4   | 1.042%     |
+| 1.6   | 0.690%     |
+| **1.8** | **0.069%** (MINIMUM) |
+| 2.0   | 1.127%     |
+| 2.2   | 3.484%     |
+
+**RICH-optimum scale 1.8 matches BASE-optimum 1.8066 to 3 digits.**
+So scale IS physics-defined (L8 gauge DOF is real). But at the
+RICH-optimum, err = 0.069% — **21× WORSE than F.4 (0.003%)**.
+
+**L14 (FINAL)**: rank-(1,1,1) split has a STRUCTURAL floor ~0.07%
+at σ_t·R=10, ρ=0.3 RICH. F.4 at RICH gives 0.003% — structurally
+better. The gauge DOF from L8 is real and quadrature-invariant at
+its optimum, BUT the truncation at N_i=1 inner mode + Marshak-
+consistent basis is a stricter structural bound than F.4's Lambert/
+Marshak mismatch. E4's BASE-quad "wins" (87k× ratios) were
+quadrature noise at BOTH closures' floors.
+
+### Why F.4 is structurally better than rank-(1,1,1) split
+
+F.4 uses Lambert P/G + Marshak W (basis mismatch). This implicitly
+accesses a 1-dimensional angular subspace that formally-consistent
+rank-N Marshak/split bases cannot reproduce (per L6, Lambert-ification
+of the split basis is catastrophic: 737% err at thin τ).
+
+F.4 is on a structurally special 1-parameter family that rank-N bases
+cannot access within a single basis convention. Breaking below F.4
+would require a fundamentally different approach — NOT more modes,
+NOT scale calibration, but a principled reproduction of F.4's
+asymmetric basis weighting in a rank-N setting.
+
+### FINAL STATUS (2026-04-22)
+
+**DIRECTION M REJECTED.** Split-basis rank-(1,1,1)+Brent-calibrated-scale
+is NOT a shippable universal closure. At matched quadrature, F.4 remains
+strictly better.
+
+### Recommendation
+
+1. **Close Issue #120** with verdict "empirical falsification at matched
+   quadrature". The c_in-aware split basis is structurally sound but
+   empirically dominated by F.4 at every thick-τ point tested at RICH.
+2. **Do NOT lift NotImplementedError guards** on
+   `boundary="white_rank2"` or related. F.4 is the production path.
+3. **If pursuing further**: rank-(1,1,1)+RICH-quad-Brent has NOT been
+   tested. Very expensive (~15-30 min per point). Unlikely to yield
+   a universal formula per L14. The scale scan shows monotonic decrease
+   up to scale=1.5 with no minimum — suggests RICH-optimum scale is
+   either very large or the regime is entirely dominated by F.4.
+
+### Residual question for future session
+
+Does rank-(1,1,1) at RICH-quadrature-optimized scale beat F.4 at RICH?
+Scale scan at σ_t·R=10, ρ=0.3, RICH shows monotonically decreasing
+err from scale=1.2 (1.26% err) to 1.5 (0.89% err). Full scan to
+scale=3.0 needed to confirm no minimum exists in the accessible range.
+If no minimum, L14 proven conclusively: scale is quadrature-defined,
+not geometry-defined.
