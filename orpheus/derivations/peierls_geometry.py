@@ -4078,6 +4078,342 @@ class PeierlsSolution:
         return out
 
 
+_DEPRECATED_CLOSURE_ALIASES = {
+    "white": "white_rank1_mark",
+    "white_rank2": "white_f4",
+}
+
+
+def _resolve_closure_name(boundary: str, *, user_stacklevel: int) -> str:
+    """Resolve deprecated closure aliases to canonical names.
+
+    Parameters
+    ----------
+    boundary
+        The user-facing closure name (may be a deprecated alias).
+    user_stacklevel
+        The ``stacklevel`` value to hand to :func:`warnings.warn` so
+        the resulting ``DeprecationWarning`` points at the user's
+        call site, not at an intermediate wrapper frame.
+
+        Call from :func:`solve_peierls_mg` directly: pass ``3``
+        (``warn -> _resolve -> solve_peierls_mg -> user``).
+        Call from :func:`solve_peierls_1g` (which itself calls
+        :func:`solve_peierls_mg`): pass ``3`` from inside the 1G
+        wrapper *before* calling ``solve_peierls_mg``, so the
+        MG-side resolution is a no-op on the canonical name.
+    """
+    if boundary in _DEPRECATED_CLOSURE_ALIASES:
+        new_name = _DEPRECATED_CLOSURE_ALIASES[boundary]
+        import warnings as _warnings
+        _warnings.warn(
+            f"boundary={boundary!r} is a deprecated alias; the canonical "
+            f"name is {new_name!r}. The old name still works for this "
+            f"release. See docs/theory/peierls_unified.rst "
+            f"§theory-peierls-naming.",
+            DeprecationWarning,
+            stacklevel=user_stacklevel,
+        )
+        return new_name
+    return boundary
+
+
+def _build_full_K_per_group(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    panels: list,
+    radii: np.ndarray,
+    sig_t_g: np.ndarray,
+    closure: str,
+    *,
+    n_angular: int,
+    n_rho: int,
+    n_surf_quad: int,
+    n_bc_modes: int,
+    dps: int,
+) -> np.ndarray:
+    """Assemble K = K_vol + K_bc for a single group at per-region Σ_t,g.
+
+    Internal helper shared by the MG driver and the 1G wrapper. The
+    closure arg is pre-resolved (no alias handling here).
+    """
+    K = build_volume_kernel(
+        geometry, r_nodes, panels, radii, sig_t_g,
+        n_angular=n_angular, n_rho=n_rho, dps=dps,
+    )
+    if closure == "vacuum":
+        return K
+    if closure == "white_rank1_mark":
+        K_bc = build_white_bc_correction_rank_n(
+            geometry, r_nodes, r_wts, radii, sig_t_g,
+            n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
+            n_bc_modes=n_bc_modes,
+        )
+        return K + K_bc
+    if closure == "white_f4":
+        if n_bc_modes > 1:
+            raise NotImplementedError(
+                "closure='white_f4' with n_bc_modes > 1 is not a "
+                "shipped closure. The rank-N Marshak per-face path "
+                "was falsified by the 2026-04-22 research program "
+                "(see research log L21 and Sphinx §peierls-rank-n-"
+                "per-face-closeout). Use n_bc_modes=1 for F.4, or "
+                "closure='white_rank1_mark' for rank-1 Mark."
+            )
+        if getattr(geometry, "n_surfaces", 1) == 1:
+            import warnings as _warnings
+            _warnings.warn(
+                f"closure='white_f4' on a 1-surface (solid) geometry "
+                f"(kind={geometry.kind!r}, inner_radius="
+                f"{getattr(geometry, 'inner_radius', 0.0)}) silently "
+                f"collapses to rank-1 Mark because there is no second-"
+                f"face coupling. Use closure='white_rank1_mark' to "
+                f"make the intent explicit. This silent-collapse "
+                f"behavior will become a ValueError in a future "
+                f"release.",
+                DeprecationWarning,
+                stacklevel=4,
+            )
+        op = build_closure_operator(
+            geometry, r_nodes, r_wts, radii, sig_t_g,
+            n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
+            n_bc_modes=1, reflection="white",
+        )
+        return K + op.as_matrix()
+    raise ValueError(
+        f"closure must be 'vacuum', 'white_rank1_mark', or "
+        f"'white_f4' (or the deprecated aliases 'white' / "
+        f"'white_rank2'); got {closure!r}"
+    )
+
+
+def solve_peierls_mg(
+    geometry: CurvilinearGeometry,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    sig_s: np.ndarray,
+    nu_sig_f: np.ndarray,
+    chi: np.ndarray,
+    *,
+    boundary: str = "vacuum",
+    n_panels_per_region: int = 2,
+    p_order: int = 5,
+    n_angular: int = 24,
+    n_rho: int = 24,
+    n_surf_quad: int = 24,
+    dps: int = 25,
+    max_iter: int = 300,
+    tol: float = 1e-10,
+    n_bc_modes: int = 1,
+) -> PeierlsSolution:
+    r"""Unified multi-group Peierls eigenvalue driver for curvilinear geometry.
+
+    Generalisation of :func:`solve_peierls_1g` to ``ng ≥ 1`` energy
+    groups with downscatter / upscatter coupling and :math:`\chi`-weighted
+    fission. The per-group Peierls equation is
+
+    .. math::
+
+       \Sigma_{t,g}(r_i)\,\varphi_g(r_i) \;=\;
+         \sum_j K^{(g)}_{ij}\!\!
+         \sum_{g'}\!\bigl(
+           \Sigma_{s,g'\to g}(r_j)\,\varphi_{g'}(r_j)
+           + \tfrac{1}{k}\,\chi_g(r_i)\,\nu\Sigma_{f,g'}(r_j)\,\varphi_{g'}(r_j)
+         \bigr),
+
+    assembled into a block :math:`(N \cdot n_g)` × :math:`(N \cdot n_g)`
+    linear system with row index ``i * ng + g`` (node-major) and solved
+    by fission-source power iteration. The volume kernel
+    :math:`K^{(g)}` differs across groups only through :math:`\Sigma_{t,g}`;
+    the closure (vacuum / white_rank1_mark / white_f4) is rebuilt once
+    per group from the per-group :math:`\Sigma_{t,g}` trace.
+
+    The closure primitives (``build_closure_operator``,
+    ``build_white_bc_correction_rank_n``) are group-local by
+    construction (no cross-group coupling through the reflection
+    operator — verified during Issue #104 scoping; see research log
+    L21 / Sphinx §peierls-rank-n-per-face-closeout for the F.4 case).
+
+    Parameters
+    ----------
+    geometry
+        Curvilinear geometry instance (slab-polar / cylinder-1d /
+        sphere-1d, optionally hollow).
+    radii
+        Outer radii per region, shape ``(n_regions,)``. The inner
+        cavity radius (if any) comes from ``geometry.inner_radius``.
+    sig_t
+        Total cross section, shape ``(n_regions, ng)``.
+    sig_s
+        P\ :sub:`0` scattering matrix per region, shape
+        ``(n_regions, ng, ng)``. Convention: ``sig_s[r, g_src, g_dst]``
+        is the rate of scatter **from** group ``g_src`` **into** group
+        ``g_dst`` at region ``r`` — i.e., the first group index is
+        the source and the second is the destination. This matches
+        the XS library (:mod:`orpheus.derivations._xs_library`) and
+        the slab driver
+        :func:`~orpheus.derivations.peierls_slab.solve_peierls_eigenvalue`.
+        Under this convention downscatter (fast → thermal, i.e.,
+        ``g_src < g_dst`` with group 0 = fast) sits in the
+        upper-triangular entries.
+    nu_sig_f
+        :math:`\nu\Sigma_f` per region and group, shape
+        ``(n_regions, ng)``.
+    chi
+        Fission emission spectrum per region and group, shape
+        ``(n_regions, ng)``. Must sum to 1 along the group axis
+        per region (not checked — caller's responsibility).
+    boundary, n_panels_per_region, p_order, n_angular, n_rho,
+    n_surf_quad, dps, max_iter, tol, n_bc_modes
+        See :func:`solve_peierls_1g`; semantics are unchanged.
+        Tolerances apply to the scalar eigenvalue iteration only.
+
+    Returns
+    -------
+    PeierlsSolution
+        ``phi_values`` has shape ``(N, ng)``; ``n_groups == ng``.
+
+    Notes
+    -----
+    **ng = 1 bit-match guarantee.** For ``ng == 1`` with ``chi == 1``
+    the MG path reduces algebraically to the original 1G assembly
+    (same K, same A / B, same power iteration). This is enforced by
+    the regression test ``test_mg_bitmatch_1g_*`` and is a prerequisite
+    for preserving the behaviour of all 1G callers via the
+    :func:`solve_peierls_1g` wrapper.
+    """
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    sig_s = np.asarray(sig_s, dtype=float)
+    nu_sig_f = np.asarray(nu_sig_f, dtype=float)
+    chi = np.asarray(chi, dtype=float)
+
+    if sig_t.ndim != 2:
+        raise ValueError(
+            f"sig_t must be shape (n_regions, ng); got ndim={sig_t.ndim}, "
+            f"shape={sig_t.shape}. Use solve_peierls_1g for 1-D Σ_t input."
+        )
+    n_regions, ng = sig_t.shape
+    if sig_s.shape != (n_regions, ng, ng):
+        raise ValueError(
+            f"sig_s must be shape (n_regions={n_regions}, ng={ng}, "
+            f"ng={ng}); got {sig_s.shape}."
+        )
+    if nu_sig_f.shape != (n_regions, ng):
+        raise ValueError(
+            f"nu_sig_f must be shape (n_regions={n_regions}, ng={ng}); "
+            f"got {nu_sig_f.shape}."
+        )
+    if chi.shape != (n_regions, ng):
+        raise ValueError(
+            f"chi must be shape (n_regions={n_regions}, ng={ng}); "
+            f"got {chi.shape}."
+        )
+
+    # stacklevel=3 resolves:  warn -> _resolve_closure_name ->
+    # solve_peierls_mg -> user's call site.
+    closure = _resolve_closure_name(boundary, user_stacklevel=3)
+
+    # Forward hollow-cell cavity exclusion to the radial mesh builder
+    # (identical to solve_peierls_1g — Issue #119).
+    r_nodes, r_wts, panels = composite_gl_r(
+        radii, n_panels_per_region, p_order, dps=dps,
+        inner_radius=getattr(geometry, "inner_radius", 0.0) or 0.0,
+    )
+    N = len(r_nodes)
+
+    # Per-group K = K_vol + K_bc. This is the only group-local loop.
+    K_per_group = np.empty((ng, N, N))
+    for g in range(ng):
+        K_per_group[g] = _build_full_K_per_group(
+            geometry, r_nodes, r_wts, panels, radii, sig_t[:, g],
+            closure,
+            n_angular=n_angular, n_rho=n_rho, n_surf_quad=n_surf_quad,
+            n_bc_modes=n_bc_modes, dps=dps,
+        )
+
+    # Per-node XS (look up the annulus-region index per radial node).
+    k_annulus = np.array(
+        [geometry.which_annulus(float(r_nodes[i]), radii) for i in range(N)],
+        dtype=int,
+    )
+    sig_t_n = sig_t[k_annulus, :]          # (N, ng)
+    sig_s_n = sig_s[k_annulus, :, :]       # (N, ng, ng)
+    nu_f_n  = nu_sig_f[k_annulus, :]       # (N, ng)
+    chi_n   = chi[k_annulus, :]            # (N, ng)
+
+    # Block (N·ng) × (N·ng) assembly — node-major indexing row = i*ng + g.
+    # Convention bit-matches slab's _build_system_matrices in
+    # peierls_slab.py:243 (row = i*ng + ge, col = j*ng + gs).
+    dim = N * ng
+    A = np.zeros((dim, dim))
+    B = np.zeros((dim, dim))
+
+    # Diagonal Σ_t term: A[i*ng+g, i*ng+g] = Σ_t,g(r_i).
+    for i in range(N):
+        for g in range(ng):
+            A[i * ng + g, i * ng + g] = sig_t_n[i, g]
+
+    # Off-diagonal scatter / fission operators. Σ_t-LHS convention
+    # (matches solve_peierls_1g): A = diag(Σ_t) − K·Σ_s, B = K·χ·νΣ_f.
+    # Access sig_s_n[j, gs, ge] as "scatter gs → ge at node j" per the
+    # slab reference pattern.
+    for ge in range(ng):
+        Kg = K_per_group[ge]
+        for i in range(N):
+            chi_ie = chi_n[i, ge]
+            row = i * ng + ge
+            for j in range(N):
+                kij = Kg[i, j]
+                if kij == 0.0:
+                    continue
+                for gs in range(ng):
+                    col = j * ng + gs
+                    A[row, col] -= kij * sig_s_n[j, gs, ge]
+                    B[row, col] += kij * chi_ie * nu_f_n[j, gs]
+
+    # Fission-source power iteration — bit-identical structure to the
+    # 1G path (just acts on a dim-wide vector instead of N-wide).
+    phi = np.ones(dim)
+    k_val = 1.0
+    B_phi = B @ phi
+    prod_old = np.abs(B_phi).sum()
+    for it in range(max_iter):
+        q = B_phi / k_val
+        phi_new = np.linalg.solve(A, q)
+        B_phi_new = B @ phi_new
+        prod_new = np.abs(B_phi_new).sum()
+        k_new = k_val * prod_new / prod_old if prod_old > 0 else k_val
+        nrm = np.abs(phi_new).sum()
+        if nrm > 0:
+            phi_new = phi_new / nrm
+        B_phi_norm = B @ phi_new
+        prod_norm = np.abs(B_phi_norm).sum()
+        converged = abs(k_new - k_val) < tol and it > 5
+        phi, k_val = phi_new, k_new
+        B_phi, prod_old = B_phi_norm, prod_norm
+        if converged:
+            break
+
+    # Reshape (N*ng,) → (N, ng) for the dataclass; node-major layout
+    # means phi[i*ng + g] goes to phi_values[i, g].
+    phi_values = phi.reshape(N, ng)
+
+    return PeierlsSolution(
+        r_nodes=r_nodes,
+        phi_values=phi_values,
+        k_eff=float(k_val),
+        cell_radius=float(radii[-1]),
+        n_groups=ng,
+        geometry_kind=geometry.kind,
+        n_quad_r=N,
+        n_quad_angular=n_angular * n_rho,
+        precision_digits=dps,
+        panel_bounds=panels,
+    )
+
+
 def solve_peierls_1g(
     geometry: CurvilinearGeometry,
     radii: np.ndarray,
@@ -4110,100 +4446,41 @@ def solve_peierls_1g(
     with :math:`\tilde A = \mathrm{diag}(\Sigma_t) - K\cdot
     \mathrm{diag}(\Sigma_s)` and :math:`\tilde B = K\cdot
     \mathrm{diag}(\nu\Sigma_f)`. Fission-source power iteration.
+
+    As of Issue #104 (2026-04-24) this function is a thin wrapper over
+    :func:`solve_peierls_mg` with ``ng = 1`` and a synthesised
+    :math:`\chi = 1`. The ng=1 MG path is algebraically identical to the
+    original 1G assembly (verified by ``test_mg_bitmatch_1g_*``), so
+    all downstream 1G callers continue to work unchanged.
     """
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     sig_s = np.asarray(sig_s, dtype=float)
     nu_sig_f = np.asarray(nu_sig_f, dtype=float)
 
-    # Forward hollow-cell cavity exclusion to the radial mesh builder.
-    # Without ``inner_radius`` the mesh spans [0, R] and erroneously
-    # places quadrature nodes inside the cavity (Issue #119 — inflated
-    # the Phase F.4 scalar N=1 residual from the quadrature-limited
-    # 0.077 % to ~1.5 % at r_0/R = 0.3).
-    r_nodes, r_wts, panels = composite_gl_r(
-        radii, n_panels_per_region, p_order, dps=dps,
-        inner_radius=getattr(geometry, "inner_radius", 0.0) or 0.0,
-    )
-    K = build_volume_kernel(
-        geometry, r_nodes, panels, radii, sig_t,
-        n_angular=n_angular, n_rho=n_rho, dps=dps,
-    )
-
-    if boundary == "white":
-        K_bc = build_white_bc_correction_rank_n(
-            geometry, r_nodes, r_wts, radii, sig_t,
-            n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
-            n_bc_modes=n_bc_modes,
-        )
-        K = K + K_bc
-    elif boundary == "white_rank2":
-        # Phase F.3: per-face white BC with transmission feedback.
-        # For 2-surface (Class-A) geometries — slab here; hollow cyl/sph
-        # under Phase F.4 — this captures the T·J⁻ self-feedback that
-        # rank-1 Mark omits, closing the Wigner-Seitz identity
-        # k_eff = k_inf up to outer-quadrature order.
-        if n_bc_modes > 1:
-            raise NotImplementedError(
-                "boundary='white_rank2' with n_bc_modes > 1 is not yet "
-                "supported (rank-N per-face planned in Phase F.5 — see "
-                "Issue #119). Use n_bc_modes=1."
-            )
-        op = build_closure_operator(
-            geometry, r_nodes, r_wts, radii, sig_t,
-            n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
-            n_bc_modes=1, reflection="white",
-        )
-        K = K + op.as_matrix()
-    elif boundary != "vacuum":
+    # Coerce per-region 1-D arrays to (n_regions, 1) for the MG path.
+    if sig_t.ndim != 1:
         raise ValueError(
-            f"boundary must be 'vacuum', 'white', or 'white_rank2', "
-            f"got {boundary!r}"
+            f"solve_peierls_1g: sig_t must be a 1-D per-region array; "
+            f"got shape={sig_t.shape}. Use solve_peierls_mg for ng > 1."
         )
+    n_regions = sig_t.shape[0]
+    sig_t_mg = sig_t[:, np.newaxis]                                   # (n_r, 1)
+    sig_s_mg = sig_s.reshape(n_regions, 1, 1)                         # (n_r, 1, 1)
+    nu_sig_f_mg = nu_sig_f[:, np.newaxis]                             # (n_r, 1)
+    chi_mg = np.ones((n_regions, 1))                                  # χ = 1 for 1G
 
-    N = len(r_nodes)
-    sig_t_n = np.empty(N)
-    sig_s_n = np.empty(N)
-    nu_sig_f_n = np.empty(N)
-    for i, ri in enumerate(r_nodes):
-        ki = geometry.which_annulus(ri, radii)
-        sig_t_n[i] = sig_t[ki]
-        sig_s_n[i] = sig_s[ki]
-        nu_sig_f_n[i] = nu_sig_f[ki]
+    # Resolve deprecated aliases here so the DeprecationWarning points
+    # at the user's call to solve_peierls_1g rather than at the internal
+    # solve_peierls_mg call. stacklevel=3 resolves to:
+    # warn -> _resolve_closure_name -> solve_peierls_1g -> user.
+    canonical_boundary = _resolve_closure_name(boundary, user_stacklevel=3)
 
-    A = np.diag(sig_t_n) - K * sig_s_n[np.newaxis, :]
-    B = K * nu_sig_f_n[np.newaxis, :]
-
-    phi = np.ones(N)
-    k_val = 1.0
-    B_phi = B @ phi
-    prod_old = np.abs(B_phi).sum()
-    for it in range(max_iter):
-        q = B_phi / k_val
-        phi_new = np.linalg.solve(A, q)
-        B_phi_new = B @ phi_new
-        prod_new = np.abs(B_phi_new).sum()
-        k_new = k_val * prod_new / prod_old if prod_old > 0 else k_val
-        nrm = np.abs(phi_new).sum()
-        if nrm > 0:
-            phi_new = phi_new / nrm
-        B_phi_norm = B @ phi_new
-        prod_norm = np.abs(B_phi_norm).sum()
-        converged = abs(k_new - k_val) < tol and it > 5
-        phi, k_val = phi_new, k_new
-        B_phi, prod_old = B_phi_norm, prod_norm
-        if converged:
-            break
-
-    return PeierlsSolution(
-        r_nodes=r_nodes,
-        phi_values=phi[:, np.newaxis],
-        k_eff=float(k_val),
-        cell_radius=float(radii[-1]),
-        n_groups=1,
-        geometry_kind=geometry.kind,
-        n_quad_r=N,
-        n_quad_angular=n_angular * n_rho,
-        precision_digits=dps,
-        panel_bounds=panels,
+    sol = solve_peierls_mg(
+        geometry, radii, sig_t_mg, sig_s_mg, nu_sig_f_mg, chi_mg,
+        boundary=canonical_boundary,
+        n_panels_per_region=n_panels_per_region, p_order=p_order,
+        n_angular=n_angular, n_rho=n_rho, n_surf_quad=n_surf_quad,
+        dps=dps, max_iter=max_iter, tol=tol, n_bc_modes=n_bc_modes,
     )
+    return sol
