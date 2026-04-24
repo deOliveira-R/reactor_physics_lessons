@@ -332,6 +332,42 @@ class CurvilinearGeometry:
         return 2 if self.inner_radius > 0.0 else 1
 
     @property
+    def topology(self) -> str:
+        r"""Topological class for Peierls closure dispatch.
+
+        Returns one of:
+
+        - ``"two_surface"`` — the cell has two boundary surfaces that
+          carry re-entry data. Members: slab (two parallel faces),
+          hollow annular cylinder (inner + outer ring), hollow sphere
+          (inner + outer shell). **F.4 scalar rank-2 per-face closure
+          (Stamm'ler Eq. 34 = Hébert 2009 Eq. 3.323) applies to this
+          class.** All members share the same L19 stability-protocol
+          coverage and the L21 structural residual class.
+
+        - ``"one_surface_compact"`` — the cell has a single boundary
+          surface (compact convex body). Members: solid cylinder
+          (``inner_radius == 0``), solid sphere (``inner_radius == 0``).
+          **F.4 is structurally unavailable** on this class because
+          there is no second face to couple to; the only shipped
+          closure is rank-1 Mark.
+
+        This is the **primary organizing principle** for Peierls
+        reference cases (see
+        :ref:`theory-peierls-capabilities` and
+        :file:`.claude/plans/topology-based-consolidation.md`). Tests
+        and case builders should dispatch on ``topology`` rather than
+        on ``kind`` + ``inner_radius`` gymnastics.
+
+        Semantically equivalent to ``n_surfaces`` (2 ↔ ``"two_surface"``,
+        1 ↔ ``"one_surface_compact"``), but named for its role rather
+        than its arity. Code that cares about the topology *label* —
+        dispatching case builders, filtering tests, gating closure
+        applicability — should prefer this property.
+        """
+        return "two_surface" if self.n_surfaces == 2 else "one_surface_compact"
+
+    @property
     def is_planar(self) -> bool:
         """True for Cartesian (slab) geometry; False for curvilinear.
 
@@ -798,6 +834,93 @@ class CurvilinearGeometry:
         if self.kind == "cylinder-1d":
             return R
         return R * R
+
+    # ── case-builder helpers (Stage 2 of the simplification) ──────────
+
+    def shell_volume_integral(
+        self, r_nodes: np.ndarray, r_wts: np.ndarray, phi: np.ndarray,
+    ) -> float:
+        r"""Compute :math:`\int_{r_0}^{R}\!\varphi(r)\,\mathrm dV(r)` at the
+        current geometry's volume element.
+
+        Used by continuous-reference case builders to normalize the flux.
+        Replaces the per-geometry duplicated expressions previously
+        hand-coded in ``peierls_{cylinder,sphere,slab}.py``:
+
+        - **Slab** (``kind="slab-polar"``): :math:`\int \varphi\,\mathrm dx
+          = \sum_j w_j\,\varphi_j`.
+        - **Cylinder** (``kind="cylinder-1d"``): :math:`2\pi\int r\,\varphi
+          \,\mathrm dr = 2\pi\sum_j r_j\,w_j\,\varphi_j` (per unit z).
+        - **Sphere** (``kind="sphere-1d"``): :math:`4\pi\int r^2\,\varphi
+          \,\mathrm dr = 4\pi\sum_j r_j^2\,w_j\,\varphi_j`.
+
+        Parameters
+        ----------
+        r_nodes, r_wts
+            Composite GL radial nodes and weights on :math:`[r_0, R]`.
+        phi
+            Scalar flux sampled at ``r_nodes`` (shape matches).
+
+        Returns
+        -------
+        float
+            The shell-volume integral. Zero or near-zero indicates
+            either trivial flux (eigenvector not yet normalised) or a
+            quadrature pathology.
+        """
+        r_nodes = np.asarray(r_nodes, dtype=float)
+        r_wts = np.asarray(r_wts, dtype=float)
+        phi = np.asarray(phi, dtype=float)
+        if self.kind == "slab-polar":
+            return float(np.dot(r_wts, phi))
+        if self.kind == "cylinder-1d":
+            return float(2.0 * np.pi * np.dot(r_nodes * r_wts, phi))
+        if self.kind == "sphere-1d":
+            return float(
+                4.0 * np.pi * np.dot(r_nodes * r_nodes * r_wts, phi)
+            )
+        raise ValueError(
+            f"shell_volume_integral: unknown kind {self.kind!r}"
+        )
+
+    def reciprocity_factor(self, R_outer: float, r_inner: float) -> float:
+        r"""Return the outer-to-inner area ratio for F.4 reciprocity:
+
+        .. math::
+
+           W_{oi} \;=\; \bigl(A_{\rm outer} / A_{\rm inner}\bigr)\,
+           W_{io}.
+
+        - **Cylinder** (``2\pi R`` per unit z): returns :math:`R/r_0`.
+        - **Sphere** (``4\pi R^2``): returns :math:`(R/r_0)^2`.
+        - **Slab-polar**: raises ``ValueError`` — slab has flat faces
+          of equal area with :math:`W_{oi} = W_{io}` (no curvilinear
+          cavity reciprocity). Callers should use the slab rank-2
+          per-face closure directly.
+
+        This codifies the reciprocity trap noted in the test
+        ``test_hollow_cyl_transmission_zero_absorption_conservation``:
+        the cylinder form (first power) must not be confused with the
+        sphere form (squared).
+        """
+        if r_inner <= 0.0 or r_inner >= R_outer:
+            raise ValueError(
+                f"reciprocity_factor requires 0 < r_inner < R_outer; "
+                f"got r_inner={r_inner}, R_outer={R_outer}"
+            )
+        if self.kind == "cylinder-1d":
+            return R_outer / r_inner
+        if self.kind == "sphere-1d":
+            return (R_outer / r_inner) ** 2
+        if self.kind == "slab-polar":
+            raise ValueError(
+                "reciprocity_factor is undefined for slab-polar — "
+                "slab has flat equal-area faces. Use the slab rank-2 "
+                "per-face closure directly."
+            )
+        raise ValueError(
+            f"reciprocity_factor: unknown kind {self.kind!r}"
+        )
 
 
 # Convenience singletons
