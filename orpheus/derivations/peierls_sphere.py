@@ -337,31 +337,6 @@ def solve_peierls_sphere_1g(
     return _soln_to_sphere(sol)
 
 
-def solve_peierls_sphere_1g_vacuum(
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    sig_s: np.ndarray,
-    nu_sig_f: np.ndarray,
-    *,
-    n_panels_per_region: int = 2,
-    p_order: int = 5,
-    n_theta: int = 24,
-    n_rho: int = 24,
-    dps: int = 25,
-    max_iter: int = 300,
-    tol: float = 1e-10,
-) -> PeierlsSphereSolution:
-    """Vacuum-BC alias for the scaffold-level verification gate."""
-    return solve_peierls_sphere_1g(
-        radii, sig_t, sig_s, nu_sig_f,
-        boundary="vacuum",
-        n_panels_per_region=n_panels_per_region,
-        p_order=p_order,
-        n_theta=n_theta, n_rho=n_rho,
-        dps=dps, max_iter=max_iter, tol=tol,
-    )
-
-
 # ═══════════════════════════════════════════════════════════════════════
 # Multi-group eigenvalue driver (Issue #104)
 # ═══════════════════════════════════════════════════════════════════════

@@ -3043,7 +3043,7 @@ the full operator; the eigenvalue problem is
      \varphi \;=\; \frac{1}{k}\,K\,\mathrm{diag}(\nu\Sigma_f)\,\varphi,
 
 solved by fission-source power iteration in
-``solve_peierls_cylinder_1g_vacuum`` in
+``solve_peierls_cylinder_1g(..., boundary="vacuum")`` in
 :mod:`orpheus.derivations.peierls_cylinder`. This is the closure
 that is currently implemented; it is used for the Sanchez tie-point
 verification below.
@@ -3078,8 +3078,9 @@ relative to the :math:`O(N^{3})` radial LU factorisation.
 .. note::
 
    The white-BC closure is **not yet implemented**. The current
-   :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g_vacuum`
-   handles vacuum BC only. The ``optical_depths_pm`` :math:`\tau^{\pm}`
+   :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g`
+   with ``boundary="vacuum"`` handles vacuum BC only. The
+   ``optical_depths_pm`` :math:`\tau^{\pm}`
    walker that lives alongside ``build_volume_kernel`` is the
    primitive needed for either option (a) or option (b); it is
    retained in the module for this planned extension. The
@@ -3223,8 +3224,9 @@ sorting crossings, making the bare-cylinder case
    — result container with radial node positions, flux values,
    and :math:`k_{\rm eff}`.
 
-   :func:`orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g_vacuum`
-   — 1-group vacuum-BC eigenvalue driver.
+   :func:`orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g`
+   — 1-group eigenvalue driver (use ``boundary="vacuum"`` for the
+   vacuum-BC closure described above).
 
    ``tests/derivations/test_peierls_cylinder_geometry.py`` — L0
    tests for ``composite_gl_y`` and ``optical_depths_pm``.
@@ -4055,9 +4057,9 @@ the full operator; the eigenvalue problem is
      \varphi \;=\; \frac{1}{k}\,K\,\mathrm{diag}(\nu\Sigma_f)\,\varphi,
 
 solved by fission-source power iteration in
-:func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g_vacuum`.
-This is the clean closure: no approximation enters beyond the
-quadrature orders.
+:func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`
+with ``boundary="vacuum"``. This is the clean closure: no
+approximation enters beyond the quadrature orders.
 
 **Rank-1 white.** The unified :math:`K_{\rm vol} + K_{\rm bc}`
 structure with :math:`K_{\rm bc}` the rank-1 outer product derived
@@ -4281,10 +4283,8 @@ the multi-annulus walker and computes :math:`\tau_{\rm surf} =
    :class:`~orpheus.derivations.peierls_cylinder.PeierlsCylinderSolution`.
 
    :func:`orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`
-   — 1-group vacuum- or white-BC eigenvalue driver.
-
-   :func:`orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g_vacuum`
-   — vacuum-BC alias for the scaffold-level verification gate.
+   — 1-group vacuum- or white-BC eigenvalue driver. Pass
+   ``boundary="vacuum"`` for the scaffold-level verification gate.
 
    ``tests/derivations/test_peierls_sphere_geometry.py`` — 17 L0
    tests for angular/radial geometry primitives, the composite

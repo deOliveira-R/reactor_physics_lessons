@@ -36,7 +36,7 @@
      - 1
      - 0.1
      - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - 2G; parity vs discrete ``cp_cylinder`` — future work (Issue #104 AC)
+     - 2G builds, finite k_eff (``TestMG2GHollowRegistration``); k_eff vs ``cp_cylinder`` analytical not yet gated; structural residual expected ~1.4 % (group-local closure, unverified) — Issue #104 AC
    * - ``peierls_cyl1D_hollow_1eg_1rg_r0_20``
      - cylinder-1d
      - 1
@@ -50,7 +50,7 @@
      - 1
      - 0.2
      - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - 2G; parity vs discrete ``cp_cylinder`` — future work (Issue #104 AC)
+     - 2G builds, finite k_eff (``TestMG2GHollowRegistration``); k_eff vs ``cp_cylinder`` analytical not yet gated; structural residual expected ~5.4 % (group-local closure, unverified) — Issue #104 AC
    * - ``peierls_cyl1D_hollow_1eg_1rg_r0_30``
      - cylinder-1d
      - 1
@@ -64,7 +64,7 @@
      - 1
      - 0.3
      - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - 2G; parity vs discrete ``cp_cylinder`` — future work (Issue #104 AC)
+     - 2G builds, finite k_eff (``TestMG2GHollowRegistration``); k_eff vs ``cp_cylinder`` analytical not yet gated; structural residual expected ~13 % (group-local closure, unverified) — Issue #104 AC
    * - ``peierls_sph1D_hollow_1eg_1rg_r0_10``
      - sphere-1d
      - 1
@@ -78,7 +78,7 @@
      - 1
      - 0.1
      - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - 2G; parity vs discrete ``cp_sphere`` — future work (Issue #104 AC)
+     - 2G builds, finite k_eff (``TestMG2GHollowRegistration``); k_eff vs ``cp_sphere`` analytical not yet gated; structural residual expected ~0.4 % (group-local closure, unverified) — Issue #104 AC
    * - ``peierls_sph1D_hollow_1eg_1rg_r0_20``
      - sphere-1d
      - 1
@@ -92,7 +92,7 @@
      - 1
      - 0.2
      - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - 2G; parity vs discrete ``cp_sphere`` — future work (Issue #104 AC)
+     - 2G builds, finite k_eff (``TestMG2GHollowRegistration``); k_eff vs ``cp_sphere`` analytical not yet gated; structural residual expected ~1.2 % (group-local closure, unverified) — Issue #104 AC
    * - ``peierls_sph1D_hollow_1eg_1rg_r0_30``
      - sphere-1d
      - 1
@@ -106,5 +106,5 @@
      - 1
      - 0.3
      - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - 2G; parity vs discrete ``cp_sphere`` — future work (Issue #104 AC)
+     - 2G builds, finite k_eff (``TestMG2GHollowRegistration``); k_eff vs ``cp_sphere`` analytical not yet gated; structural residual expected ~3.3 % (group-local closure, unverified) — Issue #104 AC
 

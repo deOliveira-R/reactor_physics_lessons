@@ -1,7 +1,8 @@
 """L1 eigenvalue tests for the cylindrical Peierls Nyström solver.
 
 C5 of the Phase-4.2 campaign. Exercises the 1-group vacuum-BC
-eigenvalue driver :func:`solve_peierls_cylinder_1g_vacuum`.
+eigenvalue driver :func:`solve_peierls_cylinder_1g` with
+``boundary="vacuum"``.
 
 Grounded identity used here: as the cylinder radius
 :math:`R \\to \\infty`, the vacuum-BC eigenvalue must approach the
@@ -42,7 +43,7 @@ import numpy as np
 import pytest
 
 from orpheus.derivations.peierls_cylinder import (
-    solve_peierls_cylinder_1g_vacuum,
+    solve_peierls_cylinder_1g,
 )
 
 
@@ -66,9 +67,10 @@ class TestSanchezTiePoint:
         (k_inf = 1.5), the Peierls eigenvalue is :math:`1.00421` at
         fully-converged quadrature. Gate at 1 % from unity to remain
         robust to scatter/fission-split ambiguity in the reference."""
-        sol = solve_peierls_cylinder_1g_vacuum(
+        sol = solve_peierls_cylinder_1g(
             radii=np.array([1.9798]),
             sig_t=_SIG_T, sig_s=_SIG_S, nu_sig_f=_NU_SIG_F,
+            boundary="vacuum",
             n_panels_per_region=3, p_order=5, n_beta=20, n_rho=20, dps=20,
         )
         err = abs(sol.k_eff - 1.0)
@@ -85,14 +87,16 @@ class TestSanchezTiePoint:
         Marked ``slow`` — runs the (n_β=n_ρ=32) branch which is the
         dominant cost; skipped by default ``pytest -m "not slow"``.
         """
-        sol_coarse = solve_peierls_cylinder_1g_vacuum(
+        sol_coarse = solve_peierls_cylinder_1g(
             radii=np.array([1.9798]),
             sig_t=_SIG_T, sig_s=_SIG_S, nu_sig_f=_NU_SIG_F,
+            boundary="vacuum",
             n_panels_per_region=3, p_order=5, n_beta=20, n_rho=20, dps=20,
         )
-        sol_fine = solve_peierls_cylinder_1g_vacuum(
+        sol_fine = solve_peierls_cylinder_1g(
             radii=np.array([1.9798]),
             sig_t=_SIG_T, sig_s=_SIG_S, nu_sig_f=_NU_SIG_F,
+            boundary="vacuum",
             n_panels_per_region=4, p_order=6, n_beta=32, n_rho=32, dps=20,
         )
         assert abs(sol_coarse.k_eff - sol_fine.k_eff) < 1e-3, (
@@ -108,9 +112,10 @@ class TestVacuumBCThickLimit:
 
     def test_k_eff_approaches_kinf_at_30_MFP(self):
         """At R = 30 MFP, leakage drops below 1% and k_eff ≈ k_inf."""
-        sol = solve_peierls_cylinder_1g_vacuum(
+        sol = solve_peierls_cylinder_1g(
             radii=np.array([30.0]),
             sig_t=_SIG_T, sig_s=_SIG_S, nu_sig_f=_NU_SIG_F,
+            boundary="vacuum",
             n_panels_per_region=3, p_order=5, n_beta=20, n_rho=20, dps=20,
         )
         err = abs(sol.k_eff - _K_INF) / _K_INF
@@ -124,9 +129,10 @@ class TestVacuumBCThickLimit:
         higher eigenvalue)."""
         keffs = []
         for R in (1.5, 3.0, 6.0, 12.0, 24.0):
-            sol = solve_peierls_cylinder_1g_vacuum(
+            sol = solve_peierls_cylinder_1g(
                 radii=np.array([R]),
                 sig_t=_SIG_T, sig_s=_SIG_S, nu_sig_f=_NU_SIG_F,
+                boundary="vacuum",
                 n_panels_per_region=3, p_order=5,
                 n_beta=16, n_rho=16, dps=20,
             )
@@ -144,9 +150,10 @@ class TestVacuumBCThickLimit:
     def test_k_eff_below_kinf_for_finite_R(self):
         """For any finite R with vacuum BC, k_eff < k_inf (some
         neutrons escape before inducing further fission)."""
-        sol = solve_peierls_cylinder_1g_vacuum(
+        sol = solve_peierls_cylinder_1g(
             radii=np.array([5.0]),
             sig_t=_SIG_T, sig_s=_SIG_S, nu_sig_f=_NU_SIG_F,
+            boundary="vacuum",
             n_panels_per_region=3, p_order=5,
             n_beta=18, n_rho=18, dps=20,
         )
@@ -167,9 +174,10 @@ class TestVacuumBCQuadratureConvergence:
         error monotonically at R = 5 MFP."""
         results = []
         for n_q in (10, 16, 24):
-            sol = solve_peierls_cylinder_1g_vacuum(
+            sol = solve_peierls_cylinder_1g(
                 radii=np.array([5.0]),
                 sig_t=_SIG_T, sig_s=_SIG_S, nu_sig_f=_NU_SIG_F,
+                boundary="vacuum",
                 n_panels_per_region=3, p_order=5,
                 n_beta=n_q, n_rho=n_q, dps=20,
             )
@@ -186,9 +194,10 @@ class TestVacuumBCQuadratureConvergence:
         """Refining the radial p-order reduces error at fixed (n_β, n_ρ)."""
         results = []
         for p in (4, 6, 8):
-            sol = solve_peierls_cylinder_1g_vacuum(
+            sol = solve_peierls_cylinder_1g(
                 radii=np.array([5.0]),
                 sig_t=_SIG_T, sig_s=_SIG_S, nu_sig_f=_NU_SIG_F,
+                boundary="vacuum",
                 n_panels_per_region=2, p_order=p,
                 n_beta=16, n_rho=16, dps=20,
             )
@@ -209,10 +218,11 @@ class TestVacuumBCStability:
     def test_zero_sig_s_pure_fission(self):
         """Removing scattering reduces k_eff (less efficient fission chain)
         and keeps the formulation stable."""
-        sol = solve_peierls_cylinder_1g_vacuum(
+        sol = solve_peierls_cylinder_1g(
             radii=np.array([5.0]),
             sig_t=_SIG_T, sig_s=np.array([0.0]),
             nu_sig_f=np.array([0.75]),
+            boundary="vacuum",
             n_panels_per_region=2, p_order=5,
             n_beta=14, n_rho=14, dps=20,
         )

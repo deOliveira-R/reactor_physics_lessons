@@ -940,24 +940,9 @@ them breaks the public contract.
 Retirement candidates
 ---------------------
 
-These exist purely for test-site ergonomics (accepting a
-``boundary=``-bound variant instead of the general API). They are
-small and low-risk; retire when their test-site callers migrate to
-the general API.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - Function
-     - Retirement trigger
-   * - :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g_vacuum`
-     - Retire when
-       ``tests/derivations/test_peierls_cylinder_eigenvalue.py`` (and
-       friends) migrate to ``solve_peierls_cylinder_1g(...,
-       boundary="vacuum")``.
-   * - :func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g_vacuum`
-     - Mirror for sphere.
+All retirement candidates have been retired as of 2026-04-23; this
+subsection is intentionally empty as a placeholder for future
+transitional wrappers.
 
 Verification-of-verification
 -----------------------------
@@ -5032,8 +5017,8 @@ standard tests.
    :mod:`orpheus.derivations.peierls_cylinder` — Phase-4.2 cylinder
    Peierls reference (:math:`\mathrm{Ki}_1`), including the
    vacuum-BC driver
-   (:func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g_vacuum`)
-   and the rank-1 white-BC correction
+   (:func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g`
+   with ``boundary="vacuum"``) and the rank-1 white-BC correction
    (:func:`~orpheus.derivations.peierls_cylinder.build_white_bc_correction`).
 
    :mod:`orpheus.derivations.peierls_sphere` — Phase-4.3 sphere

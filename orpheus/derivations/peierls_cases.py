@@ -467,8 +467,10 @@ def capability_rows() -> list[dict[str, object]]:
             "r0_over_R": r0,
             "closure": f4_label,
             "accuracy": (
-                "2G; parity vs discrete ``cp_cylinder`` — future work "
-                "(Issue #104 AC)"
+                f"2G builds, finite k_eff (``TestMG2GHollowRegistration``); "
+                f"k_eff vs ``cp_cylinder`` analytical not yet gated; "
+                f"structural residual expected ~{tol_1g} (group-local closure, "
+                f"unverified) — Issue #104 AC"
             ),
             "topology_class": "A",
         })
@@ -495,8 +497,10 @@ def capability_rows() -> list[dict[str, object]]:
             "r0_over_R": r0,
             "closure": f4_label,
             "accuracy": (
-                "2G; parity vs discrete ``cp_sphere`` — future work "
-                "(Issue #104 AC)"
+                f"2G builds, finite k_eff (``TestMG2GHollowRegistration``); "
+                f"k_eff vs ``cp_sphere`` analytical not yet gated; "
+                f"structural residual expected ~{tol_1g} (group-local closure, "
+                f"unverified) — Issue #104 AC"
             ),
             "topology_class": "A",
         })

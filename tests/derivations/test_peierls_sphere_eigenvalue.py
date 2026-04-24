@@ -27,7 +27,6 @@ import pytest
 
 from orpheus.derivations.peierls_sphere import (
     solve_peierls_sphere_1g,
-    solve_peierls_sphere_1g_vacuum,
 )
 
 
@@ -48,9 +47,10 @@ class TestVacuumBCThickLimit:
         """k_eff(R = 30 MFP) is within 1 % of k_inf = 1.5."""
         sig_t, sig_s, nu_sig_f = 1.0, 0.5, 0.75
         k_inf = self._k_inf(sig_t, sig_s, nu_sig_f)
-        sol = solve_peierls_sphere_1g_vacuum(
+        sol = solve_peierls_sphere_1g(
             np.array([30.0]),
             np.array([sig_t]), np.array([sig_s]), np.array([nu_sig_f]),
+            boundary="vacuum",
             n_panels_per_region=3, p_order=5,
             n_theta=24, n_rho=24, dps=25,
         )
@@ -65,10 +65,11 @@ class TestVacuumBCThickLimit:
         R_values = [1.5, 3.0, 6.0, 12.0, 24.0]
         k_values = []
         for R in R_values:
-            sol = solve_peierls_sphere_1g_vacuum(
+            sol = solve_peierls_sphere_1g(
                 np.array([R]),
                 np.array([sig_t]), np.array([sig_s]),
                 np.array([nu_sig_f]),
+                boundary="vacuum",
                 n_panels_per_region=2, p_order=5,
                 n_theta=20, n_rho=20, dps=22,
             )
@@ -95,10 +96,11 @@ class TestQuadratureConvergence:
         radii = np.array([R])
         k_values = []
         for n_q in (12, 20, 28):
-            sol = solve_peierls_sphere_1g_vacuum(
+            sol = solve_peierls_sphere_1g(
                 radii,
                 np.array([sig_t]), np.array([sig_s]),
                 np.array([nu_sig_f]),
+                boundary="vacuum",
                 n_panels_per_region=2, p_order=5,
                 n_theta=n_q, n_rho=n_q, dps=22,
             )

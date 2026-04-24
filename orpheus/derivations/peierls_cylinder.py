@@ -332,31 +332,6 @@ def solve_peierls_cylinder_1g(
     return _soln_to_cylinder(sol)
 
 
-def solve_peierls_cylinder_1g_vacuum(
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    sig_s: np.ndarray,
-    nu_sig_f: np.ndarray,
-    *,
-    n_panels_per_region: int = 2,
-    p_order: int = 5,
-    n_beta: int = 24,
-    n_rho: int = 24,
-    dps: int = 25,
-    max_iter: int = 300,
-    tol: float = 1e-10,
-) -> PeierlsCylinderSolution:
-    """Vacuum-BC alias — kept for the C5 tests."""
-    return solve_peierls_cylinder_1g(
-        radii, sig_t, sig_s, nu_sig_f,
-        boundary="vacuum",
-        n_panels_per_region=n_panels_per_region,
-        p_order=p_order,
-        n_beta=n_beta, n_rho=n_rho,
-        dps=dps, max_iter=max_iter, tol=tol,
-    )
-
-
 # ═══════════════════════════════════════════════════════════════════════
 # Multi-group eigenvalue driver (Issue #104)
 # ═══════════════════════════════════════════════════════════════════════
