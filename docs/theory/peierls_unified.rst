@@ -212,113 +212,16 @@ Capabilities at a glance — what references this module ships
 for geometry X at closure Y?"** this section is the canonical index.
 The table below enumerates every shipped Peierls continuous reference
 case with its production status, accuracy class, and the test label
-that gates regressions. The data is the source-of-truth produced by
-``orpheus.derivations.reference_values.continuous_all()`` filtered to
-``operator_form == "integral-peierls"`` — if this table diverges from
-that query, the table is wrong.
+that gates regressions. The table body is auto-generated at Sphinx
+build time by
+:mod:`tools.verification.generate_peierls_matrix` from the registry
+function
+:func:`orpheus.derivations.peierls_cases.capability_rows` — if this
+table diverges from ``continuous_all()`` filtered to
+``operator_form == "integral-peierls"``, the capability-matrix
+cross-check test will fail.
 
-.. list-table:: Shipped Peierls continuous references (operator_form ``integral-peierls``)
-   :header-rows: 1
-   :widths: 33 12 8 8 12 15 12
-
-   * - Reference name
-     - Geometry
-     - n_g
-     - n_reg
-     - :math:`r_0 / R`
-     - Closure
-     - Accuracy class
-   * - ``peierls_slab_2eg_2rg``
-     - slab
-     - 2
-     - 2
-     - —
-     - white rank-2 per-face (E₂/E₃)
-     - O(h²), Wigner-Seitz exact
-   * - ``peierls_cyl1D_hollow_1eg_1rg_r0_10``
-     - cylinder-1d
-     - 1
-     - 1
-     - 0.1
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - ~1.4 % structural (scalar mode)
-   * - ``peierls_cyl1D_hollow_1eg_1rg_r0_20``
-     - cylinder-1d
-     - 1
-     - 1
-     - 0.2
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - ~5.4 % structural (scalar mode)
-   * - ``peierls_cyl1D_hollow_1eg_1rg_r0_30``
-     - cylinder-1d
-     - 1
-     - 1
-     - 0.3
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - ~13 % structural (scalar mode)
-   * - ``peierls_sph1D_hollow_1eg_1rg_r0_10``
-     - sphere-1d
-     - 1
-     - 1
-     - 0.1
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - ~0.4 % structural (scalar mode)
-   * - ``peierls_sph1D_hollow_1eg_1rg_r0_20``
-     - sphere-1d
-     - 1
-     - 1
-     - 0.2
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - ~1.2 % structural (scalar mode)
-   * - ``peierls_sph1D_hollow_1eg_1rg_r0_30``
-     - sphere-1d
-     - 1
-     - 1
-     - 0.3
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - ~3.3 % structural (scalar mode)
-   * - ``peierls_cyl1D_hollow_2eg_1rg_r0_10``
-     - cylinder-1d
-     - 2
-     - 1
-     - 0.1
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - 2G; parity vs discrete ``cp_cylinder`` — future work (Issue #104 AC)
-   * - ``peierls_cyl1D_hollow_2eg_1rg_r0_20``
-     - cylinder-1d
-     - 2
-     - 1
-     - 0.2
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - same
-   * - ``peierls_cyl1D_hollow_2eg_1rg_r0_30``
-     - cylinder-1d
-     - 2
-     - 1
-     - 0.3
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - same
-   * - ``peierls_sph1D_hollow_2eg_1rg_r0_10``
-     - sphere-1d
-     - 2
-     - 1
-     - 0.1
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - 2G; parity vs discrete ``cp_sphere`` — future work (Issue #104 AC)
-   * - ``peierls_sph1D_hollow_2eg_1rg_r0_20``
-     - sphere-1d
-     - 2
-     - 1
-     - 0.2
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - same
-   * - ``peierls_sph1D_hollow_2eg_1rg_r0_30``
-     - sphere-1d
-     - 2
-     - 1
-     - 0.3
-     - :math:`{\rm F.4}` (Stamm'ler Eq. 34)
-     - same
+.. include:: _peierls_capability_matrix.inc.rst
 
 All rows carry ``vv_level = "L1"``, ``equation_labels`` include
 ``peierls-unified`` and — for F.4 cases —
@@ -488,6 +391,12 @@ concept lives at
 When reading session notes, research logs, or commit messages,
 interpret "F.4" by context: development timeline → Phase F.4;
 closure math → Stamm'ler Eq. 34.
+
+**Scattering matrix convention (sig_s).** ``sig_s[r, g_src, g_dst]``
+with first index = **source** group, second = **destination**. See
+:ref:`peierls-scattering-convention` in the multi-group driver
+section for the authoritative statement and its cross-check against
+the physical fixture in :mod:`orpheus.derivations._xs_library`.
 
 **Boundary string → closure semantics**. The ``boundary=`` (a.k.a.
 ``closure=``) argument to :func:`~orpheus.derivations.peierls_geometry.solve_peierls_1g`
@@ -971,6 +880,118 @@ Subsection — Related open questions
   shipping test.
 
 
+.. _theory-peierls-api-posture:
+
+API posture — permanent vs transitional wrappers
+=================================================
+
+**This section is the authoritative posture statement for every
+public function in the Peierls reference framework.** It codifies
+which functions are *permanent* (never retired), which are
+*transitional* (candidates for retirement once callers migrate), and
+which are *verification-of-verification* (only invoked when the
+unified path itself is under test).
+
+The posture comes from Lesson L104a (2026-04-24 meta-review):
+*"Wrappers are temporary. Whatever a wrapper does needs to become
+part of the standard machinery — unless it is really necessary for
+some reason."* The "really necessary" reasons are enumerated below.
+
+Permanent public APIs
+---------------------
+
+These never get retired. New code should use them freely. Removing
+them breaks the public contract.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Function
+     - Why permanent
+   * - :func:`~orpheus.derivations.peierls_geometry.solve_peierls_mg`
+     - The canonical multi-group driver. All other entry points
+       eventually hit this function.
+   * - :func:`~orpheus.derivations.peierls_geometry.solve_peierls_1g`
+     - Permanent 1G convenience. Rationale: 1-group problems have
+       scalar ``sig_t``, scalar ``sig_s``, scalar ``nu_sig_f`` — no
+       ``chi`` axis — and forcing callers to reshape to
+       ``(n_regions, 1)`` + synthesise ``chi=1`` for every 1G
+       problem has no pedagogical or maintenance benefit. The
+       wrapper is 25 lines and is bit-exact regression-gated by
+       :class:`~tests.derivations.test_peierls_multigroup.TestMGNg1BitMatch1G`.
+   * - :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_mg`
+     - Permanent shape-specific MG API. Binds the geometry, renames
+       ``n_angular`` → ``n_beta`` to match the cylinder's
+       ``β``-angular variable convention, and returns a
+       :class:`PeierlsCylinderSolution` (shape-specific dataclass
+       with ``n_quad_y`` etc.). The parameter renaming is the
+       ergonomic justification.
+   * - :func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_mg`
+     - Mirror of the cylinder — ``n_angular`` → ``n_theta``, returns
+       :class:`PeierlsSphereSolution`.
+   * - :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g`
+     - Shape-specific 1G convenience (``solve_peierls_cylinder_mg``
+       on scalar XS). Same "permanent" rationale as
+       ``solve_peierls_1g``.
+   * - :func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`
+     - Mirror for sphere.
+
+Retirement candidates
+---------------------
+
+These exist purely for test-site ergonomics (accepting a
+``boundary=``-bound variant instead of the general API). They are
+small and low-risk; retire when their test-site callers migrate to
+the general API.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Function
+     - Retirement trigger
+   * - :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g_vacuum`
+     - Retire when
+       ``tests/derivations/test_peierls_cylinder_eigenvalue.py`` (and
+       friends) migrate to ``solve_peierls_cylinder_1g(...,
+       boundary="vacuum")``.
+   * - :func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g_vacuum`
+     - Mirror for sphere.
+
+Verification-of-verification
+-----------------------------
+
+These are the **independent cross-check** implementations. They
+must not be imported by production code paths. They exist so that
+the unified reference pipeline can be verified against an
+independently-developed algorithm.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Function
+     - Permitted callers
+   * - :func:`~orpheus.derivations.peierls_slab.solve_peierls_eigenvalue`
+     - Only (a)
+       :class:`~tests.derivations.test_peierls_multigroup.TestSlabViaUnifiedDiscrepancyDiagnostic`
+       — the parity gate that keeps unified honest, and (b) anyone
+       who sets ``ORPHEUS_SLAB_VIA_E1=1`` (explicit bisection /
+       testing). Production references go through
+       :func:`~orpheus.derivations.peierls_cases.build_two_surface_case`
+       which dispatches on ``_SLAB_VIA_UNIFIED`` (default ``True``).
+       If you find yourself importing ``solve_peierls_eigenvalue``
+       from non-test code, you are writing something that should be
+       refactored onto the unified path.
+
+**No sig_s convention leaks here.** The native slab module's own
+sig_s convention (``sig_s[src, dst]``) matches the canonical
+convention documented in :ref:`peierls-scattering-convention`, so
+verification-of-verification does not need translation when
+exercised against the unified path.
+
+
 .. _theory-peierls-multigroup:
 
 Multi-group Peierls eigenvalue driver (Issue #104)
@@ -1050,18 +1071,32 @@ pattern). The solve uses the same fission-source power iteration
 as the 1G path, acting on a vector of dimension :math:`N \cdot n_g`
 instead of :math:`N`.
 
-**Sig_s convention.** ``sig_s[r, g_src, g_dst]`` = scatter rate
-**from** ``g_src`` **into** ``g_dst`` at region ``r``. Downscatter
-(fast → thermal with group 0 = fast) sits in the upper-triangular
-entries. This matches the XS library
-(:mod:`orpheus.derivations._xs_library`) and the slab driver's
-internal indexing — despite the historical
-:func:`solve_peierls_eigenvalue` docstring claiming the opposite
-convention (the docstring is wrong; the code is right). A 2G slab
-parity test (:class:`TestMGSlabPolarMatchesNativeSlabMG`) is the
-definitive cross-check: if the two drivers agree on a 2G
+.. _peierls-scattering-convention:
+
+Canonical ``sig_s`` convention (project-wide single source of truth)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``sig_s[r, g_src, g_dst]`` = scatter rate **from** ``g_src`` **into**
+``g_dst`` at region ``r``. First index = source group, second =
+destination. Downscatter (fast → thermal with group 0 = fast) sits
+in the **upper-triangular** entries; the physical fixture
+``_A_2G["sig_s"] = [[0.38, 0.10], [0.00, 0.90]]`` in
+:mod:`orpheus.derivations._xs_library` has ``sig_s[0, 1] = 0.10``
+(fast-to-thermal downscatter) and ``sig_s[1, 0] = 0`` (no
+upscatter), which is the physical sanity-check this convention
+must pass. All Peierls drivers
+(:func:`~orpheus.derivations.peierls_geometry.solve_peierls_mg`,
+:func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_mg`,
+:func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_mg`,
+and :func:`~orpheus.derivations.peierls_slab.solve_peierls_eigenvalue`)
+follow this convention — see their docstrings and the
+:func:`~orpheus.derivations._xs_library.get_xs` module note. The
+2G slab parity test (:class:`TestMGSlabPolarMatchesNativeSlabMG`)
+is the definitive cross-check: if the two drivers agree on a 2G
 eigenvalue with genuinely directional (non-symmetric) scatter, the
-convention is correct.
+convention is correct across the stack. **Terminology-glossary
+cross-reference**: the :ref:`theory-peierls-naming` page links
+here as the authoritative statement.
 
 
 Subsection — The per-group K matrix

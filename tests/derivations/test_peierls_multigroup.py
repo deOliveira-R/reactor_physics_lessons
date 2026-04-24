@@ -710,3 +710,252 @@ class TestSlabViaUnifiedDiscrepancyDiagnostic:
             f"compute_P_esc_{{outer,inner}} / compute_G_bc_{{outer,inner}} "
             f"multi-region slab branches are suspect."
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Tier 3 — Issue #131 regime-isolation parity (promoted from
+# `derivations/diagnostics/diag_slab_issue131_probe_{a,b}_*.py`, authored
+# by numerics-investigator 2026-04-23).
+#
+# These tests gate two regimes the flagship
+# ``test_2eg_2rg_parity_bit_exact`` does NOT cover:
+#   • 1G 2-region vacuum  — simplest multi-region case, isolates the
+#     volume-kernel ray walker and material-interface breakpoints from
+#     the MG × closure interaction.
+#   • 2G 2-region vacuum  — isolates MG × multi-region from the F.4
+#     white closure (the flagship runs white_f4 on the unified side).
+#
+# Keeping both as permanent guards means a future regression can be
+# pinpointed to exactly one axis (regions vs. groups vs. closure).
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.l1
+@pytest.mark.slow
+@pytest.mark.verifies("peierls-unified")
+class TestSlabMultiRegionVacuumParity:
+    r"""Unified vs native Peierls parity on multi-region slabs with
+    **vacuum BC** (strips the F.4 closure from the comparison).
+
+    Complements :class:`TestSlabViaUnifiedDiscrepancyDiagnostic`, which
+    gates the ``white_f4`` closure in the 2G 2-region fixture. These
+    two methods isolate multi-region handling itself:
+
+    * Probe A — 1G 2-region, synthetic XS. If this ever fails, the
+      bug is in the ray walker / interface breakpoints, *not* in MG.
+    * Probe B — 2G 2-region, shipped fixture. Any failure here with
+      Probe A passing pinpoints the MG × multi-region interaction
+      (assembly, χ indexing, sig_s transpose across region boundary).
+
+    Originally ``diag_slab_issue131_probe_{a,b}_*.py``; promoted per
+    the policy in ``tests/derivations/_promotion_policy.md``.
+    """
+
+    def test_1g_2rg_vacuum_parity(self):
+        """Issue #131 Probe A — 1G 2-region vacuum unified vs native."""
+        from orpheus.derivations.peierls_geometry import (
+            SLAB_POLAR_1D,
+            solve_peierls_mg,
+        )
+        from orpheus.derivations.peierls_slab import solve_peierls_eigenvalue
+
+        thicknesses = [0.5, 0.5]
+        sig_t_A = np.array([0.5])
+        sig_t_B = np.array([0.6])
+        nu_sf_A = np.array([0.3])
+        nu_sf_B = np.array([0.0])
+        sig_s_A = np.array([[0.3]])
+        sig_s_B = np.array([[0.5]])
+        chi_A = np.array([1.0])
+        chi_B = np.array([1.0])
+
+        sol_nat = solve_peierls_eigenvalue(
+            sig_t_regions=[sig_t_A, sig_t_B],
+            sig_s_matrices=[sig_s_A, sig_s_B],
+            nu_sig_f_all=[nu_sf_A, nu_sf_B],
+            chi_all=[chi_A, chi_B],
+            thicknesses=thicknesses,
+            n_panels_per_region=2,
+            p_order=3,
+            precision_digits=20,
+            boundary="vacuum",
+        )
+
+        sig_t_mg = np.stack([sig_t_A, sig_t_B])
+        sig_s_mg = np.stack([sig_s_A, sig_s_B])
+        nu_sig_f_mg = np.stack([nu_sf_A, nu_sf_B])
+        chi_mg = np.stack([chi_A, chi_B])
+        radii_mg = np.cumsum(np.asarray(thicknesses, dtype=float))
+
+        sol_mg = solve_peierls_mg(
+            SLAB_POLAR_1D,
+            radii_mg,
+            sig_t=sig_t_mg,
+            sig_s=sig_s_mg,
+            nu_sig_f=nu_sig_f_mg,
+            chi=chi_mg,
+            boundary="vacuum",
+            n_panels_per_region=2,
+            p_order=3,
+            dps=20,
+            tol=1e-12,
+        )
+
+        rel = abs(sol_mg.k_eff - sol_nat.k_eff) / abs(sol_nat.k_eff)
+        assert rel < 1e-8, (
+            f"1G 2-region vacuum parity: rel_diff={rel:.3e} "
+            f"(native={sol_nat.k_eff:.12f}, unified={sol_mg.k_eff:.12f}). "
+            f"Volume kernel / ray-walker regression — multi-region "
+            f"interface handling suspect."
+        )
+
+    def test_2g_2rg_vacuum_parity(self):
+        """Issue #131 Probe B — 2G 2-region vacuum unified vs native.
+
+        Runs the shipped ``peierls_slab_2eg_2rg`` XS fixture with
+        vacuum BC on both paths. With the white_f4 gate in
+        :class:`TestSlabViaUnifiedDiscrepancyDiagnostic`, a failure
+        here while that passes (or vice versa) cleanly isolates MG ×
+        multi-region handling from the white-BC closure.
+        """
+        from orpheus.derivations._xs_library import LAYOUTS, get_xs
+        from orpheus.derivations.cp_slab import _THICKNESSES
+        from orpheus.derivations.peierls_geometry import (
+            SLAB_POLAR_1D,
+            solve_peierls_mg,
+        )
+        from orpheus.derivations.peierls_slab import solve_peierls_eigenvalue
+
+        n_regions = 2
+        ng_key = "2g"
+        layout = LAYOUTS[n_regions]
+        thicknesses = _THICKNESSES[n_regions]
+        xs_list = [get_xs(region, ng_key) for region in layout]
+
+        sig_t_list = [xs["sig_t"] for xs in xs_list]
+        sig_s_list = [xs["sig_s"] for xs in xs_list]
+        nu_list = [xs["nu"] * xs["sig_f"] for xs in xs_list]
+        chi_list = [xs["chi"] for xs in xs_list]
+
+        sol_nat = solve_peierls_eigenvalue(
+            sig_t_regions=sig_t_list,
+            sig_s_matrices=sig_s_list,
+            nu_sig_f_all=nu_list,
+            chi_all=chi_list,
+            thicknesses=thicknesses,
+            n_panels_per_region=2,
+            p_order=3,
+            precision_digits=20,
+            boundary="vacuum",
+        )
+
+        sig_t_mg = np.stack(sig_t_list)
+        sig_s_mg = np.stack(sig_s_list)
+        nu_sig_f_mg = np.stack(nu_list)
+        chi_mg = np.stack(chi_list)
+        radii_mg = np.cumsum(np.asarray(thicknesses, dtype=float))
+
+        sol_mg = solve_peierls_mg(
+            SLAB_POLAR_1D,
+            radii_mg,
+            sig_t=sig_t_mg,
+            sig_s=sig_s_mg,
+            nu_sig_f=nu_sig_f_mg,
+            chi=chi_mg,
+            boundary="vacuum",
+            n_panels_per_region=2,
+            p_order=3,
+            dps=20,
+            tol=1e-12,
+        )
+
+        rel = abs(sol_mg.k_eff - sol_nat.k_eff) / abs(sol_nat.k_eff)
+        assert rel < 1e-8, (
+            f"2G 2-region vacuum parity: rel_diff={rel:.3e} "
+            f"(native={sol_nat.k_eff:.12f}, unified={sol_mg.k_eff:.12f}). "
+            f"MG × multi-region regression with closure excluded — "
+            f"check χ indexing, sig_s transpose, K assembly."
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Foundation — software invariant: the multi-region slab branches of
+# compute_P_esc_{outer,inner} / compute_G_bc_{outer,inner} must reduce
+# to the single-region closed form when Σ_t is spatially uniform.
+#
+# Promoted from `derivations/diagnostics/diag_slab_issue131_probe_d_*`
+# (Issue #131). This invariant gates the Issue-#131 fix MECHANISM
+# (closed-form ½ E_2 / 2 E_2 in the multi-region branch) directly,
+# orthogonal to the k_eff parity gates above which only see the net
+# effect.
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.foundation
+class TestMultiRegionEscapeReduction:
+    r"""The piecewise-constant-Σ_t closed form for
+    ``compute_P_esc_outer``, ``compute_P_esc_inner``,
+    ``compute_G_bc_outer``, ``compute_G_bc_inner`` must reduce bit-
+    exactly to the homogeneous (single-region) closed form when the
+    cross sections are spatially uniform.
+
+    This is a pure software invariant — no equation label, no k_eff
+    involvement. Before Issue #131 the multi-region branches used
+    finite-N GL µ-quadrature, which diverged from the single-region
+    closed form by ~4e-3 at N=24 (the bug). The fix replaced them
+    with ½ E_2(τ_total) / 2 E_2(τ_total) closed forms (the µ-integral
+    is analytic for piecewise-constant Σ_t). Any regression of the
+    branching logic — e.g. accidental fall-through to GL quadrature,
+    wrong τ accumulation, off-by-one on region index — will surface
+    here as a large reduction error on this trivial check.
+    """
+
+    def test_pesc_gbc_multiregion_reduces_to_homogeneous(self):
+        """σ_t uniform across regions ⇒ multi-region branch == homogeneous."""
+        from orpheus.derivations.peierls_geometry import (
+            SLAB_POLAR_1D,
+            compute_G_bc_inner,
+            compute_G_bc_outer,
+            compute_P_esc_inner,
+            compute_P_esc_outer,
+            composite_gl_r,
+        )
+
+        sig_t_val = 2.0  # Region-B-thermal-worst-case from 2eg_2rg fixture.
+        thicknesses = [0.5, 0.5]
+        radii_2reg = np.cumsum(thicknesses)
+        radii_1reg = np.array([1.0])
+        sig_t_2reg = np.array([sig_t_val, sig_t_val])
+        sig_t_1reg = np.array([sig_t_val])
+
+        n_panels, p_order, dps = 2, 3, 20
+        r_nodes, _r_wts, _panels = composite_gl_r(
+            np.asarray(radii_2reg, dtype=float),
+            n_panels, p_order, dps=dps,
+        )
+        r_nodes_arr = np.asarray(r_nodes, dtype=float)
+
+        # The four primitives — all four multi-region branches must
+        # match the single-region closed form.
+        cases = [
+            ("P_esc_outer", compute_P_esc_outer, dict(n_angular=24)),
+            ("P_esc_inner", compute_P_esc_inner, dict(n_angular=24)),
+            ("G_bc_outer", compute_G_bc_outer, dict(n_surf_quad=24)),
+            ("G_bc_inner", compute_G_bc_inner, dict(n_surf_quad=24)),
+        ]
+        for name, fn, kwargs in cases:
+            P_hom = fn(
+                SLAB_POLAR_1D, r_nodes_arr, radii_1reg, sig_t_1reg,
+                dps=dps, **kwargs,
+            )
+            P_mr = fn(
+                SLAB_POLAR_1D, r_nodes_arr, radii_2reg, sig_t_2reg,
+                dps=dps, **kwargs,
+            )
+            err = float(np.max(np.abs(np.asarray(P_hom) - np.asarray(P_mr))))
+            assert err < 1e-12, (
+                f"{name}: multi-region branch (σ_t uniform) diverges "
+                f"from single-region closed form by {err:.3e}. "
+                f"Issue #131 regression — multi-region branches must "
+                f"use closed-form ½ E_2 / 2 E_2, not GL µ-quadrature."
+            )

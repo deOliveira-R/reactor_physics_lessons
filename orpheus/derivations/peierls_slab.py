@@ -422,7 +422,12 @@ def solve_peierls_eigenvalue(
     sig_t_regions : list of (ng,) arrays
         Total XS per region.
     sig_s_matrices : list of (ng, ng) arrays
-        P0 scattering matrices per region (``sig_s[g', g]`` = g → g').
+        P0 scattering matrices per region. Convention:
+        ``sig_s[g_src, g_dst]`` = rate from ``g_src`` into ``g_dst``
+        (first index = source group, second = destination). Matches
+        the project-wide ``sig_s`` convention documented in
+        Sphinx §theory-peierls-multigroup and exposed by
+        :func:`orpheus.derivations._xs_library.get_xs`.
     nu_sig_f_all : list of (ng,) arrays
         :math:`\nu\Sigma_f` per region.
     chi_all : list of (ng,) arrays

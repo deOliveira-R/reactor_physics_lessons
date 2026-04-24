@@ -1349,29 +1349,27 @@ def compute_P_esc(
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
 
-    if geometry.kind == "slab-polar" and len(radii) == 1:
-        # Slab, homogeneous single region: P_esc reduces to the
-        # closed-form E_2 sum
+    if geometry.kind == "slab-polar":
+        # Slab (homogeneous OR multi-region): closed-form sum of the two
+        # face escape probabilities
         #
-        #     P_esc_slab(x_i) = (1/2) · [E_2(Σ_t·x_i) + E_2(Σ_t·(L − x_i))]
+        #     P_esc_slab(x_i) = ½ E_2(τ_inner(x_i)) + ½ E_2(τ_outer(x_i))
         #
-        # (escape through face 0 at µ < 0, through face L at µ > 0;
-        # each half-range contributes an E_2). Closed-form is
-        # machine-precision, bypassing the GL grazing-ray stiffness at
-        # µ = 0 that limits the unified quadrature branch.
-        L = float(radii[-1])
-        sig_t_val = float(sig_t[0])
+        # where τ_{inner,outer}(x_i) is the piecewise-integrated optical
+        # depth from x_i to the corresponding face. The µ-integral is
+        # closed-form because τ is µ-independent when σ_t(x) is
+        # piecewise-constant. This matches the per-face primitives
+        # compute_P_esc_outer + compute_P_esc_inner bit-exactly and
+        # fixes the multi-region fallthrough to finite-N GL that was
+        # the Issue #131 signature in the legacy single-surface
+        # aggregate (L131a consolidation).
         N = len(r_nodes)
         P_esc = np.zeros(N)
         for i in range(N):
             x_i = float(r_nodes[i])
-            tau_left = sig_t_val * x_i
-            tau_right = sig_t_val * (L - x_i)
-            e2_left = (float(mpmath.expint(2, tau_left))
-                       if tau_left > 0 else 1.0)
-            e2_right = (float(mpmath.expint(2, tau_right))
-                        if tau_right > 0 else 1.0)
-            P_esc[i] = 0.5 * (e2_left + e2_right)
+            tau_inner = _slab_tau_to_inner_face(x_i, radii, sig_t)
+            tau_outer = _slab_tau_to_outer_face(x_i, radii, sig_t)
+            P_esc[i] = 0.5 * (_slab_E2(tau_inner) + _slab_E2(tau_outer))
         return P_esc
 
     omega_low, omega_high = geometry.angular_range
@@ -1446,57 +1444,24 @@ def compute_G_bc(
     G_bc = np.zeros(N)
 
     if geometry.kind == "slab-polar":
-        # Slab has TWO faces (x = 0 and x = L); the scalar flux at
+        # Slab (homogeneous OR multi-region): the scalar flux at
         # interior x_i from UNIT uniform isotropic inward partial
         # currents at *each* face is
         #
-        #   G_bc_slab(x_i) = 2·[E_2(Σ_t·x_i) + E_2(Σ_t·(L - x_i))]
+        #   G_bc_slab(x_i) = 2·[E_2(τ_inner(x_i)) + E_2(τ_outer(x_i))]
         #
-        # for a homogeneous slab. The factor 2 comes from
-        # :math:`\psi_{\rm in} = 2 J^{-}` for a half-range isotropic
-        # partial current. Each E_2 term is one face's contribution;
-        # :func:`mpmath.expint` gives machine precision.
-        L = R  # for slab, radii[-1] IS L
-        if len(radii) == 1:
-            sig_t_val = float(sig_t[0])
-            for i in range(N):
-                x_i = float(r_nodes[i])
-                tau_left = sig_t_val * x_i
-                tau_right = sig_t_val * (L - x_i)
-                e2_left = (float(mpmath.expint(2, tau_left))
-                           if tau_left > 0 else 1.0)
-                e2_right = (float(mpmath.expint(2, tau_right))
-                            if tau_right > 0 else 1.0)
-                G_bc[i] = 2.0 * (e2_left + e2_right)
-            return G_bc
-
-        # Multi-region slab: GL over the inward half-range µ ∈ (0, 1)
-        # for each face, with τ computed by the polymorphic ray walker
-        # (handles piecewise Σ_t crossings).
-        mu_pts, mu_wts = gl_float(n_surf_quad, 0.0, 1.0, dps)
+        # with τ_{inner,outer}(x_i) the piecewise-integrated optical
+        # depth from x_i to the corresponding face. Closed-form for any
+        # piecewise-constant σ_t because the µ-integral factors out of
+        # τ. Matches compute_G_bc_outer + compute_G_bc_inner bit-exactly
+        # and fixes the Issue #131 multi-region fallthrough to
+        # finite-N GL in the legacy single-surface aggregate
+        # (L131a consolidation).
         for i in range(N):
             x_i = float(r_nodes[i])
-            total_0 = 0.0
-            total_L = 0.0
-            for k in range(n_surf_quad):
-                mu = float(mu_pts[k])
-                if mu <= 1e-15:
-                    continue
-                # Face 0: ray enters at (x=0) in direction +µ, observer
-                # at x_i means ray length ρ = x_i/µ.
-                rho_0 = x_i / mu
-                tau_0 = geometry.optical_depth_along_ray(
-                    0.0, mu, rho_0, radii, sig_t,
-                )
-                total_0 += float(mu_wts[k]) * 2.0 * float(np.exp(-tau_0))
-                # Face L: ray enters at (x=L) in direction -µ, observer
-                # at x_i means ray length ρ = (L - x_i)/µ.
-                rho_L = (L - x_i) / mu
-                tau_L = geometry.optical_depth_along_ray(
-                    L, -mu, rho_L, radii, sig_t,
-                )
-                total_L += float(mu_wts[k]) * 2.0 * float(np.exp(-tau_L))
-            G_bc[i] = total_0 + total_L
+            tau_inner = _slab_tau_to_inner_face(x_i, radii, sig_t)
+            tau_outer = _slab_tau_to_outer_face(x_i, radii, sig_t)
+            G_bc[i] = 2.0 * (_slab_E2(tau_inner) + _slab_E2(tau_outer))
         return G_bc
 
     if geometry.kind == "sphere-1d":

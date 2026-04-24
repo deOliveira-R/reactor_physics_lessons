@@ -241,12 +241,30 @@ LAYOUTS: dict[int, list[str]] = {
 
 
 def get_xs(region: str, ng_key: str) -> dict:
-    """Get XS dict for a region and group count.
+    r"""Get XS dict for a region and group count.
 
     Parameters
     ----------
     region : "A", "B", "C", or "D"
     ng_key : "1g", "2g", or "4g"
+
+    Returns
+    -------
+    dict
+        Cross-section dict with keys ``sig_t``, ``sig_c``, ``sig_f``,
+        ``nu``, ``chi``, ``sig_s``, ``sig_s1``.
+
+    Notes
+    -----
+    **Scattering-matrix convention.** ``xs["sig_s"]`` is a ``(ng, ng)``
+    P\ :sub:`0` array with shape ``[g_src, g_dst]``: first index =
+    source group, second = destination. Downscatter (fast → thermal
+    with group 0 = fast) sits in the upper-triangular entries. For
+    example, ``_A_2G["sig_s"] = [[0.38, 0.10], [0.00, 0.90]]`` has
+    ``sig_s[0, 1] = 0.10`` (fast-to-thermal downscatter) and
+    ``sig_s[1, 0] = 0.00`` (no upscatter). ``sig_s1`` follows the
+    same convention. This matches the project-wide canonical
+    statement in Sphinx :ref:`peierls-scattering-convention`.
     """
     return XS[region][ng_key]
 

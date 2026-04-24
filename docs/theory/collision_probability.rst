@@ -2465,26 +2465,20 @@ Peierls reference bypasses this integration and solves the full
 integral equation numerically, making it an independent check on
 the CP method's spatial discretisation.
 
-.. _peierls-scattering-convention:
-
 Multi-group scattering convention
 ---------------------------------
 
-The Peierls solver receives scattering matrices from the XS library in
-the convention ``sig_s[g', g]`` = transfer FROM group :math:`g'` TO
-group :math:`g`.  In the assembly loop
-(``_build_system_matrices()`` in :mod:`orpheus.derivations.peierls_slab`,
-line 250), the scatter kernel for the equation in group ``ge`` sums
-over source groups ``gs``:
-
-.. code-block:: python
-
-   K_scatter[row, col] += kij * sig_s_at_node[j][gs][ge]
-
-Here ``sig_s_at_node[j][gs][ge]`` is :math:`\Sigma_{s,gs \to ge}` ---
-the transfer cross section FROM group ``gs`` TO group ``ge``.  The
-outer loop index ``ge`` is the target group in the Peierls equation, and
-``gs`` is the source group in the column index.
+See :ref:`peierls-scattering-convention` (in the Peierls unified
+theory page) for the canonical, project-wide statement of the
+``sig_s[g_src, g_dst]`` convention, which the CP / Peierls
+drivers and the XS library
+(:mod:`orpheus.derivations._xs_library`) all follow. In the Peierls
+slab assembly loop
+(:func:`orpheus.derivations.peierls_slab._build_system_matrices`)
+the scatter kernel for the equation in group ``ge`` sums over
+source groups ``gs`` via ``sig_s_at_node[j][gs][ge]`` =
+:math:`\Sigma_{s,\,gs \to ge}` — first index source, second
+destination.
 
 .. warning::
 
@@ -2493,7 +2487,8 @@ outer loop index ``ge`` is the target group in the Peierls equation, and
    ``sig_s[from, to]``, consistent with the ``Mixture.SigS`` storage
    where ``SigS[g_from, g_to]`` and the in-scatter source is
    ``Q = SigS^T @ phi``.  See the scattering convention note in the
-   :ref:`key-facts-cp` section.
+   :ref:`key-facts-cp` section and the authoritative
+   :ref:`peierls-scattering-convention` note.
 
 Numerical evidence
 ------------------
