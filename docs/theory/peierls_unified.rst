@@ -5669,6 +5669,151 @@ fission L1 reference would need either (a) the Mark closure replaced
 by an angular-distribution-preserving alternative, or (b) acceptance
 of the source-spectrum-dependent error magnitude.
 
+Follow-up direction investigation (2026-04-25)
+----------------------------------------------
+
+Three candidate paths to address the Mark uniformity overshoot were
+investigated by parallel numerics-investigator dispatch:
+
+**1. Davison method-of-images (ABANDONED, structurally impossible)**
+
+For sphere with vacuum at center (Davison :math:`u(0)=0`) and white
+BC at outer surface, the image series
+
+.. math::
+
+    K_{\rm white}(r, r') = \sum_{n} (-1)^{|n|}
+        \bigl[E_1(\tau|r - 2nR - r'|) - E_1(\tau|r - 2nR + r'|)\bigr]
+
+converges fast (saturates at ~5 image terms, exponentially decaying)
+but to the **wrong eigenvalue** (-53 % off cp_sphere k_inf for
+1G/1R fuel A). Root cause: method-of-images requires the BC to act
+**pointwise on the angular flux**. Vacuum (:math:`\psi^- = 0`) and
+specular (:math:`\psi^-(\Omega) = \psi^+(\Omega - 2(\Omega \cdot \mathbf
+n)\mathbf n)`) qualify. White BC (Mark) does NOT — it re-emits returning
+current with the AVERAGED angular distribution
+:math:`\psi^-(\Omega) = J^+/\pi`, which cannot be reproduced by mirror
+sources. The image series solves the SPECULAR-reflection problem
+instead. **No method-of-images formulation exists for white BC**, even
+on a homogeneous sphere; this is a hard structural barrier.
+
+Probes:
+``derivations/diagnostics/diag_sphere_davison_image_{01..04}_*.py``;
+agent memory:
+:file:`.claude/agent-memory/numerics-investigator/issue_132_davison_image_series.md`.
+
+**2. Augmented Nyström (ABANDONED, algebraically equivalent)**
+
+Adding the surface partial current :math:`J^+(\mu)` as :math:`M`
+extra unknowns in an :math:`(N+M)\times(N+M)` block system, enforcing
+:math:`J^- = J^+` as constraint equations rather than a closure
+approximation. **Verified algebraically equivalent** to the existing
+:math:`K_{\rm bc} = G \cdot R \cdot P` Schur reduction in
+:class:`BoundaryClosureOperator` to machine precision
+(:math:`6.66\times10^{-16}` at :math:`M = 1`). The block formulation
+pre-elimination IS the Schur reduction; eliminating
+:math:`J^+` from the bottom block recovers the existing closure with
+:math:`R = (I - W_{\rm eff})^{-1}`. **The augmented direction provides
+zero new physics beyond the existing rank-:math:`M` closure** — the
+only knob is the choice of :math:`M`-mode basis, and:
+
+- µ-Nyström-collocation is structurally non-convergent (:math:`r`-
+  dependent endpoint singularity at :math:`\mu_{\min}(r) = \sqrt{1 -
+  (r/R)^2}`).
+- Marshak Legendre rank-:math:`M` plateaus at +2.4 % — the same
+  Issue #100 mode-0/mode-:math:`n\geq1` normalisation floor that
+  prevented the rank-:math:`N` Marshak path from being shipped
+  originally.
+
+Probes:
+``derivations/diagnostics/diag_sphere_augmented_nystrom_{a..e}_*.py``;
+memory:
+:file:`.claude/agent-memory/numerics-investigator/issue_132_augmented_nystrom.md`.
+
+**3. Cylinder Hébert (PARTIAL, blocked on Issue #112 Phase C)**
+
+The cylinder analog of :func:`compute_P_ss_sphere` derives cleanly:
+
+.. math::
+   :label: peierls-cyl-Pss-derivation
+
+   P_{ss}^{\rm cyl}(\Sigma_t, R) = \frac{4}{\pi}\!\int_0^{\pi/2}
+       \cos\alpha\;\mathrm{Ki}_3\!\bigl(2\Sigma_t R\cos\alpha\bigr)\,d\alpha
+
+with :math:`\mathrm{Ki}_3` arising from analytical integration over
+the polar angle :math:`\beta` from the cylinder axis. Multi-region
+extension mirrors the sphere chord-piecewise integration with the
+2-D :math:`h = R\sin\alpha` impact-parameter geometry. Verified to
+:math:`<5\times10^{-3}` against independent Monte Carlo. Shipped as
+:func:`compute_P_ss_cylinder` with foundation tests at
+``tests/cp/test_cylinder_pss.py``.
+
+**However**, applying :math:`(1 - P_{ss}^{\rm cyl})^{-1}` to the
+existing cylinder rank-1 Mark closure does NOT close the cylinder
+Class B verification gap. Row-sum probe:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Geometry
+     - :math:`\min(K\cdot 1/\Sigma_t)`
+     - mean
+     - max
+   * - Sphere 1G/1R
+     - 0.9993
+     - 0.9993
+     - 0.9994
+   * - Cylinder 1G/1R
+     - 0.8886
+     - **0.8924**
+     - 0.9089
+
+Cylinder kernel is biased by **7.6 % independent of quadrature** (scan
+over :math:`n_{\rm angular} \in \{16, 24, 48\}`,
+:math:`n_{\rm surf} \in \{16, 32, 64, 128\}` all give the same mean
+:math:`-0.0764`). This is the missing 3-D polar-angle integration in
+:func:`compute_G_bc` cylinder — exactly the Knyazev
+:math:`\mathrm{Ki}_{2+k}` expansion called out in Issue #112 Phase C.
+The Hébert geometric series is geometry-correct; it amplifies a
+kernel that is itself 8 % low.
+
+**Recommendation**: ``boundary="white_hebert"`` for cylinder remains
+``NotImplementedError`` until Issue #112 Phase C lands a 3-D corrected
+:func:`compute_G_bc` for cylinder. At that point, the
+:func:`compute_P_ss_cylinder` primitive shipped here can be wired
+directly. By analogy with the sphere case, the expected result is
+:math:`<1.5\,\%` k_eff agreement on cylinder Class B 1G/1R, 2G/1R,
+2G/2R for the chi = [1, 0] spectrum, with the same chi-dependent
+overshoot as sphere on source-localised cases.
+
+Probes:
+``derivations/diagnostics/diag_cylinder_hebert_{pss,keff,diagnose_residual}.py``;
+memory:
+:file:`.claude/agent-memory/numerics-investigator/issue_132_cylinder_hebert.md`.
+
+**Synthesis**
+
+For Class B sphere, the chi-dependent Mark uniformity overshoot is
+the **intrinsic structural limit** of the Hébert closure family. No
+algebraic transformation within the closure framework removes it;
+both candidate algebraic upgrades (Davison, augmented Nyström) are
+structurally impossible or algebraically equivalent. To address the
+overshoot at L1 tolerance for source-localised spectra requires a
+**fundamentally different approach** — candidate paths:
+
+- Sanchez 1976 multiple-collision :math:`K_\infty` derivation (cited
+  in the lit-researcher's memory as the rigorous closure that the
+  Hébert series approximates for non-flat eigenvectors)
+- Direct Sn or MOC angular-flux discretisation of the surface
+  reflection (departs from the Peierls integral-equation paradigm)
+- Acceptance of the chi-dependent overshoot as the Mark-closure
+  documented limit
+
+For Class B cylinder, the path is clearer: Issue #112 Phase C
+(Knyazev :math:`\mathrm{Ki}_{2+k}` 3-D angular normalisation) +
+:func:`compute_P_ss_cylinder` Hébert series → expected sphere-quality
+verification on the chi = [1, 0] spectrum.
+
 To fully resolve the 1G/2R case requires either:
 
 (a) An angular-distribution-preserving closure — the rank-N Marshak

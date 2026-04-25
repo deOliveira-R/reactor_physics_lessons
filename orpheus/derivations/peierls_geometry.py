@@ -1518,6 +1518,101 @@ def compute_G_bc(
     return G_bc
 
 
+def compute_P_ss_cylinder(
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    *,
+    n_quad: int = 64,
+    dps: int = 25,
+) -> float:
+    r"""Surface-to-surface probability :math:`P_{ss}` for solid cylinder
+    with white BC.
+
+    Defined as the probability that a neutron entering the cylinder at
+    the lateral surface (uniform isotropic inward distribution
+    :math:`\psi^- = J^-/\pi`) exits the surface uncollided. For a
+    homogeneous cylinder of radius :math:`R` and total cross section
+    :math:`\Sigma_t`, after integrating analytically over the polar
+    angle :math:`\beta` from the cylinder axis (which produces a
+    Bickley-Naylor :math:`\mathrm{Ki}_3`):
+
+    .. math::
+        :label: peierls-cyl-Pss-homogeneous
+
+        P_{ss}^{\rm cyl}(\Sigma_t, R) =
+            \frac{4}{\pi}\!\int_0^{\pi/2}\cos\alpha\,
+                \mathrm{Ki}_3\!\bigl(2\Sigma_t R\cos\alpha\bigr)\,d\alpha
+
+    where :math:`\alpha` is the in-plane azimuthal offset from the
+    inward surface normal in the transverse plane. The :math:`2 R
+    \cos\alpha` factor is the in-plane chord length; the
+    :math:`\mathrm{Ki}_3` arises from the polar integration with the
+    :math:`\sin^2\beta` weight from the slanted-chord geometry.
+
+    Multi-region: chords cross annular boundaries at impact parameter
+    :math:`h = R\sin\alpha`; the in-plane chord becomes piecewise
+    :math:`\tau^{\rm 2D}(\alpha) = \sum_k \Sigma_{t,k}\ell_k^{\rm 2D}(\alpha)`
+    with the standard cylinder-shell intersection geometry, and
+    :math:`\mathrm{Ki}_3(\tau^{\rm 2D}(\alpha))` replaces
+    :math:`\mathrm{Ki}_3(2\Sigma_t R\cos\alpha)`.
+
+    See :func:`compute_P_ss_sphere` for the sphere analog. The
+    cylinder formula derives in
+    ``derivations/diagnostics/diag_cylinder_hebert_pss.py``; verified
+    to <5e-3 against an independent Monte Carlo estimate.
+
+    Parameters
+    ----------
+    radii
+        Outer radii per region, ascending. Shape ``(n_regions,)``.
+    sig_t
+        Total cross section per region for the current group. Shape
+        ``(n_regions,)``.
+    n_quad
+        Gauss-Legendre order on :math:`\alpha`. Default 64 — converged
+        to ~1e-10 for typical cylinder R/MFP ranges.
+    dps
+        mpmath working precision for the inner :math:`\mathrm{Ki}_3`
+        evaluations.
+
+    Returns
+    -------
+    float
+        :math:`P_{ss}^{\rm cyl}` value in :math:`[0, 1]`.
+    """
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    R = float(radii[-1])
+    radii_inner = np.concatenate([[0.0], radii[:-1]])
+    radii_outer = radii
+
+    pts, wts = np.polynomial.legendre.leggauss(n_quad)
+    alpha_pts = 0.5 * (pts + 1) * (np.pi / 2)
+    alpha_wts = wts * (np.pi / 4)
+
+    P_ss = 0.0
+    for k in range(n_quad):
+        ca = float(np.cos(alpha_pts[k]))
+        sa = float(np.sin(alpha_pts[k]))
+        h = R * sa
+        tau_2d = 0.0
+        for n_reg in range(len(radii)):
+            r_in = float(radii_inner[n_reg])
+            r_out = float(radii_outer[n_reg])
+            if h >= r_out:
+                continue
+            seg_outer = float(np.sqrt(max(r_out * r_out - h * h, 0.0)))
+            seg_inner = (
+                float(np.sqrt(max(r_in * r_in - h * h, 0.0)))
+                if h < r_in else 0.0
+            )
+            chord_2d_in_annulus = 2.0 * (seg_outer - seg_inner)
+            tau_2d += sig_t[n_reg] * chord_2d_in_annulus
+        P_ss += alpha_wts[k] * ca * float(ki_n_mp(3, tau_2d, dps))
+
+    return float(4.0 / np.pi * P_ss)
+
+
 def compute_P_ss_sphere(
     radii: np.ndarray,
     sig_t: np.ndarray,
