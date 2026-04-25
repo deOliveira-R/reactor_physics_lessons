@@ -451,6 +451,74 @@ def test_class_b_sphere_hebert_recovers_kinf_rich(ng_key, n_regions,
 
 
 @pytest.mark.l1
+@pytest.mark.parametrize("chi_spectrum, expected_err_pct, tol_pct", [
+    pytest.param([1.0, 0.0], -1.5, 1.0, id="fast_emission"),
+    pytest.param([0.5, 0.5], 2.7, 1.0, id="mixed_emission"),
+    pytest.param([0.0, 1.0], 6.6, 1.0, id="thermal_emission"),
+])
+def test_class_b_sphere_hebert_chi_dependence(chi_spectrum,
+                                                expected_err_pct, tol_pct):
+    """Pin the chi-dependent Hébert error on sphere 2G/2R fuel-mod.
+
+    Triggered by user observation 2026-04-25: the "near-exact 2G/2R
+    Hébert" claim looked suspicious given parity with 1G/2R (same
+    geometry, same materials). This test pins the monotone trend
+    showing the 2G/2R DEFAULT chi=[1, 0] result is coincident with
+    the spectrum routing emission into a near-uniform-σ_t group:
+
+      chi=[1, 0]  (fast):    err ≈ −1.5 %  (essentially exact)
+      chi=[0.5, 0.5] (mixed): err ≈ +2.7 %
+      chi=[0, 1]  (thermal): err ≈ +6.6 %
+
+    This is the source-distribution dependence of the Mark uniformity
+    assumption — see :ref:`peierls-class-b-sphere-hebert` discussion
+    of the 1G/2R limitation. Pinning the trend here ensures that
+    future Mark-closure improvements (Davison kernel, augmented
+    Nyström) flatten the chi-dependence — when this test starts
+    failing, that signals the closure has been improved.
+    """
+    xs = _build_xs_arrays("2g", 2)
+    radii = np.array(cp_sphere._RADII[2])
+    chi_arr = np.array([chi_spectrum, chi_spectrum])  # one row per region
+
+    sol = solve_peierls_mg(
+        SPHERE_1D, radii=radii,
+        sig_t=xs["sig_t"], sig_s=xs["sig_s"], nu_sig_f=xs["nu_sig_f"],
+        chi=chi_arr,
+        boundary="white_hebert", n_bc_modes=1,
+        **_QUAD_BASE,
+    )
+    k_eff = sol.k_eff
+
+    # Reference: cp k_inf with the same chi spectrum
+    from orpheus.derivations.cp_sphere import _sphere_cp_matrix
+    from orpheus.derivations._eigenvalue import kinf_from_cp
+    layout = LAYOUTS[2]
+    xs_list = [get_xs(r, "2g") for r in layout]
+    r_inner = np.zeros(2)
+    r_inner[1:] = radii[:-1]
+    volumes = (4 / 3) * np.pi * (radii**3 - r_inner**3)
+    P_inf = _sphere_cp_matrix(xs["sig_t"], radii, volumes, radii[-1])
+    k_inf = kinf_from_cp(
+        P_inf_g=P_inf, sig_t_all=xs["sig_t"], V_arr=volumes,
+        sig_s_mats=[xs["sig_s"] for xs in xs_list],
+        nu_sig_f_mats=[xs["nu"] * xs["sig_f"] for xs in xs_list],
+        chi_mats=[np.asarray(chi_spectrum) for _ in xs_list],
+    )
+    actual_err_pct = (k_eff - k_inf) / k_inf * 100
+
+    assert abs(actual_err_pct - expected_err_pct) < tol_pct, (
+        f"sphere 2G/2R chi={chi_spectrum} Hébert: actual err = "
+        f"{actual_err_pct:+.3f} %, expected {expected_err_pct:+.2f} % "
+        f"± {tol_pct} %. The chi-dependent overshoot trend is the "
+        f"signature of the Mark uniformity assumption — see "
+        f"docs/theory/peierls_unified.rst §peierls-class-b-sphere-hebert. "
+        f"Drift here indicates either a Mark-closure improvement (good!) "
+        f"or a regression in the Hébert path (bad)."
+    )
+
+
+@pytest.mark.l1
 @pytest.mark.parametrize("kind", ["cylinder-1d", "slab-polar"])
 def test_class_b_hebert_raises_for_non_sphere(kind):
     """Hébert closure currently sphere-only; cylinder / slab must raise."""

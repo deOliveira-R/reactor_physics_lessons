@@ -5597,8 +5597,8 @@ structural, not numerical.
 Reproducer:
 :file:`derivations/diagnostics/diag_sphere_hebert_rich_check.py`.
 
-The 1G/2R heterogeneous limitation
-----------------------------------
+The 1G/2R heterogeneous limitation — Mark uniformity assumption
+----------------------------------------------------------------
 
 The Mark closure assumes the surface re-emission is **uniform isotropic**
 across the surface — i.e. :math:`\psi^-(r_b, \Omega) = J^-/\pi`
@@ -5615,11 +5615,59 @@ Quantitatively, the cp_sphere k_inf with finer subdivisions converges
 to 0.6485 (verified up to 64 sub-regions; see
 :file:`derivations/diagnostics/diag_sphere_geometric_series_thicker_cell_scan.py`),
 so the +10 % overshoot is NOT a "pointwise vs flat-flux CP" artifact
-— it is a real Mark-closure limitation. The 2G/2R case escapes the
-limitation because the fast/thermal coupling smooths the surface
-flux profile (fast neutrons are mostly absorbed in fuel after
-downscatter; thermal in moderator), so the net surface distribution
-is more nearly uniform.
+— it is a real Mark-closure limitation.
+
+**The 2G/2R "<0.05 %" result is contingent on the chi spectrum**
+
+The "essentially exact" 2G/2R result above is conditional on the
+shipped chi = [1, 0] (all fission emission into the fast group).
+The fast group has :math:`\Sigma_t = [0.5, 0.6]` — nearly uniform
+across fuel and moderator — so fission emissions thermalise into
+a roughly uniform fast flux, which down-scatters into a roughly
+uniform thermal source. The eigenvector is therefore nearly flat
+across the cell, and the Mark uniformity assumption holds exactly.
+
+A direct chi-override test confirms the source-distribution
+dependence:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Configuration
+     - chi spectrum
+     - cp k_inf
+     - Hébert err
+   * - 1G/2R
+     - (single group)
+     - 0.6480
+     - +10.26 %
+   * - 2G/2R DEFAULT
+     - [1, 0] (fast emission)
+     - 0.4140
+     - −1.47 %
+   * - 2G/2R chi-mixed
+     - [0.5, 0.5]
+     - 0.4348
+     - **+2.73 %**
+   * - 2G/2R chi-thermal
+     - [0, 1] (thermal emission)
+     - 0.4555
+     - **+6.58 %**
+
+Reproducer:
+:file:`derivations/diagnostics/diag_sphere_chi_dependence_hebert.py`.
+
+**Pattern**: more spatially-localised source → larger Mark uniformity
+overshoot. The 2G/2R "good result" is coincident with the chi = [1, 0]
+spectrum routing emissions into a nearly-uniform-σ_t group; thermal-
+emission spectra (e.g. LWR-like chi = [0, 1]) reproduce the same
+overshoot pattern even at 2G structure.
+
+**Verification implication**: the ``test_class_b_sphere_hebert_recovers_kinf``
+gates pin the chi = [1, 0] case to <0.05 % at RICH, but a thermal-
+fission L1 reference would need either (a) the Mark closure replaced
+by an angular-distribution-preserving alternative, or (b) acceptance
+of the source-spectrum-dependent error magnitude.
 
 To fully resolve the 1G/2R case requires either:
 
