@@ -5836,26 +5836,46 @@ memory:
 
 **Synthesis**
 
-For Class B sphere, the chi-dependent Mark uniformity overshoot is
-the **intrinsic structural limit** of the Hébert closure family. No
-algebraic transformation within the closure framework removes it;
-both candidate algebraic upgrades (Davison, augmented Nyström) are
-structurally impossible or algebraically equivalent. To address the
-overshoot at L1 tolerance for source-localised spectra requires a
-**fundamentally different approach** — candidate paths:
+For Class B sphere AND cylinder (after Issue #112 Phase C), the
+chi-dependent Mark uniformity overshoot is the **intrinsic structural
+limit** of the rank-N interface-current closure family. Three
+independent investigations confirm this:
 
-- Sanchez 1976 multiple-collision :math:`K_\infty` derivation (cited
-  in the lit-researcher's memory as the rigorous closure that the
-  Hébert series approximates for non-flat eigenvectors)
+- **Davison method-of-images** is structurally impossible (white BC
+  acts on the *averaged* angular distribution, not pointwise).
+- **Augmented Nyström** is algebraically equivalent to the existing
+  rank-M Schur reduction (verified to machine precision at M=1).
+- **Sanchez 1977 NSE 64 rank-N IC formulation** (PDF read 2026-04-25
+  — see :file:`.claude/agent-memory/literature-researcher/sanchez_1977_nse64_canonical_ic.md`)
+  uses 3 modes per face = same algebraic class as rank-M Schur with
+  M=3 per face. The paper is fixed-source only — its
+  :math:`(I - A\cdot P_{ss})^{-1}` is *multi-cell coupling*, not a
+  multi-collision K_∞ closure as the earlier ORPHEUS narration
+  asserted. The Hébert :math:`(1 - P_{ss})^{-1}` is a *different
+  object* (single-cell self-multiplication), not the rank-0 collapse
+  of Sanchez 1977. The empirical bound from Sanchez's Tables VI-VII
+  on heterogeneous LWR cells is ~1-3 % residual with rank-3 — an
+  order of magnitude smaller than the +50 % cyl 2G/2R overshoot, so
+  rank-3 cannot close the gap.
+
+To address the overshoot at L1 tolerance for source-localised spectra
+requires a fundamentally different approach. Live candidate paths
+(none yet PDF-verified to actually solve the heterogeneous-Mark
+problem):
+
+- **Sanchez 2002 NSE 142** — double-PN extension of the rank-N IC
+  formulation. Genuinely distinct surface response if the double-PN
+  basis spans more than the per-face piecewise-uniform basis of
+  Sanchez 1977.
+- **Bogado Leite 1998 ANE** — orphaned reference per
+  :file:`.claude/agent-memory/literature-researcher/rank_n_ic_curvilinear_literature_leads.md`,
+  candidate for a non-rank-N approach.
 - Direct Sn or MOC angular-flux discretisation of the surface
-  reflection (departs from the Peierls integral-equation paradigm)
+  reflection — departs from the Peierls integral-equation paradigm.
 - Acceptance of the chi-dependent overshoot as the Mark-closure
-  documented limit
-
-For Class B cylinder, the path is clearer: Issue #112 Phase C
-(Knyazev :math:`\mathrm{Ki}_{2+k}` 3-D angular normalisation) +
-:func:`compute_P_ss_cylinder` Hébert series → expected sphere-quality
-verification on the chi = [1, 0] spectrum.
+  documented limit; restrict L1-tolerance verification to
+  configurations that route through near-uniform-σ_t groups (default
+  2G XS chi=[1, 0]).
 
 To fully resolve the 1G/2R case requires either:
 
