@@ -1327,6 +1327,103 @@ is equally load-bearing and easy to miss.
 
 ---
 
+## ERR-030 — Peierls rank-N white-BC: mode-0/mode-n≥1 normalization mismatch
+
+**Failure mode:** #1 Wrong formula — inconsistent normalization
+between two integrand factors that look like the same partial-current
+moment but are not.
+**Date:** 2026-04-25
+**Solver:** CP / Peierls curvilinear rank-N closure
+(`orpheus.derivations.peierls_geometry.build_closure_operator`,
+peierls_geometry.py:3618-3642).
+
+**Bug:** The rank-N Marshak white-BC closure routes mode 0 through
+the legacy ``compute_P_esc / compute_G_bc`` (no surface Jacobian,
+the isotropic-escape-probability form) while modes ``n ≥ 1`` use
+``compute_P_esc_mode / compute_G_bc_mode`` (with the canonical
+``(ρ_max/R)²`` surface-to-observer Jacobian). The two forms live in
+**different normalization spaces** for the partial-current expansion
+moment ``J_n = ∫ μ·P̃_n(μ) ψ⁺ dμ`` and therefore cannot be summed
+into a single rank-N ``K_bc = Σ_n u_n ⊗ v_n`` consistently.
+
+The mismatch was introduced as a deliberate compromise (documented
+in the function docstring as "for bit-exact rank-1 regression") so
+that ``n_bc_modes = 1`` would reproduce the existing rank-1 Mark
+behavior bit-exactly. In single-region solid cells the mismatch is
+hidden because the legacy mode-0 was historically calibrated to make
+the rank-1 Mark closure approximately right; adding mode-1 then
+adds a small *Marshak* correction that lands the 1R rank-2 within
+1 % of ``k_inf``. The published 2026-04-18 1G/1R rank-N table at
+``peierls_geometry.py`` lines 3934-3961 records this as a "rank-N
+converges" claim — but those numbers were achieved by the
+legacy/canonical hybrid that is now demonstrably wrong in MR.
+
+**Impact:** Sphere 1G/2R fuel-A inner / moderator-B outer
+(``LAYOUTS=["A","B"]``, ``radii=[0.5, 1.0]``, ``σ_t=[1, 2]``) gives:
+
+- rank-1 Mark: ``k_eff = 0.551`` vs ``k_inf = 0.648`` → -15 %
+  (acceptable Mark closure floor)
+- **rank-2 Marshak: ``k_eff = 1.015`` → +57 % (sign flip)**
+- rank-3..8: ``k_eff`` plateaus at 1.08 → +67 %, NOT converging
+
+Cylinder 1G/2R rank-2 also degrades to +18 % (smaller because Issue
+#112 Phase C cyl Ki_{k+2} normalization adds a separate floor that
+masks the underlying mode-0 mismatch).
+
+Replacing legacy mode-0 with the canonical ``compute_P_esc_mode(n=0)``
+gives a uniformly *worse* result in 1R (rank-2 = -29 %) — the proper
+fix requires re-derivation of the rank-N partial-current expansion
+end-to-end so mode 0 and mode ``n ≥ 1`` live in the same basis.
+Tracked in Issue #132.
+
+**How it hid from higher-level tests:**
+- All existing rank-N tests in ``tests/derivations/test_peierls_rank_n_bc.py``
+  exercise 1G × 1R only. The 1R control gives rank-2 = -1.10 % on
+  sphere — a deceptive "convergence" that masked the mismatch.
+- The conservation row-sum test
+  (``tests/derivations/test_peierls_rank_n_conservation.py``) uses
+  uniform Σ_t = 1, where ``K · 1 = 1`` holds by construction. The
+  identity does NOT generalize to piecewise Σ_t (it becomes an
+  integrated identity, not pointwise), so the test is structurally
+  blind to MR mismatches.
+- The 2026-04-22 falsification of the rank-N per-face hollow Class A
+  closure (research log L21) closed the rank-N path against the F.4
+  reference, but explicitly never audited Class B (solid). The
+  N=1 ``boundary="white_f4"`` collapse for solid cells was treated
+  as the "shipped" Class B closure — except the rank-N branch was
+  still callable through ``boundary="white_rank1_mark"`` with
+  ``n_bc_modes ≥ 2`` and silently broken.
+
+**L1 tests that catch it:**
+- ``tests/derivations/test_peierls_rank_n_class_b_mr_mg.py::test_class_b_mr_catastrophe_sphere_1g_2r_rank2``
+  (XFAIL, strict=True) — pins the +57 % sphere catastrophe
+- ``::test_class_b_mr_catastrophe_cylinder_1g_2r_rank2`` (XFAIL,
+  strict=True) — pins the +18 % cylinder analog
+- ``::test_class_b_mr_routing_invariance_uniform_sigma`` — passes
+  today, regression gate against accidental introduction of an
+  ``len(radii) > 1`` routing divergence even at uniform σ_t
+
+**Fix:** Pending. Issue #132 tracks the re-derivation work.
+Candidate paths: (a) a canonical mode-0 partial-current
+normalization that reduces to Mark at ``n_bc_modes = 1``, OR (b)
+replacing rank-N with the Sanchez & McCormick 1982 §III.F.1
+partial-current-moment basis end-to-end (Eqs. 165-169), OR (c)
+the Knyazev 1993 Ki_{2+k} polynomial expansion for cylinder
+(Issue #112 Phase C, may share root).
+
+**Lesson:** A "rank-N converges" claim must be verified at MR×MG —
+single-region single-group passing rates are degenerate evidence
+because two structurally-different normalizations can produce the
+same ``k_eff`` by historical calibration. For any partial-current-
+moment closure, the rank-1 → rank-2 step must hold across
+``radii=[1.0]`` AND ``radii=[0.5, 1.0]`` with non-trivial Σ_t
+breakpoints. The Issue #131 anti-pattern audit ("does the multi-
+region branch silently differ from the single-region branch?")
+must be performed for every closure primitive, not just the volume
+kernel.
+
+---
+
 ## Meta-Lessons
 
 1. **1-group is degenerate.** k = νΣ_f/Σ_a regardless of flux shape.
