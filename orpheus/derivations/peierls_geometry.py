@@ -57,6 +57,7 @@ import numpy as np
 from ._kernels import (  # noqa: F401
     _shifted_legendre_eval,
     chord_half_lengths,
+    gauss_legendre_visibility_cone,
     ki_n_float,
     ki_n_mp,
 )
@@ -2111,25 +2112,61 @@ def compute_T_specular_sphere(
     inversion entirely — see ``.claude/agent-memory/numerics-investigator/
     specular_mb_overshoot_root_cause.md`` for the operator-norm proof
     and the Phase 5 sketch.
+
+    **Quadrature** (Phase 1B of the visibility-cone-substitution rollout,
+    plan 1 in ``.claude/plans/visibility-cone-substitution-rollout.md``).
+    For multi-region cells the integrand of
+    :eq:`peierls-sphere-T-specular` has :math:`\sqrt{\mu^{2}-\mu_{k}^{2}}`
+    derivative singularities at the visibility-cone knots
+    :math:`\mu_{k} = \sqrt{1 - (r_{k}/R)^{2}}` (interior shell radii
+    :math:`r_{k}`, :math:`k = 1\ldots N-1`): crossing :math:`\mu_{k}`
+    from below adds the chord segment
+    :math:`2\sqrt{r_{k}^{2} - h^{2}} = 2R\sqrt{\mu^{2}-\mu_{k}^{2}}` to
+    :math:`\tau(\mu)`, which gives :math:`\mathrm e^{-\tau(\mu)}` a
+    :math:`\sqrt{\mu - \mu_{k}}` derivative singularity. Plain
+    Gauss-Legendre on :math:`[0, 1]` resolves the kinks only
+    algebraically (:math:`\mathcal O(Q^{-3/2})`).
+
+    The current implementation subdivides :math:`[0, 1]` at the
+    :math:`\{\mu_{k}\}_{k=1}^{N-1}` knots into :math:`N` panels and
+    applies the visibility-cone substitution
+    :func:`~orpheus.derivations._kernels.gauss_legendre_visibility_cone`
+    (``singular_endpoint="lower"``) to each interior panel
+    :math:`[\mu_{k}, \mu_{k-1}]`, absorbing the
+    :math:`\sqrt{\mu^{2}-\mu_{k}^{2}}` factor into the substitution
+    Jacobian. The leftmost panel :math:`[0, \mu_{N-1}]` has
+    :math:`y_{\min} = 0`, where the substitution degenerates to plain
+    Gauss-Legendre on a smooth integrand (only the outermost annulus
+    contributes there with chord :math:`2R\mu`). The :math:`n_{\rm quad}`
+    parameter is *per panel*; the total node count grows with :math:`N`
+    but each panel converges spectrally. For :math:`N = 1` (homogeneous
+    sphere) there are no interior knots and the path reduces
+    bit-exactly to plain Gauss-Legendre on :math:`[0, 1]` with
+    :math:`n_{\rm quad}` nodes — backwards-compatible.
+
+    See :ref:`section-22-7-visibility-cone` in
+    :doc:`/theory/peierls_unified` for the substitution derivation,
+    Bernstein-ellipse convergence analysis, and rollout-site map.
     """
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
     radii_inner = np.concatenate([[0.0], radii[:-1]])
     radii_outer = radii
+    N_reg = len(radii)
 
-    # GL on µ ∈ [0, 1].
-    nodes, wts = np.polynomial.legendre.leggauss(n_quad)
-    mu_pts = 0.5 * (nodes + 1.0)
-    mu_wts = 0.5 * wts
+    mu_pts, mu_wts = _build_visibility_cone_mu_grid_sphere(
+        radii_outer, R, n_quad,
+    )
+    n_q = len(mu_pts)
 
     # Multi-region τ along the antipodal chord at each µ.
-    tau_arr = np.zeros(n_quad)
-    for k in range(n_quad):
+    tau_arr = np.zeros(n_q)
+    for k in range(n_q):
         mu = float(mu_pts[k])
         h = R * float(np.sqrt(max(0.0, 1.0 - mu * mu)))
         tau = 0.0
-        for n_reg in range(len(radii)):
+        for n_reg in range(N_reg):
             r_in = float(radii_inner[n_reg])
             r_out = float(radii_outer[n_reg])
             if h >= r_out:
@@ -2153,6 +2190,81 @@ def compute_T_specular_sphere(
             Pn = _shifted_legendre_eval(n, mu_pts)
             T[m, n] = 2.0 * float(np.sum(mu_wts * mu_pts * Pm * Pn * decay))
     return T
+
+
+def _build_visibility_cone_mu_grid_sphere(
+    radii_outer: np.ndarray, R: float, n_quad_per_panel: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Concatenated visibility-cone µ-quadrature for the sphere
+    antipodal-chord integral on :math:`[0, 1]`.
+
+    Subdivides :math:`[0, 1]` at the visibility-cone knots
+    :math:`\mu_{k} = \sqrt{1 - (r_{k}/R)^{2}}` for each interior shell
+    radius :math:`r_{k}` (:math:`k = 1 \ldots N-1`; the outermost
+    :math:`r_{N} = R` maps to :math:`\mu = 0`, the panel boundary, not
+    an interior kink). On each interior sub-panel
+    :math:`[\mu_{k}, \mu_{k-1}]` the integrand of the sphere T-matrix
+    integral inherits a :math:`\sqrt{\mu^{2}-\mu_{k}^{2}}` lower-endpoint
+    derivative singularity from the chord segment in the newly-entered
+    annulus :math:`k` — absorbed by the visibility-cone substitution
+    (``singular_endpoint="lower"``). On the leftmost panel
+    :math:`[0, \mu_{N-1}]` the chord penetrates only the outermost shell
+    with chord :math:`= 2R\mu` (smooth integrand) — the substitution
+    with :math:`y_{\min} = 0` degenerates to plain Gauss-Legendre on
+    :math:`[0, y_{\max}]`, which is correct.
+
+    Parameters
+    ----------
+    radii_outer : np.ndarray, shape (N,)
+        Outer radii :math:`r_{1} < \ldots < r_{N} = R` of the
+        concentric shells.
+    R : float
+        Outer sphere radius (:math:`= r_{N}`).
+    n_quad_per_panel : int
+        Gauss-Legendre nodes per sub-panel. For :math:`N = 1` there are
+        no interior knots and ``n_quad_per_panel`` becomes the total
+        number of nodes on :math:`[0, 1]` — bit-equivalent to the
+        pre-rollout plain-GL implementation.
+
+    Returns
+    -------
+    (mu_pts, mu_wts) : tuple of np.ndarray
+        Concatenated visibility-cone GL nodes and positive weights on
+        :math:`[0, 1]`.
+    """
+    N_reg = len(radii_outer)
+    if N_reg == 1:
+        # Homogeneous sphere — no shell crossings, plain GL on [0, 1].
+        nodes, wts = np.polynomial.legendre.leggauss(n_quad_per_panel)
+        return 0.5 * (nodes + 1.0), 0.5 * wts
+
+    # Interior visibility-cone knots µ_k = √(1 − (r_k/R)²) for the
+    # interior shell radii r_1, …, r_{N-1}.
+    mu_kinks = np.sqrt(np.maximum(0.0, 1.0 - (radii_outer[:-1] / R) ** 2))
+    mu_kinks_sorted = np.sort(mu_kinks)
+    mu_breaks = np.concatenate([[0.0], mu_kinks_sorted, [1.0]])
+
+    pts_list: list[np.ndarray] = []
+    wts_list: list[np.ndarray] = []
+    for i in range(len(mu_breaks) - 1):
+        y_min = float(mu_breaks[i])
+        y_max = float(mu_breaks[i + 1])
+        if y_max - y_min <= 0.0:
+            # Degenerate panel from coincident knots — skip.
+            continue
+        if y_min == 0.0:
+            # Plain GL on [0, y_max] — leftmost panel, smooth integrand.
+            nodes, wts = np.polynomial.legendre.leggauss(n_quad_per_panel)
+            pts = 0.5 * (nodes + 1.0) * y_max
+            wgts = 0.5 * wts * y_max
+        else:
+            pts, wgts = gauss_legendre_visibility_cone(
+                y_min, y_max, n_quad_per_panel,
+                singular_endpoint="lower",
+            )
+        pts_list.append(pts)
+        wts_list.append(wgts)
+    return np.concatenate(pts_list), np.concatenate(wts_list)
 
 
 def compute_T_specular_slab(
@@ -2326,27 +2438,67 @@ def compute_T_specular_cylinder_3d(
     for the Knyazev derivation, the rank-1 :math:`= P_{ss}^{\rm cyl}`
     identity (verified to 1e-14), and the regime sweep showing the
     overshoot persists across :math:`\tau_R \in [1, 5]`.
+
+    **Quadrature** (Phase 1B of the visibility-cone-substitution rollout,
+    plan 1 in ``.claude/plans/visibility-cone-substitution-rollout.md``).
+    For multi-region cells the integrand of :eq:`peierls-cyl-T-specular`
+    has :math:`\sqrt{\alpha_{k} - \alpha}` derivative singularities at
+    the visibility-cone knots :math:`\alpha_{k} = \arcsin(r_{k}/R)`
+    (interior shell radii :math:`r_{k}`, :math:`k = 1\ldots N-1`):
+    crossing :math:`\alpha_{k}` from below the chord segment
+    :math:`2\sqrt{r_{k}^{2}-h^{2}} \sim 2R\sqrt{\sin(2\alpha_{k})\,
+    (\alpha_{k}-\alpha)}` collapses to zero, giving
+    :math:`\mathrm{Ki}(\tau(\alpha))` a :math:`\sqrt{\alpha_{k}-\alpha}`
+    derivative singularity (algebraic :math:`\mathcal O(Q^{-3/2})` for
+    plain Gauss-Legendre).
+
+    The current implementation subdivides :math:`[0, \pi/2]` at the
+    :math:`\{\alpha_{k}\}_{k=1}^{N-1}` knots and applies the
+    visibility-cone substitution
+    :func:`~orpheus.derivations._kernels.gauss_legendre_visibility_cone`
+    in :math:`y = R\sin\alpha` coordinates with
+    ``singular_endpoint="upper"`` to each interior and last sub-panel,
+    then converts back to :math:`\alpha`-quadrature via
+    :math:`\alpha = \arcsin(y/R)`,
+    :math:`\mathrm d\alpha = \mathrm dy/\sqrt{R^{2}-y^{2}}`. The
+    leftmost panel :math:`[0, \alpha_{1}]` has :math:`y_{\min} = 0`
+    where the upper variant introduces a spurious :math:`1/y`
+    singularity (the substitution Jacobian's :math:`1/y(u)` factor at
+    :math:`u = 1`); this panel falls back to plain Gauss-Legendre on
+    :math:`[0, \alpha_{1}]`, which is algebraic at :math:`\alpha_{1}`
+    but on a much smaller interval than the original full
+    :math:`[0, \pi/2]`. The :math:`n_{\rm quad}` parameter is *per
+    panel*. For :math:`N = 1` (homogeneous cylinder) there are no
+    interior knots and the path reduces bit-exactly to plain
+    Gauss-Legendre on :math:`[0, \pi/2]` with :math:`n_{\rm quad}`
+    nodes — backwards-compatible.
+
+    See :ref:`section-22-7-visibility-cone` in
+    :doc:`/theory/peierls_unified` for the substitution derivation,
+    Bernstein-ellipse convergence analysis, and rollout-site map.
     """
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
     radii_inner = np.concatenate([[0.0], radii[:-1]])
     radii_outer = radii
+    N_reg = len(radii)
 
-    nodes, wts = np.polynomial.legendre.leggauss(n_quad)
-    alpha = 0.5 * (nodes + 1.0) * (np.pi / 2.0)
-    aw = wts * (np.pi / 4.0)
-    cos_a = np.cos(alpha)
-    sin_a = np.sin(alpha)
+    alpha_pts, alpha_wts = _build_visibility_cone_alpha_grid_cylinder(
+        radii_outer, R, n_quad,
+    )
+    n_q = len(alpha_pts)
+    cos_a = np.cos(alpha_pts)
+    sin_a = np.sin(alpha_pts)
 
     # Multi-region τ_2D along antipodal in-plane chord at each α.
     # Impact parameter h = R sin α; same shell-intersection geometry as
     # compute_P_ss_cylinder.
-    tau_arr = np.zeros(n_quad)
-    for k in range(n_quad):
+    tau_arr = np.zeros(n_q)
+    for k in range(n_q):
         h = R * float(sin_a[k])
         tau = 0.0
-        for n_reg in range(len(radii)):
+        for n_reg in range(N_reg):
             r_in = float(radii_inner[n_reg])
             r_out = float(radii_outer[n_reg])
             if h >= r_out:
@@ -2361,12 +2513,12 @@ def compute_T_specular_cylinder_3d(
         tau_arr[k] = tau
 
     # Pre-evaluate Ki_(j+3) for j = 0 .. 2(N-1) at each α node.
-    # Use float ki_n_float for speed (Knyazev integrand needs O(n_quad ·
+    # Use float ki_n_float for speed (Knyazev integrand needs O(n_q ·
     # 2N) Ki evaluations and ki_n_mp would be ~1000x slower).
     max_kk = 2 * (n_modes - 1) if n_modes > 0 else 0
-    Ki_arr = np.zeros((max_kk + 1, n_quad))
+    Ki_arr = np.zeros((max_kk + 1, n_q))
     for j in range(max_kk + 1):
-        for k in range(n_quad):
+        for k in range(n_q):
             Ki_arr[j, k] = ki_n_float(j + 3, float(tau_arr[k]))
 
     coef_list = [_shifted_legendre_monomial_coefs(m) for m in range(n_modes)]
@@ -2376,7 +2528,7 @@ def compute_T_specular_cylinder_3d(
         cm = coef_list[m]
         for n in range(n_modes):
             cn = coef_list[n]
-            kernel = np.zeros(n_quad)
+            kernel = np.zeros(n_q)
             for k_m, c_m in enumerate(cm):
                 if c_m == 0.0:
                     continue
@@ -2385,8 +2537,121 @@ def compute_T_specular_cylinder_3d(
                         continue
                     kk = k_m + k_n
                     kernel += c_m * c_n * (cos_a ** kk) * Ki_arr[kk]
-            T[m, n] = (4.0 / np.pi) * float(np.sum(aw * cos_a * kernel))
+            T[m, n] = (4.0 / np.pi) * float(np.sum(alpha_wts * cos_a * kernel))
     return T
+
+
+def _build_visibility_cone_alpha_grid_cylinder(
+    radii_outer: np.ndarray, R: float, n_quad_per_panel: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Concatenated visibility-cone α-quadrature for the cylinder
+    Knyazev integral on :math:`[0, \pi/2]`.
+
+    Subdivides :math:`\alpha` at the visibility-cone knots
+    :math:`\alpha_{k} = \arcsin(r_{k}/R)` for the interior shell radii
+    :math:`r_{k}` (:math:`k = 1\ldots N-1`). On each panel the chord
+    factor :math:`\sqrt{r_{k}^{2}-R^{2}\sin^{2}\alpha}` introduces a
+    :math:`\sqrt{\alpha_{k}-\alpha}` upper-endpoint derivative
+    singularity in :math:`\tau(\alpha)` — absorbed by the
+    visibility-cone substitution applied in :math:`y = R\sin\alpha`
+    coordinates with ``singular_endpoint="upper"``, then converted back
+    to :math:`\alpha`-quadrature via :math:`\alpha = \arcsin(y/R)`,
+    :math:`\mathrm d\alpha = \mathrm dy/\sqrt{R^{2}-y^{2}}`.
+
+    The first panel :math:`[0, \alpha_{1}]` has :math:`y_{\min} = 0`,
+    where the upper variant introduces a spurious :math:`1/y(u)`
+    singularity at :math:`u = 1` (its Jacobian's :math:`1/y(u)` factor,
+    see :func:`~orpheus.derivations._kernels.gauss_legendre_visibility_cone`
+    notes). We fall back to plain Gauss-Legendre on this panel —
+    algebraic :math:`\mathcal O(Q^{-3/2})` at :math:`\alpha_{1}` but on
+    a far smaller interval than the original full :math:`[0, \pi/2]`,
+    so the absolute error is bounded.
+
+    For :math:`N_{\rm reg} = 1` (homogeneous cylinder) there are no
+    interior knots; falls back to plain :math:`\alpha`-Gauss-Legendre
+    on :math:`[0, \pi/2]` — bit-equivalent to the pre-rollout
+    implementation.
+
+    Parameters
+    ----------
+    radii_outer : np.ndarray, shape (N,)
+        Outer radii :math:`r_{1} < \ldots < r_{N} = R` of the
+        concentric shells.
+    R : float
+        Outer cylinder radius (:math:`= r_{N}`).
+    n_quad_per_panel : int
+        Gauss-Legendre nodes per sub-panel.
+
+    Returns
+    -------
+    (alpha_pts, alpha_wts) : tuple of np.ndarray
+        Concatenated α-quadrature nodes and positive weights on
+        :math:`[0, \pi/2]`.
+    """
+    N_reg = len(radii_outer)
+    if N_reg == 1:
+        # Homogeneous cylinder — plain α-GL on [0, π/2]. The integrand
+        # cos α · Ki(τ(α)) is smooth in α (τ = σ·2R cos α), so plain
+        # GL is already spectral on the single panel.
+        nodes, wts = np.polynomial.legendre.leggauss(n_quad_per_panel)
+        alpha_pts = 0.5 * (nodes + 1.0) * (np.pi / 2.0)
+        alpha_wts = wts * (np.pi / 4.0)
+        return alpha_pts, alpha_wts
+
+    # Visibility-cone knots α_k = arcsin(r_k/R) for the interior shell
+    # radii r_1, …, r_{N-1}.  The outermost r_N = R maps to α = π/2
+    # (panel boundary, not an interior kink).  We split the first
+    # panel [0, α_1] at its midpoint α_1/2 so that the upper half
+    # carries the √(α_1−α) singularity (handled by vis-cone-upper in
+    # y-space, y_min = R sin(α_1/2) > 0) while the lower half is
+    # smooth (plain α-GL spectral).  Without this split the y_min=0
+    # vis-cone-upper degeneracy forces algebraic convergence on the
+    # entire first panel; the split recovers spectral convergence on
+    # both halves.
+    alpha_kinks = np.arcsin(np.minimum(radii_outer[:-1] / R, 1.0))
+    alpha_kinks_sorted = np.sort(alpha_kinks)
+    alpha_breaks = np.concatenate(
+        [[0.0, 0.5 * float(alpha_kinks_sorted[0])],
+         alpha_kinks_sorted,
+         [np.pi / 2.0]]
+    )
+
+    pts_list: list[np.ndarray] = []
+    wts_list: list[np.ndarray] = []
+    for i in range(len(alpha_breaks) - 1):
+        a_lo = float(alpha_breaks[i])
+        a_hi = float(alpha_breaks[i + 1])
+        if a_hi - a_lo <= 0.0:
+            continue
+        if a_lo == 0.0:
+            # Lower half of the split first panel [0, α_1/2] — plain
+            # α-GL on a smooth integrand (no kinks interior, the kink
+            # at α_1 is two panels away). Spectral.
+            nodes, wts = np.polynomial.legendre.leggauss(n_quad_per_panel)
+            half = 0.5 * (a_hi - a_lo)
+            mid = 0.5 * (a_hi + a_lo)
+            pts = half * nodes + mid
+            wgts = half * wts
+        else:
+            # Interior or last panel — vis-cone-upper in y = R sin α.
+            y_lo = R * float(np.sin(a_lo))
+            y_hi = R * float(np.sin(a_hi))
+            y_pts, y_wts = gauss_legendre_visibility_cone(
+                y_lo, y_hi, n_quad_per_panel,
+                singular_endpoint="upper",
+            )
+            pts = np.arcsin(y_pts / R)
+            # α_wts = y_wts / √(R² − y²).  At y = R (last panel,
+            # u = 0 in vis-cone-upper) both numerator and denominator
+            # vanish at the same rate (y_wts ∝ u, √(R²−y²) ∝ u);
+            # leggauss never lands exactly on u = 0 so the ratio is
+            # always finite numerically.
+            wgts = y_wts / np.sqrt(
+                np.maximum(R * R - y_pts * y_pts, 0.0)
+            )
+        pts_list.append(pts)
+        wts_list.append(wgts)
+    return np.concatenate(pts_list), np.concatenate(wts_list)
 
 
 def _chord_tau_mu_sphere(
