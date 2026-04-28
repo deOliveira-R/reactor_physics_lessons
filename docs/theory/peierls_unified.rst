@@ -320,7 +320,16 @@ Nyström).
    * - White rank-N DP\ :sub:`N` on outer face
      - 🚫 Issue #103 open; reachable but unsafe in MR (Issue #132, see :ref:`peierls-rank-n-class-b-mr-mg-falsification`)
      - 🚫 Issue #100 / #103 open; reachable but unsafe in MR (Issue #132)
-   * - Periodic / albedo / specular
+   * - ``white_hebert`` (Eq. 3.323)
+     - ✅ rank-1; cylinder via :func:`compute_G_bc_cylinder_3d` (Issue #112 Phase C)
+     - ✅ rank-1; documented +10 % overshoot on 1G/2R (:ref:`peierls-class-b-sphere-hebert`)
+   * - ``specular`` (rank-:math:`N`, exact angular preservation)
+     - ✅ rank-:math:`N`; Knyazev :math:`\mathrm{Ki}_{2+k}` 3-D primitives; converges to :math:`k_\infty` (-0.02 % at :math:`N=6`)
+     - ✅ rank-:math:`N`; converges to :math:`k_\infty` for homogeneous (sweet spot :math:`N=4`); see :ref:`peierls-specular-bc`
+   * - ``specular_multibounce`` (sphere only; thin-cell-correct)
+     - 🚫 not shipped (cyl Knyazev T matrix is Phase 4 follow-up)
+     - ✅ rank-:math:`N` ∈ {1, 2, 3}; lifts thin-cell plateau via :math:`(I - T R)^{-1}` geometric series; rank-1 ≡ ``white_hebert``
+   * - Periodic / albedo
      - 🚫 not shipped
      - 🚫 not shipped
 
@@ -5948,6 +5957,772 @@ infrastructure now covers the four-corner topology
 solver against the analytical white-BC k_inf, with the documented
 1G/2R sphere limitation as the only remaining open
 configuration-axis question (Issue #132).
+
+
+.. _peierls-specular-bc:
+
+Specular reflective BC — exact angular preservation (Issue #132 path forward)
+=============================================================================
+
+The Hébert (1−P_ss)⁻¹ closure above assumes the inward angular flux
+at the surface is **uniform isotropic**: :math:`\psi^{-}(r_b, \mu) =
+J^{-}(r_b)/\pi`. For a homogeneous Class-B cell this is true by
+rotational symmetry; for a heterogeneous Class-B cell the actual
+surface flux is anisotropic and the uniformity approximation
+introduces the documented ~+10 % overshoot on sphere 1G/2R
+(:ref:`peierls-class-b-sphere-hebert`).
+
+The **specular reflective BC** preserves the angular distribution
+exactly:
+
+.. math::
+   :label: peierls-specular-bc-defn
+
+   \psi^{-}(r_b, \mu_{\rm in}) \;=\; \psi^{+}(r_b, \mu_{\rm in})
+
+with :math:`\mu_{\rm in} = |\mathbf\Omega \cdot \hat n_b|` the
+absolute cosine of the ray direction at the surface normal. No
+moment averaging, no uniformity assumption — every angular component
+of the outgoing flux is reflected back as the corresponding inward
+component. The construction in this section gives a closed-form
+:math:`R_{\rm spec}` matrix in the rank-:math:`N` Marshak shifted-
+Legendre basis (Section 8 of this page), so the existing tensor-
+network closure operator
+:math:`K_{\rm bc} = G \cdot R \cdot P` accommodates it
+**without any new geometry primitives** — specular is "just another
+choice of :math:`R`".
+
+Why specular is the natural Class-B reference
+---------------------------------------------
+
+For homogeneous cells (rotational symmetry → uniform eigenvector →
+isotropic surface flux):
+
+- Mark, Marshak, Hébert, **specular**: all give :math:`k_{\rm eff} =
+  k_\infty` (within their respective rank-N truncations).
+
+For heterogeneous cells (eigenvector has an angular gradient at the
+surface):
+
+- Mark / Marshak / Hébert: average the angular distribution, missing
+  the surface anisotropy by an amount proportional to the eigenvector's
+  surface gradient. **Documented +10 % overshoot for sphere 1G/2R**.
+- **Specular**: preserves the full angular distribution. **No
+  closure approximation at all** — the rank-:math:`N` truncation is
+  the only source of error, and that converges as :math:`N \to \infty`.
+
+This makes specular the **angularly-exact pointwise reference** that
+Class-B verification has been missing. cp_sphere / cp_cylinder
+:math:`k_\infty` is calibrated to the white-BC closure family (Mark
+uniformity); specular is a **mathematically independent** reference
+that bypasses the Mark assumption entirely.
+
+The R_specular operator — closed form in the half-range Legendre basis
+----------------------------------------------------------------------
+
+In the rank-:math:`N` Gelbard shifted-Legendre basis :math:`\tilde
+P_n(\mu) = P_n(2\mu - 1)` on :math:`\mu \in [0, 1]`, the specular
+reflection operator is
+
+.. math::
+   :label: peierls-specular-R-formula
+
+   R_{\rm spec} \;=\; \tfrac{1}{2}\,M^{-1},
+   \qquad
+   M_{nm} \;=\; \int_0^1 \mu\,\tilde P_n(\mu)\,\tilde P_m(\mu)\,
+   \mathrm d\mu.
+
+:math:`M` is the **partial-current overlap matrix** on the half-range
+basis; symmetric tridiagonal in this basis with closed-form entries
+
+.. math::
+   :label: peierls-specular-M-tridiagonal
+
+   M_{nn} \;=\; \frac{1}{2(2n+1)},
+   \qquad
+   M_{n,n+1} \;=\; M_{n+1,n} \;=\;
+   \frac{n+1}{2(2n+1)(2n+3)}.
+
+The construction satisfies the **rank-:math:`N` partial-current
+identity** :math:`J^{-}_m = J^{+}_m` for all :math:`m = 0,\ldots,N-1`,
+which is the projection of the full specular condition
+:eq:`peierls-specular-bc-defn` onto the :math:`N`-mode subspace. The
+contract :math:`2\,M\,R_{\rm spec} = I` is built into the
+construction by definition.
+
+Derivation. Expand the outgoing flux in the basis,
+:math:`\psi^{+}(r_b, \mu) = \sum_m e_m \tilde P_m(\mu)`. Insert into
+the partial-current moment definition,
+:math:`J^{+}_n = 2\pi\int_0^1 \mu\,\tilde P_n(\mu)\,\psi^{+}\,
+\mathrm d\mu = 2\pi\sum_m M_{nm}\,e_m`, so :math:`J^{+} = 2\pi\,M\,e`.
+The specular condition :math:`\psi^{-} = \psi^{+}` says the inward
+expansion coefficients are equal to :math:`e_m`. The G-input is
+:math:`b_n = \pi\,e_n` (because :math:`\psi^{-} = \sum_n (b_n/\pi)
+\tilde P_n` includes the :math:`1/\pi` isotropic-Mark normalisation),
+so :math:`b = \pi\,e = \tfrac{1}{2}\,M^{-1}\,J^{+}`. Therefore
+:math:`R_{\rm spec} = \tfrac{1}{2}\,M^{-1}`.
+
+The full SymPy derivation, including verification of the closed-form
+tridiagonal :math:`M` against direct integration at :math:`N = 1,
+\ldots, 5` and the :math:`2\,M\,R_{\rm spec} = I` contract at every
+rank, lives in :file:`derivations/peierls_specular_bc.py`.
+
+R_specular ladder
+-----------------
+
+.. list-table:: Closed-form :math:`R_{\rm spec}` matrices
+   :header-rows: 1
+   :widths: 12, 88
+
+   * - :math:`N`
+     - :math:`R_{\rm spec}`
+   * - 1
+     - :math:`[[1]]` — equals :math:`R_{\rm Mark}` and :math:`R_{\rm
+       Marshak}` (trivial truncation: only the constant mode is
+       resolvable, so all white-BC variants collapse to the same
+       isotropic closure)
+   * - 2
+     - :math:`\tfrac{1}{2}\bigl[\begin{smallmatrix}3 & -3\\-3 & 9
+       \end{smallmatrix}\bigr]` — **dense**, off-diagonal
+       :math:`R_{01} = -3/2`. This is the load-bearing distinction
+       from :func:`reflection_marshak` (which is strictly diagonal).
+       Specular and Marshak DP_N white differ from rank 2 onward
+       because the partial-current weight :math:`\mu` mixes adjacent
+       shifted-Legendre indices.
+   * - 3
+     - dense, largest entry :math:`R_{22} = 25/3 \approx 8.33`,
+       conditioning :math:`\kappa(M) \sim 50`
+   * - 6
+     - dense, largest entry :math:`R_{55} \approx 30.2`,
+       conditioning :math:`\kappa(M) \sim 10^{4}` (still safe in
+       float64 but use higher dps for :math:`N \ge 8`)
+
+Why we use no-Jacobian P primitives in the specular branch
+----------------------------------------------------------
+
+The existing :func:`compute_P_esc_mode` for modes :math:`n \ge 1`
+carries an extra :math:`(\rho_{\max}/R)^2` surface-to-observer
+Jacobian factor that is **identically 1** in the canonical observer-
+centred derivation for sphere (since :math:`\rho_{\max} = s` along
+the chord, so :math:`\rho^2/s^2 = 1`). The factor was empirically
+introduced during the Issue #132 rank-N closure calibration for
+diagonal Marshak (see agent memory
+:file:`direction_q_lambert_marshak_derivation.md`), where it
+contributes a partial calibration coincidence with the Jacobian +
+:math:`(2n+1)` Gelbard interaction. For the **dense** off-diagonal
+:math:`R_{\rm spec}`, this factor is destructive — it couples mode
+0 (no Jacobian by P̃_0 = 1) with modes :math:`n \ge 1` (with the
+spurious Jacobian) inconsistently, and rank-N specular under the
+contaminated convention DIVERGES from :math:`k_\infty` for
+homogeneous sphere.
+
+The specular branch in :func:`_build_full_K_per_group` therefore uses
+a **no-Jacobian** P primitive for ALL modes (see the inline custom
+assembly). At :math:`n = 0` the no-Jacobian primitive equals
+:func:`compute_P_esc` exactly (since :math:`\tilde P_0 = 1`); at
+:math:`n \ge 1` it is the strictly canonical Sanchez-McCormick
+moment
+
+.. math::
+
+   J^{+}_n(r_i) \;=\; \tfrac{1}{2}\!\int_0^\pi \sin\theta\,
+   \tilde P_n(\mu_{\rm exit}(\theta))\,e^{-\tau(r_i,\theta)}\,
+   \mathrm d\theta.
+
+This convention is **uniform across all modes** and matches the
+SymPy-derived :math:`R_{\rm spec}` formula bit-exactly. As a
+consequence: at rank-1 specular bit-equals rank-1 Mark for K_bc
+(because at :math:`n = 0` the two P primitives coincide), and at
+higher rank the off-diagonal :math:`R_{\rm spec}` couplings act on
+a self-consistent basis.
+
+Convergence — homogeneous sphere
+--------------------------------
+
+Verification on the canonical homogeneous sphere (fuel A, 1G,
+:math:`R = 5\,{\rm cm}`, :math:`\Sigma_t = 1`,
+:math:`\Sigma_s = 0.5`, :math:`\nu\Sigma_f = 0.75`, so :math:`k_\infty
+= 1.5`) under BASE quadrature (p_order=4, n_quad=24, dps=20):
+
+.. list-table:: Sphere 1G/1R specular convergence ladder
+   :header-rows: 1
+   :widths: 8, 22, 22, 22, 26
+
+   * - :math:`N`
+     - vacuum
+     - white_rank1_mark
+     - white_hebert
+     - **specular**
+   * - 1
+     - 1.259 (-16.07 %)
+     - 1.488 (-0.82 %)
+     - 1.496 (-0.25 %)
+     - **1.488 (-0.82 %)**
+   * - 2
+     - —
+     - —
+     - —
+     - **1.490 (-0.66 %)**
+   * - 3
+     - —
+     - —
+     - —
+     - **1.494 (-0.40 %)**
+   * - 4
+     - —
+     - —
+     - —
+     - **1.499 (-0.07 %)**
+   * - 5
+     - —
+     - —
+     - —
+     - **1.502 (+0.11 %)**
+   * - 6
+     - —
+     - —
+     - —
+     - **1.502 (+0.11 %)**
+
+The ladder is monotonically improving from rank-1 to rank-4, hitting
+0.07 % of :math:`k_\infty` at :math:`N = 4` — the **sweet spot for
+sphere specular**. Beyond :math:`N = 5` the residual is at the
+quadrature-precision floor (~0.1 %) and the slight overshoot at
+:math:`N = 6` is the leading edge of the :math:`R_{\rm spec}`
+conditioning growing with :math:`N`. RICH quadrature (p_order=6,
+n_quad=64, dps=30) tightens the ladder further.
+
+Convergence — homogeneous cylinder (Knyazev 3-D primitives)
+-----------------------------------------------------------
+
+Cylinder rank-N specular uses the **Knyazev :math:`\mathrm{Ki}_{2+k}`
+expansion** generalisation of :func:`compute_G_bc_cylinder_3d` for
+both P and G primitives (see
+:func:`compute_P_esc_cylinder_3d_mode` and
+:func:`compute_G_bc_cylinder_3d_mode`). The 3-D direction cosine at
+the lateral surface is :math:`\mu_{\rm 3D} = \sin\theta_p\,\mu_{\rm
+2D}` (in-plane component scaled by the polar projection); the polar
+integration over :math:`\theta_p` with :math:`\tilde P_n(\mu_{\rm
+3D})` weight expands the integrand monomially as
+:math:`\tilde P_n(y) = \sum_k c_n^k y^k` and gives
+
+.. math::
+
+    \int_0^{\pi/2} \sin^{k+1}\theta_p\,
+        e^{-\tau_{\rm 2D}/\sin\theta_p}\,\mathrm d\theta_p
+    \;=\; \mathrm{Ki}_{k+2}(\tau_{\rm 2D}).
+
+The resulting cylinder mode-N primitives are
+
+.. math::
+   :label: peierls-cyl-3d-mode-formula
+
+   P_{\rm esc}^{(n,3d)}(r_i) = \frac{1}{\pi}\!\int_0^\pi\sum_{k=0}^n
+       c_n^k\,\mu_{\rm 2D}(\omega)^k\,
+       \mathrm{Ki}_{k+2}\!\bigl(\tau_{\rm 2D}(\omega)\bigr)\,\mathrm d\omega,
+
+.. math::
+
+   G_{\rm bc}^{(n,3d)}(r_i) = \frac{4}{\pi}\!\int_0^\pi\sum_{k=0}^n
+       c_n^k\,\mu_{\rm 2D}(\omega)^k\,
+       \mathrm{Ki}_{k+2}\!\bigl(\tau_{\rm 2D}(\omega)\bigr)\,\mathrm d\omega.
+
+For :math:`n = 0`, :math:`c_0^0 = 1` and only the :math:`k = 0` term
+survives, recovering :func:`compute_P_esc` (cylinder branch) and
+:func:`compute_G_bc_cylinder_3d` exactly.
+
+Verification on the homogeneous fuel-A cylinder (1G, :math:`R =
+5\,{\rm cm}`, BASE quadrature):
+
+.. list-table:: Cylinder 1G/1R specular convergence ladder
+   :header-rows: 1
+   :widths: 8, 22, 22, 22, 26
+
+   * - :math:`N`
+     - vacuum
+     - white_rank1_mark
+     - white_hebert
+     - **specular**
+   * - 1
+     - 1.346 (-10.27 %)
+     - 1.462 (-2.50 %)
+     - 1.498 (-0.16 %)
+     - **1.495 (-0.31 %)**
+   * - 2
+     - —
+     - —
+     - —
+     - **1.496 (-0.28 %)**
+   * - 3
+     - —
+     - —
+     - —
+     - **1.497 (-0.20 %)**
+   * - 4
+     - —
+     - —
+     - —
+     - **1.498 (-0.11 %)**
+   * - 5
+     - —
+     - —
+     - —
+     - **1.499 (-0.04 %)**
+   * - 6
+     - —
+     - —
+     - —
+     - **1.500 (-0.02 %)**
+
+Monotonic improvement; rank-6 within 0.02 % of :math:`k_\infty`.
+Note that the cylinder rank-1 specular (-0.31 %) is much closer to
+:math:`k_\infty` than the cylinder rank-1 Mark (-2.50 %) — at
+:math:`n = 0` the no-Jacobian P primitive uses the Knyazev
+:math:`\mathrm{Ki}_2` form which is identical to
+:func:`compute_G_bc_cylinder_3d` (already 3-D-correct).
+Consequently rank-1 specular cylinder ≡ rank-1 Hébert cylinder for
+homogeneous (both -0.16 %--0.31 %).
+
+See ``derivations/peierls_cylinder_3d_mode_n.py`` for the full SymPy
+derivation and verification of the Knyazev expansion.
+
+Convergence — homogeneous slab (per-face block-diagonal closure)
+----------------------------------------------------------------
+
+Slab :math:`\mu`-polar geometry has TWO planar boundary surfaces (at
+:math:`x = 0` and :math:`x = L`), each with its own outward normal.
+**Per-face mode decomposition** gives mode space :math:`A =
+\mathbb R^{2N}` (one set of :math:`N` modes per face) and the
+reflection operator is **block diagonal**:
+
+.. math::
+
+   R_{\rm slab} \;=\; \begin{pmatrix}
+       R_{\rm spec}(N) & 0 \\
+       0 & R_{\rm spec}(N)
+   \end{pmatrix}_{2N \times 2N},
+   \qquad R_{\rm spec}(N) \;=\; \tfrac{1}{2}\,M^{-1}
+
+— the same :math:`R_{\rm spec}` formula as curvilinear (Section
+:eq:`peierls-specular-R-formula`). Block-diagonal because true
+specular is **local at each face** (a particle leaving the outer
+face cannot magically appear at the inner face except through the
+volume kernel, which is already in :math:`K_{\rm vol}`).
+
+Per-face P/G primitives in closed form via :math:`E_n` exponential
+integrals (the :math:`\mu`-weight cancels exactly in the slab
+partial-current moment derivation — analogous to :math:`\rho^2 /
+s^2 = 1` for sphere — leaving the **no-:math:`\mu`-weight** basis
+that Mark uses):
+
+.. math::
+   :label: peierls-slab-Pesc-mode
+
+   P_{\rm face}^{(n)}(x_i) \;=\; \tfrac{1}{2}\sum_{k=0}^n c_n^k\,
+       E_{k+2}\!\bigl(\tau_{\rm perp}(x_i, {\rm face})\bigr),
+
+.. math::
+   :label: peierls-slab-Gbc-mode
+
+   G_{\rm face}^{(n)}(x_i) \;=\; 2\sum_{k=0}^n c_n^k\,
+       E_{k+2}\!\bigl(\tau_{\rm perp}(x_i, {\rm face})\bigr).
+
+For :math:`n = 0`, :math:`c_0^0 = 1` and only the :math:`k = 0`
+term survives, recovering :func:`compute_P_esc_outer` and
+:func:`compute_G_bc_outer` for slab exactly.
+
+**Critical implementation note: the divisor**. The per-face
+:math:`G` primitive must use the **single-face surface area
+divisor** (= 1 for slab; each face has unit transverse area), NOT
+the legacy combined-face divisor (= 2 from
+:meth:`CurvilinearGeometry.rank1_surface_divisor`). The combined-face
+divisor=2 is correct for legacy Mark, which uses ONE primitive
+representing the SUM over both faces and then normalises by the
+TOTAL surface area = 2. The per-face decomposition keeps the two
+faces algebraically separate; each face block has its individual
+area = 1. (This single-line bug was the root cause of an earlier
+"rank-N specular slab plateaus at -5 %/+7 %" investigation; see
+``.claude/agent-memory/numerics-investigator/specular_bc_slab_fix.md``
+for the diagnostic cascade.)
+
+**Rank-1 dominant-eigenvalue equivalence with Mark legacy**. At
+rank-1 with :math:`R_{\rm face} = [[1]]` and divisor = 1, the
+per-face block-diagonal :math:`K_{\rm bc}` is **not** element-wise
+equal to Mark legacy. The legacy :math:`K_{\rm bc}` decomposes as
+four face-pair products,
+
+.. math::
+
+   K_{\rm bc}^{\rm Mark} \;=\; K_{oo} + K_{oi} + K_{io} + K_{ii},
+
+while the per-face block-diagonal specular keeps only the diagonal
+pair :math:`K_{oo} + K_{ii}`. The cross-face couplings :math:`K_{oi}
++ K_{io}` are **anti-symmetric around** :math:`L/2` for homogeneous
+slab and do not excite the dominant symmetric flux mode. So
+:math:`k_{\rm eff}` matches bit-exactly (verified to 1e-15) even
+though the matrices differ by :math:`\mathcal O(0.1)` element-wise.
+
+Verification on the homogeneous fuel-A slab (1G, :math:`L =
+5\,{\rm cm}`, BASE quadrature):
+
+.. list-table:: Slab 1G/1R specular convergence ladder
+   :header-rows: 1
+   :widths: 8, 30, 30, 32
+
+   * - :math:`N`
+     - vacuum
+     - white_rank1_mark
+     - **specular**
+   * - 1
+     - 1.302 (-13.23 %)
+     - 1.476 (-0.20 %)
+     - **1.476 (-0.20 %)** ≡ Mark
+   * - 2
+     - —
+     - —
+     - **1.476 (-0.19 %)**
+   * - 3
+     - —
+     - —
+     - **1.477 (-0.17 %)**
+   * - 4
+     - —
+     - —
+     - **1.478 (-0.15 %)**
+
+Monotonic improvement; rank-1 bit-equals Mark legacy in the
+dominant eigenvalue.
+
+See ``derivations/peierls_specular_slab.py`` for the SymPy
+derivation and the ``test_slab_mark_decomposes_into_four_per_face_blocks``
+test for the algebraic identity locking the per-face decomposition.
+
+Verification posture
+--------------------
+
+Specular at rank-:math:`N` ≥ 2 is the **first closure-approximation-
+free Peierls reference** for Class B that bypasses the Mark
+uniformity assumption entirely. The verification mode change is:
+
+- "Peierls white-BC verifies CP white-BC :math:`k_\infty`" (same
+  closure family, circular) →
+- **"Peierls specular-BC verifies CP white-BC :math:`k_\infty` for
+  homogeneous cells exactly, and bounds the closure error for
+  heterogeneous cells independently"**
+
+For homogeneous: specular agrees with white BC by symmetry. For
+heterogeneous: the divergence between specular and CP measures the
+CP Mark closure error directly, giving the **first quantitative
+bound** on the documented Class-B 1G/2R overshoot.
+
+Tests
+-----
+
+Foundation tests for :math:`R_{\rm spec}`:
+
+- ``test_reflection_specular_rank1_equals_mark`` — pins :math:`R(N=1)
+  = [[1]]`
+- ``test_reflection_specular_satisfies_partial_current_contract`` —
+  asserts :math:`2\,M\,R = I` at :math:`N = 1, \ldots, 5`
+- ``test_reflection_specular_dense_off_diagonal_at_rank2`` — pins
+  :math:`R(N=2) = \tfrac{1}{2}[[3,-3],[-3,9]]` and the symmetry +
+  off-diagonal nonzero contract
+
+End-to-end tests
+(:file:`tests/derivations/test_peierls_specular_bc.py`):
+
+- ``test_specular_rank1_sphere_equals_mark_kinf`` — sphere rank-1
+  specular bit-equals rank-1 Mark in :math:`k_{\rm eff}` (the
+  no-Jacobian P primitive reduces to :func:`compute_P_esc` at
+  :math:`n = 0`)
+- ``test_specular_sphere_homogeneous_converges_to_kinf`` — monotonic
+  improvement at rank :math:`N = 1, \ldots, 4`, rank-4 within 0.5 %
+  of :math:`k_\infty`
+- ``test_specular_cylinder_homogeneous_converges_to_kinf`` —
+  monotonic improvement under the Knyazev :math:`\mathrm{Ki}_{2+k}`
+  3-D primitives, rank-4 within 0.5 % of :math:`k_\infty`; rank-1
+  cylinder specular ≡ rank-1 Hébert (NOT Mark)
+- ``test_specular_slab_rank1_equals_mark_kinf`` — slab rank-1
+  specular dominant-eigenvalue match with Mark legacy
+- ``test_specular_slab_homogeneous_converges_to_kinf`` — slab
+  rank-:math:`N = 1, \ldots, 4` monotonic convergence within
+  0.5 % gate
+- ``test_slab_mark_decomposes_into_four_per_face_blocks`` —
+  algebraic identity locking the slab per-face decomposition
+  :math:`K_{\rm bc}^{\rm Mark} = K_{oo} + K_{oi} + K_{io} + K_{ii}`
+  vs. the per-face block-diagonal restriction :math:`K_{oo} + K_{ii}`
+- ``test_specular_multibounce_rank1_equals_hebert`` — sphere rank-1
+  ``specular_multibounce`` bit-equals ``white_hebert``
+- ``test_specular_multibounce_thin_sphere_lifts_plateau`` — thin
+  sphere (:math:`\tau_R = 2.5`) rank-1 multi-bounce within 0.5 %,
+  rank-3 within 0.2 %, lifts > 5 % over bare specular at the same N
+- ``test_specular_multibounce_rejects_non_sphere`` — cyl/slab raise
+  :class:`NotImplementedError`
+
+Multi-energy / multi-region convergence (Phase 2)
+-------------------------------------------------
+
+The 1G/1R verification above pins the rank-N closure at the
+homogeneous single-group level. Production use requires multi-group
+energy resolution and multi-region heterogeneity. Three additional
+test cases:
+
+- ``test_specular_2G_homogeneous_converges_to_kinf_2G`` — 2G/1R
+  fuel A homogeneous (R = 10 cm, sized at the convergence sweet
+  spot for the per-group :math:`\tau_R \in [5, 10]`). All three
+  geometries pass; per-geometry convergence reflects the rate at
+  which the rank-N closure resolves the multi-group spectrum:
+
+  .. list-table:: Sphere/cyl/slab 2G/1R (homogeneous fuel A)
+     :header-rows: 1
+     :widths: 8, 23, 23, 23, 12
+
+     * - :math:`N`
+       - sphere :math:`k_{\rm eff}` (err)
+       - cylinder :math:`k_{\rm eff}` (err)
+       - slab :math:`k_{\rm eff}` (err)
+       - gate
+     * - 1
+       - 1.7999 (-4.00 %)
+       - 1.8361 (-2.07 %)
+       - 1.8423 (-1.74 %)
+       - —
+     * - 2
+       - 1.8171 (-3.09 %)
+       - 1.8429 (-1.71 %)
+       - 1.8465 (-1.52 %)
+       - —
+     * - 3
+       - 1.8443 (-1.64 %)
+       - 1.8527 (-1.19 %)
+       - 1.8513 (-1.26 %)
+       - —
+     * - 4
+       - **1.8702 (-0.25 %)**
+       - 1.8615 (-0.72 %)
+       - 1.8544 (-1.10 %)
+       - sphere ≤0.5 %
+     * - 5
+       - —
+       - 1.8653 (-0.52 %)
+       - 1.8556 (-1.04 %)
+       - —
+     * - 6
+       - —
+       - **1.8659 (-0.48 %)**
+       - **1.8559 (-1.02 %)**
+       - cyl ≤0.6 %, slab ≤1.5 %
+
+  The :math:`k_{\infty,2G}` reference is :math:`1.875000`. Sphere
+  converges to within 0.5 % at :math:`N = 4`; cylinder needs
+  :math:`N = 6` to reach 0.6 %; slab plateaus at ~1 % even at
+  :math:`N = 6` (the single-bounce calibration limit interacting
+  with multi-group spectrum sensitivity — see
+  ``specular_bc_thin_cell_plateau.md``).
+- ``test_specular_heterogeneous_1G2R_converges`` — 1G/2R fuel A
+  inner ([0, 5]) + moderator B outer ([5, 10]). Heterogeneous
+  cells have no closed-form :math:`k_\infty` reference; the test
+  pins **monotonic convergence** at increasing :math:`N` and
+  requires the rank-3 → rank-4 step to be < 0.5 %. The converged
+  value is the new specular pointwise reference, distinct from cp
+  Mark :math:`k_\infty` (the latter has the documented Mark
+  uniformity overshoot). Cylinder converges to
+  :math:`k_{\rm eff} \approx 1.401847` (rank-4) with consecutive
+  differences at the BASE-quadrature noise floor (~5e-7 relative)
+  — verified converged.
+- ``test_specular_heterogeneous_2G2R_converges`` — 2G/2R fuel A
+  inner + moderator B outer (same geometry as 1G/2R but with full
+  2G XS, downscatter A_2G[0,1] = 0.10, no upscatter). The
+  demonstration case for multi-energy + multi-region. All three
+  geometries pass with monotonic + step-size gates:
+
+  .. list-table:: 2G/2R demonstration — sphere/cyl/slab convergence
+     :header-rows: 1
+     :widths: 8, 28, 28, 28
+
+     * - :math:`N`
+       - sphere :math:`k_{\rm eff}` (BASE)
+       - cylinder :math:`k_{\rm eff}` (BASE)
+       - slab :math:`k_{\rm eff}` (REDUCED)
+     * - 1
+       - 0.805380
+       - 1.096161
+       - 1.404112
+     * - 2
+       - 0.806958
+       - 1.097577
+       - 1.417173
+     * - 3
+       - 0.807384
+       - 1.097816
+       - 1.426769
+     * - 4
+       - 0.807827
+       - 1.098075
+       - 1.429536
+
+  New specular 2G/2R pointwise references — distinct per geometry
+  (fuel A inner + mod B outer at the same r/x breakpoints means
+  the SAME physical material distribution but different volume /
+  surface measures across geometry). Sphere converges fastest;
+  cylinder consistently behind sphere by ~30 %. Slab values use
+  REDUCED quadrature (p_order=3, n_panels=1, n_quad=16, dps=15)
+  due to mpmath cost; the converged value at BASE precision is
+  expected to differ slightly but the convergence rate (0.19 %
+  step at N=4) is within gate.
+
+**Convergence noise threshold**. The pytest gate uses a two-stage
+check: when consecutive differences exceed the BASE-quadrature
+relative noise floor (~1e-5 of :math:`k_{\rm eff}`), monotonic
+direction is required; below the floor any sign of fluctuation is
+accepted as "converged at quadrature precision". This matters for
+cylinder 1G/2R (and similar tight cases) where the per-iteration
+differences hit ~5e-7 by rank-4 — the closure has converged but
+quadrature noise looks like ladder oscillation if the strict gate
+is used.
+
+**Thin-cell single-bounce limit** (documented in
+``.claude/agent-memory/numerics-investigator/specular_bc_thin_cell_plateau.md``).
+The rank-N specular closure :math:`K_{\rm bc} = G\,R\,P` is
+mathematically equivalent in the single-bounce limit to rank-N Mark;
+multi-bounce contributions (captured by Hébert's
+:math:`(1-P_{ss})^{-1}` factor for white BC) have no clean
+rank-N matrix generalization that works at all :math:`N`. For
+thin cells (:math:`\tau_R \lesssim 5`) and **low** :math:`N`
+(:math:`N \le 3`), the matrix-form correction
+:math:`K_{\rm bc} = G\,R\,(I - T R)^{-1}\,P` lifts the plateau to
+Hébert-quality accuracy — shipped as
+``boundary="specular_multibounce"`` (sphere-only). The convergence
+sweet spot for plain ``boundary="specular"`` is therefore
+:math:`\tau_R \gtrsim 5`; for thinner cells use
+``boundary="specular_multibounce"`` at :math:`N \in \{1, 2, 3\}`
+(see the multi-bounce subsection below).
+
+Multi-bounce-corrected specular for thin sphere
+-----------------------------------------------
+
+For thin sphere cells (:math:`\tau_R \lesssim 5`) the bare
+``boundary="specular"`` closure plateaus several percent below
+:math:`k_\infty` due to the missing multi-bounce contribution.
+**Layered correction**: replace the bare :math:`K_{\rm bc} = G\,R\,P`
+with
+
+.. math::
+   :label: peierls-specular-multibounce-formula
+
+   K_{\rm bc}^{\rm spec,mb} \;=\; G \cdot R \cdot
+                                  (I - T\,R)^{-1} \cdot P,
+
+where :math:`R = R_{\rm spec}(N) = \tfrac{1}{2} M^{-1}` (the same
+specular reflection operator) and :math:`T` is the surface-to-surface
+**partial-current transfer matrix**:
+
+.. math::
+   :label: peierls-specular-T-matrix
+
+   T_{mn} \;=\; 2\!\int_0^1 \mu\,\tilde P_m(\mu)\,\tilde P_n(\mu)\,
+                  e^{-\tau(\mu)}\,\mathrm d\mu,
+
+with :math:`\tau(\mu)` the multi-region optical depth along the
+chord from the surface in direction :math:`\mu` (cosine with the
+inward normal) through the cell to the antipodal exit point. Chord
+length is :math:`2R\mu`; impact parameter is :math:`h = R\sqrt{1 -
+\mu^2}`; multi-region :math:`\tau` accumulates :math:`\Sigma_{t,k}\,
+\ell_k(\mu)` per annulus by the standard sphere-shell intersection
+geometry (same as :func:`compute_P_ss_sphere`).
+
+The geometric series :math:`(I - T\,R)^{-1} = I + T R + (T R)^2 +
+\ldots` sums the contributions of partial-current re-emergence after
+1, 2, 3, ... bounces between the surface and the cell interior. This
+is the rank-:math:`N` matrix analog of Hébert's :math:`(1 - P_{ss})^{-1}`
+scalar correction.
+
+**Rank-1 reduction**: at :math:`N = 1`, :math:`R = [[1]]` and
+:math:`T_{00} = P_{ss}` (algebraic identity, verified to
+:math:`10^{-16}` in the test
+``test_specular_multibounce_rank1_equals_hebert``), so
+
+.. math::
+
+   K_{\rm bc}^{\rm spec,mb}\bigr|_{N=1} \;=\; \frac{G\,P}{1 - P_{ss}}
+   \;=\; K_{\rm bc}^{\rm Hébert}\bigr|_{\rm rank-1}.
+
+The multi-bounce-corrected specular is **identical** to Hébert white
+BC at rank-1; the rank-:math:`N \ge 2` extension carries the
+off-diagonal partial-current couplings that capture the surface
+re-emergence anisotropy.
+
+**Convergence on thin sphere** (fuel-A-like, :math:`\sigma_t = 0.5`,
+:math:`\sigma_s = 0.38`, :math:`\nu\sigma_f = 0.025`, :math:`R =
+5\,\mathrm{cm}`, :math:`\tau_R = 2.5`, :math:`k_\infty = 0.20833`,
+BASE quad):
+
+.. list-table:: Thin-sphere specular: bare vs multi-bounce
+   :header-rows: 1
+   :widths: 8, 38, 38
+
+   * - :math:`N`
+     - bare ``specular`` (err)
+     - ``specular_multibounce`` (err)
+   * - 1
+     - 0.190795 (-8.42 %)
+     - **0.207776 (-0.27 %)**
+   * - 2
+     - 0.194304 (-6.73 %)
+     - **0.207815 (-0.25 %)**
+   * - 3
+     - 0.195755 (-6.04 %)
+     - **0.208089 (-0.12 %)**
+   * - 4
+     - 0.196637 (-5.61 %)
+     - 0.209233 (+0.43 %) ⚠ overshoot
+   * - 6
+     - 0.197469 (-5.21 %)
+     - 0.213147 (+2.31 %) ⚠
+   * - 8
+     - 0.201634 (-3.22 %)
+     - 0.220044 (+5.62 %) ⚠
+
+The multi-bounce correction is **gold for thin cells at**
+:math:`N \in \{1, 2, 3\}` (better than plain specular by 5–8 %, and
+plain specular doesn't converge there at all). At :math:`N \ge 4`
+the spectral radius :math:`\rho(T R)` approaches 1 (grazing modes
+:math:`\mu \to 0` survive multiple reflections without attenuation)
+and :math:`(I - T R)^{-1}` becomes nearly singular, causing the
+overshoot. The implementation emits a ``UserWarning`` for
+:math:`N \ge 5` to flag the pathology.
+
+**Best-use envelope**:
+
+- ``boundary="specular_multibounce"``, sphere, :math:`N \in \{1, 2, 3\}`,
+  any :math:`\tau_R` (best for thin where it lifts the plateau; comparable
+  to bare ``specular`` for thick).
+- ``boundary="specular"``, any geometry, :math:`N` as needed (rank-N
+  partial-current matching for the angular structure; thick-cell sweet
+  spot at :math:`N = 4` for sphere).
+- ``boundary="white_hebert"``, sphere/cyl, rank-1 only (fastest path
+  to Hébert :math:`(1-P_{ss})^{-1}` accuracy).
+
+**Sphere-only in this release**. The cylinder analog requires a 3-D
+Knyazev surface-to-surface :math:`T` matrix (the chord is in-plane
+but transmission has a polar-angle integration via
+:math:`\mathrm{Ki}_{2+k}`). The slab analog needs a per-face block-T
+construction (each face has its own self-bounce kernel coupling to
+the antipodal face). Both are tracked as Phase 4 follow-up; for
+non-sphere geometries the dispatch raises :class:`NotImplementedError`
+with a clear guidance message.
+
+References and further reading
+------------------------------
+
+- :func:`reflection_specular` — :math:`R_{\rm spec}` matrix builder
+  in the rank-:math:`N` Marshak basis (closed-form tridiagonal
+  :math:`M`)
+- :file:`derivations/peierls_specular_bc.py` — SymPy derivation +
+  symbolic verification of the closed-form :math:`M` and the
+  :math:`2\,M\,R = I` contract
+- ``boundary="specular"`` — user-facing string in
+  :func:`solve_peierls_1g` / :func:`solve_peierls_mg`
 
 
 .. _peierls-rank-n-bc-closure-section:

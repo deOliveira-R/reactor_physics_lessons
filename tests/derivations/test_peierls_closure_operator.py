@@ -46,6 +46,7 @@ from orpheus.derivations.peierls_geometry import (
     composite_gl_r,
     reflection_mark,
     reflection_marshak,
+    reflection_specular,
     reflection_vacuum,
 )
 
@@ -240,6 +241,67 @@ def test_reflection_marshak_has_2nplus1_diagonal():
     expected = np.diag([1.0, 3.0, 5.0, 7.0, 9.0])
     np.testing.assert_array_equal(R, expected)
     assert np.linalg.matrix_rank(R) == 5
+
+
+@pytest.mark.foundation
+def test_reflection_specular_rank1_equals_mark():
+    r"""At :math:`N = 1`, :math:`R_{\mathrm{spec}} = M^{-1}/2 = [[1]]`,
+    bit-equal to :func:`reflection_mark` (and :func:`reflection_marshak`
+    at :math:`N = 1`). The trivial truncation collapses to the
+    isotropic mode-0 closure because the only resolvable angular
+    shape is constant.
+    """
+    R = reflection_specular(1)
+    assert R.shape == (1, 1)
+    np.testing.assert_array_equal(R, reflection_mark(1))
+    np.testing.assert_array_equal(R, reflection_marshak(1))
+
+
+@pytest.mark.foundation
+@pytest.mark.parametrize("N", [1, 2, 3, 4, 5])
+def test_reflection_specular_satisfies_partial_current_contract(N):
+    r"""The defining contract :math:`2\,M\,R_{\mathrm{spec}} = I`
+    (equivalent to :math:`J^{-}_m = J^{+}_m` for all :math:`m =
+    0,\ldots,N-1`) holds at every rank. :math:`M_{nm}` is built from
+    the closed-form tridiagonal here and checked against the matrix
+    used by :func:`reflection_specular`.
+    """
+    R = reflection_specular(N)
+    M = np.zeros((N, N))
+    for n in range(N):
+        M[n, n] = 1.0 / (2.0 * (2 * n + 1))
+        if n + 1 < N:
+            off = (n + 1) / (2.0 * (2 * n + 1) * (2 * n + 3))
+            M[n, n + 1] = off
+            M[n + 1, n] = off
+    contract = 2.0 * M @ R
+    np.testing.assert_allclose(
+        contract, np.eye(N), rtol=1e-12, atol=1e-12,
+    )
+
+
+@pytest.mark.foundation
+def test_reflection_specular_dense_off_diagonal_at_rank2():
+    r"""From rank 2 onward, :math:`R_{\mathrm{spec}}` has nonzero
+    off-diagonal entries — distinguishing it from the strictly-
+    diagonal Marshak DP_N closure. At :math:`N = 2`,
+
+    .. math::
+
+       R_{\mathrm{spec}} \;=\; \tfrac{1}{2}\begin{bmatrix}
+       3 & -3 \\ -3 & 9 \end{bmatrix}.
+
+    This is the load-bearing sanity check that specular ≠ Marshak from
+    rank 2 onward.
+    """
+    R = reflection_specular(2)
+    expected = 0.5 * np.array([[3.0, -3.0], [-3.0, 9.0]])
+    np.testing.assert_allclose(R, expected, rtol=1e-14, atol=1e-15)
+    # Off-diagonal must be nonzero (otherwise specular = Marshak).
+    assert R[0, 1] != 0.0
+    assert R[1, 0] != 0.0
+    # And symmetric.
+    np.testing.assert_array_equal(R, R.T)
 
 
 # ═══════════════════════════════════════════════════════════════════════
