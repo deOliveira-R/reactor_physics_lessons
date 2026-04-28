@@ -60,7 +60,10 @@ from ._kernels import (  # noqa: F401
     ki_n_float,
     ki_n_mp,
 )
-from ._quadrature_recipes import chord_quadrature
+from ._quadrature_recipes import (
+    chord_quadrature,
+    observer_angular_quadrature,
+)
 
 
 @functools.lru_cache(maxsize=64)
@@ -1420,32 +1423,42 @@ def compute_P_esc(
             P_esc[i] = 0.5 * (_slab_E2(tau_inner) + _slab_E2(tau_outer))
         return P_esc
 
+    # Q3 of the quadrature-architecture rollout: observer-centred ω-sweep
+    # via the kink-aware `observer_angular_quadrature` recipe.  For
+    # multi-region cells the integrand has √(ω - ω_k) derivative
+    # singularities at the tangent angles ω_k = arcsin(r_k/r_obs);
+    # subdividing at the {ω_k} (per observer, since the set depends on
+    # r_obs) recovers spectral convergence on each smooth sub-panel.
+    # For homogeneous cells the recipe degenerates to plain GL, so this
+    # path is bit-equivalent to the pre-Q3 single gl_float call.
     omega_low, omega_high = geometry.angular_range
-    omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
-    # Use the polymorphic direction-cosine map: identity for slab-polar
-    # (angular variable IS µ), cos(Ω) for curvilinear (angular variable
-    # is the polar angle Ω).
-    cos_omegas = geometry.ray_direction_cosine(omega_pts)
-    angular_factor = geometry.angular_weight(omega_pts)
     pref = geometry.prefactor
 
-    N = len(r_nodes)
-    P_esc = np.zeros(N)
-    for i in range(N):
-        r_i = r_nodes[i]
-        total = 0.0
-        for k in range(n_angular):
-            cos_om = cos_omegas[k]
-            rho_max_val = geometry.rho_max(r_i, cos_om, R)
-            if rho_max_val <= 0.0:
-                continue
-            tau = geometry.optical_depth_along_ray(
-                r_i, cos_om, rho_max_val, radii, sig_t,
-            )
-            K_esc = geometry.escape_kernel_mp(tau, dps)
-            total += omega_wts[k] * angular_factor[k] * K_esc
-        P_esc[i] = pref * total
-    return P_esc
+    def _per_observer(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=omega_low, omega_high=omega_high,
+            radii=radii, n_per_panel=n_angular, dps=dps,
+        )
+        cos_om = geometry.ray_direction_cosine(q.pts)
+        ang_factor = geometry.angular_weight(q.pts)
+        rho_max_arr = np.fromiter(
+            (float(geometry.rho_max(r_i, c, R)) for c in cos_om),
+            dtype=float, count=len(q),
+        )
+        K_esc_arr = np.fromiter(
+            (
+                float(geometry.escape_kernel_mp(
+                    float(geometry.optical_depth_along_ray(
+                        r_i, c, rho, radii, sig_t,
+                    )), dps,
+                )) if rho > 0.0 else 0.0
+                for c, rho in zip(cos_om, rho_max_arr)
+            ),
+            dtype=float, count=len(q),
+        )
+        return pref * q.integrate_array(ang_factor * K_esc_arr)
+
+    return np.array([_per_observer(float(r_i)) for r_i in r_nodes])
 
 
 def compute_G_bc(
@@ -1513,29 +1526,34 @@ def compute_G_bc(
         return G_bc
 
     if geometry.kind == "sphere-1d":
-        # Observer-centred angular integral.
-        theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-        cos_thetas = np.cos(theta_pts)
-        sin_thetas = np.sin(theta_pts)
+        # Q3: observer-centred ω-sweep with kink-aware subdivision at
+        # the tangent angles arcsin(r_k/r_obs) for r_k < r_obs.
+        # Homogeneous cells degenerate to plain GL — bit-equivalent to
+        # the pre-Q3 single gl_float(n_surf_quad, 0, π) call.
+        def _tau_at(r_i: float, cos_th: float) -> float:
+            rho = float(geometry.rho_max(r_i, cos_th, R))
+            if rho <= 0.0:
+                return np.inf  # exp(-∞) = 0 — masks no-ray case
+            if len(radii) == 1:
+                return float(sig_t[0]) * rho
+            return float(geometry.optical_depth_along_ray(
+                r_i, cos_th, rho, radii, sig_t,
+            ))
 
-        for i in range(N):
-            r_i = r_nodes[i]
-            total = 0.0
-            for k in range(n_surf_quad):
-                ct = cos_thetas[k]
-                st = sin_thetas[k]
-                rho_to_surface = geometry.rho_max(r_i, ct, R)
-                if rho_to_surface <= 0.0:
-                    continue
-                if len(radii) == 1:
-                    tau = sig_t[0] * rho_to_surface
-                else:
-                    tau = geometry.optical_depth_along_ray(
-                        r_i, ct, rho_to_surface, radii, sig_t,
-                    )
-                total += theta_wts[k] * st * float(np.exp(-tau))
-            G_bc[i] = 2.0 * total
-        return G_bc
+        def _sphere_per_obs(r_i: float) -> float:
+            q = observer_angular_quadrature(
+                r_obs=r_i, omega_low=0.0, omega_high=np.pi,
+                radii=radii, n_per_panel=n_surf_quad, dps=dps,
+            )
+            cos_th = np.cos(q.pts)
+            sin_th = np.sin(q.pts)
+            tau_arr = np.fromiter(
+                (_tau_at(r_i, float(c)) for c in cos_th),
+                dtype=float, count=len(q),
+            )
+            return 2.0 * q.integrate_array(sin_th * np.exp(-tau_arr))
+
+        return np.array([_sphere_per_obs(float(r_i)) for r_i in r_nodes])
 
     # Cylinder: surface-centred form, Ki_1/d kernel.
     phi_pts, phi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
@@ -1623,34 +1641,89 @@ def compute_G_bc_cylinder_3d(
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
 
-    psi_pts, psi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
+    # Q3: observer-centred ψ-sweep with kink-aware subdivision at the
+    # tangent angles arcsin(r_k/r_obs) for r_k < r_obs.  The chord d_2D
+    # has impact parameter |r_obs sin ψ|, so the kink structure matches
+    # `observer_angular_quadrature` exactly.
+    def _tau_2d_at(r_i: float, cos_psi: float, d_2d: float) -> float:
+        if len(radii) == 1:
+            return float(sig_t[0]) * d_2d
+        return float(geometry.optical_depth_along_ray(
+            r_i, -cos_psi, d_2d, radii, sig_t,
+        ))
 
-    N = len(r_nodes)
-    G_bc = np.zeros(N)
-    for i in range(N):
-        r_i = float(r_nodes[i])
-        total = 0.0
-        for k in range(n_surf_quad):
-            cp = float(np.cos(psi_pts[k]))
-            sp = float(np.sin(psi_pts[k]))
-            # 2-D backward chord from r_i in observer direction ψ
-            disc = R * R - r_i * r_i * sp * sp
-            if disc <= 0.0:
-                continue
-            d_2d = -r_i * cp + float(np.sqrt(disc))
-            if d_2d <= 0.0:
-                continue
-            if len(radii) == 1:
-                tau_2d = float(sig_t[0]) * d_2d
-            else:
-                # Backward direction has cos_omega = -cp
-                tau_2d = float(geometry.optical_depth_along_ray(
-                    r_i, -cp, d_2d, radii, sig_t,
-                ))
-            total += psi_wts[k] * float(ki_n_mp(2, tau_2d, dps))
-        G_bc[i] = float(4.0 / np.pi * total)
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=0.0, omega_high=np.pi,
+            radii=radii, n_per_panel=n_surf_quad, dps=dps,
+        )
+        cp = np.cos(q.pts)
+        sp = np.sin(q.pts)
+        disc = np.maximum(R * R - r_i * r_i * sp * sp, 0.0)
+        d_2d = -r_i * cp + np.sqrt(disc)
+        Ki2 = np.fromiter(
+            (
+                float(ki_n_mp(2, _tau_2d_at(r_i, float(c), float(d)), dps))
+                if d > 0.0 else 0.0
+                for c, d in zip(cp, d_2d)
+            ),
+            dtype=float, count=len(q),
+        )
+        return float(4.0 / np.pi * q.integrate_array(Ki2))
 
-    return G_bc
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
+
+
+def _knyazev_mode_per_obs(
+    r_i: float,
+    R: float,
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    coefs: tuple[float, ...],
+    n_angular: int,
+    dps: int,
+    geometry: "CurvilinearGeometry",
+    *,
+    direction_sign: int,
+) -> float:
+    r"""Knyazev cylinder-3D mode integral at one observer.
+
+    Returns ``∫₀^π Σ_k c_k µ_2D^k Ki_{k+2}(τ_2D) dω`` evaluated with
+    the kink-aware observer-angular quadrature.  ``direction_sign``
+    is +1 for the outward (P_esc) form and −1 for the backward
+    (G_bc) form — the only difference between the two consumers.
+    """
+    q = observer_angular_quadrature(
+        r_obs=r_i, omega_low=0.0, omega_high=np.pi,
+        radii=radii, n_per_panel=n_angular, dps=dps,
+    )
+    cp = np.cos(q.pts)
+    sp = np.sin(q.pts)
+    disc = np.maximum(R * R - r_i * r_i * sp * sp, 0.0)
+    d_2d = -r_i * cp + np.sqrt(disc)
+    valid = d_2d > 0.0
+
+    def _kernel(k: int) -> float:
+        if not valid[k]:
+            return 0.0
+        c, d = float(cp[k]), float(d_2d[k])
+        if len(radii) == 1:
+            tau = float(sig_t[0]) * d
+        else:
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, direction_sign * c, d, radii, sig_t,
+            ))
+        mu_2d = (r_i * c + d) / R
+        return sum(
+            c_k * (mu_2d ** k_p) * float(ki_n_mp(k_p + 2, tau, dps))
+            for k_p, c_k in enumerate(coefs) if c_k != 0.0
+        )
+
+    integrand = np.fromiter(
+        (_kernel(k) for k in range(len(q))),
+        dtype=float, count=len(q),
+    )
+    return q.integrate_array(integrand)
 
 
 def compute_P_esc_cylinder_3d_mode(
@@ -1709,40 +1782,15 @@ def compute_P_esc_cylinder_3d_mode(
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
-
-    omega_pts, omega_wts = gl_float(n_angular, 0.0, np.pi, dps)
     coefs = _shifted_legendre_monomial_coefs(n_mode)
 
-    N = len(r_nodes)
-    P = np.zeros(N)
-    for i in range(N):
-        r_i = float(r_nodes[i])
-        total = 0.0
-        for k_q in range(n_angular):
-            cos_om = float(np.cos(omega_pts[k_q]))
-            sin_om = float(np.sin(omega_pts[k_q]))
-            disc = R * R - r_i * r_i * sin_om * sin_om
-            if disc <= 0.0:
-                continue
-            d_2d = -r_i * cos_om + float(np.sqrt(disc))
-            if d_2d <= 0.0:
-                continue
-            if len(radii) == 1:
-                tau_2d = float(sig_t[0]) * d_2d
-            else:
-                tau_2d = float(geometry.optical_depth_along_ray(
-                    r_i, cos_om, d_2d, radii, sig_t,
-                ))
-            mu_2d = (r_i * cos_om + d_2d) / R
-            kernel = 0.0
-            for k_p, c_k in enumerate(coefs):
-                if c_k == 0.0:
-                    continue
-                ki = float(ki_n_mp(k_p + 2, tau_2d, dps))
-                kernel += c_k * (mu_2d ** k_p) * ki
-            total += omega_wts[k_q] * kernel
-        P[i] = (1.0 / np.pi) * total
-    return P
+    return np.array([
+        (1.0 / np.pi) * _knyazev_mode_per_obs(
+            float(r_i), R, radii, sig_t, coefs,
+            n_angular, dps, geometry, direction_sign=+1,
+        )
+        for r_i in r_nodes
+    ])
 
 
 def compute_G_bc_cylinder_3d_mode(
@@ -1788,40 +1836,15 @@ def compute_G_bc_cylinder_3d_mode(
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
-
-    psi_pts, psi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
     coefs = _shifted_legendre_monomial_coefs(n_mode)
 
-    N = len(r_nodes)
-    G_bc = np.zeros(N)
-    for i in range(N):
-        r_i = float(r_nodes[i])
-        total = 0.0
-        for k_q in range(n_surf_quad):
-            cp = float(np.cos(psi_pts[k_q]))
-            sp_psi = float(np.sin(psi_pts[k_q]))
-            disc = R * R - r_i * r_i * sp_psi * sp_psi
-            if disc <= 0.0:
-                continue
-            d_2d = -r_i * cp + float(np.sqrt(disc))
-            if d_2d <= 0.0:
-                continue
-            if len(radii) == 1:
-                tau_2d = float(sig_t[0]) * d_2d
-            else:
-                tau_2d = float(geometry.optical_depth_along_ray(
-                    r_i, -cp, d_2d, radii, sig_t,
-                ))
-            mu_2d = (r_i * cp + d_2d) / R
-            kernel = 0.0
-            for k_p, c_k in enumerate(coefs):
-                if c_k == 0.0:
-                    continue
-                ki = float(ki_n_mp(k_p + 2, tau_2d, dps))
-                kernel += c_k * (mu_2d ** k_p) * ki
-            total += psi_wts[k_q] * kernel
-        G_bc[i] = float(4.0 / np.pi * total)
-    return G_bc
+    return np.array([
+        (4.0 / np.pi) * _knyazev_mode_per_obs(
+            float(r_i), R, radii, sig_t, coefs,
+            n_surf_quad, dps, geometry, direction_sign=-1,
+        )
+        for r_i in r_nodes
+    ])
 
 
 def compute_P_ss_cylinder(
@@ -2715,46 +2738,41 @@ def compute_P_esc_outer(
             P[i] = 0.5 * _slab_E2(tau)
         return P
 
-    # Curvilinear: GL over angular range.
+    # Q3: observer-centred ω-sweep with kink-aware subdivision.
     omega_low, omega_high = geometry.angular_range
-    omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
-    cos_omegas = geometry.ray_direction_cosine(omega_pts)
-    angular_factor = geometry.angular_weight(omega_pts)
     pref = geometry.prefactor
+    is_hollow = geometry.inner_radius > 0.0
 
-    P = np.zeros(N)
-    is_slab = geometry.kind == "slab-polar"
-    is_hollow = (not is_slab) and geometry.inner_radius > 0.0
-    for i in range(N):
-        r_i = float(r_nodes[i])
-        total = 0.0
-        for k in range(n_angular):
-            cos_om = cos_omegas[k]
-            rho_to_outer = geometry.rho_max(r_i, cos_om, R)
-            if rho_to_outer <= 0.0:
-                continue
-            if is_slab:
-                # Slab outer = face at x=L, reached only for µ > 0.
-                if cos_om <= 0.0:
-                    continue
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=omega_low, omega_high=omega_high,
+            radii=radii, n_per_panel=n_angular, dps=dps,
+        )
+        cos_om = geometry.ray_direction_cosine(q.pts)
+        ang_factor = geometry.angular_weight(q.pts)
+
+        def _kernel(c: float) -> float:
+            rho_out = float(geometry.rho_max(r_i, c, R))
+            if rho_out <= 0.0:
+                return 0.0
             if is_hollow:
-                # Hollow cyl/sph (Phase F.4): rays that strike the inner
-                # shell first exit through the inner boundary and are
-                # counted by compute_P_esc_inner; exclude them here so
-                # that P_esc_outer + P_esc_inner sum to the total escape
-                # probability without double-counting.
-                rho_in_minus, _ = geometry.rho_inner_intersections(
-                    r_i, cos_om,
-                )
-                if rho_in_minus is not None and rho_in_minus < rho_to_outer:
-                    continue
-            tau = geometry.optical_depth_along_ray(
-                r_i, cos_om, rho_to_outer, radii, sig_t,
-            )
-            K_esc = geometry.escape_kernel_mp(tau, dps)
-            total += omega_wts[k] * angular_factor[k] * K_esc
-        P[i] = pref * total
-    return P
+                # Phase F.4 hollow rule: rays that strike the inner
+                # shell first are counted by compute_P_esc_inner.
+                rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
+                if rho_in_minus is not None and rho_in_minus < rho_out:
+                    return 0.0
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, c, rho_out, radii, sig_t,
+            ))
+            return float(geometry.escape_kernel_mp(tau, dps))
+
+        K_esc_arr = np.fromiter(
+            (_kernel(float(c)) for c in cos_om),
+            dtype=float, count=len(q),
+        )
+        return pref * q.integrate_array(ang_factor * K_esc_arr)
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_P_esc_inner(
@@ -2802,32 +2820,36 @@ def compute_P_esc_inner(
             P[i] = 0.5 * _slab_E2(tau)
         return P
 
-    # Hollow cyl/sph: GL over angular range, restricted to directions
-    # that hit the inner shell.
+    # Q3: hollow cyl/sph — observer-centred ω-sweep restricted to
+    # directions that hit the inner shell, with kink-aware
+    # subdivision at the tangent angles arcsin(r_k/r_obs).
     omega_low, omega_high = geometry.angular_range
-    omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
-    cos_omegas = geometry.ray_direction_cosine(omega_pts)
-    angular_factor = geometry.angular_weight(omega_pts)
     pref = geometry.prefactor
 
-    P = np.zeros(N)
-    for i in range(N):
-        r_i = float(r_nodes[i])
-        total = 0.0
-        for k in range(n_angular):
-            cos_om = cos_omegas[k]
-            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, cos_om)
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=omega_low, omega_high=omega_high,
+            radii=radii, n_per_panel=n_angular, dps=dps,
+        )
+        cos_om = geometry.ray_direction_cosine(q.pts)
+        ang_factor = geometry.angular_weight(q.pts)
+
+        def _kernel(c: float) -> float:
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
             if rho_in_minus is None:
-                continue
-            # τ along the ray from r_i to the first inner intersection
-            # (annulus path only — cavity not yet entered).
-            tau = geometry.optical_depth_along_ray(
-                r_i, cos_om, rho_in_minus, radii, sig_t,
-            )
-            K_esc = geometry.escape_kernel_mp(tau, dps)
-            total += omega_wts[k] * angular_factor[k] * K_esc
-        P[i] = pref * total
-    return P
+                return 0.0
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, c, rho_in_minus, radii, sig_t,
+            ))
+            return float(geometry.escape_kernel_mp(tau, dps))
+
+        K_esc_arr = np.fromiter(
+            (_kernel(float(c)) for c in cos_om),
+            dtype=float, count=len(q),
+        )
+        return pref * q.integrate_array(ang_factor * K_esc_arr)
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_P_esc_outer_mode(
@@ -2880,41 +2902,45 @@ def compute_P_esc_outer_mode(
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
     omega_low, omega_high = geometry.angular_range
-    omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
-    cos_omegas = geometry.ray_direction_cosine(omega_pts)
-    angular_factor = geometry.angular_weight(omega_pts)
     pref = geometry.prefactor
-    N = len(r_nodes)
-    P = np.zeros(N)
-    # Phase F.5 convention: Mark-Lambert angular measure (sin θ dθ) with
-    # P̃_n(µ_exit) Legendre factor — NO (ρ/R)² Jacobian, for consistency
-    # with the W transmission matrix (which also uses no Jacobian).
-    # This means mode-0 is exactly compute_P_esc_outer (above), and
-    # mode-n≥1 is the direct Lambert-Legendre moment.
-    for i in range(N):
-        r_i = float(r_nodes[i])
-        total = 0.0
-        for k in range(n_angular):
-            cos_om = cos_omegas[k]
-            rho_out = geometry.rho_max(r_i, cos_om, R)
+
+    # Q3: Phase F.5 Mark-Lambert moment, observer-centred ω-sweep with
+    # kink-aware subdivision.  Hollow-sphere only (Model A: rays hitting
+    # inner shell first counted by compute_P_esc_inner_mode).
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=omega_low, omega_high=omega_high,
+            radii=radii, n_per_panel=n_angular, dps=dps,
+        )
+        cos_om = geometry.ray_direction_cosine(q.pts)
+        ang_factor = geometry.angular_weight(q.pts)
+
+        def _kernel_at(c: float) -> tuple[float, float]:
+            rho_out = float(geometry.rho_max(r_i, c, R))
             if rho_out <= 0.0:
-                continue
-            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, cos_om)
+                return 0.0, 0.0
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
             if rho_in_minus is not None and rho_in_minus < rho_out:
-                continue
-            tau = geometry.optical_depth_along_ray(
-                r_i, cos_om, rho_out, radii, sig_t,
-            )
-            K_esc = geometry.escape_kernel_mp(tau, dps)
-            mu_exit = (rho_out + r_i * cos_om) / R
-            p_tilde = float(
-                _shifted_legendre_eval(n_mode, np.array([mu_exit]))[0]
-            )
-            total += (
-                omega_wts[k] * angular_factor[k] * p_tilde * K_esc
-            )
-        P[i] = pref * total
-    return P
+                return 0.0, 0.0
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, c, rho_out, radii, sig_t,
+            ))
+            mu_exit = (rho_out + r_i * c) / R
+            return float(geometry.escape_kernel_mp(tau, dps)), mu_exit
+
+        kernel_vals = [_kernel_at(float(c)) for c in cos_om]
+        K_esc_arr = np.fromiter(
+            (kv[0] for kv in kernel_vals), dtype=float, count=len(q),
+        )
+        mu_exit_arr = np.fromiter(
+            (kv[1] for kv in kernel_vals), dtype=float, count=len(q),
+        )
+        p_tilde_arr = _shifted_legendre_eval(n_mode, mu_exit_arr)
+        return pref * q.integrate_array(
+            ang_factor * p_tilde_arr * K_esc_arr,
+        )
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_P_esc_inner_mode(
@@ -2960,37 +2986,42 @@ def compute_P_esc_inner_mode(
     sig_t = np.asarray(sig_t, dtype=float)
     r_0 = float(geometry.inner_radius)
     omega_low, omega_high = geometry.angular_range
-    omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
-    cos_omegas = geometry.ray_direction_cosine(omega_pts)
-    angular_factor = geometry.angular_weight(omega_pts)
     pref = geometry.prefactor
-    N = len(r_nodes)
-    P = np.zeros(N)
-    # Phase F.5 convention: Mark-Lambert weighting (no Jacobian).
-    for i in range(N):
-        r_i = float(r_nodes[i])
-        total = 0.0
-        for k in range(n_angular):
-            cos_om = cos_omegas[k]
-            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, cos_om)
+
+    # Q3: hollow sphere — observer-centred ω-sweep restricted to
+    # rays hitting the inner shell, kink-aware subdivision.
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=omega_low, omega_high=omega_high,
+            radii=radii, n_per_panel=n_angular, dps=dps,
+        )
+        cos_om = geometry.ray_direction_cosine(q.pts)
+        ang_factor = geometry.angular_weight(q.pts)
+
+        def _kernel_at(c: float) -> tuple[float, float]:
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
             if rho_in_minus is None:
-                continue
-            tau = geometry.optical_depth_along_ray(
-                r_i, cos_om, rho_in_minus, radii, sig_t,
-            )
-            K_esc = geometry.escape_kernel_mp(tau, dps)
-            sin_om = np.sqrt(max(0.0, 1.0 - cos_om * cos_om))
-            h_sq = r_i * r_i * sin_om * sin_om
-            mu_exit_sq = max(0.0, (r_0 * r_0 - h_sq) / (r_0 * r_0))
-            mu_exit = float(np.sqrt(mu_exit_sq))
-            p_tilde = float(
-                _shifted_legendre_eval(n_mode, np.array([mu_exit]))[0]
-            )
-            total += (
-                omega_wts[k] * angular_factor[k] * p_tilde * K_esc
-            )
-        P[i] = pref * total
-    return P
+                return 0.0, 0.0
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, c, rho_in_minus, radii, sig_t,
+            ))
+            sin_sq = max(0.0, 1.0 - c * c)
+            mu_exit_sq = max(0.0, (r_0 * r_0 - r_i * r_i * sin_sq) / (r_0 * r_0))
+            return float(geometry.escape_kernel_mp(tau, dps)), float(np.sqrt(mu_exit_sq))
+
+        kernel_vals = [_kernel_at(float(c)) for c in cos_om]
+        K_esc_arr = np.fromiter(
+            (kv[0] for kv in kernel_vals), dtype=float, count=len(q),
+        )
+        mu_exit_arr = np.fromiter(
+            (kv[1] for kv in kernel_vals), dtype=float, count=len(q),
+        )
+        p_tilde_arr = _shifted_legendre_eval(n_mode, mu_exit_arr)
+        return pref * q.integrate_array(
+            ang_factor * p_tilde_arr * K_esc_arr,
+        )
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_G_bc_outer(
@@ -3036,31 +3067,36 @@ def compute_G_bc_outer(
         return G
 
     if geometry.kind == "sphere-1d":
-        # Observer-centred angular integral. rho_to_surface is the full
-        # path to the outer boundary; cavity handling lives in
-        # optical_depth_along_ray.
-        theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-        cos_thetas = np.cos(theta_pts)
-        sin_thetas = np.sin(theta_pts)
-        G = np.zeros(N)
-        for i in range(N):
-            r_i = r_nodes[i]
-            total = 0.0
-            for k in range(n_surf_quad):
-                ct = cos_thetas[k]
-                st = sin_thetas[k]
-                rho_to_surface = geometry.rho_max(r_i, ct, R)
-                if rho_to_surface <= 0.0:
-                    continue
-                if len(radii) == 1 and geometry.inner_radius == 0.0:
-                    tau = sig_t[0] * rho_to_surface
-                else:
-                    tau = geometry.optical_depth_along_ray(
-                        r_i, ct, rho_to_surface, radii, sig_t,
-                    )
-                total += theta_wts[k] * st * float(np.exp(-tau))
-            G[i] = 2.0 * total
-        return G
+        # Q3: observer-centred sphere ω-sweep with kink-aware
+        # subdivision.  cavity handling lives in optical_depth_along_ray.
+        def _sphere_tau(r_i: float, c: float, rho: float) -> float:
+            if len(radii) == 1 and geometry.inner_radius == 0.0:
+                return float(sig_t[0]) * rho
+            return float(geometry.optical_depth_along_ray(
+                r_i, c, rho, radii, sig_t,
+            ))
+
+        def _sphere_per_obs(r_i: float) -> float:
+            q = observer_angular_quadrature(
+                r_obs=r_i, omega_low=0.0, omega_high=np.pi,
+                radii=radii, n_per_panel=n_surf_quad, dps=dps,
+            )
+            cos_th = np.cos(q.pts)
+            sin_th = np.sin(q.pts)
+
+            def _kernel(c: float) -> float:
+                rho = float(geometry.rho_max(r_i, c, R))
+                if rho <= 0.0:
+                    return 0.0
+                return float(np.exp(-_sphere_tau(r_i, c, rho)))
+
+            decay = np.fromiter(
+                (_kernel(float(c)) for c in cos_th),
+                dtype=float, count=len(q),
+            )
+            return 2.0 * q.integrate_array(sin_th * decay)
+
+        return np.array([_sphere_per_obs(float(r_i)) for r_i in r_nodes])
 
     # Cylinder outer — surface-centred, Ki_1/d kernel.
     phi_pts, phi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
@@ -3137,29 +3173,35 @@ def compute_G_bc_inner(
     r0 = float(geometry.inner_radius)
 
     if geometry.kind == "sphere-1d":
-        # Observer-centred, directions that hit the inner shell.
-        theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-        cos_thetas = np.cos(theta_pts)
-        sin_thetas = np.sin(theta_pts)
-        G = np.zeros(N)
-        for i in range(N):
-            r_i = r_nodes[i]
-            total = 0.0
-            for k in range(n_surf_quad):
-                ct = cos_thetas[k]
-                st = sin_thetas[k]
-                rho_in_minus, _ = geometry.rho_inner_intersections(r_i, ct)
+        # Q3: hollow sphere — observer-centred ω-sweep, kink-aware.
+        def _tau(r_i: float, c: float, rho: float) -> float:
+            if len(radii) == 1:
+                return float(sig_t[0]) * rho
+            return float(geometry.optical_depth_along_ray(
+                r_i, c, rho, radii, sig_t,
+            ))
+
+        def _per_obs(r_i: float) -> float:
+            q = observer_angular_quadrature(
+                r_obs=r_i, omega_low=0.0, omega_high=np.pi,
+                radii=radii, n_per_panel=n_surf_quad, dps=dps,
+            )
+            cos_th = np.cos(q.pts)
+            sin_th = np.sin(q.pts)
+
+            def _kernel(c: float) -> float:
+                rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
                 if rho_in_minus is None:
-                    continue
-                if len(radii) == 1:
-                    tau = sig_t[0] * rho_in_minus
-                else:
-                    tau = geometry.optical_depth_along_ray(
-                        r_i, ct, rho_in_minus, radii, sig_t,
-                    )
-                total += theta_wts[k] * st * float(np.exp(-tau))
-            G[i] = 2.0 * total
-        return G
+                    return 0.0
+                return float(np.exp(-_tau(r_i, c, float(rho_in_minus))))
+
+            decay = np.fromiter(
+                (_kernel(float(c)) for c in cos_th),
+                dtype=float, count=len(q),
+            )
+            return 2.0 * q.integrate_array(sin_th * decay)
+
+        return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
     # Cylinder inner — surface-centred on r=r_0, Ki_1/d_inner kernel.
     phi_pts, phi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
@@ -3230,42 +3272,41 @@ def compute_G_bc_outer_mode(
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
-    theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-    cos_thetas = np.cos(theta_pts)
-    sin_thetas = np.sin(theta_pts)
-    N = len(r_nodes)
-    G = np.zeros(N)
-    for i in range(N):
-        r_i = r_nodes[i]
-        total = 0.0
-        for k in range(n_surf_quad):
-            ct = cos_thetas[k]
-            st = sin_thetas[k]
-            rho_out = geometry.rho_max(r_i, ct, R)
+
+    # Q3: hollow sphere outer-face mode response — observer-centred
+    # ω-sweep with kink-aware subdivision, Model A skip on rays
+    # blocked by the inner shell.
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=0.0, omega_high=np.pi,
+            radii=radii, n_per_panel=n_surf_quad, dps=dps,
+        )
+        cos_th = np.cos(q.pts)
+        sin_th = np.sin(q.pts)
+
+        def _eval(c: float) -> tuple[float, float]:
+            rho_out = float(geometry.rho_max(r_i, c, R))
             if rho_out <= 0.0:
-                continue
-            # Model A: skip rays blocked by inner shell.
-            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, ct)
+                return 0.0, 0.0
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
             if rho_in_minus is not None and rho_in_minus < rho_out:
-                continue
-            # τ along the observer→outer chord.
+                return 0.0, 0.0
             if len(radii) == 1:
-                tau = sig_t[0] * rho_out
+                tau = float(sig_t[0]) * rho_out
             else:
-                tau = geometry.optical_depth_along_ray(
-                    r_i, ct, rho_out, radii, sig_t,
-                )
-            # µ_s at the outer surface point (local inward-normal frame
-            # at emission): |µ_s| = (ρ_out + r·cos θ)/R — the same
-            # mu_exit formula as P_esc, since chord symmetry at outer
-            # maps µ_out (emission) to µ_in (arrival) identically.
-            mu_s = (rho_out + r_i * ct) / R
-            p_tilde = float(
-                _shifted_legendre_eval(n_mode, np.array([mu_s]))[0]
-            )
-            total += theta_wts[k] * st * p_tilde * float(np.exp(-tau))
-        G[i] = 2.0 * total
-    return G
+                tau = float(geometry.optical_depth_along_ray(
+                    r_i, c, rho_out, radii, sig_t,
+                ))
+            mu_s = (rho_out + r_i * c) / R
+            return float(np.exp(-tau)), mu_s
+
+        ev = [_eval(float(c)) for c in cos_th]
+        decay = np.fromiter((e[0] for e in ev), dtype=float, count=len(q))
+        mu_s = np.fromiter((e[1] for e in ev), dtype=float, count=len(q))
+        p_tilde = _shifted_legendre_eval(n_mode, mu_s)
+        return 2.0 * q.integrate_array(sin_th * p_tilde * decay)
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_G_bc_inner_mode(
@@ -3307,37 +3348,38 @@ def compute_G_bc_inner_mode(
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     r_0 = float(geometry.inner_radius)
-    theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-    cos_thetas = np.cos(theta_pts)
-    sin_thetas = np.sin(theta_pts)
-    N = len(r_nodes)
-    G = np.zeros(N)
-    for i in range(N):
-        r_i = r_nodes[i]
-        total = 0.0
-        for k in range(n_surf_quad):
-            ct = cos_thetas[k]
-            st = sin_thetas[k]
-            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, ct)
+
+    # Q3: hollow sphere inner-face mode response — observer-centred
+    # ω-sweep restricted to rays hitting the inner shell.
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=0.0, omega_high=np.pi,
+            radii=radii, n_per_panel=n_surf_quad, dps=dps,
+        )
+        cos_th = np.cos(q.pts)
+        sin_th = np.sin(q.pts)
+
+        def _eval(c: float) -> tuple[float, float]:
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
             if rho_in_minus is None:
-                continue
+                return 0.0, 0.0
             if len(radii) == 1:
-                tau = sig_t[0] * rho_in_minus
+                tau = float(sig_t[0]) * float(rho_in_minus)
             else:
-                tau = geometry.optical_depth_along_ray(
-                    r_i, ct, rho_in_minus, radii, sig_t,
-                )
-            # µ_s at the inner surface emission point.
-            sin_om = float(np.sqrt(max(0.0, 1.0 - ct * ct)))
-            h_sq = r_i * r_i * sin_om * sin_om
-            mu_s_sq = max(0.0, (r_0 * r_0 - h_sq) / (r_0 * r_0))
-            mu_s = float(np.sqrt(mu_s_sq))
-            p_tilde = float(
-                _shifted_legendre_eval(n_mode, np.array([mu_s]))[0]
-            )
-            total += theta_wts[k] * st * p_tilde * float(np.exp(-tau))
-        G[i] = 2.0 * total
-    return G
+                tau = float(geometry.optical_depth_along_ray(
+                    r_i, c, rho_in_minus, radii, sig_t,
+                ))
+            sin_sq = max(0.0, 1.0 - c * c)
+            mu_s_sq = max(0.0, (r_0 * r_0 - r_i * r_i * sin_sq) / (r_0 * r_0))
+            return float(np.exp(-tau)), float(np.sqrt(mu_s_sq))
+
+        ev = [_eval(float(c)) for c in cos_th]
+        decay = np.fromiter((e[0] for e in ev), dtype=float, count=len(q))
+        mu_s = np.fromiter((e[1] for e in ev), dtype=float, count=len(q))
+        p_tilde = _shifted_legendre_eval(n_mode, mu_s)
+        return 2.0 * q.integrate_array(sin_th * p_tilde * decay)
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -3415,37 +3457,39 @@ def compute_P_esc_outer_mode_marshak(
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
     omega_low, omega_high = geometry.angular_range
-    omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
-    cos_omegas = geometry.ray_direction_cosine(omega_pts)
-    angular_factor = geometry.angular_weight(omega_pts)
     pref = geometry.prefactor
-    N = len(r_nodes)
-    P = np.zeros(N)
-    for i in range(N):
-        r_i = float(r_nodes[i])
-        total = 0.0
-        for k in range(n_angular):
-            cos_om = cos_omegas[k]
-            rho_out = geometry.rho_max(r_i, cos_om, R)
+
+    # Q3 Marshak partial-current variant — outer face, hollow sphere.
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=omega_low, omega_high=omega_high,
+            radii=radii, n_per_panel=n_angular, dps=dps,
+        )
+        cos_om = geometry.ray_direction_cosine(q.pts)
+        ang_factor = geometry.angular_weight(q.pts)
+
+        def _eval(c: float) -> tuple[float, float]:
+            rho_out = float(geometry.rho_max(r_i, c, R))
             if rho_out <= 0.0:
-                continue
-            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, cos_om)
+                return 0.0, 0.0
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
             if rho_in_minus is not None and rho_in_minus < rho_out:
-                continue
-            tau = geometry.optical_depth_along_ray(
-                r_i, cos_om, rho_out, radii, sig_t,
-            )
-            K_esc = geometry.escape_kernel_mp(tau, dps)
-            mu_exit = (rho_out + r_i * cos_om) / R
-            p_tilde = float(
-                _shifted_legendre_eval(n_mode, np.array([mu_exit]))[0]
-            )
-            total += (
-                omega_wts[k] * angular_factor[k]
-                * mu_exit * p_tilde * K_esc
-            )
-        P[i] = pref * total
-    return P
+                return 0.0, 0.0
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, c, rho_out, radii, sig_t,
+            ))
+            mu_exit = (rho_out + r_i * c) / R
+            return float(geometry.escape_kernel_mp(tau, dps)), mu_exit
+
+        ev = [_eval(float(c)) for c in cos_om]
+        K_esc = np.fromiter((e[0] for e in ev), dtype=float, count=len(q))
+        mu_exit = np.fromiter((e[1] for e in ev), dtype=float, count=len(q))
+        p_tilde = _shifted_legendre_eval(n_mode, mu_exit)
+        return pref * q.integrate_array(
+            ang_factor * mu_exit * p_tilde * K_esc,
+        )
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_P_esc_inner_mode_marshak(
@@ -3487,37 +3531,37 @@ def compute_P_esc_inner_mode_marshak(
     sig_t = np.asarray(sig_t, dtype=float)
     r_0 = float(geometry.inner_radius)
     omega_low, omega_high = geometry.angular_range
-    omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
-    cos_omegas = geometry.ray_direction_cosine(omega_pts)
-    angular_factor = geometry.angular_weight(omega_pts)
     pref = geometry.prefactor
-    N = len(r_nodes)
-    P = np.zeros(N)
-    for i in range(N):
-        r_i = float(r_nodes[i])
-        total = 0.0
-        for k in range(n_angular):
-            cos_om = cos_omegas[k]
-            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, cos_om)
+
+    # Q3 Marshak partial-current variant — inner face, hollow sphere.
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=omega_low, omega_high=omega_high,
+            radii=radii, n_per_panel=n_angular, dps=dps,
+        )
+        cos_om = geometry.ray_direction_cosine(q.pts)
+        ang_factor = geometry.angular_weight(q.pts)
+
+        def _eval(c: float) -> tuple[float, float]:
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
             if rho_in_minus is None:
-                continue
-            tau = geometry.optical_depth_along_ray(
-                r_i, cos_om, rho_in_minus, radii, sig_t,
-            )
-            K_esc = geometry.escape_kernel_mp(tau, dps)
-            sin_om = np.sqrt(max(0.0, 1.0 - cos_om * cos_om))
-            h_sq = r_i * r_i * sin_om * sin_om
-            mu_exit_sq = max(0.0, (r_0 * r_0 - h_sq) / (r_0 * r_0))
-            mu_exit = float(np.sqrt(mu_exit_sq))
-            p_tilde = float(
-                _shifted_legendre_eval(n_mode, np.array([mu_exit]))[0]
-            )
-            total += (
-                omega_wts[k] * angular_factor[k]
-                * mu_exit * p_tilde * K_esc
-            )
-        P[i] = pref * total
-    return P
+                return 0.0, 0.0
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, c, rho_in_minus, radii, sig_t,
+            ))
+            sin_sq = max(0.0, 1.0 - c * c)
+            mu_exit_sq = max(0.0, (r_0 * r_0 - r_i * r_i * sin_sq) / (r_0 * r_0))
+            return float(geometry.escape_kernel_mp(tau, dps)), float(np.sqrt(mu_exit_sq))
+
+        ev = [_eval(float(c)) for c in cos_om]
+        K_esc = np.fromiter((e[0] for e in ev), dtype=float, count=len(q))
+        mu_exit = np.fromiter((e[1] for e in ev), dtype=float, count=len(q))
+        p_tilde = _shifted_legendre_eval(n_mode, mu_exit)
+        return pref * q.integrate_array(
+            ang_factor * mu_exit * p_tilde * K_esc,
+        )
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_G_bc_outer_mode_marshak(
@@ -3558,39 +3602,39 @@ def compute_G_bc_outer_mode_marshak(
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
-    theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-    cos_thetas = np.cos(theta_pts)
-    sin_thetas = np.sin(theta_pts)
-    N = len(r_nodes)
-    G = np.zeros(N)
-    for i in range(N):
-        r_i = r_nodes[i]
-        total = 0.0
-        for k in range(n_surf_quad):
-            ct = cos_thetas[k]
-            st = sin_thetas[k]
-            rho_out = geometry.rho_max(r_i, ct, R)
+
+    # Q3 Marshak — outer-face partial-current response, hollow sphere.
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=0.0, omega_high=np.pi,
+            radii=radii, n_per_panel=n_surf_quad, dps=dps,
+        )
+        cos_th = np.cos(q.pts)
+        sin_th = np.sin(q.pts)
+
+        def _eval(c: float) -> tuple[float, float]:
+            rho_out = float(geometry.rho_max(r_i, c, R))
             if rho_out <= 0.0:
-                continue
-            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, ct)
+                return 0.0, 0.0
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
             if rho_in_minus is not None and rho_in_minus < rho_out:
-                continue
+                return 0.0, 0.0
             if len(radii) == 1:
-                tau = sig_t[0] * rho_out
+                tau = float(sig_t[0]) * rho_out
             else:
-                tau = geometry.optical_depth_along_ray(
-                    r_i, ct, rho_out, radii, sig_t,
-                )
-            mu_s = (rho_out + r_i * ct) / R
-            p_tilde = float(
-                _shifted_legendre_eval(n_mode, np.array([mu_s]))[0]
-            )
-            total += (
-                theta_wts[k] * st * mu_s * p_tilde
-                * float(np.exp(-tau))
-            )
-        G[i] = 2.0 * total
-    return G
+                tau = float(geometry.optical_depth_along_ray(
+                    r_i, c, rho_out, radii, sig_t,
+                ))
+            mu_s = (rho_out + r_i * c) / R
+            return float(np.exp(-tau)), mu_s
+
+        ev = [_eval(float(c)) for c in cos_th]
+        decay = np.fromiter((e[0] for e in ev), dtype=float, count=len(q))
+        mu_s = np.fromiter((e[1] for e in ev), dtype=float, count=len(q))
+        p_tilde = _shifted_legendre_eval(n_mode, mu_s)
+        return 2.0 * q.integrate_array(sin_th * mu_s * p_tilde * decay)
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_G_bc_inner_mode_marshak(
@@ -3624,39 +3668,37 @@ def compute_G_bc_inner_mode_marshak(
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
     r_0 = float(geometry.inner_radius)
-    theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-    cos_thetas = np.cos(theta_pts)
-    sin_thetas = np.sin(theta_pts)
-    N = len(r_nodes)
-    G = np.zeros(N)
-    for i in range(N):
-        r_i = r_nodes[i]
-        total = 0.0
-        for k in range(n_surf_quad):
-            ct = cos_thetas[k]
-            st = sin_thetas[k]
-            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, ct)
+
+    # Q3 Marshak — inner-face partial-current response, hollow sphere.
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=0.0, omega_high=np.pi,
+            radii=radii, n_per_panel=n_surf_quad, dps=dps,
+        )
+        cos_th = np.cos(q.pts)
+        sin_th = np.sin(q.pts)
+
+        def _eval(c: float) -> tuple[float, float]:
+            rho_in_minus, _ = geometry.rho_inner_intersections(r_i, c)
             if rho_in_minus is None:
-                continue
+                return 0.0, 0.0
             if len(radii) == 1:
-                tau = sig_t[0] * rho_in_minus
+                tau = float(sig_t[0]) * float(rho_in_minus)
             else:
-                tau = geometry.optical_depth_along_ray(
-                    r_i, ct, rho_in_minus, radii, sig_t,
-                )
-            sin_om = float(np.sqrt(max(0.0, 1.0 - ct * ct)))
-            h_sq = r_i * r_i * sin_om * sin_om
-            mu_s_sq = max(0.0, (r_0 * r_0 - h_sq) / (r_0 * r_0))
-            mu_s = float(np.sqrt(mu_s_sq))
-            p_tilde = float(
-                _shifted_legendre_eval(n_mode, np.array([mu_s]))[0]
-            )
-            total += (
-                theta_wts[k] * st * mu_s * p_tilde
-                * float(np.exp(-tau))
-            )
-        G[i] = 2.0 * total
-    return G
+                tau = float(geometry.optical_depth_along_ray(
+                    r_i, c, rho_in_minus, radii, sig_t,
+                ))
+            sin_sq = max(0.0, 1.0 - c * c)
+            mu_s_sq = max(0.0, (r_0 * r_0 - r_i * r_i * sin_sq) / (r_0 * r_0))
+            return float(np.exp(-tau)), float(np.sqrt(mu_s_sq))
+
+        ev = [_eval(float(c)) for c in cos_th]
+        decay = np.fromiter((e[0] for e in ev), dtype=float, count=len(q))
+        mu_s = np.fromiter((e[1] for e in ev), dtype=float, count=len(q))
+        p_tilde = _shifted_legendre_eval(n_mode, mu_s)
+        return 2.0 * q.integrate_array(sin_th * mu_s * p_tilde * decay)
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def build_white_bc_correction(
@@ -3791,40 +3833,40 @@ def compute_P_esc_mode(
     sig_t = np.asarray(sig_t, dtype=float)
     R = float(radii[-1])
     inv_R2 = 1.0 / (R * R)
-
     omega_low, omega_high = geometry.angular_range
-    omega_pts, omega_wts = gl_float(n_angular, omega_low, omega_high, dps)
-    # Polymorphic direction cosine (identity for slab-polar where the
-    # angular variable IS µ; cos(Ω) for curvilinear).
-    cos_omegas = geometry.ray_direction_cosine(omega_pts)
-    angular_factor = geometry.angular_weight(omega_pts)
     pref = geometry.prefactor
 
-    N = len(r_nodes)
-    P = np.zeros(N)
-    for i in range(N):
-        r_i = r_nodes[i]
-        total = 0.0
-        for k in range(n_angular):
-            cos_om = cos_omegas[k]
-            rho_max_val = geometry.rho_max(r_i, cos_om, R)
-            if rho_max_val <= 0.0:
-                continue
-            tau = geometry.optical_depth_along_ray(
-                r_i, cos_om, rho_max_val, radii, sig_t,
-            )
-            K_esc = geometry.escape_kernel_mp(tau, dps)
-            mu_exit = (rho_max_val + r_i * cos_om) / R
-            p_tilde = float(
-                _shifted_legendre_eval(n_mode, np.array([mu_exit]))[0]
-            )
-            jacobian = rho_max_val * rho_max_val * inv_R2
-            total += (
-                omega_wts[k] * angular_factor[k]
-                * jacobian * p_tilde * K_esc
-            )
-        P[i] = pref * total
-    return P
+    # Q3: rank-N DP_N moment with (ρ_max/R)² Jacobian — observer-
+    # centred ω-sweep, kink-aware.
+    def _per_obs(r_i: float) -> float:
+        q = observer_angular_quadrature(
+            r_obs=r_i, omega_low=omega_low, omega_high=omega_high,
+            radii=radii, n_per_panel=n_angular, dps=dps,
+        )
+        cos_om = geometry.ray_direction_cosine(q.pts)
+        ang_factor = geometry.angular_weight(q.pts)
+
+        def _eval(c: float) -> tuple[float, float, float]:
+            rho = float(geometry.rho_max(r_i, c, R))
+            if rho <= 0.0:
+                return 0.0, 0.0, 0.0
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, c, rho, radii, sig_t,
+            ))
+            mu_exit = (rho + r_i * c) / R
+            return float(geometry.escape_kernel_mp(tau, dps)), mu_exit, rho
+
+        ev = [_eval(float(c)) for c in cos_om]
+        K_esc = np.fromiter((e[0] for e in ev), dtype=float, count=len(q))
+        mu_exit = np.fromiter((e[1] for e in ev), dtype=float, count=len(q))
+        rho = np.fromiter((e[2] for e in ev), dtype=float, count=len(q))
+        p_tilde = _shifted_legendre_eval(n_mode, mu_exit)
+        jacobian = rho * rho * inv_R2
+        return pref * q.integrate_array(
+            ang_factor * jacobian * p_tilde * K_esc,
+        )
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_G_bc_mode(
@@ -3881,32 +3923,34 @@ def compute_G_bc_mode(
     G = np.zeros(N)
 
     if geometry.kind == "sphere-1d":
-        theta_pts, theta_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-        cos_thetas = np.cos(theta_pts)
-        sin_thetas = np.sin(theta_pts)
+        # Q3: observer-centred ω-sweep, kink-aware.
+        def _sphere_per_obs(r_i: float) -> float:
+            q = observer_angular_quadrature(
+                r_obs=r_i, omega_low=0.0, omega_high=np.pi,
+                radii=radii, n_per_panel=n_surf_quad, dps=dps,
+            )
+            cos_th = np.cos(q.pts)
+            sin_th = np.sin(q.pts)
 
-        for i in range(N):
-            r_i = r_nodes[i]
-            total = 0.0
-            for k in range(n_surf_quad):
-                ct = cos_thetas[k]
-                st = sin_thetas[k]
-                rho_to_surface = geometry.rho_max(r_i, ct, R)
-                if rho_to_surface <= 0.0:
-                    continue
+            def _eval(c: float) -> tuple[float, float]:
+                rho = float(geometry.rho_max(r_i, c, R))
+                if rho <= 0.0:
+                    return 0.0, 0.0
                 if len(radii) == 1:
-                    tau = sig_t[0] * rho_to_surface
+                    tau = float(sig_t[0]) * rho
                 else:
-                    tau = geometry.optical_depth_along_ray(
-                        r_i, ct, rho_to_surface, radii, sig_t,
-                    )
-                mu_exit = (rho_to_surface + r_i * ct) / R
-                p_tilde = float(
-                    _shifted_legendre_eval(n_mode, np.array([mu_exit]))[0]
-                )
-                total += theta_wts[k] * st * p_tilde * float(np.exp(-tau))
-            G[i] = 2.0 * total
-        return G
+                    tau = float(geometry.optical_depth_along_ray(
+                        r_i, c, rho, radii, sig_t,
+                    ))
+                return float(np.exp(-tau)), (rho + r_i * c) / R
+
+            ev = [_eval(float(c)) for c in cos_th]
+            decay = np.fromiter((e[0] for e in ev), dtype=float, count=len(q))
+            mu_exit = np.fromiter((e[1] for e in ev), dtype=float, count=len(q))
+            p_tilde = _shifted_legendre_eval(n_mode, mu_exit)
+            return 2.0 * q.integrate_array(sin_th * p_tilde * decay)
+
+        return np.array([_sphere_per_obs(float(r_i)) for r_i in r_nodes])
 
     # Cylinder: surface-centred Ki_1/d kernel, weighted by P̃_n(|μ_s_2D|).
     phi_pts, phi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
