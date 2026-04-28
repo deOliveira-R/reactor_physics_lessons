@@ -48,6 +48,8 @@ C. **Cylinder caveat** — the cylinder ``compute_G_bc_mode`` primitive
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -776,8 +778,27 @@ def test_specular_heterogeneous_2G2R_converges(
 # quality accuracy at N ∈ {1, 2, 3}. At rank-1 reduces algebraically
 # to Hébert white BC.
 #
-# Sphere-only in the current release; the cylinder Knyazev analog
-# and the slab per-face block-T construction are Phase 4 follow-up.
+# Phase 4 (2026-04-28) extends the closure to all three geometries:
+#
+# - Sphere: matrix-Galerkin form diverges at high N (continuous-µ
+#   resolvent 1/(1 - e^{-σ·2Rµ}) singular at grazing µ → 0).
+#   UserWarning at N >= 4. Best at N ∈ {1, 2, 3}.
+# - Cylinder: continuous-limit resolvent bounded but R = (1/2) M^{-1}
+#   ill-conditioned at high N; (I - T·R)^{-1} amplifies the
+#   conditioning blow-up. UserWarning at N >= 4. Best at N ∈ {1, 2, 3}.
+# - Slab: chord = L/µ → ∞ at grazing, transmission e^{-σL/µ} → 0
+#   exponentially; T is purely block off-diagonal and ρ(T·R) ≤ 0.08
+#   across all N. NO PATHOLOGY — slab MB monotonically improves
+#   k_eff toward k_inf at any N.
+#
+# The Phase 4 derivations live in
+# `compute_T_specular_cylinder_3d` (Knyazev Ki_(3+k_m+k_n)
+# expansion, one Ki order higher than the cylinder P/G primitives
+# because T carries an additional µ_3D = sin θ_p factor for partial-
+# current weight) and `compute_T_specular_slab` (per-face block off-
+# diagonal with T_oi^(mn) = 2 ∫ µ P̃_m P̃_n e^{-τ_total/µ} dµ; self-
+# blocks T_oo = T_ii = 0 exactly because a single transit cannot
+# leave a face and return without an intermediate reflection).
 
 
 @pytest.fixture(scope="module")
@@ -890,22 +911,371 @@ def test_specular_multibounce_thin_sphere_lifts_plateau(
     )
 
 
-def test_specular_multibounce_rejects_non_sphere():
-    """Multi-bounce specular is sphere-only in this release; cylinder
-    and slab raise NotImplementedError with a guidance message."""
+@pytest.mark.foundation
+def test_specular_multibounce_warns_at_high_N(thin_sphere_fuelA_like_1G):
+    """Sphere/cyl multi-bounce specular emits a ``UserWarning`` at
+    :math:`N \\ge 4` (Phase 4: tightened from the prior :math:`N \\ge 5`
+    after the operator-norm investigation pinned the overshoot start
+    at :math:`N = 4`). Slab MB never warns — geometric immunity.
+    """
+    fix = thin_sphere_fuelA_like_1G
+
+    # N=3: no warning.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        solve_peierls_1g(
+            SPHERE_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+            fix["nu_sig_f"], boundary="specular_multibounce", n_bc_modes=3,
+            p_order=4, n_panels_per_region=2,
+            n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+            tol=1e-10,
+        )
+
+    # N=4: warning expected on sphere.
+    with warnings.catch_warnings(record=True) as ws:
+        warnings.simplefilter("always")
+        solve_peierls_1g(
+            SPHERE_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+            fix["nu_sig_f"], boundary="specular_multibounce", n_bc_modes=4,
+            p_order=4, n_panels_per_region=2,
+            n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+            tol=1e-10,
+        )
+        sphere_warned = any(
+            issubclass(w.category, UserWarning)
+            and "specular_multibounce" in str(w.message)
+            for w in ws
+        )
+    assert sphere_warned, (
+        "Sphere multi-bounce specular at N=4 must emit a UserWarning; "
+        "the matrix-Galerkin form overshoots k_inf for thin cells at "
+        "this rank."
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# F. Cylinder multi-bounce specular (Phase 4)
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def thin_cyl_fuelA_like_1G():
+    """Same fuel-A-like XS as ``thin_sphere_fuelA_like_1G`` but applied
+    to a cylinder cell of the same radius. ``τ_R = 2.5`` — surfaces
+    the cylinder thin-cell single-bounce plateau (~-3 % at rank-1).
+    """
+    sig_t = np.array([0.5])
+    sig_s = np.array([[0.38]])
+    nu_sig_f = np.array([2.5 * 0.01])
+    radii = np.array([5.0])
+    k_inf = float(nu_sig_f[0]) / (float(sig_t[0]) - float(sig_s[0, 0]))
+    return {
+        "sig_t": sig_t,
+        "sig_s": sig_s,
+        "nu_sig_f": nu_sig_f,
+        "radii": radii,
+        "k_inf": k_inf,
+    }
+
+
+@pytest.mark.foundation
+def test_specular_multibounce_cyl_rank1_equals_hebert(thin_cyl_fuelA_like_1G):
+    r"""At rank-1, ``closure="specular_multibounce"`` for cylinder
+    reduces algebraically to ``closure="white_hebert"``. The
+    construction
+    :math:`K_{\rm bc}^{\rm spec,mb,cyl} = G\,R\,(I - T R)^{-1}\,P`
+    collapses at :math:`N = 1` to :math:`G\,(1/(1 - P_{ss}^{\rm cyl}))\,P`
+    because :math:`R = [[1]]` and :math:`T_{00}^{\rm cyl} = P_{ss}^{\rm
+    cyl}` exactly (the Knyazev rank-1 reduction —
+    :math:`(4/\pi)\!\int_0^{\pi/2}\!\cos\alpha\,\mathrm{Ki}_3(\tau_{\rm 2D}(\alpha))
+    \,\mathrm d\alpha = P_{ss}^{\rm cyl}`).
+    """
+    fix = thin_cyl_fuelA_like_1G
+    sol_mb = solve_peierls_1g(
+        CYLINDER_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+        fix["nu_sig_f"], boundary="specular_multibounce", n_bc_modes=1,
+        p_order=4, n_panels_per_region=2,
+        n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+        tol=1e-10,
+    )
+    sol_heb = solve_peierls_1g(
+        CYLINDER_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+        fix["nu_sig_f"], boundary="white_hebert", n_bc_modes=1,
+        p_order=4, n_panels_per_region=2,
+        n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+        tol=1e-10,
+    )
+    np.testing.assert_allclose(
+        sol_mb.k_eff, sol_heb.k_eff, rtol=1e-8, atol=1e-10,
+    )
+
+
+@pytest.mark.foundation
+def test_specular_multibounce_cyl_lifts_thin_plateau(thin_cyl_fuelA_like_1G):
+    r"""Multi-bounce cylinder lifts the thin-cell single-bounce
+    plateau (rank-1 bare specular ~ -3 %, MB ~ -0.34 %).
+
+    Pinned regression numbers from
+    ``derivations/diagnostics/diag_specular_mb_phase4_06_keff_endtoend.py``
+    at BASE quadrature (p_order=4, n_panels=2, n_angular=24, dps=20):
+
+    - :math:`N=1`: bare ~ -2.95 %, MB ~ -0.17 %.
+    - :math:`N=3`: MB ~ -0.14 % (close to convergence).
+
+    Cylinder MB is gated to :math:`N \in \{1, 2, 3\}` for thin cells
+    by the :math:`N \ge 4` UserWarning, mirroring the sphere envelope.
+    """
+    fix = thin_cyl_fuelA_like_1G
+    k_inf = fix["k_inf"]
+
+    # N=1 MB within 0.5 %.
+    sol_mb_1 = solve_peierls_1g(
+        CYLINDER_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+        fix["nu_sig_f"], boundary="specular_multibounce", n_bc_modes=1,
+        p_order=4, n_panels_per_region=2,
+        n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+        tol=1e-10,
+    )
+    err1 = abs(sol_mb_1.k_eff - k_inf) / k_inf
+    assert err1 < 5e-3, (
+        f"cyl MB rank-1 error {err1*100:.4f} % exceeds 0.5 % "
+        f"(Hébert-equivalent target). k_eff = {sol_mb_1.k_eff:.6f}, "
+        f"k_inf = {k_inf:.6f}"
+    )
+
+    # N=3 MB within 0.3 %.
+    sol_mb_3 = solve_peierls_1g(
+        CYLINDER_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+        fix["nu_sig_f"], boundary="specular_multibounce", n_bc_modes=3,
+        p_order=4, n_panels_per_region=2,
+        n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+        tol=1e-10,
+    )
+    err3 = abs(sol_mb_3.k_eff - k_inf) / k_inf
+    assert err3 < 3e-3, (
+        f"cyl MB rank-3 error {err3*100:.4f} % exceeds 0.3 % gate. "
+        f"k_eff = {sol_mb_3.k_eff:.6f}, k_inf = {k_inf:.6f}"
+    )
+
+    # MB significantly lifts over bare specular at the same rank.
+    sol_bare_3 = solve_peierls_1g(
+        CYLINDER_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+        fix["nu_sig_f"], boundary="specular", n_bc_modes=3,
+        p_order=4, n_panels_per_region=2,
+        n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+        tol=1e-10,
+    )
+    improvement = abs(sol_bare_3.k_eff - sol_mb_3.k_eff)
+    assert improvement > 0.01 * k_inf, (
+        f"multi-bounce should improve thin-cyl k_eff over bare specular "
+        f"by > 1 % at rank-3, got {improvement / k_inf * 100:.3f} %. "
+        f"bare = {sol_bare_3.k_eff:.6f}, multibounce = {sol_mb_3.k_eff:.6f}"
+    )
+
+
+@pytest.mark.foundation
+def test_specular_multibounce_cyl_warns_at_high_N(thin_cyl_fuelA_like_1G):
+    """Cylinder MB emits a ``UserWarning`` at :math:`N \\ge 4`
+    mirroring the sphere envelope. The pathology mechanism is
+    different (sphere = continuous-µ matrix-Galerkin divergence;
+    cylinder = R = (1/2) M^{-1} ill-conditioning amplified by the
+    geometric series) but the operational consequence is identical.
+    """
+    fix = thin_cyl_fuelA_like_1G
+
+    # N=3: no warning.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        solve_peierls_1g(
+            CYLINDER_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+            fix["nu_sig_f"], boundary="specular_multibounce", n_bc_modes=3,
+            p_order=4, n_panels_per_region=2,
+            n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+            tol=1e-10,
+        )
+
+    # N=4: warning expected.
+    with warnings.catch_warnings(record=True) as ws:
+        warnings.simplefilter("always")
+        solve_peierls_1g(
+            CYLINDER_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+            fix["nu_sig_f"], boundary="specular_multibounce", n_bc_modes=4,
+            p_order=4, n_panels_per_region=2,
+            n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+            tol=1e-10,
+        )
+        cyl_warned = any(
+            issubclass(w.category, UserWarning)
+            and "specular_multibounce" in str(w.message)
+            for w in ws
+        )
+    assert cyl_warned, (
+        "Cylinder multi-bounce specular at N=4 must emit a UserWarning; "
+        "R = (1/2) M^{-1} ill-conditioning is amplified by the "
+        "geometric-series factor."
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# G. Slab multi-bounce specular (Phase 4 — geometric immunity)
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def thin_slab_fuelA_like_1G():
+    """Fuel-A-like XS on a slab of half-thickness 5 cm. ``τ_L = 2.5``
+    — surfaces the slab thin-cell single-bounce plateau (~-2.7 % at
+    rank-1) and probes the geometric-immunity claim that slab MB
+    converges monotonically at any N.
+    """
+    sig_t = np.array([0.5])
+    sig_s = np.array([[0.38]])
+    nu_sig_f = np.array([2.5 * 0.01])
+    radii = np.array([5.0])
+    k_inf = float(nu_sig_f[0]) / (float(sig_t[0]) - float(sig_s[0, 0]))
+    return {
+        "sig_t": sig_t,
+        "sig_s": sig_s,
+        "nu_sig_f": nu_sig_f,
+        "radii": radii,
+        "k_inf": k_inf,
+    }
+
+
+@pytest.mark.foundation
+def test_specular_multibounce_slab_rank1_equals_2E3_identity():
+    r"""Algebraic identity test: at rank-1, the slab specular MB
+    transfer matrix has :math:`T_{oi}^{(0,0)} = 2 E_3(\tau_{\rm tot})`
+    by closed form (substitution :math:`u = 1/\mu`):
+
+    .. math::
+
+       T_{oi}^{(0,0)} = 2\!\int_0^1\!\mu\,e^{-\sigma L/\mu}\,\mathrm d\mu
+                      = 2\!\int_1^\infty\!u^{-3}\,e^{-\sigma L u}\,\mathrm du
+                      = 2 E_3(\sigma L).
+
+    Self-blocks :math:`T_{oo} = T_{ii} = 0` exactly because a single
+    transit at constant direction cannot leave a face and return
+    without an intermediate reflection.
+    """
     from orpheus.derivations.peierls_geometry import (
-        _build_full_K_per_group,
-        composite_gl_r,
+        compute_T_specular_slab, _slab_E_n,
     )
-    radii = np.array([2.0])
-    r_nodes, r_wts, panels = composite_gl_r(
-        radii, n_panels_per_region=1, p_order=2, dps=15,
+    cases = [
+        ("thin",      np.array([5.0]),      np.array([0.5])),  # τ_L=2.5
+        ("thick",     np.array([5.0]),      np.array([1.0])),  # τ_L=5
+        ("very-thin", np.array([5.0]),      np.array([0.2])),  # τ_L=1
+        ("MR",        np.array([2.0, 5.0]), np.array([0.6, 0.4])),
+    ]
+    for name, radii, sig_t in cases:
+        T = compute_T_specular_slab(radii, sig_t, 1, n_quad=128)
+        region_lengths = np.diff(np.concatenate([[0.0], radii]))
+        tau_tot = float(np.sum(sig_t * region_lengths))
+        twoE3 = 2.0 * _slab_E_n(3, tau_tot)
+        rel = abs(T[0, 1] - twoE3) / twoE3
+        assert rel < 1e-10, (
+            f"T_oi^(0,0) != 2 E_3(τ) for {name}: "
+            f"{T[0,1]:.10f} vs {twoE3:.10f}, rel_err={rel:.3e}"
+        )
+        # Self-blocks zero by construction.
+        assert T[0, 0] == 0.0
+        assert T[1, 1] == 0.0
+
+
+@pytest.mark.foundation
+def test_specular_multibounce_slab_rank1_lifts_plateau(thin_slab_fuelA_like_1G):
+    r"""Slab MB at rank-1 lifts the bare-specular thin-cell plateau
+    (~-2.7 %) to within 0.5 %. Because slab has no
+    ``boundary="white_hebert"`` analog (Hébert's
+    :math:`(1 - P_{ss})^{-1}` factor only applies to sphere/cyl), we
+    use bare specular as the comparator: MB must show a measurable
+    improvement.
+    """
+    fix = thin_slab_fuelA_like_1G
+    k_inf = fix["k_inf"]
+
+    sol_mb_1 = solve_peierls_1g(
+        SLAB_POLAR_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+        fix["nu_sig_f"], boundary="specular_multibounce", n_bc_modes=1,
+        p_order=4, n_panels_per_region=2,
+        n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+        tol=1e-10,
     )
-    sig_t_g = np.array([1.0])
-    for geom in (CYLINDER_1D, SLAB_POLAR_1D):
-        with pytest.raises(NotImplementedError, match="sphere-only"):
-            _build_full_K_per_group(
-                geom, r_nodes, r_wts, panels, radii, sig_t_g,
-                "specular_multibounce",
-                n_angular=4, n_rho=4, n_surf_quad=4, n_bc_modes=2, dps=15,
+    err1 = abs(sol_mb_1.k_eff - k_inf) / k_inf
+    assert err1 < 5e-3, (
+        f"slab MB rank-1 error {err1*100:.4f} % exceeds 0.5 %. "
+        f"k_eff = {sol_mb_1.k_eff:.6f}, k_inf = {k_inf:.6f}"
+    )
+
+    sol_bare_1 = solve_peierls_1g(
+        SLAB_POLAR_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+        fix["nu_sig_f"], boundary="specular", n_bc_modes=1,
+        p_order=4, n_panels_per_region=2,
+        n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+        tol=1e-10,
+    )
+    improvement = abs(sol_bare_1.k_eff - sol_mb_1.k_eff)
+    assert improvement > 0.01 * k_inf, (
+        f"multi-bounce should improve thin-slab k_eff over bare specular "
+        f"by > 1 % at rank-1, got {improvement / k_inf * 100:.3f} %. "
+        f"bare = {sol_bare_1.k_eff:.6f}, multibounce = {sol_mb_1.k_eff:.6f}"
+    )
+
+
+@pytest.mark.foundation
+def test_specular_multibounce_slab_monotonic_high_N(thin_slab_fuelA_like_1G):
+    r"""Geometric-immunity regression: slab MB **converges
+    monotonically** with N (no overshoot at any N). The test pins
+    the per-rank progression at thin :math:`\tau_L = 2.5` from the
+    Phase 4 investigation:
+
+    ============  ==========
+    :math:`N`     rel error
+    ============  ==========
+    1             ~ -0.30 %
+    4             ~ -0.24 %
+    8             ~ -0.16 %
+    ============  ==========
+
+    The progression must stay strictly below :math:`k_\infty` (no
+    overshoot) and must be monotonically improving (within numerical
+    noise tolerance). Slab is the only geometry where the
+    matrix-Galerkin :math:`(I - T R)^{-1}` form converges as
+    :math:`N \to \infty`. NO ``UserWarning`` should be emitted at
+    any :math:`N`.
+    """
+    fix = thin_slab_fuelA_like_1G
+    k_inf = fix["k_inf"]
+
+    keffs = {}
+    for N in (1, 4, 8):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            sol = solve_peierls_1g(
+                SLAB_POLAR_1D, fix["radii"], fix["sig_t"], fix["sig_s"],
+                fix["nu_sig_f"], boundary="specular_multibounce", n_bc_modes=N,
+                p_order=4, n_panels_per_region=2,
+                n_angular=24, n_rho=24, n_surf_quad=24, dps=20,
+                tol=1e-10,
             )
+        keffs[N] = sol.k_eff
+    # No overshoot.
+    for N in (1, 4, 8):
+        assert keffs[N] < k_inf, (
+            f"slab MB N={N} OVERSHOT k_inf: k_eff={keffs[N]:.8f} vs "
+            f"k_inf={k_inf:.8f}"
+        )
+    # Monotonic improvement (within 1e-6 noise floor).
+    assert keffs[4] >= keffs[1] - 1e-6, (
+        f"slab MB non-monotonic N=1→4: {keffs[1]:.8f} → {keffs[4]:.8f}"
+    )
+    assert keffs[8] >= keffs[4] - 1e-6, (
+        f"slab MB non-monotonic N=4→8: {keffs[4]:.8f} → {keffs[8]:.8f}"
+    )
+    # Rank-8 within 0.3 % (per the investigator's regime sweep).
+    err8 = abs(keffs[8] - k_inf) / k_inf
+    assert err8 < 3e-3, (
+        f"slab MB rank-8 error {err8*100:.4f} % exceeds 0.3 % gate "
+        f"(geometric-immunity claim). k_eff = {keffs[8]:.6f}, "
+        f"k_inf = {k_inf:.6f}"
+    )

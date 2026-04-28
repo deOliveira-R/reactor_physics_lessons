@@ -2077,20 +2077,40 @@ def compute_T_specular_sphere(
     white BC. Beyond rank-1, :math:`T` carries the off-diagonal
     couplings that capture the non-isotropic surface re-emergence.
 
-    **High-rank pathology**. The spectral radius of :math:`T R` grows
-    toward 1 as :math:`N \to \infty` because grazing modes
-    (:math:`\mu \to 0` so chord :math:`\to 0` so transmission
-    :math:`\to 1`) survive multiple reflections without attenuation.
-    The geometric series :math:`(I - T R)^{-1}` then becomes nearly
-    singular, and the multi-bounce closure overshoots :math:`k_\infty`
-    for :math:`N \gtrsim 4` even on configurations where rank-1 / 2 / 3
-    were excellent. **Recommended use is** :math:`N \in \{1, 2, 3\}`
-    for thin cells (:math:`\tau_R \lesssim 5`); for thick cells use
-    plain ``boundary="specular"`` at higher :math:`N`.
+    **Fundamental matrix-Galerkin divergence at high :math:`N`**. The
+    multi-bounce closure overshoots :math:`k_\infty` for :math:`N \ge 4`
+    on thin sphere even when rank-1 / 2 / 3 were excellent. The root
+    cause is **structural, not numerical**:
 
-    See ``derivations/diagnostics/diag_specular_thin_06_multi_bounce.py``
-    for the full diagnostic ladder confirming both the low-:math:`N`
-    win and the high-:math:`N` overshoot.
+    - In continuous-:math:`\mu` space, :math:`T \cdot R` is multiplication
+      by :math:`e^{-\sigma\,2R\mu}` (spectrum on :math:`(e^{-2\sigma R}, 1]`)
+      and :math:`(I - T R)^{-1}` is multiplication by
+      :math:`1/(1 - e^{-\sigma\,2R\mu})`, which **diverges at
+      :math:`\mu = 0`** (grazing rays — chord :math:`2R\mu \to 0`,
+      transmission :math:`\to 1`, so the geometric sum of bounces does
+      not terminate).
+    - The continuous-:math:`\mu` integral form of :math:`K_{\rm bc}^{\rm
+      mb}` carries an additional :math:`\mu`-weight that **cancels this
+      singularity** (:math:`\mu / (1 - e^{-2\sigma R\mu}) \to 1/(2\sigma R)`,
+      finite). MC ground truth gives :math:`k_{\rm eff} = k_\infty` at
+      homogeneous specular sphere (verified by `diag_specular_overshoot_05`).
+    - But the **matrix-Galerkin projection** distributes the
+      :math:`\mu`-weight across :math:`P, T, G` separately and the
+      matrix inverse :math:`(I - T R)^{-1}` does not preserve the
+      cancellation. As :math:`N` grows the basis resolves grazing
+      modes more sharply, exposing the divergence:
+      :math:`\| (I - T R)^{-1} \|_2` at thin :math:`\tau_R = 2.5` grows
+      from :math:`1.08` (:math:`N=1`) to :math:`53.9` (:math:`N=25`) —
+      **unbounded**.
+
+    **Recommended use is** :math:`N \in \{1, 2, 3\}` for thin cells
+    (:math:`\tau_R \lesssim 5`); for thicker cells use plain
+    ``boundary="specular"`` at higher :math:`N`. A ``UserWarning`` is
+    emitted at :math:`N \ge 4`. The proper fix (Phase 5) is a
+    continuous-:math:`\mu` reformulation that bypasses the matrix
+    inversion entirely — see ``.claude/agent-memory/numerics-investigator/
+    specular_mb_overshoot_root_cause.md`` for the operator-norm proof
+    and the Phase 5 sketch.
     """
     radii = np.asarray(radii, dtype=float)
     sig_t = np.asarray(sig_t, dtype=float)
@@ -2132,6 +2152,240 @@ def compute_T_specular_sphere(
         for n in range(n_modes):
             Pn = _shifted_legendre_eval(n, mu_pts)
             T[m, n] = 2.0 * float(np.sum(mu_wts * mu_pts * Pm * Pn * decay))
+    return T
+
+
+def compute_T_specular_slab(
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    n_modes: int,
+    *,
+    n_quad: int = 64,
+) -> np.ndarray:
+    r"""Surface-to-surface partial-current **transfer matrix** for the
+    slab specular BC, used by the multi-bounce-corrected closure.
+
+    The slab has two faces (outer at :math:`x = L`, inner at
+    :math:`x = 0`), each carrying :math:`N` partial-current modes, so
+    the mode space is :math:`\mathbb R^{2N}` with the per-face block
+    decomposition used by ``closure="specular"`` for slab. A single
+    transit at constant direction crosses the slab from one face to
+    the other; the **self-blocks** :math:`T_{oo} = T_{ii} = 0` exactly
+    (a ray cannot leave outer face and return without an intermediate
+    reflection at inner face). The structure is therefore purely
+    block off-diagonal:
+
+    .. math::
+       :label: peierls-slab-T-specular
+
+       T_{\rm slab} \;=\; \begin{pmatrix} 0 & T_{oi} \\
+                                          T_{io} & 0
+                          \end{pmatrix}, \qquad
+       T_{io} \;=\; T_{oi}\ \text{(face symmetry, homogeneous)},
+
+    with
+
+    .. math::
+
+       T_{oi}^{(mn)} \;=\; 2\!\int_0^1\!\mu\,\tilde P_m(\mu)\,
+                              \tilde P_n(\mu)\,e^{-\tau_{\rm tot}/\mu}\,
+                              \mathrm d\mu
+
+    and :math:`\tau_{\rm tot} = \sum_k \Sigma_{t,k}\,L_k` the integrated
+    optical thickness (slab chord length is uniformly :math:`L/\mu`, so
+    multi-region :math:`\tau(\mu) = \tau_{\rm tot}/\mu`).
+
+    **Use**. Combined with :func:`reflection_specular` (= per-face
+    :math:`R_{\rm face}`) and the block-diagonal slab reflection
+    :math:`R_{\rm slab} = \operatorname{diag}(R_{\rm face}, R_{\rm face})`,
+    the multi-bounce-corrected slab specular closure is
+
+    .. math::
+
+       K_{\rm bc}^{\rm spec,mb,slab} \;=\;
+            G_{\rm slab}\,R_{\rm slab}\,
+            (I - T_{\rm slab}\,R_{\rm slab})^{-1}\,P_{\rm slab}.
+
+    **Rank-1 reduction**. At :math:`N = 1`, :math:`T_{oi}^{(0,0)} = 2
+    E_3(\tau_{\rm tot})` exactly (closed form by substitution
+    :math:`u = 1/\mu`). The block off-diagonal :math:`T_{\rm slab}`
+    yields :math:`(I - T \cdot R)^{-1}` with diagonal blocks
+    :math:`(I - T_{oi} R T_{io} R)^{-1}` and an extremely well-conditioned
+    inverse.
+
+    **No high-:math:`N` pathology**. Unlike sphere (where the
+    continuous-:math:`\mu` operator :math:`1/(1 - e^{-\sigma\,2R\mu})`
+    diverges at grazing :math:`\mu \to 0`) and unlike cylinder (where
+    :math:`R = (1/2) M^{-1}` is ill-conditioned at high :math:`N`),
+    the slab **chord** is :math:`L/\mu \to \infty` at grazing, so
+    :math:`e^{-\tau_{\rm tot}/\mu} \to 0` exponentially. The operator
+    :math:`T_{\rm op}^{\rm slab}(\mu) = e^{-\sigma L/\mu}` vanishes at
+    both endpoints :math:`\mu = 0, 1` and the spectral radius
+    :math:`\rho(T R) \le 0.08` across all :math:`N` at thin
+    :math:`\tau_L = 2.5`. The matrix-Galerkin (I - T R)^{-1}
+    **converges as** :math:`N \to \infty` for slab — the only geometry
+    where this is true.
+
+    See ``.claude/agent-memory/numerics-investigator/specular_mb_phase4_cyl_slab.md``
+    for the geometric-immunity derivation and the pinned regime sweep
+    over :math:`\tau_L \in [0.5, 10]`.
+    """
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    region_lengths = np.diff(np.concatenate([[0.0], radii]))
+    tau_total = float(np.sum(sig_t * region_lengths))
+
+    # Half-range Gauss-Legendre on µ ∈ [0, 1].
+    nodes, wts = np.polynomial.legendre.leggauss(n_quad)
+    mu = 0.5 * (nodes + 1.0)
+    w = 0.5 * wts
+
+    # τ(µ) = τ_total / µ for slab (chord = L/µ uniformly).
+    decay = np.exp(-tau_total / mu)
+    mu_w = w * mu
+
+    T_oi = np.zeros((n_modes, n_modes))
+    for m in range(n_modes):
+        Pm = _shifted_legendre_eval(m, mu)
+        for n in range(n_modes):
+            Pn = _shifted_legendre_eval(n, mu)
+            T_oi[m, n] = 2.0 * float(np.sum(mu_w * Pm * Pn * decay))
+
+    T = np.zeros((2 * n_modes, 2 * n_modes))
+    T[:n_modes, n_modes:] = T_oi
+    T[n_modes:, :n_modes] = T_oi  # T_io = T_oi by face symmetry
+    return T
+
+
+def compute_T_specular_cylinder_3d(
+    radii: np.ndarray,
+    sig_t: np.ndarray,
+    n_modes: int,
+    *,
+    n_quad: int = 64,
+) -> np.ndarray:
+    r"""Surface-to-surface partial-current **transfer matrix** for the
+    cylinder specular BC (Knyazev expansion), used by the multi-bounce-
+    corrected closure.
+
+    .. math::
+       :label: peierls-cyl-T-specular
+
+       T_{mn}^{\rm cyl} \;=\; \frac{4}{\pi}\!\int_0^{\pi/2}\!\cos\alpha\,
+            \sum_{k_m, k_n} c_m^{k_m}\,c_n^{k_n}\,
+            (\cos\alpha)^{k_m+k_n}\,
+            \mathrm{Ki}_{3+k_m+k_n}\!\bigl(\tau_{\rm 2D}(\alpha)\bigr)\,
+            \mathrm d\alpha
+
+    where :math:`c_n^k` are the monomial coefficients of
+    :math:`\tilde P_n(\mu)`, :math:`\alpha` is the in-plane angle
+    measured from the inward normal at the surface emission point, and
+    :math:`\tau_{\rm 2D}(\alpha)` is the multi-region optical depth
+    along the antipodal in-plane chord with impact parameter
+    :math:`h = R \sin\alpha` (same chord geometry as in
+    :func:`compute_P_ss_cylinder` / :func:`compute_P_esc_cylinder_3d_mode`).
+
+    The :math:`\mathrm{Ki}_{3+k_m+k_n}` order is **one higher** than
+    the :math:`\mathrm{Ki}_{2+k}` of the analogous P/G primitives —
+    because :math:`T` carries an additional :math:`\mu_{\rm 3D} =
+    \sin\theta_p \cos\alpha` factor for the partial-current weight on
+    top of the polar absorption already present in P/G.
+
+    **Use**. Combined with :func:`reflection_specular` (= :math:`R`),
+    the cylinder multi-bounce specular closure is
+
+    .. math::
+
+       K_{\rm bc}^{\rm spec,mb,cyl} \;=\; G^{\rm cyl}\,R\,
+                                   (I - T^{\rm cyl}\,R)^{-1}\,P^{\rm cyl}.
+
+    **Rank-1 reduction**. At :math:`m = n = 0` only the
+    :math:`k_m = k_n = 0` term survives; :math:`T_{00}^{\rm cyl} =
+    (4/\pi) \int_0^{\pi/2} \cos\alpha\,\mathrm{Ki}_3(\tau_{\rm 2D}(\alpha))\,
+    \mathrm d\alpha = P_{ss}^{\rm cyl}` exactly (the same kernel as
+    :func:`compute_P_ss_cylinder`). At rank-1 the multi-bounce closure
+    therefore reduces algebraically to Hébert's :math:`(1 - P_{ss})^{-1}`
+    white BC for cylinder — bit-equal to ``boundary="white_hebert"`` at
+    :math:`N = 1`.
+
+    **High-rank pathology**. Although the **continuous-limit**
+    resolvent for cylinder is bounded (the :math:`\cos\alpha` partial-
+    current weight in :math:`T_{\rm op}^{\rm cyl}(\alpha)` vanishes at
+    grazing :math:`\alpha \to \pi/2`), the **matrix** :math:`R = (1/2)
+    M^{-1}` is poorly conditioned at high :math:`N` and the geometric
+    series :math:`(I - T R)^{-1}` amplifies the conditioning blow-up.
+    Empirically the closure overshoots :math:`k_\infty` for :math:`N
+    \ge 4` at thin cells (:math:`\tau_R = 2.5`: :math:`+0.03 \%` at
+    :math:`N=4`, :math:`+1.27 \%` at :math:`N=8`). **Recommended use
+    is** :math:`N \in \{1, 2, 3\}` for thin cells; for thicker cells
+    use plain ``boundary="specular"`` at higher :math:`N`. A
+    ``UserWarning`` is emitted at :math:`N \ge 4` mirroring the sphere
+    multi-bounce gating.
+
+    See ``.claude/agent-memory/numerics-investigator/specular_mb_phase4_cyl_slab.md``
+    for the Knyazev derivation, the rank-1 :math:`= P_{ss}^{\rm cyl}`
+    identity (verified to 1e-14), and the regime sweep showing the
+    overshoot persists across :math:`\tau_R \in [1, 5]`.
+    """
+    radii = np.asarray(radii, dtype=float)
+    sig_t = np.asarray(sig_t, dtype=float)
+    R = float(radii[-1])
+    radii_inner = np.concatenate([[0.0], radii[:-1]])
+    radii_outer = radii
+
+    nodes, wts = np.polynomial.legendre.leggauss(n_quad)
+    alpha = 0.5 * (nodes + 1.0) * (np.pi / 2.0)
+    aw = wts * (np.pi / 4.0)
+    cos_a = np.cos(alpha)
+    sin_a = np.sin(alpha)
+
+    # Multi-region τ_2D along antipodal in-plane chord at each α.
+    # Impact parameter h = R sin α; same shell-intersection geometry as
+    # compute_P_ss_cylinder.
+    tau_arr = np.zeros(n_quad)
+    for k in range(n_quad):
+        h = R * float(sin_a[k])
+        tau = 0.0
+        for n_reg in range(len(radii)):
+            r_in = float(radii_inner[n_reg])
+            r_out = float(radii_outer[n_reg])
+            if h >= r_out:
+                continue
+            seg_outer = float(np.sqrt(max(r_out * r_out - h * h, 0.0)))
+            seg_inner = (
+                float(np.sqrt(max(r_in * r_in - h * h, 0.0)))
+                if h < r_in else 0.0
+            )
+            chord_in_annulus = 2.0 * (seg_outer - seg_inner)
+            tau += float(sig_t[n_reg]) * chord_in_annulus
+        tau_arr[k] = tau
+
+    # Pre-evaluate Ki_(j+3) for j = 0 .. 2(N-1) at each α node.
+    # Use float ki_n_float for speed (Knyazev integrand needs O(n_quad ·
+    # 2N) Ki evaluations and ki_n_mp would be ~1000x slower).
+    max_kk = 2 * (n_modes - 1) if n_modes > 0 else 0
+    Ki_arr = np.zeros((max_kk + 1, n_quad))
+    for j in range(max_kk + 1):
+        for k in range(n_quad):
+            Ki_arr[j, k] = ki_n_float(j + 3, float(tau_arr[k]))
+
+    coef_list = [_shifted_legendre_monomial_coefs(m) for m in range(n_modes)]
+
+    T = np.zeros((n_modes, n_modes))
+    for m in range(n_modes):
+        cm = coef_list[m]
+        for n in range(n_modes):
+            cn = coef_list[n]
+            kernel = np.zeros(n_quad)
+            for k_m, c_m in enumerate(cm):
+                if c_m == 0.0:
+                    continue
+                for k_n, c_n in enumerate(cn):
+                    if c_n == 0.0:
+                        continue
+                    kk = k_m + k_n
+                    kernel += c_m * c_n * (cos_a ** kk) * Ki_arr[kk]
+            T[m, n] = (4.0 / np.pi) * float(np.sum(aw * cos_a * kernel))
     return T
 
 
@@ -4911,51 +5165,69 @@ def _build_full_K_per_group(
 
         return K + K_bc_hebert
     if closure == "specular_multibounce":
-        # Multi-bounce-corrected specular for SPHERE. Identical to
-        # `closure="specular"` for sphere PLUS the multi-bounce
-        # correction `K_bc = G · R · (I - T·R)^{-1} · P` where
-        # T_mn = 2 ∫_0^1 µ P̃_m(µ) P̃_n(µ) e^{-τ(µ)} dµ is the
-        # multi-region surface-to-surface partial-current transfer
-        # matrix (see :func:`compute_T_specular_sphere`).
+        # Multi-bounce-corrected specular: bare-specular K_bc with the
+        # geometric-series factor `(I - T·R)^{-1}` inserted between
+        # `R` and `P`,
         #
-        # **Best-use envelope**: thin cells (τ_R ≲ 5) at LOW rank
-        # (N ∈ {1, 2, 3}). Lifts the documented thin-cell single-
-        # bounce plateau from -8 % (rank-1 Mark calibration limit) to
-        # Hébert-quality accuracy. At rank-1 reduces algebraically to
-        # Hébert (1 - P_ss)^{-1} white BC.
+        #     K_bc^spec,mb = G · R · (I - T·R)^(-1) · P,
         #
-        # **High-N pathology**: at N ≥ 4 the geometric series
-        # (I - T·R)^{-1} becomes nearly singular because the
-        # spectral radius ρ(T·R) approaches 1 (grazing modes survive
-        # multiple reflections without attenuation). Empirically the
-        # closure overshoots k_inf at N ≥ 4 even on configurations
-        # where N ∈ {1, 2, 3} were excellent. For thicker cells use
-        # plain ``closure="specular"`` at higher N.
+        # where T is the surface-to-surface partial-current transfer
+        # matrix for the geometry. This is the rank-N analog of
+        # Hébert's `(1 - P_ss)^{-1}` factor and at rank-1 reduces
+        # algebraically to Hébert white BC (T_00 = P_ss for sphere/cyl;
+        # T_oi^(0,0) = 2 E_3(σL) for slab).
         #
-        # See ``derivations/diagnostics/diag_specular_thin_06_multi_bounce.py``
-        # for the full diagnostic ladder and agent memory
-        # ``specular_bc_thin_cell_plateau.md`` for the structural
-        # discussion of the missing multi-bounce term in the bare
-        # G·R·P specular closure.
-        if geometry.kind != "sphere-1d":
+        # **Best-use envelopes** (per-geometry) — see the docstrings
+        # of :func:`compute_T_specular_sphere`,
+        # :func:`compute_T_specular_cylinder_3d`,
+        # :func:`compute_T_specular_slab` for the structural derivations
+        # and `.claude/agent-memory/numerics-investigator/specular_mb_
+        # phase4_cyl_slab.md` for the per-geometry pathology table.
+        #
+        # - SPHERE: N ∈ {1, 2, 3} for thin cells (τ_R ≲ 5). At N ≥ 4 a
+        #   UserWarning is emitted because the matrix-Galerkin
+        #   projection of the divergent continuous-µ operator
+        #   1/(1-e^{-σ·2Rµ}) (singular at grazing µ → 0) has
+        #   unbounded operator norm; closure overshoots k_inf for
+        #   N ≥ 4 even when N ∈ {1,2,3} were excellent. See
+        #   `specular_mb_overshoot_root_cause.md` for the operator-
+        #   norm proof.
+        # - CYLINDER: same envelope as sphere (N ∈ {1, 2, 3}) with
+        #   UserWarning at N ≥ 4. The continuous-limit resolvent is
+        #   bounded for cylinder (cos α partial-current factor wins
+        #   at grazing α → π/2), but R = (1/2) M^{-1} is poorly
+        #   conditioned at high N and the geometric series amplifies
+        #   the conditioning blow-up to user-visible drift past k_inf.
+        # - SLAB: NO PATHOLOGY at any N. Slab chord = L/µ → ∞ at
+        #   grazing so transmission e^{-σL/µ} → 0 exponentially; the
+        #   single-transit T is purely block off-diagonal with
+        #   ρ(T·R) ≤ 0.08 across all N at thin τ_L = 2.5. No warning
+        #   is emitted; slab MB monotonically improves k_eff toward
+        #   k_inf as N grows (verified to N = 16+). It is the only
+        #   geometry where the matrix-Galerkin form converges as
+        #   N → ∞.
+        if geometry.kind not in ("sphere-1d", "cylinder-1d", "slab-polar"):
             raise NotImplementedError(
-                f"closure='specular_multibounce' is sphere-only in this "
-                f"release; the cylinder analog requires a 3-D Knyazev "
-                f"surface-to-surface T matrix and the slab analog requires "
-                f"a per-face block-T construction (Phase 3 follow-up). For "
-                f"{geometry.kind!r} use closure='specular' (single-bounce, "
-                f"converges at thicker cells) or closure='white_hebert' "
-                f"(thin-cell-correct rank-1)."
+                f"closure='specular_multibounce': unsupported geometry "
+                f"kind {geometry.kind!r}. Supported: sphere-1d, "
+                f"cylinder-1d, slab-polar."
             )
-        if n_bc_modes >= 5:
+        if geometry.kind in ("sphere-1d", "cylinder-1d") and n_bc_modes >= 4:
             import warnings as _warnings
+            geom_label = (
+                "sphere" if geometry.kind == "sphere-1d" else "cylinder"
+            )
             _warnings.warn(
-                f"closure='specular_multibounce' at n_bc_modes={n_bc_modes} "
-                f">= 5: the (I - T·R)^(-1) geometric series enters the "
-                f"grazing-mode pathology regime where ρ(T·R) → 1 and the "
-                f"closure overshoots k_inf. Recommended n_bc_modes ∈ {{1, "
-                f"2, 3}} for thin cells; for thicker cells use "
-                f"closure='specular' (no multi-bounce) at higher rank.",
+                f"closure='specular_multibounce' on {geom_label} at "
+                f"n_bc_modes={n_bc_modes} >= 4: the (I - T·R)^(-1) "
+                f"geometric-series factor enters the high-rank pathology "
+                f"regime (sphere: matrix-Galerkin divergence at grazing µ; "
+                f"cylinder: R = (1/2) M^(-1) ill-conditioning amplified by "
+                f"the geometric series) and the closure overshoots k_inf. "
+                f"Recommended n_bc_modes ∈ {{1, 2, 3}} for thin cells. For "
+                f"thicker cells use closure='specular' (no multi-bounce) at "
+                f"higher rank, or closure='specular_multibounce' on slab "
+                f"(no pathology at any N).",
                 UserWarning,
                 stacklevel=4,
             )
@@ -4970,57 +5242,117 @@ def _build_full_K_per_group(
         divisor = geometry.rank1_surface_divisor(R_cell)
         N_r = len(r_nodes)
         N = n_bc_modes
+        if geometry.kind == "slab-polar":
+            # Slab MB: per-face block decomposition mirrors the bare
+            # specular slab branch (see closure="specular" slab block
+            # below for the divisor-per-face commentary). The slab T is
+            # block off-diagonal so (I - T·R)^{-1} preserves the per-
+            # face block structure but couples outer ↔ inner via the
+            # transit factor.
+            P_o = np.zeros((N, N_r))
+            P_i = np.zeros((N, N_r))
+            G_o = np.zeros((N_r, N))
+            G_i = np.zeros((N_r, N))
+            for i in range(N_r):
+                x_i = float(r_nodes[i])
+                tau_o = _slab_tau_to_outer_face(x_i, radii, sig_t_g)
+                tau_n = _slab_tau_to_inner_face(x_i, radii, sig_t_g)
+                for n in range(N):
+                    coefs = _shifted_legendre_monomial_coefs(n)
+                    Po = Pn = Go = Gn = 0.0
+                    for k, c in enumerate(coefs):
+                        if c == 0.0:
+                            continue
+                        E_o = _slab_E_n(k + 2, tau_o)
+                        E_n_val = _slab_E_n(k + 2, tau_n)
+                        Po += 0.5 * c * E_o
+                        Pn += 0.5 * c * E_n_val
+                        Go += 2.0 * c * E_o
+                        Gn += 2.0 * c * E_n_val
+                    P_o[n, i] = Po
+                    P_i[n, i] = Pn
+                    G_o[i, n] = Go
+                    G_i[i, n] = Gn
+            DIVISOR_PER_FACE = 1.0
+            P_o_w = rv * r_wts * P_o
+            P_i_w = rv * r_wts * P_i
+            G_o_w = sig_t_n[:, None] * G_o / DIVISOR_PER_FACE
+            G_i_w = sig_t_n[:, None] * G_i / DIVISOR_PER_FACE
+            P_slab = np.vstack([P_o_w, P_i_w])  # (2N, N_r)
+            G_slab = np.hstack([G_o_w, G_i_w])  # (N_r, 2N)
+            R_face = reflection_specular(N)
+            R_slab = np.zeros((2 * N, 2 * N))
+            R_slab[:N, :N] = R_face
+            R_slab[N:, N:] = R_face
+            T_slab = compute_T_specular_slab(radii, sig_t_g, N, n_quad=64)
+            ITR = np.eye(2 * N) - T_slab @ R_slab
+            K_bc = G_slab @ R_slab @ np.linalg.solve(ITR, P_slab)
+            return K + K_bc
+        # Sphere / cylinder: single-surface mode space (N modes).
         P = np.zeros((N, N_r))
         G = np.zeros((N_r, N))
-        # Same no-Jacobian P/G build as the sphere branch of
-        # closure="specular" (kept inline for clarity; the build is
-        # short enough that factoring out is more obscuring than
-        # helpful).
-        omega_low, omega_high = geometry.angular_range
-        omega_pts, omega_wts = gl_float(
-            n_angular, omega_low, omega_high, dps,
-        )
-        cos_omegas = geometry.ray_direction_cosine(omega_pts)
-        angular_factor = geometry.angular_weight(omega_pts)
-        pref = geometry.prefactor
-        for n in range(N):
-            P_esc_n = np.zeros(N_r)
-            for i in range(N_r):
-                r_i = float(r_nodes[i])
-                total = 0.0
-                for k_q in range(n_angular):
-                    cos_om = cos_omegas[k_q]
-                    rho_max_val = geometry.rho_max(r_i, cos_om, R_cell)
-                    if rho_max_val <= 0.0:
-                        continue
-                    tau = geometry.optical_depth_along_ray(
-                        r_i, cos_om, rho_max_val, radii, sig_t_g,
-                    )
-                    K_esc = geometry.escape_kernel_mp(tau, dps)
-                    mu_exit = (rho_max_val + r_i * cos_om) / R_cell
-                    p_tilde = float(
-                        _shifted_legendre_eval(
-                            n, np.array([mu_exit]),
-                        )[0]
-                    )
-                    total += (
-                        omega_wts[k_q] * angular_factor[k_q]
-                        * p_tilde * K_esc
-                    )
-                P_esc_n[i] = pref * total
-            G_bc_n = compute_G_bc_mode(
-                geometry, r_nodes, radii, sig_t_g, n,
-                n_surf_quad=n_surf_quad, dps=dps,
+        if geometry.kind == "sphere-1d":
+            # Same no-Jacobian P/G build as the sphere branch of
+            # closure="specular" (kept inline for clarity).
+            omega_low, omega_high = geometry.angular_range
+            omega_pts, omega_wts = gl_float(
+                n_angular, omega_low, omega_high, dps,
             )
-            P[n, :] = rv * r_wts * P_esc_n
-            G[:, n] = sig_t_n * G_bc_n / divisor
-
+            cos_omegas = geometry.ray_direction_cosine(omega_pts)
+            angular_factor = geometry.angular_weight(omega_pts)
+            pref = geometry.prefactor
+            for n in range(N):
+                P_esc_n = np.zeros(N_r)
+                for i in range(N_r):
+                    r_i = float(r_nodes[i])
+                    total = 0.0
+                    for k_q in range(n_angular):
+                        cos_om = cos_omegas[k_q]
+                        rho_max_val = geometry.rho_max(r_i, cos_om, R_cell)
+                        if rho_max_val <= 0.0:
+                            continue
+                        tau = geometry.optical_depth_along_ray(
+                            r_i, cos_om, rho_max_val, radii, sig_t_g,
+                        )
+                        K_esc = geometry.escape_kernel_mp(tau, dps)
+                        mu_exit = (rho_max_val + r_i * cos_om) / R_cell
+                        p_tilde = float(
+                            _shifted_legendre_eval(
+                                n, np.array([mu_exit]),
+                            )[0]
+                        )
+                        total += (
+                            omega_wts[k_q] * angular_factor[k_q]
+                            * p_tilde * K_esc
+                        )
+                    P_esc_n[i] = pref * total
+                G_bc_n = compute_G_bc_mode(
+                    geometry, r_nodes, radii, sig_t_g, n,
+                    n_surf_quad=n_surf_quad, dps=dps,
+                )
+                P[n, :] = rv * r_wts * P_esc_n
+                G[:, n] = sig_t_n * G_bc_n / divisor
+            T = compute_T_specular_sphere(radii, sig_t_g, N, n_quad=64)
+        else:  # cylinder-1d
+            # Cylinder: use the 3-D Knyazev primitives matching the bare
+            # specular cyl branch (see closure="specular" cylinder block
+            # below for the Knyazev Ki_(2+k) commentary). T uses
+            # Ki_(3+k_m+k_n) — one Ki order higher than P/G — to carry
+            # the additional µ_3D = sin θ_p partial-current factor.
+            for n in range(N):
+                P_esc_n = compute_P_esc_cylinder_3d_mode(
+                    geometry, r_nodes, radii, sig_t_g, n,
+                    n_angular=n_angular, dps=dps,
+                )
+                G_bc_n = compute_G_bc_cylinder_3d_mode(
+                    geometry, r_nodes, radii, sig_t_g, n,
+                    n_surf_quad=n_surf_quad, dps=dps,
+                )
+                P[n, :] = rv * r_wts * P_esc_n
+                G[:, n] = sig_t_n * G_bc_n / divisor
+            T = compute_T_specular_cylinder_3d(radii, sig_t_g, N, n_quad=64)
         R_spec = reflection_specular(N)
-        # Multi-bounce correction: T = surface-to-surface partial-
-        # current transfer; (I - T R)^{-1} sums the geometric series.
-        T = compute_T_specular_sphere(radii, sig_t_g, N, n_quad=64)
         ITR = np.eye(N) - T @ R_spec
-        # Use linalg.solve for numerical stability vs explicit inversion.
         K_bc = G @ R_spec @ np.linalg.solve(ITR, P)
         return K + K_bc
     if closure == "specular":
@@ -5250,10 +5582,11 @@ def _build_full_K_per_group(
         f"'white_hebert' (sphere/cyl only — Issue #132 Hébert correction), "
         f"'white_f4', 'specular' (slab/sphere/cyl — exact angular "
         f"preservation; rank-N partial-current matching; per-face "
-        f"block-diagonal R for slab), or 'specular_multibounce' (sphere "
-        f"only — multi-bounce-corrected specular, best at thin cells "
-        f"with N <= 3) — or the deprecated aliases 'white' / 'white_rank2'; "
-        f"got {closure!r}"
+        f"block-diagonal R for slab), or 'specular_multibounce' (slab/"
+        f"sphere/cyl — multi-bounce-corrected specular; sphere/cyl best "
+        f"at thin cells with N <= 3 with UserWarning at N >= 4; slab "
+        f"converges monotonically at any N) — or the deprecated aliases "
+        f"'white' / 'white_rank2'; got {closure!r}"
     )
 
 

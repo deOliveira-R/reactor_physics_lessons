@@ -303,33 +303,42 @@ Nyström).
 
 .. list-table:: Class B — closures shipped per shape
    :header-rows: 1
-   :widths: 40 30 30
+   :widths: 32 22 22 24
 
    * - Closure
      - Solid cylinder
      - Solid sphere
+     - Slab
    * - ``vacuum``
      - ✅ Ki₁ via unified
      - ✅ exp(-τ) via unified
+     - ✅ E₁ via unified
    * - ``white_rank1_mark`` (dep. alias: ``white``)
      - ✅ production
      - ✅ production
+     - ✅ production (combined-face)
    * - ``white_f4`` (dep. alias: ``white_rank2``)
      - ⚠️ silent collapse + ``DeprecationWarning`` (no second face)
      - ⚠️ silent collapse + ``DeprecationWarning``
+     - ✅ rank-1 only (per-face); rank-N falsified (:ref:`peierls-rank-n-per-face-closeout`)
    * - White rank-N DP\ :sub:`N` on outer face
      - 🚫 Issue #103 open; reachable but unsafe in MR (Issue #132, see :ref:`peierls-rank-n-class-b-mr-mg-falsification`)
      - 🚫 Issue #100 / #103 open; reachable but unsafe in MR (Issue #132)
+     - n/a (slab uses per-face F.4 instead)
    * - ``white_hebert`` (Eq. 3.323)
      - ✅ rank-1; cylinder via :func:`compute_G_bc_cylinder_3d` (Issue #112 Phase C)
      - ✅ rank-1; documented +10 % overshoot on 1G/2R (:ref:`peierls-class-b-sphere-hebert`)
+     - 🚫 not applicable (slab uses per-face block-diagonal, no scalar :math:`(1-P_{ss})^{-1}` form)
    * - ``specular`` (rank-:math:`N`, exact angular preservation)
      - ✅ rank-:math:`N`; Knyazev :math:`\mathrm{Ki}_{2+k}` 3-D primitives; converges to :math:`k_\infty` (-0.02 % at :math:`N=6`)
      - ✅ rank-:math:`N`; converges to :math:`k_\infty` for homogeneous (sweet spot :math:`N=4`); see :ref:`peierls-specular-bc`
-   * - ``specular_multibounce`` (sphere only; thin-cell-correct)
-     - 🚫 not shipped (cyl Knyazev T matrix is Phase 4 follow-up)
-     - ✅ rank-:math:`N` ∈ {1, 2, 3}; lifts thin-cell plateau via :math:`(I - T R)^{-1}` geometric series; rank-1 ≡ ``white_hebert``
+     - ✅ rank-:math:`N`; per-face block-diagonal :math:`R`; monotonic convergence to :math:`N=4`
+   * - ``specular_multibounce`` (Phase 4 — multi-bounce-corrected)
+     - ✅ rank-:math:`N` ∈ {1, 2, 3}; Knyazev :math:`T_{mn} = (4/\pi)\!\int\!\cos\alpha\,\sum_{k_m,k_n}\!c_m^{k_m} c_n^{k_n}(\cos\alpha)^{k_m+k_n}\,\mathrm{Ki}_{3+k_m+k_n}\,\mathrm d\alpha`; rank-1 ≡ ``white_hebert``; ``UserWarning`` at :math:`N \ge 4` (R-conditioning blow-up)
+     - ✅ rank-:math:`N` ∈ {1, 2, 3}; sphere :math:`T_{mn} = 2\!\int_0^1\!\mu\,\tilde P_m\tilde P_n\,e^{-\tau(\mu)}\,\mathrm d\mu`; rank-1 ≡ ``white_hebert``; ``UserWarning`` at :math:`N \ge 4` (matrix-Galerkin divergence at grazing)
+     - ✅ ANY :math:`N`; slab :math:`T` is purely block off-diagonal (:math:`T_{oo} = T_{ii} = 0`) with :math:`T_{oi}^{(0,0)} = 2 E_3(\sigma L)`; **monotonic convergence at any** :math:`N` (geometric immunity — no warning)
    * - Periodic / albedo
+     - 🚫 not shipped
      - 🚫 not shipped
      - 🚫 not shipped
 
@@ -6456,8 +6465,27 @@ End-to-end tests
 - ``test_specular_multibounce_thin_sphere_lifts_plateau`` — thin
   sphere (:math:`\tau_R = 2.5`) rank-1 multi-bounce within 0.5 %,
   rank-3 within 0.2 %, lifts > 5 % over bare specular at the same N
-- ``test_specular_multibounce_rejects_non_sphere`` — cyl/slab raise
-  :class:`NotImplementedError`
+- ``test_specular_multibounce_warns_at_high_N`` — sphere ``UserWarning``
+  emitted at :math:`N \ge 4` (Phase 4: tightened from prior :math:`N \ge 5`)
+- ``test_specular_multibounce_cyl_rank1_equals_hebert`` — cylinder
+  rank-1 ``specular_multibounce`` bit-equals ``white_hebert``
+  (Knyazev :math:`T_{00}^{\rm cyl} = P_{ss}^{\rm cyl}` identity)
+- ``test_specular_multibounce_cyl_lifts_thin_plateau`` — thin cyl
+  (:math:`\tau_R = 2.5`) MB lifts the single-bounce plateau (rank-1
+  within 0.5 %, rank-3 within 0.3 %)
+- ``test_specular_multibounce_cyl_warns_at_high_N`` — cylinder
+  ``UserWarning`` at :math:`N \ge 4` (R-conditioning blow-up
+  amplified by the geometric series)
+- ``test_specular_multibounce_slab_rank1_equals_2E3_identity`` —
+  slab rank-1 :math:`T_{oi}^{(0,0)} = 2 E_3(\tau_{\rm tot})` algebraic
+  identity (verified to :math:`10^{-14}`); self-blocks
+  :math:`T_{oo} = T_{ii} = 0` exactly
+- ``test_specular_multibounce_slab_rank1_lifts_plateau`` — thin slab
+  (:math:`\tau_L = 2.5`) MB lifts the bare-specular plateau by > 1 %
+  at rank-1
+- ``test_specular_multibounce_slab_monotonic_high_N`` — slab MB
+  monotonic convergence at :math:`N \in \{1, 4, 8\}`, NO overshoot,
+  NO warning (geometric-immunity regression)
 
 Multi-energy / multi-region convergence (Phase 2)
 -------------------------------------------------
@@ -6598,10 +6626,10 @@ sweet spot for plain ``boundary="specular"`` is therefore
 ``boundary="specular_multibounce"`` at :math:`N \in \{1, 2, 3\}`
 (see the multi-bounce subsection below).
 
-Multi-bounce-corrected specular for thin sphere
------------------------------------------------
+Multi-bounce-corrected specular (sphere / cylinder / slab — Phase 4)
+--------------------------------------------------------------------
 
-For thin sphere cells (:math:`\tau_R \lesssim 5`) the bare
+For thin cells (:math:`\tau \lesssim 5`) the bare
 ``boundary="specular"`` closure plateaus several percent below
 :math:`k_\infty` due to the missing multi-bounce contribution.
 **Layered correction**: replace the bare :math:`K_{\rm bc} = G\,R\,P`
@@ -6614,103 +6642,272 @@ with
                                   (I - T\,R)^{-1} \cdot P,
 
 where :math:`R = R_{\rm spec}(N) = \tfrac{1}{2} M^{-1}` (the same
-specular reflection operator) and :math:`T` is the surface-to-surface
-**partial-current transfer matrix**:
+specular reflection operator as for bare specular; for slab,
+:math:`R = \operatorname{diag}(R_{\rm face}, R_{\rm face})`) and
+:math:`T` is the **surface-to-surface partial-current transfer
+matrix** for the geometry. The geometric series
+:math:`(I - T R)^{-1} = I + T R + (T R)^2 + \ldots` sums the
+contributions of partial-current re-emergence after 1, 2, 3, …
+bounces between the surface and the cell interior — the rank-:math:`N`
+matrix analog of Hébert's scalar :math:`(1 - P_{ss})^{-1}`.
+
+Per-geometry derivation of :math:`T`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each geometry has its own surface-to-surface transit kernel because
+the chord, partial-current weight, and polar absorption structure
+differ. The three derivations are pinned by separate test cases at
+the rank-1 reduction.
+
+**Sphere** (:func:`compute_T_specular_sphere`):
 
 .. math::
    :label: peierls-specular-T-matrix
 
-   T_{mn} \;=\; 2\!\int_0^1 \mu\,\tilde P_m(\mu)\,\tilde P_n(\mu)\,
+   T_{mn}^{\rm sph} \;=\; 2\!\int_0^1\!\mu\,\tilde P_m(\mu)\,\tilde P_n(\mu)\,
                   e^{-\tau(\mu)}\,\mathrm d\mu,
 
 with :math:`\tau(\mu)` the multi-region optical depth along the
-chord from the surface in direction :math:`\mu` (cosine with the
-inward normal) through the cell to the antipodal exit point. Chord
-length is :math:`2R\mu`; impact parameter is :math:`h = R\sqrt{1 -
-\mu^2}`; multi-region :math:`\tau` accumulates :math:`\Sigma_{t,k}\,
-\ell_k(\mu)` per annulus by the standard sphere-shell intersection
-geometry (same as :func:`compute_P_ss_sphere`).
+antipodal chord (chord :math:`= 2R\mu`; impact parameter :math:`h
+= R\sqrt{1 - \mu^2}`; sphere-shell intersection per-annulus segments
+as in :func:`compute_P_ss_sphere`).
 
-The geometric series :math:`(I - T\,R)^{-1} = I + T R + (T R)^2 +
-\ldots` sums the contributions of partial-current re-emergence after
-1, 2, 3, ... bounces between the surface and the cell interior. This
-is the rank-:math:`N` matrix analog of Hébert's :math:`(1 - P_{ss})^{-1}`
-scalar correction.
-
-**Rank-1 reduction**: at :math:`N = 1`, :math:`R = [[1]]` and
-:math:`T_{00} = P_{ss}` (algebraic identity, verified to
-:math:`10^{-16}` in the test
-``test_specular_multibounce_rank1_equals_hebert``), so
+Rank-1 reduction: :math:`T_{00}^{\rm sph} = P_{ss}^{\rm sph}` (algebraic
+identity, verified to :math:`10^{-16}` in
+``test_specular_multibounce_rank1_equals_hebert``). At :math:`N = 1`,
 
 .. math::
 
-   K_{\rm bc}^{\rm spec,mb}\bigr|_{N=1} \;=\; \frac{G\,P}{1 - P_{ss}}
-   \;=\; K_{\rm bc}^{\rm Hébert}\bigr|_{\rm rank-1}.
+   K_{\rm bc}^{\rm spec,mb,sph}\bigr|_{N=1}
+       \;=\; \frac{G\,P}{1 - P_{ss}}
+       \;=\; K_{\rm bc}^{\rm Hébert}\bigr|_{\rm rank\text{-}1}.
 
-The multi-bounce-corrected specular is **identical** to Hébert white
-BC at rank-1; the rank-:math:`N \ge 2` extension carries the
-off-diagonal partial-current couplings that capture the surface
-re-emergence anisotropy.
+**Cylinder** (:func:`compute_T_specular_cylinder_3d`):
 
-**Convergence on thin sphere** (fuel-A-like, :math:`\sigma_t = 0.5`,
-:math:`\sigma_s = 0.38`, :math:`\nu\sigma_f = 0.025`, :math:`R =
-5\,\mathrm{cm}`, :math:`\tau_R = 2.5`, :math:`k_\infty = 0.20833`,
-BASE quad):
+.. math::
 
-.. list-table:: Thin-sphere specular: bare vs multi-bounce
+   T_{mn}^{\rm cyl} \;=\; \frac{4}{\pi}\!\int_0^{\pi/2}\!\cos\alpha\,
+        \sum_{k_m, k_n}\!c_m^{k_m}\,c_n^{k_n}\,
+        (\cos\alpha)^{k_m+k_n}\,\mathrm{Ki}_{3+k_m+k_n}\!\bigl(\tau_{\rm 2D}(\alpha)\bigr)\,
+        \mathrm d\alpha,
+
+where :math:`c_n^k` are the monomial coefficients of
+:math:`\tilde P_n(\mu)`, :math:`\alpha` is the in-plane angle from
+the inward normal at the surface emission point, :math:`\tau_{\rm 2D}(\alpha)`
+is the multi-region optical depth along the antipodal in-plane
+chord (impact parameter :math:`h = R\sin\alpha`), and the
+:math:`\mathrm{Ki}_{3+k_m+k_n}` expansion comes from the polar
+integration with the additional :math:`\mu_{\rm 3D} = \sin\theta_p
+\cos\alpha` partial-current factor — **one Ki order higher** than
+the cylinder P/G primitives' :math:`\mathrm{Ki}_{2+k}` (which carry
+the polar absorption only, not the partial-current weight).
+
+Rank-1 reduction: :math:`T_{00}^{\rm cyl} = (4/\pi)\!\int_0^{\pi/2}\!\cos\alpha\,
+\mathrm{Ki}_3(\tau_{\rm 2D}(\alpha))\,\mathrm d\alpha = P_{ss}^{\rm cyl}`
+(:func:`compute_P_ss_cylinder`; verified to :math:`10^{-14}` in
+``test_specular_multibounce_cyl_rank1_equals_hebert``). At
+:math:`N = 1` the cylinder MB closure is bit-equal to
+``boundary="white_hebert"`` for cylinder.
+
+**Slab** (:func:`compute_T_specular_slab`): the slab mode space is
+:math:`\mathbb R^{2N}` (per-face block decomposition; see the bare-
+specular slab branch). A single transit at constant direction
+crosses from one face to the other; **the self-blocks are exactly
+zero** because a ray cannot leave a face and return without an
+intermediate reflection at the other face. The transit matrix is
+purely block off-diagonal:
+
+.. math::
+
+   T_{\rm slab} \;=\; \begin{pmatrix} 0 & T_{oi} \\
+                                       T_{io} & 0
+                       \end{pmatrix}, \qquad T_{io} = T_{oi}\
+   \text{(face symmetry)},
+
+with the homogeneous off-diagonal block
+
+.. math::
+
+   T_{oi}^{(mn)} \;=\; 2\!\int_0^1\!\mu\,\tilde P_m(\mu)\,
+                       \tilde P_n(\mu)\,e^{-\tau_{\rm tot}/\mu}\,\mathrm d\mu
+
+and :math:`\tau_{\rm tot} = \sum_k \Sigma_{t,k} L_k` (slab chord is
+uniformly :math:`L/\mu`, so multi-region :math:`\tau` factors as
+:math:`\tau_{\rm tot}/\mu`).
+
+Rank-1 reduction: :math:`T_{oi}^{(0,0)} = 2 E_3(\tau_{\rm tot})` by
+closed form (substitution :math:`u = 1/\mu`), verified to
+:math:`10^{-14}` in
+``test_specular_multibounce_slab_rank1_equals_2E3_identity``. Slab
+has no scalar :math:`(1-P_{ss})^{-1}` analog (the per-face block
+structure forbids a scalar geometric series), so the slab rank-1
+identity pins the :math:`2 E_3` closed form directly rather than
+comparing against a different closure.
+
+Per-geometry pathology vs geometric immunity
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The matrix-Galerkin form :math:`(I - T R)^{-1}` is not uniformly
+well-conditioned across the three geometries. The pathology is
+**fundamental** (operator-norm divergence) for sphere, **practical**
+(R-conditioning amplification) for cylinder, and **absent** for slab.
+
+.. list-table:: Per-geometry resolvent behaviour at thin cell
+                (:math:`\tau = 2.5`)
    :header-rows: 1
-   :widths: 8, 38, 38
+   :widths: 6 28 28 28
 
    * - :math:`N`
-     - bare ``specular`` (err)
-     - ``specular_multibounce`` (err)
+     - sphere :math:`\|(I - TR)^{-1}\|_2`
+     - cylinder :math:`\|(I - TR)^{-1}\|_2`
+     - slab :math:`\|(I - TR)^{-1}\|_2`
    * - 1
-     - 0.190795 (-8.42 %)
-     - **0.207776 (-0.27 %)**
-   * - 2
-     - 0.194304 (-6.73 %)
-     - **0.207815 (-0.25 %)**
-   * - 3
-     - 0.195755 (-6.04 %)
-     - **0.208089 (-0.12 %)**
+     - 1.08
+     - 1.03
+     - 1.03
    * - 4
-     - 0.196637 (-5.61 %)
-     - 0.209233 (+0.43 %) ⚠ overshoot
-   * - 6
-     - 0.197469 (-5.21 %)
-     - 0.213147 (+2.31 %) ⚠
+     - 2.53
+     - 1.52
+     - 1.08
    * - 8
-     - 0.201634 (-3.22 %)
-     - 0.220044 (+5.62 %) ⚠
+     - 6.89
+     - 2.52
+     - 1.09
+   * - 12
+     - 13.82
+     - 3.60
+     - 1.09
+   * - 16
+     - 23.29
+     - 5.19 (R-noise)
+     - 1.09
+   * - 25
+     - 53.9 (divergent)
+     - —
+     - 1.09 (plateau)
 
-The multi-bounce correction is **gold for thin cells at**
-:math:`N \in \{1, 2, 3\}` (better than plain specular by 5–8 %, and
-plain specular doesn't converge there at all). At :math:`N \ge 4`
-the spectral radius :math:`\rho(T R)` approaches 1 (grazing modes
-:math:`\mu \to 0` survive multiple reflections without attenuation)
-and :math:`(I - T R)^{-1}` becomes nearly singular, causing the
-overshoot. The implementation emits a ``UserWarning`` for
-:math:`N \ge 5` to flag the pathology.
+**Sphere**: the continuous-:math:`\mu` limit of :math:`T \cdot R` is
+multiplication by :math:`e^{-\sigma\,2R\mu}` (spectrum on
+:math:`(e^{-2\sigma R}, 1]`) and :math:`(I - T R)^{-1}` is
+multiplication by :math:`1/(1 - e^{-\sigma\,2R\mu})`, which **diverges
+at grazing** :math:`\mu \to 0` (chord :math:`2R\mu \to 0`,
+transmission :math:`\to 1`, infinite-bounce summation does not
+terminate). The continuous-:math:`\mu` integral form of
+:math:`K_{\rm bc}^{\rm mb}` carries an additional :math:`\mu`-weight
+that cancels this singularity (:math:`\mu / (1 - e^{-2\sigma R\mu})
+\to 1/(2\sigma R)`, finite; MC ground truth confirms specular sphere
+:math:`= k_\infty` exactly), but the **matrix-Galerkin projection**
+distributes the :math:`\mu`-weight across :math:`P, T, G` separately
+and the matrix inverse does not preserve the cancellation. As
+:math:`N` grows the basis resolves grazing modes more sharply,
+exposing the divergence. **Result**: sphere MB overshoots
+:math:`k_\infty` for :math:`N \ge 4` even at thin
+:math:`\tau_R = 2.5`. Recommended :math:`N \in \{1, 2, 3\}` for
+thin cells; ``UserWarning`` at :math:`N \ge 4`.
 
-**Best-use envelope**:
+**Cylinder**: the continuous-limit operator is **bounded** because
+the :math:`\cos\alpha` partial-current factor in
+:math:`T_{\rm op}^{\rm cyl}(\alpha)` vanishes at grazing
+:math:`\alpha \to \pi/2` (in-plane chord :math:`\to 0` makes
+:math:`\mathrm{Ki}_3` finite, but the :math:`\cos\alpha` factor
+multiplies it by zero). The matrix form is therefore not
+fundamentally divergent — but :math:`R = (1/2) M^{-1}` is poorly
+conditioned at high :math:`N` and the geometric series amplifies
+the conditioning blow-up. Empirically cylinder MB **overshoots
+:math:`k_\infty` for :math:`N \ge 4`** at thin cells (same envelope
+as sphere, different mechanism). Recommended :math:`N \in \{1, 2,
+3\}`; ``UserWarning`` at :math:`N \ge 4`.
 
-- ``boundary="specular_multibounce"``, sphere, :math:`N \in \{1, 2, 3\}`,
-  any :math:`\tau_R` (best for thin where it lifts the plateau; comparable
-  to bare ``specular`` for thick).
-- ``boundary="specular"``, any geometry, :math:`N` as needed (rank-N
-  partial-current matching for the angular structure; thick-cell sweet
-  spot at :math:`N = 4` for sphere).
-- ``boundary="white_hebert"``, sphere/cyl, rank-1 only (fastest path
-  to Hébert :math:`(1-P_{ss})^{-1}` accuracy).
+**Slab — geometric immunity**: chord :math:`= L/\mu \to \infty`
+at grazing :math:`\mu \to 0` (the **opposite** sign from sphere),
+so transmission :math:`e^{-\sigma L/\mu} \to 0` exponentially. The
+operator :math:`T_{\rm op}^{\rm slab}(\mu) = e^{-\sigma L/\mu}`
+vanishes at both endpoints :math:`\mu \in \{0, 1\}` (note: at
+:math:`\mu = 1` the standard slab transmission gives :math:`e^{-\sigma L}`,
+which is small for any :math:`\sigma L > 0`; the operator is bounded
+by :math:`e^{-\tau_{\rm tot}}`). Combined with the off-diagonal
+block structure (:math:`T_{oo} = T_{ii} = 0`), :math:`\rho(T R) \le
+0.08` across all :math:`N` at thin :math:`\tau_L = 2.5`. **Slab MB
+converges monotonically as** :math:`N \to \infty` — the only
+geometry where the matrix-Galerkin form does. **No
+``UserWarning``**; any :math:`N` is safe.
 
-**Sphere-only in this release**. The cylinder analog requires a 3-D
-Knyazev surface-to-surface :math:`T` matrix (the chord is in-plane
-but transmission has a polar-angle integration via
-:math:`\mathrm{Ki}_{2+k}`). The slab analog needs a per-face block-T
-construction (each face has its own self-bounce kernel coupling to
-the antipodal face). Both are tracked as Phase 4 follow-up; for
-non-sphere geometries the dispatch raises :class:`NotImplementedError`
-with a clear guidance message.
+Convergence ladders
+~~~~~~~~~~~~~~~~~~~
+
+End-to-end k_eff at the standard fuel-A-like 1G fixture
+(:math:`\sigma_t = 0.5`, :math:`\sigma_s = 0.38`, :math:`\nu\sigma_f
+= 0.025`, :math:`k_\infty = 0.20833`, characteristic length 5 cm,
+:math:`\tau = 2.5`, BASE quadrature):
+
+.. list-table:: Per-geometry MB k_eff at thin cell vs N
+   :header-rows: 1
+   :widths: 6 30 30 30
+
+   * - :math:`N`
+     - **sphere** bare / MB (err %)
+     - **cyl** bare / MB (err %)
+     - **slab** bare / MB (err %)
+   * - 1
+     - -8.31 / **-0.27** ✓
+     - -2.95 / **-0.17** ✓
+     - -2.83 / **-0.30** ✓
+   * - 2
+     - -6.75 / **-0.25** ✓
+     - -2.63 / **-0.16** ✓
+     - -2.82 / **-0.29** ✓
+   * - 3
+     - -6.24 / **-0.12** ✓
+     - -2.33 / **-0.14** ✓
+     - -2.77 / **-0.27** ✓
+   * - 4
+     - -6.05 / +0.43 ⚠
+     - -2.01 / -0.04 ⚠
+     - -2.75 / **-0.24** ✓
+   * - 8
+     - -3.22 / +5.62 ⚠⚠
+     - -1.05 / +1.27 ⚠
+     - -2.67 / **-0.16** ✓
+   * - 16
+     - —
+     - —
+     - -2.67 / **-0.16** ✓ (plateau)
+
+**Multi-bounce is gold for thin cells at** :math:`N \in \{1, 2, 3\}`
+across all three geometries (better than plain specular by 1–8 %).
+For sphere/cyl at :math:`N \ge 4` the closure overshoots and a
+``UserWarning`` flags the pathology; for slab the closure converges
+monotonically at any :math:`N`.
+
+Best-use envelope
+~~~~~~~~~~~~~~~~~
+
+- ``boundary="specular_multibounce"``, **slab**, ANY :math:`N` —
+  geometric immunity, no warning. The workhorse for thin slab
+  cells at any rank.
+- ``boundary="specular_multibounce"``, **sphere/cylinder**,
+  :math:`N \in \{1, 2, 3\}` — best at thin where it lifts the
+  single-bounce plateau; comparable to bare ``specular`` for thick
+  cells.
+- ``boundary="specular"``, any geometry, :math:`N` as needed —
+  rank-:math:`N` partial-current matching for the angular structure;
+  thick-cell sweet spot at :math:`N = 4` for sphere, :math:`N = 6`
+  for cylinder.
+- ``boundary="white_hebert"``, sphere/cyl, rank-1 only — fastest
+  path to Hébert :math:`(1-P_{ss})^{-1}` accuracy at rank-1
+  (algebraically equivalent to MB rank-1 on sphere/cyl).
+
+**Phase 5 — continuous-:math:`\mu` reformulation** (research, open).
+The proper fix for the sphere/cyl matrix-Galerkin pathology is to
+replace the matrix inverse :math:`(I - T R)^{-1}` with a direct
+multiplication by the continuous-:math:`\mu` multi-bounce factor
+:math:`\mu / (1 - e^{-\sigma\,2R\mu})` (sphere; analogous for cyl/slab),
+performing the :math:`\mu`-integral once with adaptive quadrature
+rather than projecting onto a basis and inverting. This is
+out-of-scope for Phase 4; see
+``.claude/agent-memory/numerics-investigator/specular_mb_overshoot_root_cause.md``
+for the conceptual sketch and the operator-norm proof of the
+matrix-form divergence.
 
 References and further reading
 ------------------------------
