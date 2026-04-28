@@ -6897,11 +6897,125 @@ Best-use envelope
   path to Hébert :math:`(1-P_{ss})^{-1}` accuracy at rank-1
   (algebraically equivalent to MB rank-1 on sphere/cyl).
 
-**Phase 5a — continuous-:math:`\mu` reformulation** (research
-prototype, 2026-04-28). The proper fix for the sphere/cyl
-matrix-Galerkin pathology is the textbook integral form derived in
-Sanchez 1986 [SanchezTTSP1986]_ Eq. (A6) for the homogeneous sphere
-with specular boundary:
+.. _peierls-phase5-retreat:
+
+**Phase 5 — continuous-:math:`\mu` reformulation** (RESEARCH RECORD,
+ABANDONED for production wiring after 3 rounds of investigation,
+2026-04-28). The continuous-:math:`\mu` reformulation appeared to be
+the structural fix for the matrix-Galerkin divergence at high rank
+:math:`N`. It is not — the kernel is **hypersingular** at the
+discrete Nyström diagonal and cannot be discretised by any standard
+quadrature technique. The matrix-Galerkin :math:`(I - T R)^{-1}`
+mode-mixing absorbs the singularity via basis projection and is
+**essential**, not a numerical artefact.
+
+**Round-by-round summary** of the investigation:
+
+- **Phase 5a** (Sanchez 1986 [SanchezTTSP1986]_ reference
+  implementation): the textbook Eq. (A6) form is
+  `g_h(\rho' \to \rho) = 2 \int_{\mu_0}^{1} T(\mu_-)
+  \mu_*^{-1} \cosh(\rho\mu) \cosh(\rho'\mu_*) e^{-2a\mu_-} d\mu`.
+  SymPy 4/4 verifications PASS. Reference implementation
+  `compute_K_bc_specular_continuous_mu_sphere` in
+  ``orpheus/derivations/peierls_geometry.py``. Smoke test failed —
+  kernel magnitude vs ``closure="white_hebert"`` ratios spread 4
+  orders of magnitude. Two open blockers: Sanchez↔ORPHEUS Jacobian
+  conversion + diagonal singularity.
+
+- **Round 1** (3 parallel fronts): **Front A** (Jacobian conversion
+  via rank-1 cross-check) FALSIFIED — no separable conversion exists;
+  Phase 5 kernel is rank-(>1), Hebert is rank-1, and Phase 5 itself
+  doesn't converge in `n_quad`. **Front B** (singularity
+  subtraction) PARTIAL — closed-form leading orders identified
+  (`s = 2/[\mu(e^{\tau_0}-1)]` interior, `s = 1/(a\mu^2)` surface)
+  but the analytical add-back is divergent. **Front C** (ORPHEUS-
+  native reformulation bypassing Sanchez cosh forms) FAILED — built
+  the `F_out / G_in` µ-resolved primitives correctly (consistency
+  passed vs Phase 4) but k_eff oscillates wildly with Q because
+  T(µ) ~ 1/(σ·2Rµ) at µ → 0 is the same singularity Phase 4 has at
+  high N.
+
+- **Round 2** (PRIMARY M2 + BACKUP symbolic limit): **PRIMARY M2**
+  (bounce-resolved expansion) — confirmed `w(\mu) = 1` is the
+  correct M1 weight, geometric series converges with ratio 0.25/bounce
+  (K_max=10 saturates), but the diagonal singularity persists at
+  K_max=0 (NO multi-bounce). Smoking gun: the singularity is in the
+  `F_out · G_in` primitive structure, NOT in T(µ). Source: the
+  `1/(\cos(\omega_i)\cos(\omega_j))` Jacobian at `r_i = r_j = r`
+  has both cosines vanishing at the SAME `\mu_{\min}(r) = \sqrt{1 -
+  (r/R)^2}`, yielding non-integrable `1/(\mu^2 - \mu_{\min}^2)` on
+  the visibility cone. **BACKUP** (independent symbolic N→∞ limit)
+  derived the closed-form multi-bounce factor:
+
+  .. math::
+
+      f_\infty(\mu) = \frac{1}{2} \frac{\mu}{1 - e^{-\sigma\,2R\mu}}
+
+  bounded at :math:`\mu = 0` (limit :math:`= 1/(4a)`); :math:`(1/2)`
+  from :math:`R = (1/2) M^{-1}`, :math:`\mu` from the µ-weighted
+  basis Gram measure. Bit-exact via Bose-Einstein polylog:
+  :math:`K_\infty^{\rm half} = (1/(8a^2)) [\pi^2/6 - \mathrm{Li}_2(e^{-2a})
+  + 2a \ln(1 - e^{-2a})]`. The cross-domain attacker's M1 sketch
+  was wrong by a factor of 2 (missing the :math:`(1/2)`); Sanchez's
+  Eq. (A6) is in a DIFFERENT normalisation (integral-equation
+  Green's function vs Nyström K_ij).
+
+- **Round 3** (PRIMARY adaptive quadrature + SECONDARY Galerkin):
+  6 approaches tried (per-pair half-M1, chord substitution
+  :math:`s^2 = \mu^2 - \mu_{\min}^2`, adaptive Gauss-Kronrod,
+  Galerkin diagonal cell-average, full Galerkin double-integration
+  :math:`\int\int L_i(r) L_j(r') K(r, r') dr dr'`, alternative
+  conventions). **All FAIL.** Smoke test k_eff errors -34 % to
+  -50 %, monotone divergence in :math:`n_{\rm quad}`. The full
+  Galerkin double-integration over Lagrange basis (the standard
+  BEM/IGA fix for integrable singular kernels) gives the same
+  hypersingular log-divergence as the Nyström sampling — confirming
+  the singularity is genuinely non-Nyström-discretisable.
+
+**Structural conclusion** (independently confirmed by 3 numerics-
+investigators — Round 2 PRIMARY, Round 3 PRIMARY, Round 3 SECONDARY):
+the continuous-:math:`\mu` K_bc kernel is **hypersingular** (Hadamard
+finite-part / Cauchy principal-value type). The matrix-Galerkin form
+:math:`(I - T R)^{-1}` and the continuous-:math:`\mu` integral form
+are **different integral operators**, not different discretisations
+of the same operator. The matrix-Galerkin's mode-mixing via the
+basis projection is the load-bearing structure that gives Phase 4
+its operational behaviour — Nyström sampling cannot reproduce it.
+
+**Production verdict**: ``closure="specular_multibounce"`` (Phase 4
+matrix-Galerkin form) is the **permanent production path** for
+multi-bounce specular at all three geometries. Within its envelope
+(:math:`N \in \{1, 2, 3\}` for thin sphere/cyl, any :math:`N` for
+slab) it gives Hébert-quality k_eff. The earlier Phase 4 docstring
+reference to "Phase 5 — proper fix" is hereby withdrawn: there is no
+proper fix in the continuous-:math:`\mu` discretisation framework.
+
+**Useful side-finding** (promote-worthy): the chord/visibility-cone
+substitution :math:`u^2 = (\mu^2 - \mu_{\min}^2)/(1 - \mu_{\min}^2)`
+gives **machine-precision off-diagonal Q-convergence** (1e-9 at
+Q=128) for any µ-resolved per-pair integral with a single-endpoint
+visibility-cone singularity. Portable to any geometry.
+
+**Sanchez 1986 reference theory** (retained for documentation): the
+Phase 5a reference implementation
+:func:`compute_K_bc_specular_continuous_mu_sphere` produces Sanchez
+Eq. (A6) verbatim and the SymPy 4/4 verifications in
+:file:`derivations/peierls_specular_continuous_mu.py` confirm the
+algebraic equivalence with the cross-domain attacker's M1 sketch
+(after the factor-of-µ correction). The closure is registered in
+the dispatch but raises :class:`NotImplementedError` with a
+guidance message pointing to ``closure="specular_multibounce"`` for
+production use.
+
+**Further reading**: see GitHub Issue #133 (closed wontfix with the
+round-3 structural conclusion); investigator memos at
+``.claude/agent-memory/numerics-investigator/phase5_*.md`` (5
+documents covering each round); literature memo at
+``.claude/agent-memory/literature-researcher/phase5_sanchez_1986_sphere_specular.md``.
+
+Below is the original Sanchez 1986 textbook derivation (kept as
+reference even though it does not yield a Nyström-compatible
+discretisation):
 
 .. math::
    :label: peierls-phase5-sanchez-A6

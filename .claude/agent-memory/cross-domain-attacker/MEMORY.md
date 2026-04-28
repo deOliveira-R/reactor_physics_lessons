@@ -1,0 +1,3 @@
+- [Peierls rank-N white BC attack](peierls_rank_n_frame_attack.md) — Six frames attacked (Chandrasekhar H, Rayleigh-Ritz, surface Markov chain, connection-coefficient, QMC, group-theory); five high-priority first tests proposed.
+- [Phase 5 continuous-µ frame attack](phase5_continuous_mu_frames.md) — Six frames against the µ-resolved multi-bounce kernel; strong: Hilbert-Schmidt separable, generating-function bounce-resolved, multiplication-operator spectral theorem, Feynman-Kac surface chain. Refuted: Mittag-Leffler PF, Wiener-Hopf, basis switch.
+- [Elegance smell 15](elegance_smell_rank_non_monotone.md) — Rank-N non-monotone convergence (rank-2 worse than rank-1) is a structural tell that Galerkin is being done without a variational principle.

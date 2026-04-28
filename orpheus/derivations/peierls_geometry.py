@@ -2589,8 +2589,21 @@ def compute_K_bc_specular_continuous_mu_sphere(
             # µ_* = √[ρ'² − ρ²(1−µ²)] / ρ' depends on (rho, rho_p, µ).
             # Visibility cone: µ_*² > 0 requires either ρ' > ρ (always
             # visible) or µ > µ_0 = √[1 − (ρ'/ρ)²] (when ρ' < ρ).
+            #
+            # Numerically stable form. The naive identity
+            #   ρ'² − ρ²(1 − µ²) = (ρ'² − ρ²) + ρ²·µ²
+            # is equivalent algebraically but the RHS avoids
+            # catastrophic cancellation when ρ ≈ ρ' (e.g., near the
+            # diagonal in adaptive quadrature where µ may approach
+            # zero). The naive LHS suffers `1 − µ²` cancellation at
+            # small µ; the rewritten form uses ρ²·µ² directly.
+            # Phase 5+ Front B (numerics-investigator,
+            # `phase5_front_b_singularity_subtraction.md`) flagged
+            # this as a latent landmine for the (research-prototype)
+            # Phase 5 closure if production-wired with adaptive
+            # quadrature.
             rho_p_mu_star_sq = (
-                rho_p * rho_p - rho * rho * (1.0 - mu_pts * mu_pts)
+                (rho_p * rho_p - rho * rho) + rho * rho * mu_pts * mu_pts
             )
             valid = rho_p_mu_star_sq > 0.0
             if not np.any(valid):
@@ -5579,63 +5592,87 @@ def _build_full_K_per_group(
         K_bc = G @ R_spec @ np.linalg.solve(ITR, P)
         return K + K_bc
     if closure == "specular_continuous_mu":
-        # Phase 5 — Continuous-µ multi-bounce specular BC (RESEARCH
-        # PROTOTYPE — not yet production-wired).
+        # Phase 5 — Continuous-µ multi-bounce specular BC.
         #
-        # Bypasses the Phase 4 matrix-Galerkin form
-        # `(I - T·R)^{-1}` by integrating the multi-bounce kernel
-        # directly in µ. This is the "proper fix" for the matrix-
-        # Galerkin divergence flagged in the sphere
-        # `closure="specular_multibounce"` docstring (see
-        # `compute_T_specular_sphere` and
-        # `.claude/agent-memory/numerics-investigator/specular_mb_overshoot_root_cause.md`
-        # for the operator-norm proof).
+        # **Status: ABANDONED for production wiring.** After three
+        # rounds of numerics-investigator dispatches (Phase 5a + Round 1
+        # Front A/B/C + Round 2 PRIMARY/BACKUP + Round 3 PRIMARY/SECONDARY,
+        # all in 2026-04-28), the continuous-µ K_bc kernel was proven
+        # **HYPERSINGULAR** — a Hadamard finite-part / Cauchy principal-
+        # value kernel that is **not Nyström-discretisable in principle**.
         #
-        # **Status (Phase 5a, 2026-04-28)**: Sanchez 1986 Eq. (A6) is
-        # confirmed as the textbook continuous-µ multi-bounce kernel
-        # for homogeneous sphere with specular BC (literature pull
-        # in `.claude/agent-memory/literature-researcher/
-        # phase5_sanchez_1986_sphere_specular.md`). The SymPy
-        # derivation in `derivations/peierls_specular_continuous_mu.py`
-        # verified the algebraic equivalence with the cross-domain-
-        # attacker's M1 sketch (resolving the µ-weight convention
-        # question).
+        # The structural finding (independently confirmed by 3 agents):
+        # the µ-resolved primitives `F_out(r,µ) · G_in(r,µ)` carry a
+        # `1/(cos(ω_i) cos(ω_j))` Jacobian. At the discrete diagonal
+        # `r_i = r_j = r`, both cosines vanish at the SAME `µ_min(r) =
+        # √(1 - (r/R)²)`, yielding non-integrable `1/(µ² - µ_min²)` on
+        # the visibility cone. This singularity persists at K_max=0 (no
+        # multi-bounce — bare specular alone), proving it is in the
+        # primitive structure, not in the multi-bounce factor.
         #
-        # **The reference implementation** is available as
-        # :func:`compute_K_bc_specular_continuous_mu_sphere` and
-        # produces Sanchez Eq. (A6) directly. **Production wiring is
-        # blocked on a Jacobian-conversion question** (Phase 5+):
-        # Sanchez's `g_h(ρ' → ρ)` uses an integral form
-        # ``I(ρ) = ∫ g · F dρ'`` where ``F`` is the local emission and
-        # ``g`` has the surface-area Jacobian ``4π ρ'²`` baked in via
-        # Sanchez Eq. (2). ORPHEUS's `K_ij` discretises a different
-        # Peierls form ``Σ_t·φ_i = Σ_j K_ij · q_j`` where the
-        # radial-volume weight (``rv = 4π r²``) and quadrature weight
-        # ``r_wts`` are explicit. Bridging the two normalisations
-        # requires deriving the conversion `K_ij = α(r_i, r_j) ·
-        # g_h(r_j, r_i)` where α carries (a) the σ from ``dρ' =
-        # σ·dr'``, (b) the radial-volume weight, and (c) any
-        # remaining 4π / surface-area factors. This Jacobian is **not
-        # documented in Sanchez 1986** and the closed-form `cosh`
-        # structure of Eq. (A6) makes the comparison subtle. Phase 5+
-        # plan: derive the conversion via a rank-1-equivalence
-        # cross-check against `closure="white_hebert"` (which works
-        # at rank-1 in ORPHEUS's K_ij convention) before re-wiring.
+        # The Phase 4 matrix-Galerkin form `(I - T·R)^{-1}` ABSORBS
+        # this singularity through basis projection (the rank-N
+        # shifted-Legendre projection acts as a smoothing). Six
+        # quadrature-handling approaches were tried in Round 3 — singularity
+        # subtraction, change-of-variables (u² substitution),
+        # Gauss-Kronrod adaptive subdivision, Galerkin diagonal
+        # cell-averaging, full Galerkin double-integration over
+        # Lagrange basis, and bounce-resolved geometric series
+        # truncation. ALL failed: end-to-end k_eff errors -34 % to
+        # -50 %, with monotone divergence in n_quad. The matrix-
+        # Galerkin and continuous-µ per-pair forms are different
+        # integral operators despite same physical interpretation.
         #
-        # In the meantime, the Phase 4 matrix-Galerkin form
-        # ``closure="specular_multibounce"`` remains the production
-        # path for sphere/cyl/slab multi-bounce.
+        # **Useful side-finding** (promote-worthy from Round 3):
+        # the chord/visibility-cone substitution `u² = (µ² - µ_min²) /
+        # (1 - µ_min²)` gives MACHINE PRECISION (1e-9 at Q=128) off-
+        # diagonal Q-convergence. Portable technique for any µ-resolved
+        # per-pair integral with a single-endpoint visibility-cone
+        # singularity.
+        #
+        # **Closed-form multi-bounce factor** (Round 2 BACKUP, useful
+        # for theoretical reference):
+        #     f_∞(µ) = (1/2) µ / (1 - exp(-σ·2Rµ))
+        # bounded at µ=0 (limit = 1/(4a)). The (1/2) comes from
+        # R = (1/2) M^{-1}; the µ from the µ-weighted basis Gram
+        # measure. Closed form: K_∞^half = (1/(8a²)) [π²/6 - Li_2(e^{-2a})
+        # + 2a ln(1 - e^{-2a})].
+        #
+        # See:
+        # - `.claude/agent-memory/numerics-investigator/phase5_round3_*.md`
+        #   (R3 PRIMARY adaptive quadrature + R3 SECONDARY Galerkin
+        #   double-int both fail with hypersingular diagnosis)
+        # - `.claude/agent-memory/numerics-investigator/phase5_round2_*.md`
+        #   (M2 PRIMARY isolates singularity; BACKUP closed-form factor)
+        # - `.claude/agent-memory/numerics-investigator/phase5_front_*.md`
+        #   (R1 Front A falsified, B partial, C failed → recommended M2)
+        # - `.claude/agent-memory/numerics-investigator/specular_continuous_mu_phase5a_closeout.md`
+        #   (Phase 5a baseline that started the investigation)
+        # - `derivations/peierls_specular_continuous_mu.py`
+        #   (4 SymPy verifications PASS — math is correct, but
+        #   discretisation is fundamentally not Nyström-compatible)
+        # - GitHub Issue #133 (Phase 5+ tracking — closing as wontfix
+        #   after the round-3 structural conclusion).
+        #
+        # **For users**: `closure="specular_multibounce"` (Phase 4
+        # matrix-Galerkin form) is the **permanent production path**
+        # for multi-bounce specular. At rank N ∈ {1, 2, 3} it gives
+        # Hébert-quality k_eff for thin sphere/cyl/slab. The Phase 4
+        # docstring's reference to "Phase 5 — proper fix" is now
+        # withdrawn: there is no proper fix in the continuous-µ
+        # discretisation framework.
         raise NotImplementedError(
-            f"closure='specular_continuous_mu' is a Phase 5 research "
-            f"prototype, not yet wired into solve_peierls_*. The "
-            f"reference kernel `compute_K_bc_specular_continuous_mu_sphere` "
-            f"implements Sanchez 1986 Eq. (A6) directly but the "
-            f"Jacobian conversion to ORPHEUS's K_ij Nyström convention "
-            f"is pending (see Phase 5+ in "
-            f".claude/plans/specular-bc-phase4-multibounce-rollout.md "
-            f"§10). For multi-bounce specular today, use "
-            f"closure='specular_multibounce' (matrix-Galerkin form, "
-            f"with rank gate)."
+            f"closure='specular_continuous_mu': Phase 5 production "
+            f"wiring was ABANDONED after 3 rounds of investigation "
+            f"(2026-04-28). The continuous-µ K_bc kernel is "
+            f"HYPERSINGULAR (Hadamard finite-part) and not Nyström-"
+            f"discretisable. The matrix-Galerkin Phase 4 form's "
+            f"(I - T·R)^(-1) mode-mixing is essential — not a basis-"
+            f"truncation artefact. Use closure='specular_multibounce' "
+            f"for production multi-bounce specular at any geometry. "
+            f"See `.claude/agent-memory/numerics-investigator/"
+            f"phase5_round3_adaptive_quadrature.md` for the full "
+            f"forensic record + Sphinx §peierls-phase5-retreat."
         )
     if closure == "specular":
         # Specular reflection BC: psi^-(r_b, mu_in) = psi^+(r_b, mu_in)
