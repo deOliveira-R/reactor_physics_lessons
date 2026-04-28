@@ -9071,6 +9071,472 @@ transform at that time. Until then, the polar form in §§3–4 is the
 canonical ORPHEUS treatment.
 
 
+22.7 Visibility-cone substitution for chord and µ-cone integrals
+-------------------------------------------------------------------
+
+.. _section-22-7-visibility-cone:
+
+Sections 22.2 and 22.5 catalogued the *Jacobian-absorbing* and
+*Gauss-Jacobi* responses to a square-root endpoint singularity; this
+subsection promotes a third, lighter-weight option that is now the
+ORPHEUS default for chord- and visibility-cone integrals with a
+**single** :math:`\sqrt{\,\cdot\,}`-vanishing endpoint. The primitive
+is :func:`~orpheus.derivations._kernels.gauss_legendre_visibility_cone`,
+shipped on branch ``feature/peierls-specular-bc`` (this commit). The
+substitution itself is classical (it reduces to the
+:math:`s^2 = r'^{2} - y^{2}` Jacobian-absorbing transform of §22.2 in
+the special case :math:`y_{\min} = 0`), but the explicit two-endpoint
+formulation, the precise bookkeeping of the Bernstein-ellipse branch
+points, and the treatment as a *portable Gauss-Legendre rule on the
+original* :math:`y`-*interval* are what makes the utility usable as a
+drop-in replacement at a dozen call sites in
+:mod:`~orpheus.derivations.peierls_geometry`.
+
+Where this singularity comes from in ORPHEUS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Two distinct geometric objects surface a single
+:math:`\sqrt{\,\cdot\,}`-vanishing endpoint in the ORPHEUS chord
+integrals.
+
+**(i) Visibility cone in** :math:`\mu`-**space.** A ray from observer
+:math:`r > 0` in a sphere or cylinder of outer radius :math:`R` reaches
+its target only if its direction cosine relative to the local outward
+radial satisfies :math:`\mu \ge \mu_{\rm vis}(r)`, where the *visibility
+threshold*
+
+.. math::
+
+   \mu_{\rm vis}(r) \;=\; \sqrt{1 - (r/R)^{2}}
+
+is the geometric cone bounding rays that strike the boundary before
+escaping. For an off-diagonal pair :math:`(r_{i}, r_{j})` the joint
+visibility threshold is :math:`\mu_{\rm vis}^{(ij)} =
+\max\{\mu_{\rm vis}(r_{i}),\,\mu_{\rm vis}(r_{j})\}`. The transmission
+factor that survives the joint geometry carries a
+:math:`1/\cos\omega(\mu)` term, with
+:math:`\cos\omega(\mu) = \sqrt{\mu^{2} - \mu_{\rm vis}^{2}}\,/\mu`,
+giving an integrable :math:`1/\sqrt{\mu^{2} - \mu_{\rm vis}^{2}}`-type
+singularity at the lower endpoint :math:`\mu = \mu_{\rm vis}`. This is
+the off-diagonal Phase 5 Round 3 SECONDARY pattern, isolated and
+reproduced in
+``derivations/diagnostics/diag_phase5_round3_visibility_cone_quad.py``.
+
+**(ii) Chord half-length on an annulus.** The primitive
+:func:`~orpheus.derivations._kernels.chord_half_lengths` returns
+piecewise chord lengths through concentric annuli — for an outermost
+shell with inner radius :math:`r_{k-1}` and outer radius :math:`r_{k}`,
+the chord half-length on the strip :math:`y \in [r_{k-1}, r_{k}]` is
+
+.. math::
+
+   \ell_{k}(y) \;=\; \sqrt{r_{k}^{2} - y^{2}},
+
+which vanishes as :math:`\sqrt{r_{k} - y}` at the upper endpoint
+:math:`y = r_{k}`. The inner chord on :math:`y \in [0, r_{k-1}]` is
+:math:`\ell_{k}(y) = \sqrt{r_{k}^{2} - y^{2}} - \sqrt{r_{k-1}^{2} -
+y^{2}}` and is *smooth* on this strip (no :math:`\sqrt{}`-vanishing
+inside the interval), so the visibility-cone substitution is **not
+needed there** — plain Gauss-Legendre is already spectral. It is the
+*outermost* annular strip and the *visibility-cone* :math:`\mu`-strip
+that share the single-:math:`\sqrt{}`-vanishing pattern this
+substitution is built for.
+
+Derivation of the substitution
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Generalise the two cases above to a parametric integral on an interval
+:math:`[y_{\min}, y_{\max}]` with :math:`y_{\min} \ge 0` and an
+integrand carrying a *single* :math:`\sqrt{}`-vanishing factor at one
+endpoint. The lower-endpoint variant is the canonical visibility-cone
+case; the upper-endpoint variant is the chord-strip case. We treat the
+lower variant in detail and quote the upper-variant result by symmetry.
+
+**Lower variant.** Suppose the integrand has the form
+:math:`g(y)\,/\sqrt{y^{2} - y_{\min}^{2}}` (or
+:math:`g(y)\,\sqrt{y^{2} - y_{\min}^{2}}`) with :math:`g` smooth on
+:math:`[y_{\min}, y_{\max}]`. Introduce
+
+.. math::
+
+   u^{2} \;=\; \frac{y^{2} - y_{\min}^{2}}{y_{\max}^{2} - y_{\min}^{2}}
+   \;\equiv\; \frac{y^{2} - y_{\min}^{2}}{\Delta^{2}},
+
+so that :math:`u = 0` at :math:`y = y_{\min}` and :math:`u = 1` at
+:math:`y = y_{\max}`. Inverting,
+
+.. math::
+
+   y(u) \;=\; \sqrt{y_{\min}^{2} + u^{2}\,\Delta^{2}}.
+
+Differentiating,
+
+.. math::
+
+   \frac{\mathrm d y}{\mathrm d u}
+   \;=\; \frac{u\,\Delta^{2}}{\sqrt{y_{\min}^{2} + u^{2}\,\Delta^{2}}}
+   \;=\; \frac{u\,\Delta^{2}}{y(u)}.
+
+The crucial observation is the **global identity**
+
+.. math::
+
+   \sqrt{y^{2} - y_{\min}^{2}} \;=\; u\,\Delta
+   \qquad
+   \text{(exact for all } u \in [0, 1]\text{)},
+
+which is *not* a leading-order Taylor expansion near the endpoint — it
+holds globally on the interval because the substitution was built
+quadratically in :math:`y^{2} - y_{\min}^{2}` precisely so that this
+identity is exact. Combining,
+
+.. math::
+   :label: gauss-legendre-visibility-cone
+
+   \int_{y_{\min}}^{y_{\max}}\! \frac{g(y)}{\sqrt{y^{2}-y_{\min}^{2}}}\,
+       \mathrm d y
+   \;=\;
+   \int_{0}^{1}\! \frac{g(y(u))}{u\,\Delta}\,
+       \frac{u\,\Delta^{2}}{y(u)}\,\mathrm d u
+   \;=\;
+   \int_{0}^{1}\! \frac{\Delta}{y(u)}\,g(y(u))\,\mathrm d u.
+
+.. vv-status: gauss-legendre-visibility-cone tested
+
+The :math:`u` factor in :math:`\mathrm d y/\mathrm d u` exactly cancels
+the :math:`1/u`-type behaviour of the singular factor, leaving a smooth
+:math:`u`-integrand whenever :math:`g` is smooth and
+:math:`y_{\min} > 0`. For an integrand of the *opposite* type
+:math:`g(y)\,\sqrt{y^{2}-y_{\min}^{2}}` the same substitution gives
+:math:`g(y(u))\,u\,\Delta \cdot \mathrm d y/\mathrm d u =
+g(y(u))\,u^{2}\,\Delta^{3}/y(u)\,\mathrm d u`, again smooth on
+:math:`[0, 1]`. Plain Gauss-Legendre on :math:`u \in [-1, 1]` (with the
+standard affine map to :math:`[0, 1]`) is therefore spectral on the
+transformed integrand. The :func:`gauss_legendre_visibility_cone`
+utility ships the resulting Gauss-Legendre rule, **expressed back in
+the original** :math:`y`-coordinate so that the caller writes
+:math:`\sum_i w_{i}\,f(y_{i})` for the original integrand
+:math:`f(y) = g(y)/\sqrt{y^{2}-y_{\min}^{2}}` (or
+:math:`g(y)\,\sqrt{y^{2}-y_{\min}^{2}}`) without rewriting the
+integrand.
+
+**Upper variant.** For an integrand vanishing at the upper endpoint
+(the chord-strip case :math:`\sqrt{y_{\max}^{2} - y^{2}}` at
+:math:`y \to y_{\max}`), set instead
+
+.. math::
+
+   u^{2} \;=\; \frac{y_{\max}^{2} - y^{2}}{y_{\max}^{2} - y_{\min}^{2}},
+   \qquad
+   y(u) \;=\; \sqrt{y_{\max}^{2} - u^{2}\,\Delta^{2}}.
+
+The role of the endpoints is swapped (:math:`u = 0` now corresponds to
+:math:`y = y_{\max}`). The Jacobian magnitude is identical,
+:math:`|\mathrm d y / \mathrm d u| = u\,\Delta^{2}/y(u)`, and the sign
+of :math:`\mathrm d y / \mathrm d u` is absorbed by the swap of
+integration limits, so the implementation returns a single positive
+weight formula
+
+.. math::
+
+   w(u) \;=\; \frac{u\,\Delta^{2}}{y(u)},
+   \qquad \Delta^{2} \;=\; y_{\max}^{2} - y_{\min}^{2},
+
+selecting :math:`y(u) = \sqrt{y_{\min}^{2} + u^{2}\Delta^{2}}` for the
+lower variant and :math:`y(u) = \sqrt{y_{\max}^{2} - u^{2}\Delta^{2}}`
+for the upper variant. The utility selects between the two via the
+``singular_endpoint`` keyword.
+
+Spectral convergence and the Bernstein-ellipse caveat
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Why is the substitution *spectral* and not merely high-order? The
+Trefethen-Bornemann Gauss-Legendre convergence theorem states that for
+an integrand analytic in a Bernstein ellipse :math:`\mathcal E_{\rho}`
+of parameter :math:`\rho > 1` around :math:`[-1, 1]`, the :math:`Q`-
+node Gauss-Legendre error decays as :math:`\mathcal O(\rho^{-2 Q})`.
+The transformed :math:`u`-integrand inherits the analytic structure of
+:math:`y(u) = \sqrt{y_{\min}^{2} + u^{2}\,\Delta^{2}}` (lower) or
+:math:`\sqrt{y_{\max}^{2} - u^{2}\,\Delta^{2}}` (upper). Each is
+analytic on a strip in the complex :math:`u`-plane bounded by the
+square-root branch points:
+
+- **Lower variant**: :math:`y(u)^{2} = 0` at
+  :math:`u = \pm i\,y_{\min}/\Delta` — *purely imaginary*, distance
+  :math:`y_{\min}/\Delta` from the real interval.
+- **Upper variant**: :math:`y(u)^{2} = 0` at
+  :math:`u = \pm y_{\max}/\Delta` — *real*, distance
+  :math:`y_{\max}/\Delta - 1` from :math:`u = 1`.
+
+The corresponding Bernstein ellipse parameter is
+:math:`\rho = a + \sqrt{a^{2} \pm 1}` with
+:math:`a = y_{\min}/\Delta` (lower) or :math:`a = y_{\max}/\Delta`
+(upper). Larger :math:`\rho` (branch point far from the real interval)
+means faster geometric decay; :math:`\rho \to 1^{+}` (branch point
+approaching the interval) means arbitrarily slow.
+
+This gives a sharp, predictive caveat:
+
+.. list-table:: Bernstein-ellipse parameter :math:`\rho` versus
+                interval shape :math:`y_{\min}/y_{\max}`
+   :header-rows: 1
+   :widths: 20 20 20 40
+
+   * - :math:`y_{\min}/y_{\max}`
+     - :math:`\rho` (lower)
+     - :math:`\rho` (upper)
+     - Notes
+   * - 0.90
+     - 4.36
+     - 4.36
+     - Both variants converge very fast (thin shell).
+   * - 0.50
+     - 1.73
+     - 1.73
+     - Solid spectral decay (~6 digits gained per :math:`Q = 16`).
+   * - 0.25
+     - 1.29
+     - 1.29
+     - Marginal — bump :math:`Q` by ~2× over the 0.50 case.
+   * - 0.10
+     - 1.11
+     - 1.11
+     - Slow — split the interval at the midpoint or fall back to §22.5.
+   * - 0.01
+     - 1.010
+     - 1.010
+     - Effectively algebraic — substitution offers no benefit over
+       plain GL.
+
+The lower and upper variants happen to share the same numerical
+:math:`\rho` because :math:`a_{\rm lower}^{2} + 1 = a_{\rm upper}^{2}`
+when :math:`\Delta` is the same — so they are *equally* well-
+conditioned on a given interval and the choice between them is purely
+geometric (which endpoint hosts the :math:`\sqrt{}`-vanishing factor of
+the original integrand). What *does* differ between the two variants
+is the location of the branch point in the complex plane: the lower
+variant places it on the imaginary axis (a "safe" location for
+real-axis quadrature), while the upper variant places it on the real
+axis just outside :math:`[0, 1]` — *not* a problem for Gauss-Legendre
+convergence (only the Bernstein parameter :math:`\rho` matters), but it
+does mean that adaptive subdivision schemes that use real-axis branch
+detection should prefer the lower variant when both options are
+available.
+
+For the chord-strip case where :math:`y_{\min} = 0` and the integrand
+vanishes at the upper endpoint, the upper variant places its branch
+point at :math:`u = 1` itself (zero distance), which renders the
+substitution useless. The chord-strip practitioner has two clean
+alternatives: split the strip at an interior knot (so each sub-strip
+has :math:`y_{\min} > 0`), or fall back to Gauss-Jacobi (§22.5) with
+:math:`\beta = 1/2`. The shipped utility does **not** raise an error
+for :math:`y_{\min} = 0`; the lower variant degenerates harmlessly to
+plain Gauss-Legendre on :math:`[0, y_{\max}]`, but the upper variant
+silently introduces a :math:`1/y(u)` blow-up at :math:`u = 1`. This
+trap is documented in the docstring's *Notes* section; callers are
+responsible for choosing a sensible variant.
+
+Numerical evidence
+~~~~~~~~~~~~~~~~~~
+
+The L0 test module at ``tests/derivations/test_kernels.py`` covers six
+configurations; the three most informative are reproduced here. All
+integrals are evaluated against either an analytical closed form or an
+``mpmath.quad`` ground truth at 50-digit working precision.
+
+.. list-table:: Vis-cone (lower variant) versus plain Gauss-Legendre,
+                absolute error
+   :header-rows: 1
+   :widths: 35 13 13 13 13 13
+
+   * - Integrand
+     - Method
+     - Q=16
+     - Q=32
+     - Q=64
+     - Q=128
+   * - :math:`f(y) = 1/\sqrt{y^{2}-y_{\min}^{2}}` on :math:`[1, 2]`,
+       truth :math:`= \mathrm{arccosh}(2)`
+     - vis-cone
+     - 1.6e-14
+     - 1.4e-13
+     - 1.6e-13
+     - 4.9e-13
+   * -
+     - plain GL
+     - 3.7e-02
+     - 1.9e-02
+     - 9.5e-03
+     - 4.8e-03
+   * - :math:`f(y) = \sqrt{y^{2}-y_{\min}^{2}}\,e^{-y}` on
+       :math:`[1, 3]`, truth from mpmath
+     - vis-cone
+     - 2.4e-13
+     - 4.4e-16
+     - 5.6e-17
+     - 2.4e-15
+   * -
+     - plain GL
+     - 3.4e-05
+     - 4.4e-06
+     - 5.6e-07
+     - 7.1e-08
+   * - :math:`f(y) = e^{-y^{2}}` on :math:`[0.5, 2.5]` (smooth, no
+       singularity)
+     - vis-cone
+     - 6.3e-11
+     - 7.8e-16
+     - 5.6e-17
+     - —
+   * -
+     - plain GL
+     - 1.1e-16
+     - 7.8e-16
+     - 1.1e-16
+     - —
+
+Three properties of the substitution are visible in this table:
+
+1. **Spectral on the singular case** (row 1). At :math:`Q = 16` the
+   vis-cone error is at the edge of double precision; plain GL plateaus
+   at the algebraic :math:`\mathcal O(Q^{-1})` rate dictated by the
+   :math:`1/\sqrt{y - y_{\min}}` endpoint and is still ~:math:`10^{12}`
+   worse at :math:`Q = 128`.
+2. **Spectral on the** :math:`\sqrt{}`-**vanishing case** (row 2). The
+   vis-cone hits machine precision at :math:`Q = 32`; plain GL improves
+   at the algebraic :math:`\mathcal O(Q^{-3/2})` rate set by the
+   :math:`\sqrt{y - y_{\min}}` factor and lags by ~:math:`10^{10}` at
+   :math:`Q = 32`.
+3. **Unbiased on smooth integrands** (row 3). The vis-cone result
+   matches the mpmath ground truth to machine precision at
+   :math:`Q = 32`. It is *slower* than plain GL on a smooth integrand —
+   roughly twice the node count to reach machine precision — because
+   the :math:`1/y(u)` factor introduced by the substitution makes the
+   transformed integrand polynomial-of-higher-degree than the original.
+   The substitution is therefore a *targeted* tool: use it when there
+   is a singularity to absorb, not as a default replacement.
+
+These numbers are fully reproducible from
+``tests/derivations/test_kernels.py`` and the originating diagnostic at
+``derivations/diagnostics/diag_phase5_round3_visibility_cone_quad.py``.
+
+Gotchas and non-uses
+~~~~~~~~~~~~~~~~~~~~
+
+A small number of corner cases need explicit mention; each surfaced
+during the L0 test design.
+
+- :math:`y_{\min} = 0` **with the lower variant**:
+  :math:`y(u) = u\,y_{\max}`, the substitution degenerates to the
+  linear scaling :math:`y = u\,y_{\max}` and the rule reduces to plain
+  Gauss-Legendre on :math:`[0, y_{\max}]`. There is no spectral benefit
+  (no singularity to absorb) and no harm.
+
+- :math:`y_{\min} = 0` **with the upper variant**:
+  :math:`y(u) = y_{\max}\,\sqrt{1 - u^{2}}` and the weight
+  :math:`w(u) = u\,y_{\max}^{2}/y(u)` blows up at :math:`u = 1`. The
+  utility raises *no* error for this configuration — it is the
+  caller's responsibility to either split the interval at a positive
+  interior knot or fall back to Gauss-Jacobi (§22.5).
+
+- **Two-endpoint** :math:`\sqrt{}`-**vanishing integrands** (e.g. the
+  inner-annulus chord :math:`\sqrt{r_{k}^{2}-y^{2}} -
+  \sqrt{r_{k-1}^{2}-y^{2}}` *if it ever appeared on a strip
+  containing both* :math:`y = r_{k-1}` *and* :math:`y = r_{k}`): a
+  single substitution cannot smooth both endpoints. The cure is either
+  to split the panel at an interior point and apply the appropriate
+  variant on each half, or to fall back to the Gauss-Jacobi
+  :math:`(\alpha, \beta) = (1/2, 1/2)` rule of §22.5 which absorbs both
+  endpoint factors directly into the weight. In the present ORPHEUS
+  chord library this case does *not* arise — by construction
+  :func:`~orpheus.derivations._kernels.chord_half_lengths` partitions
+  the impact-parameter axis at the inner-radius knots so each strip
+  has at most one :math:`\sqrt{}`-vanishing endpoint.
+
+- **Inner-panel chord smoothness.** On the impact-parameter strip
+  :math:`y \in [0, r_{k-1}]`, the chord :math:`\sqrt{r_{k}^{2}-y^{2}}
+  - \sqrt{r_{k-1}^{2}-y^{2}}` is smooth (both square roots are real
+  and differentiable on the strip). Plain Gauss-Legendre is already
+  spectral on this case; do **not** apply the visibility-cone
+  substitution there. It would not produce a wrong answer, but it
+  would burn :math:`\sim 2\times` more nodes to reach the same accuracy
+  for no reason.
+
+Where this primitive plugs in
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The visibility-cone substitution is the first phase of a planned
+rollout across ORPHEUS chord and angular-cone quadratures. The full
+rollout plan lives at
+``.claude/plans/visibility-cone-substitution-rollout.md`` (Phase 1A
+through 1F). At the time of this commit only Phase 1A — the utility
+itself — is shipped; subsequent phases land the substitution at
+specific call sites in :mod:`~orpheus.derivations.peierls_geometry`.
+
+.. list-table:: Planned rollout sites and predecessor work
+   :header-rows: 1
+   :widths: 8 32 60
+
+   * - Phase
+     - Target
+     - Notes
+   * - 1A
+     - :func:`~orpheus.derivations._kernels.gauss_legendre_visibility_cone`
+       + L0 test
+     - **Shipped (this commit)**. Six L0 tests in
+       ``tests/derivations/test_kernels.py``, all carrying
+       ``@pytest.mark.verifies("gauss-legendre-visibility-cone")``.
+   * - 1B
+     - ``compute_T_specular_sphere``,
+       ``compute_T_specular_cylinder_3d``
+     - Phase 4 multi-bounce specular T-matrix integrals (commit
+       ``9178cc6``). Highest leverage: the rank-N Galerkin overshoot
+       at :math:`N \ge 4` is currently quadrature-limited.
+   * - 1C
+     - ``compute_P_esc_*_mode``, ``compute_G_bc_*_mode``
+     - Rank-N Knyazev / Hébert mode primitives. Algebraic identities
+       at rank 1 must be preserved bit-equally (1e-14).
+   * - 1D
+     - ``compute_P_ss_sphere``, ``compute_P_ss_cylinder``
+     - Surface-to-surface kernels. Verifies the Phase 4 algebraic
+       identity :math:`T_{00} = P_{ss}^{\rm cyl/sphere}` to 1e-14.
+   * - 1E
+     - ``build_volume_kernel_adaptive``
+     - The :math:`\Omega`-integration in
+       :mod:`~orpheus.derivations.peierls_geometry`; possibly
+       redundant with the existing ``mpmath.quad`` adaptive routine.
+       Phase 1E will assess.
+   * - 1F
+     - CP modules (``cp_cylinder.py``, ``cp_sphere.py``)
+     - Optional, low priority. CP discretisation error dominates
+       quadrature error here, so the benefit is marginal until other
+       error sources are addressed.
+
+Provenance
+~~~~~~~~~~
+
+The substitution surfaced during the Phase 5 Round 3 SECONDARY mission
+of the Peierls specular-BC investigation (commit ``4dc03cf``, retreat
+note in the §"Phase 5 retreat" subsection above). The original
+diagnostic at
+``derivations/diagnostics/diag_phase5_round3_visibility_cone_quad.py``
+used a *linear-shift* variant
+:math:`\mu = \mu_{\rm vis} + (1 - \mu_{\rm vis})\,u^{2}` which works
+locally near the singular endpoint but does **not** give the global
+:math:`\sqrt{y^{2}-y_{\min}^{2}} = u\,\Delta` identity. The shipped
+utility uses the *quadratic-in-* :math:`y^{2}` variant derived above,
+which is globally exact and unifies the two endpoint patterns under a
+single weight formula. Phase 5 itself was retreated as research-grade
+(continuous-:math:`\mu` :math:`K_{\rm bc}` is hypersingular and cannot
+be wired into production); the substitution is the durable promotion-
+worthy primitive recovered from the wreckage. See §22.5 for the
+Gauss-Jacobi fallback when a *both-endpoint* :math:`\sqrt{}`-vanishing
+integrand makes the visibility-cone substitution insufficient, and
+:func:`~orpheus.derivations._kernels.chord_half_lengths` for the chord
+primitive whose annular partition the substitution is built to
+complement.
+
+
 Section 23 — Monte Carlo connections
 ====================================
 

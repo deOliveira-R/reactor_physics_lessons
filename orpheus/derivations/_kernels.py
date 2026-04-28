@@ -104,6 +104,155 @@ def chord_half_lengths(radii: np.ndarray, y_pts: np.ndarray) -> np.ndarray:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Visibility-cone Gauss-Legendre substitution
+# ═══════════════════════════════════════════════════════════════════════
+
+def gauss_legendre_visibility_cone(
+    y_min: float,
+    y_max: float,
+    n: int,
+    *,
+    singular_endpoint: str = "lower",
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Gauss-Legendre nodes/weights on :math:`[y_{\min}, y_{\max}]`
+    that absorb a square-root endpoint singularity.
+
+    For an integrand carrying a single-endpoint factor of the form
+    :math:`\sqrt{y^{2} - y_{\min}^{2}}` (vanishing at the lower
+    endpoint — the canonical visibility-cone pattern in
+    :math:`\mu`-integrals where :math:`\mu_{\min} = \sqrt{1 - (r/R)^{2}}`
+    bounds the cone), the substitution
+
+    .. math::
+
+        u^{2} \;=\; \frac{y^{2} - y_{\min}^{2}}{y_{\max}^{2} - y_{\min}^{2}},
+        \qquad
+        y(u) \;=\; \sqrt{y_{\min}^{2}
+                          + u^{2}\,(y_{\max}^{2} - y_{\min}^{2})},
+        \qquad
+        \frac{\mathrm dy}{\mathrm du}
+          \;=\; \frac{u\,(y_{\max}^{2} - y_{\min}^{2})}{y(u)}
+
+    yields the global identity
+    :math:`\sqrt{y^{2} - y_{\min}^{2}} = u\,\sqrt{y_{\max}^{2} - y_{\min}^{2}}`,
+    so the :math:`u`-factor in the Jacobian exactly cancels the
+    :math:`1/u`-type pole of any
+    :math:`g(y)/\sqrt{y^{2} - y_{\min}^{2}}` integrand and converts a
+    :math:`\sqrt{y^{2} - y_{\min}^{2}}\,g(y)` integrand into a smooth
+    :math:`u`-integrand. Plain Gauss-Legendre on the transformed
+    integrand is then **spectral**, in contrast to the algebraic
+    :math:`\mathcal O(Q^{-3/2})` of plain Gauss-Legendre on the
+    original :math:`y`-integrand or the
+    :math:`\mathcal O(Q^{-5/2})` of composite Gauss-Legendre at panel
+    boundaries.
+
+    For integrands vanishing at the *upper* endpoint
+    (:math:`\sqrt{y_{\max}^{2} - y^{2}}`, e.g. chord half-length
+    :math:`\sqrt{r_{k}^{2} - h^{2}}` at :math:`h \to r_{k}`), pass
+    ``singular_endpoint="upper"`` to invert the role of the endpoints:
+
+    .. math::
+
+        u^{2} \;=\; \frac{y_{\max}^{2} - y^{2}}{y_{\max}^{2} - y_{\min}^{2}},
+        \qquad
+        y(u) \;=\; \sqrt{y_{\max}^{2}
+                          - u^{2}\,(y_{\max}^{2} - y_{\min}^{2})}.
+
+    Both variants share the weight formula
+    :math:`u\,(y_{\max}^{2} - y_{\min}^{2})/y(u)` (the sign of
+    :math:`\mathrm dy/\mathrm du` is absorbed by the swap of limits;
+    the returned weights are positive).
+
+    Parameters
+    ----------
+    y_min : float
+        Lower endpoint, :math:`y_{\min} \ge 0`.
+    y_max : float
+        Upper endpoint, :math:`y_{\max} > y_{\min}`.
+    n : int
+        Number of Gauss-Legendre nodes. ``n >= 1``.
+    singular_endpoint : {"lower", "upper"}, keyword-only
+        Which endpoint hosts the :math:`\sqrt{}`-vanishing factor.
+        Default ``"lower"`` matches the visibility-cone
+        :math:`\mu`-integral pattern (Phase 5 Round-3 SECONDARY
+        diagnostic in
+        ``derivations/diagnostics/diag_phase5_round3_visibility_cone_quad.py``).
+
+    Returns
+    -------
+    (y_pts, y_wts) : tuple of np.ndarray, shape (n,)
+        Nodes and positive weights such that
+        :math:`\int_{y_{\min}}^{y_{\max}} f(y)\,\mathrm dy
+        \;\approx\; \sum_{i} y_{\mathrm wts}[i]\,f(y_{\mathrm pts}[i])`.
+
+    Notes
+    -----
+    The weight :math:`u\,(y_{\max}^{2}-y_{\min}^{2})/y(u)` contains
+    a :math:`1/y(u)` factor. With ``singular_endpoint="lower"`` and
+    :math:`y_{\min} > 0`, :math:`y(u) \ge y_{\min} > 0` everywhere,
+    so the weight is bounded. With :math:`y_{\min} = 0`, the lower
+    variant degenerates to the linear scaling :math:`y = u\,y_{\max}`
+    with weight :math:`y_{\max}` — still a valid GL rule on
+    :math:`[0, y_{\max}]`, just without spectral benefit (no
+    singularity to absorb). Conversely the upper variant with
+    :math:`y_{\min} = 0` introduces a *new* :math:`1/y` blow-up at
+    :math:`u = 1` (the regular endpoint :math:`y = 0`), so the
+    caller must ensure the integrand carries a compensating factor
+    or split the interval before using this primitive.
+
+    **Convergence rate (Bernstein ellipse).** The transformed
+    integrand inherits a branch point of :math:`y(u)`. For the
+    lower variant the branch point is at
+    :math:`u = i\,y_{\min}/\Delta` with
+    :math:`\Delta = \sqrt{y_{\max}^{2}-y_{\min}^{2}}` (purely
+    imaginary, distance :math:`y_{\min}/\Delta` from the real
+    interval). For the upper variant the branch point is at
+    :math:`u = y_{\max}/\Delta > 1` (real, distance
+    :math:`y_{\max}/\Delta - 1` from :math:`u = 1`). The upper
+    variant therefore converges *slowly* when :math:`y_{\min} \ll
+    y_{\max}` (branch point too close to :math:`u = 1`); for
+    intervals with :math:`y_{\min}/y_{\max} \lesssim 0.1` either
+    bump :math:`Q` by ~3× or split the interval at a midpoint. The
+    lower variant has the dual constraint: it slows when
+    :math:`y_{\min} \ll \Delta`, e.g. on intervals
+    :math:`[0+\epsilon, y_{\max}]` with very small :math:`\epsilon`.
+
+    See :ref:`§22.7 <section-22-7-visibility-cone>` in the
+    :doc:`/theory/peierls_unified` page for the full derivation,
+    spectral-vs-algebraic comparison table, gotchas, and the rollout
+    plan across the chord/visibility-cone integrals in
+    :mod:`~orpheus.derivations.peierls_geometry`.
+    """
+    if y_max <= y_min:
+        raise ValueError(
+            f"Need y_max > y_min, got y_min={y_min}, y_max={y_max}"
+        )
+    if y_min < 0:
+        raise ValueError(f"y_min must be non-negative, got {y_min}")
+    if n < 1:
+        raise ValueError(f"n must be >= 1, got {n}")
+    if singular_endpoint not in ("lower", "upper"):
+        raise ValueError(
+            f"singular_endpoint must be 'lower' or 'upper', "
+            f"got {singular_endpoint!r}"
+        )
+
+    u_nodes, u_wts = np.polynomial.legendre.leggauss(n)
+    u = 0.5 * (u_nodes + 1.0)
+    u_w = 0.5 * u_wts
+
+    delta_sq = y_max * y_max - y_min * y_min
+
+    if singular_endpoint == "lower":
+        y_pts = np.sqrt(y_min * y_min + u * u * delta_sq)
+    else:  # "upper"
+        y_pts = np.sqrt(y_max * y_max - u * u * delta_sq)
+
+    y_wts = u_w * u * delta_sq / y_pts
+    return y_pts, y_wts
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # E₃ kernel (slab geometry)
 # ═══════════════════════════════════════════════════════════════════════
 
