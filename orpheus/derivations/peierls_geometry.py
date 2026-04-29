@@ -5478,6 +5478,197 @@ def _resolve_closure_name(boundary: str, *, user_stacklevel: int) -> str:
     return boundary
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Specular per-mode P/G builders shared by closure="specular" and
+# closure="specular_multibounce" (refactor #2-helper)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# The two specular closures share identical P / G mode-decomposition
+# builds — they differ only in whether the geometric-series factor
+# (I − T·R)⁻¹ is inserted between R and P. Factoring the P/G build into
+# helpers eliminates ~150 LoC of near-verbatim duplication and pins the
+# slab `DIVISOR_PER_FACE = 1` convention (vs the legacy
+# `geometry.rank1_surface_divisor(R) = 2` for the combined-face Mark
+# primitive — see ERR-031 anti-pattern lineage and the slab specular
+# block commentary in `_build_full_K_per_group`).
+
+def _specular_assembly_setup(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    radii: np.ndarray,
+    sig_t_g: np.ndarray,
+) -> tuple[float, np.ndarray, np.ndarray, float]:
+    r"""Common per-observer setup shared by every specular closure
+    branch: returns ``(R_cell, sig_t_n, rv, divisor)``.
+
+    ``sig_t_n`` is the per-node Σ_t_g looked up via
+    :meth:`CurvilinearGeometry.which_annulus`. ``rv`` is the radial
+    volume weight per node. ``divisor`` is the rank-1 surface-area
+    divisor (``R²`` for sphere, ``R`` for cylinder, ``2`` for slab —
+    the latter is overridden to ``1`` per face by the slab-specific
+    :func:`_build_slab_per_face_specular_PG` builder below).
+    """
+    R_cell = float(radii[-1])
+    sig_t_n = np.array([
+        sig_t_g[geometry.which_annulus(float(r_nodes[i]), radii)]
+        for i in range(len(r_nodes))
+    ])
+    rv = np.array([
+        geometry.radial_volume_weight(float(rj)) for rj in r_nodes
+    ])
+    divisor = geometry.rank1_surface_divisor(R_cell)
+    return R_cell, sig_t_n, rv, divisor
+
+
+def _build_slab_per_face_specular_PG(
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    radii: np.ndarray,
+    sig_t_g: np.ndarray,
+    n_modes: int,
+    sig_t_n: np.ndarray,
+    rv: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    r"""Build the slab per-face mode-decomposed P, G, R operators for
+    specular closures (rank-:math:`N` per face, 2N total mode space).
+
+    Returns ``(P_slab, G_slab, R_slab)`` where ``P_slab.shape = (2N,
+    N_r)``, ``G_slab.shape = (N_r, 2N)``, and ``R_slab`` is the
+    block-diagonal :math:`\mathrm{diag}(R_{\rm spec}(N), R_{\rm spec}(N))`.
+
+    Used by both ``closure="specular"`` and ``closure="specular_multibounce"``
+    on slab; the per-face decomposition uses the
+    :math:`\mathrm{DIVISOR\_PER\_FACE} = 1` convention (vs the legacy
+    combined-face ``divisor = 2``).
+    """
+    N_r = len(r_nodes)
+    N = n_modes
+    P_o = np.zeros((N, N_r))
+    P_i = np.zeros((N, N_r))
+    G_o = np.zeros((N_r, N))
+    G_i = np.zeros((N_r, N))
+    for i in range(N_r):
+        x_i = float(r_nodes[i])
+        tau_o = _slab_tau_to_outer_face(x_i, radii, sig_t_g)
+        tau_n = _slab_tau_to_inner_face(x_i, radii, sig_t_g)
+        for n in range(N):
+            coefs = _shifted_legendre_monomial_coefs(n)
+            Po = Pn = Go = Gn = 0.0
+            for k, c in enumerate(coefs):
+                if c == 0.0:
+                    continue
+                E_o = _slab_E_n(k + 2, tau_o)
+                E_n_val = _slab_E_n(k + 2, tau_n)
+                Po += 0.5 * c * E_o
+                Pn += 0.5 * c * E_n_val
+                Go += 2.0 * c * E_o
+                Gn += 2.0 * c * E_n_val
+            P_o[n, i] = Po
+            P_i[n, i] = Pn
+            G_o[i, n] = Go
+            G_i[i, n] = Gn
+    DIVISOR_PER_FACE = 1.0
+    P_o_w = rv * r_wts * P_o
+    P_i_w = rv * r_wts * P_i
+    G_o_w = sig_t_n[:, None] * G_o / DIVISOR_PER_FACE
+    G_i_w = sig_t_n[:, None] * G_i / DIVISOR_PER_FACE
+    P_slab = np.vstack([P_o_w, P_i_w])  # (2N, N_r)
+    G_slab = np.hstack([G_o_w, G_i_w])  # (N_r, 2N)
+    R_face = reflection_specular(N)
+    R_slab = np.zeros((2 * N, 2 * N))
+    R_slab[:N, :N] = R_face
+    R_slab[N:, N:] = R_face
+    return P_slab, G_slab, R_slab
+
+
+def _build_sphere_specular_mode_PG(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    radii: np.ndarray,
+    sig_t_g: np.ndarray,
+    n_modes: int,
+    sig_t_n: np.ndarray,
+    rv: np.ndarray,
+    divisor: float,
+    R_cell: float,
+    n_angular: int,
+    n_surf_quad: int,
+    dps: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Build the sphere mode-decomposed P, G operators for specular
+    closures (rank-:math:`N`, single-surface mode space).
+
+    Returns ``(P, G)`` with ``P.shape = (N, N_r)`` and ``G.shape =
+    (N_r, N)``. The P side uses the :func:`_p_esc_sphere_solid_mode`
+    helper (canonical no-Jacobian Mark-Lambert primitive); the G side
+    uses :func:`compute_G_bc_mode`.
+    """
+    N_r = len(r_nodes)
+    N = n_modes
+    P = np.zeros((N, N_r))
+    G = np.zeros((N_r, N))
+    omega_low, omega_high = geometry.angular_range
+    pref = geometry.prefactor
+    for n in range(N):
+        P_esc_n = np.array([
+            pref * _p_esc_sphere_solid_mode(
+                geometry, float(r_i), R_cell, radii, sig_t_g,
+                n, omega_low, omega_high, n_angular, dps,
+            )
+            for r_i in r_nodes
+        ])
+        G_bc_n = compute_G_bc_mode(
+            geometry, r_nodes, radii, sig_t_g, n,
+            n_surf_quad=n_surf_quad, dps=dps,
+        )
+        P[n, :] = rv * r_wts * P_esc_n
+        G[:, n] = sig_t_n * G_bc_n / divisor
+    return P, G
+
+
+def _build_cylinder_specular_mode_PG(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    radii: np.ndarray,
+    sig_t_g: np.ndarray,
+    n_modes: int,
+    sig_t_n: np.ndarray,
+    rv: np.ndarray,
+    divisor: float,
+    n_angular: int,
+    n_surf_quad: int,
+    dps: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Build the cylinder mode-decomposed P, G operators for specular
+    closures (rank-:math:`N`, single-surface mode space).
+
+    Returns ``(P, G)``. Uses the 3-D Knyazev primitives
+    :func:`compute_P_esc_cylinder_3d_mode` and
+    :func:`compute_G_bc_cylinder_3d_mode` for both sides — the polar
+    :math:`\mathrm{Ki}_{2+k}` series carries the 3-D
+    :math:`\mu_{3D} = \sin\theta_p\,\mu_{2D}` factor that the
+    sphere's plain :math:`\exp(-\tau)` integrand does not need.
+    """
+    N_r = len(r_nodes)
+    N = n_modes
+    P = np.zeros((N, N_r))
+    G = np.zeros((N_r, N))
+    for n in range(N):
+        P_esc_n = compute_P_esc_cylinder_3d_mode(
+            geometry, r_nodes, radii, sig_t_g, n,
+            n_angular=n_angular, dps=dps,
+        )
+        G_bc_n = compute_G_bc_cylinder_3d_mode(
+            geometry, r_nodes, radii, sig_t_g, n,
+            n_surf_quad=n_surf_quad, dps=dps,
+        )
+        P[n, :] = rv * r_wts * P_esc_n
+        G[:, n] = sig_t_n * G_bc_n / divisor
+    return P, G
+
+
 def _build_full_K_per_group(
     geometry: CurvilinearGeometry,
     r_nodes: np.ndarray,
@@ -5668,107 +5859,44 @@ def _build_full_K_per_group(
                 UserWarning,
                 stacklevel=4,
             )
-        R_cell = float(radii[-1])
-        sig_t_n = np.array([
-            sig_t_g[geometry.which_annulus(float(r_nodes[i]), radii)]
-            for i in range(len(r_nodes))
-        ])
-        rv = np.array([
-            geometry.radial_volume_weight(float(rj)) for rj in r_nodes
-        ])
-        divisor = geometry.rank1_surface_divisor(R_cell)
-        N_r = len(r_nodes)
+        # Refactor #2-helper: the per-observer setup + per-geometry P/G
+        # builds are factored into shared helpers (see above) so the
+        # specular_multibounce and specular branches only differ in the
+        # geometric-series factor (I - T·R)^(-1) inserted between R and P.
+        R_cell, sig_t_n, rv, divisor = _specular_assembly_setup(
+            geometry, r_nodes, radii, sig_t_g,
+        )
         N = n_bc_modes
         if geometry.kind == "slab-polar":
-            # Slab MB: per-face block decomposition mirrors the bare
-            # specular slab branch (see closure="specular" slab block
-            # below for the divisor-per-face commentary). The slab T is
+            # Slab MB: per-face block decomposition. The slab T is
             # block off-diagonal so (I - T·R)^{-1} preserves the per-
             # face block structure but couples outer ↔ inner via the
             # transit factor.
-            P_o = np.zeros((N, N_r))
-            P_i = np.zeros((N, N_r))
-            G_o = np.zeros((N_r, N))
-            G_i = np.zeros((N_r, N))
-            for i in range(N_r):
-                x_i = float(r_nodes[i])
-                tau_o = _slab_tau_to_outer_face(x_i, radii, sig_t_g)
-                tau_n = _slab_tau_to_inner_face(x_i, radii, sig_t_g)
-                for n in range(N):
-                    coefs = _shifted_legendre_monomial_coefs(n)
-                    Po = Pn = Go = Gn = 0.0
-                    for k, c in enumerate(coefs):
-                        if c == 0.0:
-                            continue
-                        E_o = _slab_E_n(k + 2, tau_o)
-                        E_n_val = _slab_E_n(k + 2, tau_n)
-                        Po += 0.5 * c * E_o
-                        Pn += 0.5 * c * E_n_val
-                        Go += 2.0 * c * E_o
-                        Gn += 2.0 * c * E_n_val
-                    P_o[n, i] = Po
-                    P_i[n, i] = Pn
-                    G_o[i, n] = Go
-                    G_i[i, n] = Gn
-            DIVISOR_PER_FACE = 1.0
-            P_o_w = rv * r_wts * P_o
-            P_i_w = rv * r_wts * P_i
-            G_o_w = sig_t_n[:, None] * G_o / DIVISOR_PER_FACE
-            G_i_w = sig_t_n[:, None] * G_i / DIVISOR_PER_FACE
-            P_slab = np.vstack([P_o_w, P_i_w])  # (2N, N_r)
-            G_slab = np.hstack([G_o_w, G_i_w])  # (N_r, 2N)
-            R_face = reflection_specular(N)
-            R_slab = np.zeros((2 * N, 2 * N))
-            R_slab[:N, :N] = R_face
-            R_slab[N:, N:] = R_face
+            P_slab, G_slab, R_slab = _build_slab_per_face_specular_PG(
+                r_nodes, r_wts, radii, sig_t_g, N, sig_t_n, rv,
+            )
             T_slab = compute_T_specular_slab(radii, sig_t_g, N, n_quad=64)
             ITR = np.eye(2 * N) - T_slab @ R_slab
             K_bc = G_slab @ R_slab @ np.linalg.solve(ITR, P_slab)
             return K + K_bc
         # Sphere / cylinder: single-surface mode space (N modes).
-        P = np.zeros((N, N_r))
-        G = np.zeros((N_r, N))
         if geometry.kind == "sphere-1d":
-            # Same no-Jacobian Mark-Lambert P/G build as
-            # compute_P_esc_outer_mode (hollow), but the multi-bounce
-            # specular assembly only runs for solid sphere here, so
-            # there is no inner-shell Model-A skip.  Q6.L4: route the
-            # observer-centred ω-sweep through observer_angular_quadrature
-            # to inherit kink-aware subdivision for multi-region cells.
-            omega_low, omega_high = geometry.angular_range
-            pref = geometry.prefactor
-            for n in range(N):
-                P_esc_n = np.array([
-                    pref * _p_esc_sphere_solid_mode(
-                        geometry, float(r_i), R_cell, radii, sig_t_g,
-                        n, omega_low, omega_high, n_angular, dps,
-                    )
-                    for r_i in r_nodes
-                ])
-                G_bc_n = compute_G_bc_mode(
-                    geometry, r_nodes, radii, sig_t_g, n,
-                    n_surf_quad=n_surf_quad, dps=dps,
-                )
-                P[n, :] = rv * r_wts * P_esc_n
-                G[:, n] = sig_t_n * G_bc_n / divisor
+            P, G = _build_sphere_specular_mode_PG(
+                geometry, r_nodes, r_wts, radii, sig_t_g, N,
+                sig_t_n, rv, divisor, R_cell,
+                n_angular, n_surf_quad, dps,
+            )
             T = compute_T_specular_sphere(radii, sig_t_g, N, n_quad=64)
         else:  # cylinder-1d
-            # Cylinder: use the 3-D Knyazev primitives matching the bare
-            # specular cyl branch (see closure="specular" cylinder block
-            # below for the Knyazev Ki_(2+k) commentary). T uses
-            # Ki_(3+k_m+k_n) — one Ki order higher than P/G — to carry
-            # the additional µ_3D = sin θ_p partial-current factor.
-            for n in range(N):
-                P_esc_n = compute_P_esc_cylinder_3d_mode(
-                    geometry, r_nodes, radii, sig_t_g, n,
-                    n_angular=n_angular, dps=dps,
-                )
-                G_bc_n = compute_G_bc_cylinder_3d_mode(
-                    geometry, r_nodes, radii, sig_t_g, n,
-                    n_surf_quad=n_surf_quad, dps=dps,
-                )
-                P[n, :] = rv * r_wts * P_esc_n
-                G[:, n] = sig_t_n * G_bc_n / divisor
+            # Cylinder: T uses Ki_(3+k_m+k_n) — one Ki order higher than
+            # P/G — to carry the additional µ_3D = sin θ_p partial-
+            # current factor. P/G use the 3-D Knyazev primitives
+            # consistent with the bare specular cyl branch.
+            P, G = _build_cylinder_specular_mode_PG(
+                geometry, r_nodes, r_wts, radii, sig_t_g, N,
+                sig_t_n, rv, divisor,
+                n_angular, n_surf_quad, dps,
+            )
             T = compute_T_specular_cylinder_3d(radii, sig_t_g, N, n_quad=64)
         R_spec = reflection_specular(N)
         ITR = np.eye(N) - T @ R_spec
@@ -5888,139 +6016,37 @@ def _build_full_K_per_group(
         # no-Jacobian primitive equals `compute_P_esc` exactly (since
         # P̃_0 = 1 and the Jacobian was the only difference), so at
         # rank-1 specular bit-equals rank-1 Mark.
-        R_cell = float(radii[-1])
-        sig_t_n = np.array([
-            sig_t_g[geometry.which_annulus(float(r_nodes[i]), radii)]
-            for i in range(len(r_nodes))
-        ])
-        rv = np.array([
-            geometry.radial_volume_weight(float(rj)) for rj in r_nodes
-        ])
-        divisor = geometry.rank1_surface_divisor(R_cell)
-
-        N_r = len(r_nodes)
+        # Refactor #2-helper: same factored helpers as
+        # closure="specular_multibounce" — the bare-specular branch
+        # differs only in the absence of the (I - T·R)^(-1) factor.
+        # See `_build_slab_per_face_specular_PG`,
+        # `_build_sphere_specular_mode_PG`, and
+        # `_build_cylinder_specular_mode_PG` for the per-geometry P/G
+        # construction (the slab block-diag uses DIVISOR_PER_FACE = 1,
+        # the bit-equivalence-preserving per-face decomposition rather
+        # than the legacy combined-face divisor = 2).
+        R_cell, sig_t_n, rv, divisor = _specular_assembly_setup(
+            geometry, r_nodes, radii, sig_t_g,
+        )
         N = n_bc_modes
         if geometry.kind == "slab-polar":
-            # Slab specular: per-face mode decomposition (2N modes — N
-            # modes per face — with block-diagonal R because specular
-            # reflection at a planar face is a LOCAL mirror with no
-            # cross-face coupling). See
-            # `derivations/peierls_specular_slab.py` for the SymPy
-            # derivation of the per-face P^(n) / G^(n) primitives in
-            # closed form via E_(k+2) sums.
-            #
-            # CRITICAL: the per-face block uses the SINGLE-face surface
-            # area divisor (= 1 for slab), NOT the legacy combined-face
-            # divisor `geometry.rank1_surface_divisor(R) = 2`. The
-            # legacy compute_P_esc / compute_G_bc for slab combine BOTH
-            # face contributions into a single primitive (½ E_2_outer
-            # + ½ E_2_inner) and use divisor=2 to convert to per-unit-
-            # face-area. The per-face decomposition treats each face
-            # individually with area=1, so divisor=1.
-            #
-            # At rank-1 with R_face = (1/2) M^{-1} = [[1]], the per-face
-            # K_bc is element-wise NOT equal to the legacy combined K_bc
-            # (the per-face form has stronger diagonal blocks and weaker
-            # cross-face blocks). However, the DOMINANT EIGENVALUE matches
-            # bit-exactly for homogeneous slab because the difference
-            # `K_bc_legacy - K_bc_per_face` is anti-symmetric and does
-            # not excite the dominant symmetric flux mode. See
-            # `derivations/diagnostics/diag_slab_specular_08_*.py` for
-            # the element-wise calculation showing
-            # K_bc_legacy = K_bc_per_face_div2 + (1/2) (G_o ⊗ P_i + G_i ⊗ P_o)
-            # which together decompose Mark's combined-face primitive
-            # into the per-face block-diagonal form expected by specular.
-            #
-            # For rank-N > 1, the closure converges to k_inf monotonically
-            # in both N and mesh refinement (verified by
-            # `tests/derivations/test_peierls_specular_bc.py::test_slab*`).
-            P_o = np.zeros((N, N_r))
-            P_i = np.zeros((N, N_r))
-            G_o = np.zeros((N_r, N))
-            G_i = np.zeros((N_r, N))
-            for i in range(N_r):
-                x_i = float(r_nodes[i])
-                tau_o = _slab_tau_to_outer_face(x_i, radii, sig_t_g)
-                tau_n = _slab_tau_to_inner_face(x_i, radii, sig_t_g)
-                for n in range(N):
-                    coefs = _shifted_legendre_monomial_coefs(n)
-                    Po = Pn = Go = Gn = 0.0
-                    for k, c in enumerate(coefs):
-                        if c == 0.0:
-                            continue
-                        E_o = _slab_E_n(k + 2, tau_o)
-                        E_n_val = _slab_E_n(k + 2, tau_n)
-                        Po += 0.5 * c * E_o
-                        Pn += 0.5 * c * E_n_val
-                        Go += 2.0 * c * E_o
-                        Gn += 2.0 * c * E_n_val
-                    P_o[n, i] = Po
-                    P_i[n, i] = Pn
-                    G_o[i, n] = Go
-                    G_i[i, n] = Gn
-
-            DIVISOR_PER_FACE = 1.0  # ← single-face area for slab
-            P_o_w = rv * r_wts * P_o
-            P_i_w = rv * r_wts * P_i
-            G_o_w = sig_t_n[:, None] * G_o / DIVISOR_PER_FACE
-            G_i_w = sig_t_n[:, None] * G_i / DIVISOR_PER_FACE
-
-            P_slab = np.vstack([P_o_w, P_i_w])  # (2N, N_r)
-            G_slab = np.hstack([G_o_w, G_i_w])  # (N_r, 2N)
-
-            R_face = reflection_specular(N)
-            R_slab = np.zeros((2 * N, 2 * N))
-            R_slab[:N, :N] = R_face
-            R_slab[N:, N:] = R_face
-
+            P_slab, G_slab, R_slab = _build_slab_per_face_specular_PG(
+                r_nodes, r_wts, radii, sig_t_g, N, sig_t_n, rv,
+            )
             K_bc = G_slab @ R_slab @ P_slab
             return K + K_bc
-        P = np.zeros((N, N_r))
-        G = np.zeros((N_r, N))
         if geometry.kind == "sphere-1d":
-            # Sphere: the angular variable θ at the observer IS the polar
-            # angle, and µ_exit = (ρ_max + r_i cos θ)/R is the full 3-D
-            # cosine with the outward normal. The escape kernel exp(-τ)
-            # has no polar-integration absorption to undo, so the
-            # canonical no-Jacobian P primitive is just
-            # P̃_n(µ_exit) · exp(-τ) integrated against the sphere's
-            # sin θ dθ measure with prefactor 1/2.  Q6.L4 routes through
-            # the shared `_p_esc_sphere_solid_mode` helper so the
-            # observer-angular ω-sweep inherits kink-aware subdivision.
-            omega_low, omega_high = geometry.angular_range
-            pref = geometry.prefactor
-            for n in range(N):
-                P_esc_n = np.array([
-                    pref * _p_esc_sphere_solid_mode(
-                        geometry, float(r_i), R_cell, radii, sig_t_g,
-                        n, omega_low, omega_high, n_angular, dps,
-                    )
-                    for r_i in r_nodes
-                ])
-                G_bc_n = compute_G_bc_mode(
-                    geometry, r_nodes, radii, sig_t_g, n,
-                    n_surf_quad=n_surf_quad, dps=dps,
-                )
-                P[n, :] = rv * r_wts * P_esc_n
-                G[:, n] = sig_t_n * G_bc_n / divisor
+            P, G = _build_sphere_specular_mode_PG(
+                geometry, r_nodes, r_wts, radii, sig_t_g, N,
+                sig_t_n, rv, divisor, R_cell,
+                n_angular, n_surf_quad, dps,
+            )
         elif geometry.kind == "cylinder-1d":
-            # Cylinder: the existing escape_kernel_mp = Ki_2(τ) absorbs
-            # the polar (axial) integration ASSUMING mode-0 angular
-            # flux. For mode n >= 1 this absorption is wrong because
-            # the 3-D cosine is µ_3D = sin θ_p · µ_2D and the polar
-            # integration with P̃_n(µ_3D) weight expands into the
-            # Knyazev Ki_{2+k} series. Use the corrected primitives:
-            for n in range(N):
-                P_esc_n = compute_P_esc_cylinder_3d_mode(
-                    geometry, r_nodes, radii, sig_t_g, n,
-                    n_angular=n_angular, dps=dps,
-                )
-                G_bc_n = compute_G_bc_cylinder_3d_mode(
-                    geometry, r_nodes, radii, sig_t_g, n,
-                    n_surf_quad=n_surf_quad, dps=dps,
-                )
-                P[n, :] = rv * r_wts * P_esc_n
-                G[:, n] = sig_t_n * G_bc_n / divisor
+            P, G = _build_cylinder_specular_mode_PG(
+                geometry, r_nodes, r_wts, radii, sig_t_g, N,
+                sig_t_n, rv, divisor,
+                n_angular, n_surf_quad, dps,
+            )
         else:  # pragma: no cover — guarded above for slab-polar
             raise NotImplementedError(
                 f"closure='specular': unsupported geometry kind "
