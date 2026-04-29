@@ -3078,8 +3078,9 @@ relative to the :math:`O(N^{3})` radial LU factorisation.
 .. note::
 
    The white-BC closure is **not yet implemented**. The current
-   :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g`
-   with ``boundary="vacuum"`` handles vacuum BC only. The
+   :func:`~orpheus.derivations.peierls_geometry.solve_peierls_1g`
+   call (with ``geometry=_pg.CYLINDER_1D``) and ``boundary="vacuum"``
+   handles vacuum BC only. The
    ``optical_depths_pm`` :math:`\tau^{\pm}`
    walker that lives alongside ``build_volume_kernel`` is the
    primitive needed for either option (a) or option (b); it is
@@ -3216,16 +3217,20 @@ sorting crossings, making the bare-cylinder case
 
 .. seealso::
 
-   :mod:`orpheus.derivations.peierls_cylinder` — Nyström solver
-   implementation; module docstring contains the full derivation
-   of the polar-form Jacobian and the pivot rationale.
+   :mod:`orpheus.derivations.peierls_cylinder` — registry-only
+   module; binds the cylinder ``GEOMETRY`` singleton and ships the
+   ``_build_peierls_cylinder_*_case`` continuous-reference
+   constructors. The Nyström solver implementation lives in
+   :mod:`~orpheus.derivations.peierls_geometry`.
 
-   :class:`orpheus.derivations.peierls_cylinder.PeierlsCylinderSolution`
-   — result container with radial node positions, flux values,
-   and :math:`k_{\rm eff}`.
+   :class:`~orpheus.derivations.peierls_geometry.PeierlsSolution`
+   — canonical result container with radial node positions, flux
+   values, :math:`k_{\rm eff}`, and ``geometry_kind`` discriminator.
+   Same dataclass for slab / cylinder / sphere.
 
-   :func:`orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g`
-   — 1-group eigenvalue driver (use ``boundary="vacuum"`` for the
+   :func:`~orpheus.derivations.peierls_geometry.solve_peierls_1g`
+   — 1-group eigenvalue driver (call with
+   ``geometry=_pg.CYLINDER_1D`` and ``boundary="vacuum"`` for the
    vacuum-BC closure described above).
 
    ``tests/derivations/test_peierls_cylinder_geometry.py`` — L0
@@ -4057,15 +4062,16 @@ the full operator; the eigenvalue problem is
      \varphi \;=\; \frac{1}{k}\,K\,\mathrm{diag}(\nu\Sigma_f)\,\varphi,
 
 solved by fission-source power iteration in
-:func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`
-with ``boundary="vacuum"``. This is the clean closure: no
-approximation enters beyond the quadrature orders.
+:func:`~orpheus.derivations.peierls_geometry.solve_peierls_1g`
+(with ``geometry=_pg.SPHERE_1D``) and ``boundary="vacuum"``. This
+is the clean closure: no approximation enters beyond the quadrature
+orders.
 
 **Rank-1 white.** The unified :math:`K_{\rm vol} + K_{\rm bc}`
 structure with :math:`K_{\rm bc}` the rank-1 outer product derived
 above, solved by the same power iteration via
-:func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`
-with ``boundary="white"``. Accuracy is governed by the cell
+:func:`~orpheus.derivations.peierls_geometry.solve_peierls_1g`
+(with ``geometry=_pg.SPHERE_1D``) and ``boundary="white"``. Accuracy is governed by the cell
 optical thickness (``test_thin_sphere_rank1_error_bounded`` /
 ``test_medium_sphere_rank1_error_bounded`` /
 ``test_thick_sphere_rank1_near_k_inf``).
@@ -4277,14 +4283,15 @@ the multi-annulus walker and computes :math:`\tau_{\rm surf} =
    ``kind = "cylinder-1d"`` handles both geometries through one
    code path.
 
-   :class:`orpheus.derivations.peierls_sphere.PeierlsSphereSolution`
-   — result container with radial node positions, flux values,
-   and :math:`k_{\rm eff}`; kept for symmetry with
-   :class:`~orpheus.derivations.peierls_cylinder.PeierlsCylinderSolution`.
+   :class:`~orpheus.derivations.peierls_geometry.PeierlsSolution`
+   — canonical result container; same dataclass shape for
+   ``geometry_kind="sphere-1d"`` / ``"cylinder-1d"`` / ``"slab"``.
 
-   :func:`orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`
+   :func:`~orpheus.derivations.peierls_geometry.solve_peierls_1g`
    — 1-group vacuum- or white-BC eigenvalue driver. Pass
-   ``boundary="vacuum"`` for the scaffold-level verification gate.
+   ``geometry=_pg.SPHERE_1D`` (or ``CYLINDER_1D`` / ``SLAB_POLAR_1D``)
+   and ``boundary="vacuum"`` for the scaffold-level verification
+   gate.
 
    ``tests/derivations/test_peierls_sphere_geometry.py`` — 17 L0
    tests for angular/radial geometry primitives, the composite
@@ -4318,33 +4325,19 @@ the multi-annulus walker and computes :math:`\tau_{\rm surf} =
 References
 ==========
 
-.. [Carlvik1966] I. Carlvik, "A method for calculating collision
-   probabilities in general cylindrical geometry and applications to
-   flux distributions and Dancoff factors," *Proc. Third United Nations
-   Int. Conf. Peaceful Uses of Atomic Energy*, Vol. 2, 1966.
+.. note::
 
-.. [Stamm1983] R. Stamm'ler and M.J. Abbate, *Methods of Steady-State
-   Reactor Physics in Nuclear Design*, Academic Press, 1983.
+   Citations shared across pages are defined in
+   :doc:`/theory/peierls_unified` (the deeper treatment) and
+   :doc:`/theory/discrete_ordinates`; ``[Foo1234]_`` references on
+   this page resolve cross-document via Sphinx's docutils citation
+   index. Only citations unique to this page are defined locally.
 
 .. [Hebert2009] A. Hebert, *Applied Reactor Physics*, Presses
    internationales Polytechnique, 2009.
 
-.. [Hebert2020] A. Hébert, *Applied Reactor Physics*, 3rd ed.,
-   Presses Internationales Polytechnique, 2020.
-   DOI: 10.1515/9782553017445.
-
-.. [Sanchez1982] R. Sanchez and N.J. McCormick, "A Review of Neutron
-   Transport Approximations," *Nucl. Sci. Eng.* **80**, 481–535
-   (1982). DOI: 10.13182/nse80-04-481.
-
-.. [BellGlasstone1970] G.I. Bell and S. Glasstone, *Nuclear Reactor
-   Theory*, Van Nostrand Reinhold, 1970.
-
 .. [Kress2014] R. Kress, *Linear Integral Equations*, 3rd ed.,
    Springer, 2014.
-
-.. [Atkinson1997] K.E. Atkinson, *The Numerical Solution of Integral
-   Equations of the Second Kind*, Cambridge University Press, 1997.
 
 
 .. |times| unicode:: U+00D7

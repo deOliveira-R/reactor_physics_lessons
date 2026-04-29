@@ -938,7 +938,9 @@ them breaks the public contract.
      - Why permanent
    * - :func:`~orpheus.derivations.peierls_geometry.solve_peierls_mg`
      - The canonical multi-group driver. All other entry points
-       eventually hit this function.
+       eventually hit this function. Geometry is the **first**
+       positional argument — bind it inline at the call site
+       (e.g. ``solve_peierls_mg(_pg.CYLINDER_1D, ...)``).
    * - :func:`~orpheus.derivations.peierls_geometry.solve_peierls_1g`
      - Permanent 1G convenience. Rationale: 1-group problems have
        scalar ``sig_t``, scalar ``sig_s``, scalar ``nu_sig_f`` — no
@@ -947,29 +949,111 @@ them breaks the public contract.
        problem has no pedagogical or maintenance benefit. The
        wrapper is 25 lines and is bit-exact regression-gated by
        :class:`~tests.derivations.test_peierls_multigroup.TestMGNg1BitMatch1G`.
-   * - :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_mg`
-     - Permanent shape-specific MG API. Binds the geometry, renames
-       ``n_angular`` → ``n_beta`` to match the cylinder's
-       ``β``-angular variable convention, and returns a
-       :class:`PeierlsCylinderSolution` (shape-specific dataclass
-       with ``n_quad_y`` etc.). The parameter renaming is the
-       ergonomic justification.
-   * - :func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_mg`
-     - Mirror of the cylinder — ``n_angular`` → ``n_theta``, returns
-       :class:`PeierlsSphereSolution`.
-   * - :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g`
-     - Shape-specific 1G convenience (``solve_peierls_cylinder_mg``
-       on scalar XS). Same "permanent" rationale as
-       ``solve_peierls_1g``.
-   * - :func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`
-     - Mirror for sphere.
+   * - :class:`~orpheus.derivations.peierls_geometry.PeierlsSolution`
+     - The canonical solution dataclass returned by both
+       :func:`solve_peierls_1g` and :func:`solve_peierls_mg`.
+       Carries ``geometry_kind`` ("``slab``" / "``cylinder-1d``" /
+       "``sphere-1d``") so a single dataclass shape is reusable
+       across geometries; the ``n_quad_angular`` field replaces the
+       former shape-specific ``n_quad_y`` / ``n_quad_theta``.
+       Provides ``phi(r, g)`` for arbitrary-radius interpolation
+       via the piecewise Lagrange basis on the panel bounds.
 
-Retirement candidates
----------------------
+Retired wrappers (Issue #138, 2026-04-29)
+------------------------------------------
 
-All retirement candidates have been retired as of 2026-04-23; this
-subsection is intentionally empty as a placeholder for future
-transitional wrappers.
+The following wrappers were retired in commit history under Issue #138.
+They had survived the 2026-04-23 sweep with the "shape-specific
+parameter renaming + shape-specific dataclass" justification, but a
+2026-04-29 re-review under Cardinal Rule 2 (Infrastructure is
+critical) concluded that:
+
+1. The parameter renames (``n_angular`` → ``n_beta`` / ``n_theta``
+   and ``n_surf_quad`` → ``n_phi``) are a *docstring concern*, not
+   an *API* concern. The lower-level
+   :meth:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry.optical_depth_along_ray`
+   already chose the geometry-agnostic ``cos_omega`` over per-shape
+   ``cos_beta`` / ``cos_theta``; the façade wrappers were an
+   inconsistent island above that abstraction layer.
+
+2. The shape-specific dataclasses
+   (``PeierlsCylinderSolution``, ``PeierlsSphereSolution``) were
+   structurally identical to :class:`PeierlsSolution` modulo a
+   single field name (``n_quad_y`` / ``n_quad_theta`` vs
+   ``n_quad_angular``). Three copies of an identical ``phi()``
+   interpolation method is exactly the duplication Cardinal Rule 2
+   exists to prevent.
+
+3. The recent refactor cascade (commits ff288c9, 9eb1d91, c04b624)
+   collapsed analogous shape-specific layers (18 per-observer
+   angular primitives → 2 driver functions; 9 closure
+   constructors → 1 ``BoundaryClosureOperator`` registry) under
+   the same logic. Refusing to apply it here for "the docs say
+   permanent" was letting documentation freeze a past judgment that
+   the rest of the project's evolution had moved past.
+
+The retirement, therefore, is a re-application of L104a, not a
+reversal of it.
+
+.. list-table:: Retired symbols and their canonical replacements
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Retired symbol
+     - Canonical replacement
+   * - :py:func:`!orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_mg`
+     - ``solve_peierls_mg(_pg.CYLINDER_1D, ...)`` — pass
+       ``n_angular`` (was ``n_beta``), ``n_surf_quad`` (was
+       ``n_phi``)
+   * - :py:func:`!orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g`
+     - ``solve_peierls_1g(_pg.CYLINDER_1D, ...)`` — same parameter
+       rename
+   * - :py:func:`!orpheus.derivations.peierls_sphere.solve_peierls_sphere_mg`
+     - ``solve_peierls_mg(_pg.SPHERE_1D, ...)`` — pass
+       ``n_angular`` (was ``n_theta``), ``n_surf_quad`` (was
+       ``n_phi``)
+   * - :py:func:`!orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`
+     - ``solve_peierls_1g(_pg.SPHERE_1D, ...)`` — same parameter
+       rename
+   * - :py:class:`!orpheus.derivations.peierls_cylinder.PeierlsCylinderSolution`
+     - :class:`~orpheus.derivations.peierls_geometry.PeierlsSolution`
+       — rename ``n_quad_y`` to ``n_quad_angular`` and add
+       ``geometry_kind="cylinder-1d"``
+   * - :py:class:`!orpheus.derivations.peierls_sphere.PeierlsSphereSolution`
+     - :class:`~orpheus.derivations.peierls_geometry.PeierlsSolution`
+       — rename ``n_quad_theta`` to ``n_quad_angular`` and add
+       ``geometry_kind="sphere-1d"``
+
+Inner-radius variants (hollow geometries) construct the geometry
+inline at the call site::
+
+   geometry = (
+       _pg.CurvilinearGeometry(kind="cylinder-1d", inner_radius=r0)
+       if r0 != 0.0 else _pg.CYLINDER_1D
+   )
+   sol = _pg.solve_peierls_mg(geometry, ...)
+
+The ``peierls_cylinder`` and ``peierls_sphere`` modules survive as
+**registry-only modules** containing the
+``_build_peierls_*_case`` / ``_build_peierls_*_hollow_f4_case``
+constructors used by
+:func:`~orpheus.derivations.peierls_cases.build_two_surface_case`
+and the per-shape ``_F4_*_TOL`` tolerance tables consumed by
+:func:`~orpheus.derivations.peierls_cases.capability_rows`. The
+:data:`~orpheus.derivations.peierls_cylinder.GEOMETRY` /
+:data:`~orpheus.derivations.peierls_sphere.GEOMETRY` singletons are
+preserved as convenient bindings of the canonical ``CYLINDER_1D`` /
+``SPHERE_1D`` for registry-internal use.
+
+Retirement candidates (active)
+-------------------------------
+
+This subsection is intentionally empty. As of 2026-04-29 the only
+remaining transitional wrapper is the slab native E₁ Nyström, which
+is classified below as **verification-of-verification** rather than
+"retirement candidate" — its retirement is gated on the parallel
+Green's function approach (next session), not on a within-session
+sweep.
 
 Verification-of-verification
 -----------------------------
@@ -1003,6 +1087,34 @@ convention documented in :ref:`peierls-scattering-convention`, so
 verification-of-verification does not need translation when
 exercised against the unified path.
 
+Retirement gate (slab native E₁ Nyström)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The slab native solver is **not** a retirement candidate today even
+though its only production caller is the parity gate. The gate
+keeping it alive is the absence of a *third* independent
+implementation: with only two routes (native E₁ Nyström + unified
+adaptive ``mpmath.quad``), bit-exact disagreement bisects to "one of
+the two has a bug" but cannot identify *which* one. A third route
+would let the bisection actually converge on the offender.
+
+The next-session work on the **parallel Green's function approach**
+(scratched at
+:file:`.claude/plans/peierls-greens-function-approach.md`) is the
+candidate third route. Once it ships and demonstrates bit-exact
+parity with the unified path on the
+``peierls_slab_2eg_2rg`` fixture, the slab native solver becomes
+redundant as an oracle and the
+:mod:`~orpheus.derivations.peierls_slab` module can be moved to
+:file:`derivations/archive/` (reversible via ``git mv``). At that
+point this whole subsection collapses, and Issue #138's original
+Phase B (lift ``_basis_kernel_weights`` into the unified slab
+branch, delete ``_build_kernel_matrix`` / ``_build_system_matrices``,
+deprecate ``solve_peierls_eigenvalue``) becomes safe to execute.
+
+Until then, modifications to :mod:`peierls_slab` should preserve
+its bit-exact parity with the unified path on the shipped fixtures.
+
 
 .. _theory-peierls-multigroup:
 
@@ -1021,12 +1133,15 @@ regression test (:class:`tests.derivations.test_peierls_multigroup.TestMGNg1BitM
 enforces that the ng=1 MG path reproduces every legacy 1G k_eff and
 flux value to numerical zero.
 
-The shape wrappers have matching multi-group entry points:
+All shape-specific multi-group calls go through the same canonical
+entry point with the geometry bound at the call site:
 
-- :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_mg`
-  — cylinder with ``inner_radius`` for hollow cells
-- :func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_mg`
-  — sphere with ``inner_radius`` for hollow cells
+- ``solve_peierls_mg(_pg.CYLINDER_1D, ...)`` — solid cylinder (use
+  ``CurvilinearGeometry(kind="cylinder-1d", inner_radius=r0)`` for
+  hollow cells)
+- ``solve_peierls_mg(_pg.SPHERE_1D, ...)`` — solid sphere (use
+  ``CurvilinearGeometry(kind="sphere-1d", inner_radius=r0)`` for
+  hollow cells)
 
 Slab's shipped ``peierls_slab_2eg_2rg`` continuous reference now
 routes through the unified
@@ -1096,12 +1211,12 @@ in the **upper-triangular** entries; the physical fixture
 :mod:`orpheus.derivations._xs_library` has ``sig_s[0, 1] = 0.10``
 (fast-to-thermal downscatter) and ``sig_s[1, 0] = 0`` (no
 upscatter), which is the physical sanity-check this convention
-must pass. All Peierls drivers
-(:func:`~orpheus.derivations.peierls_geometry.solve_peierls_mg`,
-:func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_mg`,
-:func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_mg`,
-and :func:`~orpheus.derivations.peierls_slab.solve_peierls_eigenvalue`)
-follow this convention — see their docstrings and the
+must pass. Both Peierls drivers
+(:func:`~orpheus.derivations.peierls_geometry.solve_peierls_mg`
+for slab/cylinder/sphere via ``geometry`` binding, and
+:func:`~orpheus.derivations.peierls_slab.solve_peierls_eigenvalue`
+for the verification-of-verification slab native path) follow this
+convention — see their docstrings and the
 :func:`~orpheus.derivations._xs_library.get_xs` module note. The
 2G slab parity test (:class:`TestMGSlabPolarMatchesNativeSlabMG`)
 is the definitive cross-check: if the two drivers agree on a 2G
@@ -11303,9 +11418,6 @@ References
    probabilities in general cylindrical geometry and applications to
    flux distributions and Dancoff factors," *Proc. Third United Nations
    Int. Conf. Peaceful Uses of Atomic Energy*, Vol. 2, 1966.
-
-.. [CaseZweifel1967] K.M. Case and P.F. Zweifel,
-   *Linear Transport Theory*, Addison-Wesley, 1967.
 
 .. [Davison1957] B. Davison, *Neutron Transport Theory*,
    Clarendon Press, 1957. Ch. 5 covers the slab albedo / partial-current
