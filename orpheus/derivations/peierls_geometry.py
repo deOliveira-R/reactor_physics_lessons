@@ -4213,37 +4213,49 @@ def compute_G_bc_mode(
 class BoundaryClosureOperator:
     r"""Factored tensor-network representation of :math:`K_{\mathrm{bc}}`.
 
-    Stores the three tensors of the factorisation
+    Stores three (or four) tensors of the factorisation
 
     .. math::
 
-       K_{\mathrm{bc}} \;=\; G \cdot R \cdot P, \qquad
-       (K_{\mathrm{bc}})^i{}_j \;=\; G^i{}_n\,R^n{}_m\,P^m{}_j,
+       K_{\mathrm{bc}} \;=\; G \cdot R \cdot P,
+       \qquad \text{(bare; }T\text{ is None)}
 
-    where :math:`P : V \to A`, :math:`R : A \to A`, :math:`G : A \to V`
-    are the escape, reflection, and response operators, with :math:`V`
-    the radial Nyström space (dim :math:`N_r`) and :math:`A` the finite
+    or, with optional transmission :math:`T` enabling the multi-bounce
+    geometric-series correction,
+
+    .. math::
+
+       K_{\mathrm{bc}} \;=\; G \cdot R \cdot (I - T\,R)^{-1} \cdot P,
+       \qquad \text{(multibounce; }T\text{ provided)},
+
+    where :math:`P : V \to A`, :math:`R : A \to A`, :math:`G : A \to V`,
+    and :math:`T : A \to A` is the surface-to-surface partial-current
+    transfer matrix in the same mode space :math:`A`. :math:`V` is the
+    radial Nyström space (dim :math:`N_r`); :math:`A` is the finite
     mode space on the surface (dim :math:`N`). Contraction is over the
     shared mode index.
 
-    Complexity. Storage is :math:`\mathcal O(N_r N + N^2)`; applying
-    the operator to a source vector takes :math:`\mathcal O(N_r N +
-    N^2)` via :meth:`apply`; materialising the dense
-    :math:`N_r \times N_r` matrix costs :math:`\mathcal O(N_r^2 N)`
-    and is only needed when a caller demands a dense matrix (e.g. the
-    direct-LU eigenvalue iteration in :func:`solve_peierls_1g`).
+    Complexity. Bare: storage and :meth:`apply` cost
+    :math:`\mathcal O(N_r N + N^2)`. Multibounce: same storage; the
+    :meth:`apply` path solves an :math:`N \times N` linear system
+    once at construction (or per call if not cached). Materialising
+    the dense :math:`N_r \times N_r` matrix via :meth:`as_matrix`
+    costs :math:`\mathcal O(N_r^2 N)` regardless.
 
-    Boundary conditions. The choice of BC is entirely encoded in
-    :attr:`R`:
+    Boundary conditions. Every shipped ORPHEUS closure routes through
+    this operator:
 
-    - :func:`reflection_vacuum` — :math:`R = 0` (no reflection)
-    - :func:`reflection_mark` — :math:`R = e_0 e_0^{\top}`
-      (rank-1 isotropic white closure; only the scalar mode)
-    - :func:`reflection_marshak` — diagonal :math:`R` with Gelbard
-      :math:`(2n+1)` normalisation (rank-:math:`N` white closure)
-    - any other matrix — albedo, partial reflection, or (for
-      future lattice extensions) a non-square mode-coupling matrix
-      to neighbouring cells
+    - **vacuum** — handled outside the operator (:math:`K_{\mathrm{bc}} = 0`).
+    - **white_rank1_mark / white_f4 / Marshak DP_N** — bare; ``T = None``,
+      ``R`` from :func:`reflection_mark` /
+      :func:`reflection_marshak`.
+    - **white_hebert** — multibounce at rank-1 with ``R = [[1]]``
+      (Mark) and ``T = [[P_ss]]``: yields the Hébert
+      :math:`1/(1-P_{ss})` geometric-series factor exactly.
+    - **specular** — bare; ``R = (1/2) M^{-1}`` from
+      :func:`reflection_specular`.
+    - **specular_multibounce** — multibounce; same ``R`` plus
+      :math:`T` from :func:`compute_T_specular_*`.
 
     See :ref:`theory-peierls-unified` Part IV for the Hilbert-Schmidt
     factorisation, the Karhunen-Loève / SVD connection, and the full
@@ -4253,6 +4265,7 @@ class BoundaryClosureOperator:
     P: np.ndarray  # escape tensor,       shape (N_modes, N_nodes)
     G: np.ndarray  # response tensor,     shape (N_nodes, N_modes)
     R: np.ndarray  # reflection operator, shape (N_modes, N_modes)
+    T: np.ndarray | None = None  # transmission, shape (N_modes, N_modes)
 
     def __post_init__(self) -> None:
         if self.P.ndim != 2 or self.G.ndim != 2 or self.R.ndim != 2:
@@ -4271,6 +4284,12 @@ class BoundaryClosureOperator:
                 f"Radial node count mismatch: P has {self.P.shape[1]} "
                 f"nodes but G has {self.G.shape[0]}"
             )
+        if self.T is not None:
+            if self.T.ndim != 2 or self.T.shape != (N, N):
+                raise ValueError(
+                    f"T must be a square (N, N) matrix matching R; "
+                    f"got T.shape {self.T.shape}, expected {(N, N)}"
+                )
 
     @property
     def n_modes(self) -> int:
@@ -4283,11 +4302,28 @@ class BoundaryClosureOperator:
         return self.P.shape[1]
 
     @property
+    def is_multibounce(self) -> bool:
+        """``True`` iff the operator carries an explicit transmission
+        matrix :math:`T` and assembles via the geometric-series form
+        :math:`G R (I - T R)^{-1} P` (:func:`as_matrix`) rather than
+        the bare :math:`G R P` (:func:`as_matrix` when ``T is None``)."""
+        return self.T is not None
+
+    @property
     def closure_rank(self) -> int:
         """Numerical rank of :math:`K_{\\mathrm{bc}}`, = rank(:math:`R`)
         under the generic assumption that :math:`P` and :math:`G` have
         full mode rank."""
         return int(np.linalg.matrix_rank(self.R))
+
+    def _effective_R(self) -> np.ndarray:
+        r"""Effective mode-space operator: :math:`R` (bare) or
+        :math:`R\,(I - T\,R)^{-1}` (multibounce)."""
+        if self.T is None:
+            return self.R
+        N = self.n_modes
+        ITR = np.eye(N) - self.T @ self.R
+        return self.R @ np.linalg.inv(ITR)
 
     def apply(self, q: np.ndarray) -> np.ndarray:
         r"""Matrix-free application :math:`K_{\mathrm{bc}}\,q` via the
@@ -4295,27 +4331,46 @@ class BoundaryClosureOperator:
 
         .. math::
 
-           K_{\mathrm{bc}}\,q \;=\; G\,(R\,(P\,q)),
+           K_{\mathrm{bc}}\,q \;=\; G\,(R_{\rm eff}\,(P\,q)),
 
-        in :math:`\mathcal O(N_r N + N^2)` flops. No intermediate
-        :math:`N_r \times N_r` matrix is ever allocated — storage
-        stays at :math:`\mathcal O(N_r N + N^2)` throughout.
+        with :math:`R_{\rm eff} = R` (bare) or
+        :math:`R_{\rm eff} = R\,(I - T\,R)^{-1}` (multibounce). For
+        the multibounce form the :math:`N \times N` solve is performed
+        on each call; cache externally if hot.
+
+        Cost :math:`\mathcal O(N_r N + N^2)` flops (plus an
+        :math:`\mathcal O(N^3)` linear solve per call when
+        multibounce). No intermediate :math:`N_r \times N_r` matrix
+        is allocated — storage stays at :math:`\mathcal O(N_r N + N^2)`.
         """
-        outgoing_moments = self.P @ q                 # V → A
-        incoming_moments = self.R @ outgoing_moments  # A → A
-        return self.G @ incoming_moments              # A → V
+        outgoing_moments = self.P @ q                  # V → A
+        if self.T is None:
+            incoming_moments = self.R @ outgoing_moments
+        else:
+            N = self.n_modes
+            ITR = np.eye(N) - self.T @ self.R
+            incoming_moments = self.R @ np.linalg.solve(
+                ITR, outgoing_moments,
+            )
+        return self.G @ incoming_moments               # A → V
 
     def as_matrix(self) -> np.ndarray:
         r"""Materialise the dense :math:`N_r \times N_r` matrix
-        :math:`K_{\mathrm{bc}} = G R P`.
+        :math:`K_{\mathrm{bc}} = G\,R_{\rm eff}\,P`, with
+        :math:`R_{\rm eff} = R` (bare) or
+        :math:`R_{\rm eff} = R\,(I - T\,R)^{-1}` (multibounce).
 
-        Cost :math:`\mathcal O(N_r^2 N)`; useful only when a caller
+        Cost :math:`\mathcal O(N_r^2 N)`; useful when a caller
         requires a dense representation (e.g. the direct-solve inner
         iteration of :func:`solve_peierls_1g`, which uses
         :func:`numpy.linalg.solve` on :math:`A = \mathrm{diag}(\Sigma_t)
         - K\,\mathrm{diag}(\Sigma_s)`).
         """
-        return self.G @ self.R @ self.P
+        if self.T is None:
+            return self.G @ self.R @ self.P
+        N = self.n_modes
+        ITR = np.eye(N) - self.T @ self.R
+        return self.G @ self.R @ np.linalg.solve(ITR, self.P)
 
 
 def reflection_vacuum(n_modes: int) -> np.ndarray:
@@ -5669,6 +5724,412 @@ def _build_cylinder_specular_mode_PG(
     return P, G
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Closure-recipe registry (refactor #2-registry, Issue #137)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Every closure assembles K_bc as `BoundaryClosureOperator.as_matrix()`,
+# either bare (G·R·P) or multi-bounce (G·R·(I-T·R)⁻¹·P). The five
+# shipped closures (white_rank1_mark, white_hebert, specular,
+# specular_multibounce, white_f4) each have a builder function that
+# returns the operator. The dispatcher walks the registry, runs any
+# input-only validators, then calls the builder. This eliminates the
+# 600-LoC `if closure == ...` chain and makes the K_bc tensor network
+# load-bearing for every closure (not just the white-Marshak family).
+
+
+def _build_white_rank1_mark_op(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    radii: np.ndarray,
+    sig_t_g: np.ndarray,
+    n_bc_modes: int,
+    *,
+    n_angular: int,
+    n_surf_quad: int,
+    dps: int,
+) -> BoundaryClosureOperator:
+    r"""Rank-:math:`N` Marshak / DP\ :sub:`N-1` white-BC closure operator.
+
+    Wraps :func:`build_closure_operator` with ``reflection="marshak"``.
+    For ``n_bc_modes = 1`` this is the legacy rank-1 Mark closure
+    (mode-0 routed through :func:`compute_P_esc` /
+    :func:`compute_G_bc`); for :math:`n \ge 1` modes the canonical
+    DP\ :sub:`N-1` :math:`(\rho_{\max}/R)^2` Jacobian appears via
+    :func:`compute_P_esc_mode` / :func:`compute_G_bc_mode`.
+    """
+    return build_closure_operator(
+        geometry, r_nodes, r_wts, radii, sig_t_g,
+        n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
+        n_bc_modes=n_bc_modes, reflection="marshak",
+    )
+
+
+def _build_white_f4_op(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    radii: np.ndarray,
+    sig_t_g: np.ndarray,
+    n_bc_modes: int,
+    *,
+    n_angular: int,
+    n_surf_quad: int,
+    dps: int,
+) -> BoundaryClosureOperator:
+    r"""F.4 rank-2 per-face white-BC closure operator (Class A).
+
+    Wraps :func:`build_closure_operator` with ``reflection="white"``,
+    which switches into the rank-2 per-face layout for two-surface
+    geometries (hollow sphere/cylinder). Forced to ``n_bc_modes = 1``
+    by the validator (rank-N per-face was falsified by the 2026-04-22
+    research program — see ``research log L21`` and Sphinx
+    §peierls-rank-n-per-face-closeout).
+    """
+    return build_closure_operator(
+        geometry, r_nodes, r_wts, radii, sig_t_g,
+        n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
+        n_bc_modes=1, reflection="white",
+    )
+
+
+def _build_white_hebert_op(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    radii: np.ndarray,
+    sig_t_g: np.ndarray,
+    n_bc_modes: int,  # noqa: ARG001 — validated to 1
+    *,
+    n_angular: int,
+    n_surf_quad: int,
+    dps: int,
+) -> BoundaryClosureOperator:
+    r"""Hébert (2009) Eq. (3.323) rank-1 white-BC closure operator.
+
+    Built as a multi-bounce :class:`BoundaryClosureOperator` at rank-1
+    with :math:`R = [[1]]` (Mark) and :math:`T = [[P_{ss}]]`. The
+    geometric-series factor :math:`(I - T R)^{-1}_{00} = 1/(1 - P_{ss})`
+    matches the closed-form Hébert correction exactly:
+
+    .. math::
+
+       K_{\rm bc}^{\rm Hébert} \;=\; G \cdot R \cdot (I - T R)^{-1}
+                                          \cdot P
+       \;=\; \frac{u_n \otimes v_n}{1 - P_{ss}}
+       \;=\; \frac{K_{\rm bc}^{\rm Mark}}{1 - P_{ss}}.
+
+    Sphere uses :func:`compute_G_bc` (legacy form); cylinder uses
+    :func:`compute_G_bc_cylinder_3d` (Issue #112 Phase C 3-D-correct
+    Knyazev :math:`\mathrm{Ki}_{2+k}` expansion). Slab is plan-exempt
+    (uses the closed-form :math:`E_2` piecewise sum via the unified
+    "white" closure path; see Issue #131).
+    """
+    R_cell, sig_t_n, rv, divisor = _specular_assembly_setup(
+        geometry, r_nodes, radii, sig_t_g,
+    )
+    if geometry.kind == "cylinder-1d":
+        G_bc_n = compute_G_bc_cylinder_3d(
+            geometry, r_nodes, radii, sig_t_g,
+            n_surf_quad=n_surf_quad, dps=dps,
+        )
+        P_ss = compute_P_ss_cylinder(
+            radii, sig_t_g, n_quad=n_surf_quad, dps=dps,
+        )
+    elif geometry.kind == "sphere-1d":
+        G_bc_n = compute_G_bc(
+            geometry, r_nodes, radii, sig_t_g,
+            n_surf_quad=n_surf_quad, dps=dps,
+        )
+        P_ss = compute_P_ss_sphere(
+            radii, sig_t_g, n_quad=n_surf_quad, dps=dps,
+        )
+    else:  # pragma: no cover — guarded by validator
+        raise NotImplementedError(
+            f"white_hebert: unsupported geometry kind {geometry.kind!r}"
+        )
+
+    if P_ss >= 1.0:
+        raise RuntimeError(
+            f"P_ss = {P_ss} is >= 1, would give negative or infinite "
+            f"geometric-series factor for {geometry.kind}. Likely a "
+            f"thin-cell pathology. radii={radii}, sig_t={sig_t_g}."
+        )
+
+    P_esc_n = compute_P_esc(
+        geometry, r_nodes, radii, sig_t_g,
+        n_angular=n_angular, dps=dps,
+    )
+    v_n = rv * r_wts * P_esc_n          # shape (N_r,)
+    u_n = sig_t_n * G_bc_n / divisor    # shape (N_r,)
+
+    P_op = v_n.reshape(1, -1)            # (1, N_r)
+    G_op = u_n.reshape(-1, 1)            # (N_r, 1)
+    R_op = np.array([[1.0]])             # Mark closure
+    T_op = np.array([[float(P_ss)]])     # P_ss as 1×1 transmission
+    return BoundaryClosureOperator(P=P_op, G=G_op, R=R_op, T=T_op)
+
+
+def _build_specular_op(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    radii: np.ndarray,
+    sig_t_g: np.ndarray,
+    n_bc_modes: int,
+    *,
+    n_angular: int,
+    n_surf_quad: int,
+    dps: int,
+) -> BoundaryClosureOperator:
+    r"""Bare specular (rank-:math:`N`) closure operator
+    :math:`K_{\rm bc} = G \cdot R_{\rm spec} \cdot P`.
+
+    Slab routes through :func:`_build_slab_per_face_specular_PG`
+    (per-face 2N mode space, block-diagonal R); sphere/cylinder use
+    the single-surface mode space (N modes) via the geometry-specific
+    P/G builders. The reflection operator is
+    :math:`R_{\rm spec} = (1/2) M^{-1}` from
+    :func:`reflection_specular`.
+    """
+    R_cell, sig_t_n, rv, divisor = _specular_assembly_setup(
+        geometry, r_nodes, radii, sig_t_g,
+    )
+    N = n_bc_modes
+    if geometry.kind == "slab-polar":
+        P_slab, G_slab, R_slab = _build_slab_per_face_specular_PG(
+            r_nodes, r_wts, radii, sig_t_g, N, sig_t_n, rv,
+        )
+        return BoundaryClosureOperator(P=P_slab, G=G_slab, R=R_slab)
+    if geometry.kind == "sphere-1d":
+        P_op, G_op = _build_sphere_specular_mode_PG(
+            geometry, r_nodes, r_wts, radii, sig_t_g, N,
+            sig_t_n, rv, divisor, R_cell,
+            n_angular, n_surf_quad, dps,
+        )
+    elif geometry.kind == "cylinder-1d":
+        P_op, G_op = _build_cylinder_specular_mode_PG(
+            geometry, r_nodes, r_wts, radii, sig_t_g, N,
+            sig_t_n, rv, divisor,
+            n_angular, n_surf_quad, dps,
+        )
+    else:  # pragma: no cover — guarded by validator
+        raise NotImplementedError(
+            f"specular: unsupported geometry kind {geometry.kind!r}"
+        )
+    return BoundaryClosureOperator(P=P_op, G=G_op, R=reflection_specular(N))
+
+
+def _build_specular_multibounce_op(
+    geometry: CurvilinearGeometry,
+    r_nodes: np.ndarray,
+    r_wts: np.ndarray,
+    radii: np.ndarray,
+    sig_t_g: np.ndarray,
+    n_bc_modes: int,
+    *,
+    n_angular: int,
+    n_surf_quad: int,
+    dps: int,
+) -> BoundaryClosureOperator:
+    r"""Multi-bounce specular (rank-:math:`N`) closure operator
+    :math:`K_{\rm bc} = G \cdot R_{\rm spec} \cdot (I - T R_{\rm spec})^{-1} \cdot P`.
+
+    Same P, G, R as :func:`_build_specular_op` plus a transmission
+    matrix :math:`T` from
+    :func:`compute_T_specular_{slab,sphere,cylinder_3d}`. The
+    geometric-series factor is encoded as the operator's :attr:`T`
+    field; assembly happens in :meth:`BoundaryClosureOperator.as_matrix`.
+
+    At rank-1 with R = Mark and T = P_ss this reduces algebraically
+    to the Hébert closure (verified by
+    ``test_specular_multibounce_cyl_rank1_equals_hebert``).
+    """
+    R_cell, sig_t_n, rv, divisor = _specular_assembly_setup(
+        geometry, r_nodes, radii, sig_t_g,
+    )
+    N = n_bc_modes
+    if geometry.kind == "slab-polar":
+        P_slab, G_slab, R_slab = _build_slab_per_face_specular_PG(
+            r_nodes, r_wts, radii, sig_t_g, N, sig_t_n, rv,
+        )
+        T_slab = compute_T_specular_slab(radii, sig_t_g, N, n_quad=64)
+        return BoundaryClosureOperator(
+            P=P_slab, G=G_slab, R=R_slab, T=T_slab,
+        )
+    if geometry.kind == "sphere-1d":
+        P_op, G_op = _build_sphere_specular_mode_PG(
+            geometry, r_nodes, r_wts, radii, sig_t_g, N,
+            sig_t_n, rv, divisor, R_cell,
+            n_angular, n_surf_quad, dps,
+        )
+        T_op = compute_T_specular_sphere(radii, sig_t_g, N, n_quad=64)
+    elif geometry.kind == "cylinder-1d":
+        P_op, G_op = _build_cylinder_specular_mode_PG(
+            geometry, r_nodes, r_wts, radii, sig_t_g, N,
+            sig_t_n, rv, divisor,
+            n_angular, n_surf_quad, dps,
+        )
+        T_op = compute_T_specular_cylinder_3d(
+            radii, sig_t_g, N, n_quad=64,
+        )
+    else:  # pragma: no cover — guarded by validator
+        raise NotImplementedError(
+            f"specular_multibounce: unsupported geometry kind "
+            f"{geometry.kind!r}"
+        )
+    return BoundaryClosureOperator(
+        P=P_op, G=G_op, R=reflection_specular(N), T=T_op,
+    )
+
+
+# ── Validators (input-only, run before any computation) ──────────────
+
+
+def _validate_white_hebert(
+    geometry: CurvilinearGeometry, n_bc_modes: int,
+) -> None:
+    """Hébert closure is rank-1 only and not applicable to slab."""
+    if geometry.kind == "slab-polar":
+        raise NotImplementedError(
+            f"closure='white_hebert' not applicable to slab-polar; "
+            f"slab uses the E_2 piecewise-sum closed form via the "
+            f"unified 'white' closure path (Issue #131)."
+        )
+    if n_bc_modes != 1:
+        raise NotImplementedError(
+            f"closure='white_hebert' is rank-1 only (Mark closure "
+            f"with the (1-P_ss)⁻¹ geometric-series correction). "
+            f"Got n_bc_modes={n_bc_modes}. Higher-rank Hébert is "
+            f"structurally identical at rank-1 because the Marshak "
+            f"DP_N expansion was falsified for Class B in Issue "
+            f"#132; rank-N adds nothing once the geometric series "
+            f"is included."
+        )
+
+
+def _validate_specular_multibounce(
+    geometry: CurvilinearGeometry, n_bc_modes: int,
+) -> None:
+    """Geometry guard + N>=4 sphere/cylinder pathology warning."""
+    if geometry.kind not in ("sphere-1d", "cylinder-1d", "slab-polar"):
+        raise NotImplementedError(
+            f"closure='specular_multibounce': unsupported geometry "
+            f"kind {geometry.kind!r}. Supported: sphere-1d, "
+            f"cylinder-1d, slab-polar."
+        )
+    if geometry.kind in ("sphere-1d", "cylinder-1d") and n_bc_modes >= 4:
+        import warnings as _warnings
+        geom_label = (
+            "sphere" if geometry.kind == "sphere-1d" else "cylinder"
+        )
+        _warnings.warn(
+            f"closure='specular_multibounce' on {geom_label} at "
+            f"n_bc_modes={n_bc_modes} >= 4: the (I - T·R)^(-1) "
+            f"geometric-series factor enters the high-rank pathology "
+            f"regime (sphere: matrix-Galerkin divergence at grazing µ; "
+            f"cylinder: R = (1/2) M^(-1) ill-conditioning amplified by "
+            f"the geometric series) and the closure overshoots k_inf. "
+            f"Recommended n_bc_modes ∈ {{1, 2, 3}} for thin cells. For "
+            f"thicker cells use closure='specular' (no multi-bounce) at "
+            f"higher rank, or closure='specular_multibounce' on slab "
+            f"(no pathology at any N).",
+            UserWarning,
+            stacklevel=5,
+        )
+
+
+def _validate_specular(
+    geometry: CurvilinearGeometry, n_bc_modes: int,  # noqa: ARG001
+) -> None:
+    """Geometry guard for bare specular."""
+    if geometry.kind not in ("sphere-1d", "cylinder-1d", "slab-polar"):
+        raise NotImplementedError(
+            f"closure='specular': unsupported geometry kind "
+            f"{geometry.kind!r}"
+        )
+
+
+def _validate_white_f4(
+    geometry: CurvilinearGeometry, n_bc_modes: int,
+) -> None:
+    """F.4 rank-2 closure: n_bc_modes guard + 1-surface deprecation."""
+    if n_bc_modes > 1:
+        raise NotImplementedError(
+            "closure='white_f4' with n_bc_modes > 1 is not a "
+            "shipped closure. The rank-N Marshak per-face path "
+            "was falsified by the 2026-04-22 research program "
+            "(see research log L21 and Sphinx §peierls-rank-n-"
+            "per-face-closeout). Use n_bc_modes=1 for F.4, or "
+            "closure='white_rank1_mark' for rank-1 Mark."
+        )
+    if getattr(geometry, "n_surfaces", 1) == 1:
+        import warnings as _warnings
+        _warnings.warn(
+            f"closure='white_f4' on a 1-surface (solid) geometry "
+            f"(kind={geometry.kind!r}, inner_radius="
+            f"{getattr(geometry, 'inner_radius', 0.0)}) silently "
+            f"collapses to rank-1 Mark because there is no second-"
+            f"face coupling. Use closure='white_rank1_mark' to "
+            f"make the intent explicit. This silent-collapse "
+            f"behavior will become a ValueError in a future "
+            f"release.",
+            DeprecationWarning,
+            stacklevel=5,
+        )
+
+
+# ── Registry ──────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ClosureRecipe:
+    """A registered closure: a builder that returns a
+    :class:`BoundaryClosureOperator` plus zero or more input-only
+    validators.
+
+    Validators run before the builder and may raise
+    :class:`NotImplementedError` for unsupported configurations or
+    emit :class:`UserWarning` / :class:`DeprecationWarning` for
+    documented pathologies. Runtime checks on computed quantities
+    (e.g. :func:`_build_white_hebert_op`'s ``P_ss >= 1`` guard) live
+    inside the builder.
+    """
+
+    name: str
+    build: Callable[..., BoundaryClosureOperator]
+    validators: tuple[Callable[[CurvilinearGeometry, int], None], ...] = ()
+
+
+CLOSURE_REGISTRY: dict[str, ClosureRecipe] = {
+    "white_rank1_mark": ClosureRecipe(
+        name="white_rank1_mark",
+        build=_build_white_rank1_mark_op,
+    ),
+    "white_hebert": ClosureRecipe(
+        name="white_hebert",
+        build=_build_white_hebert_op,
+        validators=(_validate_white_hebert,),
+    ),
+    "specular": ClosureRecipe(
+        name="specular",
+        build=_build_specular_op,
+        validators=(_validate_specular,),
+    ),
+    "specular_multibounce": ClosureRecipe(
+        name="specular_multibounce",
+        build=_build_specular_multibounce_op,
+        validators=(_validate_specular_multibounce,),
+    ),
+    "white_f4": ClosureRecipe(
+        name="white_f4",
+        build=_build_white_f4_op,
+        validators=(_validate_white_f4,),
+    ),
+}
+
+
 def _build_full_K_per_group(
     geometry: CurvilinearGeometry,
     r_nodes: np.ndarray,
@@ -5695,213 +6156,6 @@ def _build_full_K_per_group(
     )
     if closure == "vacuum":
         return K
-    if closure == "white_rank1_mark":
-        K_bc = build_white_bc_correction_rank_n(
-            geometry, r_nodes, r_wts, radii, sig_t_g,
-            n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
-            n_bc_modes=n_bc_modes,
-        )
-        return K + K_bc
-    if closure == "white_hebert":
-        # Hébert (2009) §3.8.5 Eq. (3.323) white-BC closure. The rank-1
-        # Mark K_bc captures one bounce off the boundary; the
-        # (1 - β·P_ss)⁻¹ geometric series captures multiple reflections
-        # through the surface. With β = 1 (white BC):
-        #
-        #   K_bc^Hébert = K_bc^Mark / (1 - P_ss)
-        #
-        # Sphere: recovers k_inf to within 0.05 % at RICH for 1G/1R,
-        # 2G/1R, 2G/2R chi=[1,0]; +10 % overshoot on 1G/2R (Mark
-        # uniformity limit, see Sphinx §peierls-class-b-sphere-hebert).
-        #
-        # Cylinder: replaces compute_G_bc with the corrected 3-D form
-        # (compute_G_bc_cylinder_3d, Issue #112 Phase C — Knyazev
-        # Ki_{2+k} expansion at k=0). Same convergence pattern as
-        # sphere — <0.5 % on 1G/1R, 2G/1R; ~10-50 % overshoot on
-        # heterogeneous configurations (same Mark uniformity limit).
-        #
-        # Slab uses the E_2 piecewise sum (Issue #131) which is
-        # structurally different and not routed through this closure.
-        if geometry.kind == "slab-polar":
-            raise NotImplementedError(
-                f"closure='white_hebert' not applicable to slab-polar; "
-                f"slab uses the E_2 piecewise-sum closed form via the "
-                f"unified 'white' closure path (Issue #131)."
-            )
-        if n_bc_modes != 1:
-            raise NotImplementedError(
-                f"closure='white_hebert' is rank-1 only (Mark closure "
-                f"with the (1-P_ss)⁻¹ geometric-series correction). "
-                f"Got n_bc_modes={n_bc_modes}. Higher-rank Hébert is "
-                f"structurally identical at rank-1 because the Marshak "
-                f"DP_N expansion was falsified for Class B in Issue "
-                f"#132; rank-N adds nothing once the geometric series "
-                f"is included."
-            )
-
-        # Build K_bc using the geometry-appropriate 3-D-correct G_bc and
-        # the analytically-correct P_ss; routed through a custom
-        # rank-1 assembly here rather than build_closure_operator so the
-        # cylinder Knyazev correction stays out of the legacy rank-1
-        # Mark code path (preserves backward compat).
-        if geometry.kind == "cylinder-1d":
-            G_bc_n = compute_G_bc_cylinder_3d(
-                geometry, r_nodes, radii, sig_t_g,
-                n_surf_quad=n_surf_quad, dps=dps,
-            )
-            P_ss = compute_P_ss_cylinder(
-                radii, sig_t_g, n_quad=n_surf_quad, dps=dps,
-            )
-        elif geometry.kind == "sphere-1d":
-            G_bc_n = compute_G_bc(
-                geometry, r_nodes, radii, sig_t_g,
-                n_surf_quad=n_surf_quad, dps=dps,
-            )
-            P_ss = compute_P_ss_sphere(
-                radii, sig_t_g, n_quad=n_surf_quad, dps=dps,
-            )
-        else:  # pragma: no cover
-            raise NotImplementedError(
-                f"white_hebert: unsupported geometry kind {geometry.kind!r}"
-            )
-
-        if P_ss >= 1.0:
-            raise RuntimeError(
-                f"P_ss = {P_ss} is >= 1, would give negative or infinite "
-                f"geometric-series factor for {geometry.kind}. Likely a "
-                f"thin-cell pathology. radii={radii}, sig_t={sig_t_g}."
-            )
-
-        # Manual rank-1 K_bc assembly with the corrected G_bc primitive
-        R_cell = float(radii[-1])
-        sig_t_n = np.array([
-            sig_t_g[geometry.which_annulus(float(r_nodes[i]), radii)]
-            for i in range(len(r_nodes))
-        ])
-        rv = np.array([
-            geometry.radial_volume_weight(float(rj)) for rj in r_nodes
-        ])
-        divisor = geometry.rank1_surface_divisor(R_cell)
-        P_esc_n = compute_P_esc(
-            geometry, r_nodes, radii, sig_t_g,
-            n_angular=n_angular, dps=dps,
-        )
-        v_n = rv * r_wts * P_esc_n  # shape (N,)
-        u_n = sig_t_n * G_bc_n / divisor  # shape (N,)
-        K_bc_mark = np.outer(u_n, v_n)
-        K_bc_hebert = K_bc_mark / (1.0 - P_ss)
-
-        return K + K_bc_hebert
-    if closure == "specular_multibounce":
-        # Multi-bounce-corrected specular: bare-specular K_bc with the
-        # geometric-series factor `(I - T·R)^{-1}` inserted between
-        # `R` and `P`,
-        #
-        #     K_bc^spec,mb = G · R · (I - T·R)^(-1) · P,
-        #
-        # where T is the surface-to-surface partial-current transfer
-        # matrix for the geometry. This is the rank-N analog of
-        # Hébert's `(1 - P_ss)^{-1}` factor and at rank-1 reduces
-        # algebraically to Hébert white BC (T_00 = P_ss for sphere/cyl;
-        # T_oi^(0,0) = 2 E_3(σL) for slab).
-        #
-        # **Best-use envelopes** (per-geometry) — see the docstrings
-        # of :func:`compute_T_specular_sphere`,
-        # :func:`compute_T_specular_cylinder_3d`,
-        # :func:`compute_T_specular_slab` for the structural derivations
-        # and `.claude/agent-memory/numerics-investigator/specular_mb_
-        # phase4_cyl_slab.md` for the per-geometry pathology table.
-        #
-        # - SPHERE: N ∈ {1, 2, 3} for thin cells (τ_R ≲ 5). At N ≥ 4 a
-        #   UserWarning is emitted because the matrix-Galerkin
-        #   projection of the divergent continuous-µ operator
-        #   1/(1-e^{-σ·2Rµ}) (singular at grazing µ → 0) has
-        #   unbounded operator norm; closure overshoots k_inf for
-        #   N ≥ 4 even when N ∈ {1,2,3} were excellent. See
-        #   `specular_mb_overshoot_root_cause.md` for the operator-
-        #   norm proof.
-        # - CYLINDER: same envelope as sphere (N ∈ {1, 2, 3}) with
-        #   UserWarning at N ≥ 4. The continuous-limit resolvent is
-        #   bounded for cylinder (cos α partial-current factor wins
-        #   at grazing α → π/2), but R = (1/2) M^{-1} is poorly
-        #   conditioned at high N and the geometric series amplifies
-        #   the conditioning blow-up to user-visible drift past k_inf.
-        # - SLAB: NO PATHOLOGY at any N. Slab chord = L/µ → ∞ at
-        #   grazing so transmission e^{-σL/µ} → 0 exponentially; the
-        #   single-transit T is purely block off-diagonal with
-        #   ρ(T·R) ≤ 0.08 across all N at thin τ_L = 2.5. No warning
-        #   is emitted; slab MB monotonically improves k_eff toward
-        #   k_inf as N grows (verified to N = 16+). It is the only
-        #   geometry where the matrix-Galerkin form converges as
-        #   N → ∞.
-        if geometry.kind not in ("sphere-1d", "cylinder-1d", "slab-polar"):
-            raise NotImplementedError(
-                f"closure='specular_multibounce': unsupported geometry "
-                f"kind {geometry.kind!r}. Supported: sphere-1d, "
-                f"cylinder-1d, slab-polar."
-            )
-        if geometry.kind in ("sphere-1d", "cylinder-1d") and n_bc_modes >= 4:
-            import warnings as _warnings
-            geom_label = (
-                "sphere" if geometry.kind == "sphere-1d" else "cylinder"
-            )
-            _warnings.warn(
-                f"closure='specular_multibounce' on {geom_label} at "
-                f"n_bc_modes={n_bc_modes} >= 4: the (I - T·R)^(-1) "
-                f"geometric-series factor enters the high-rank pathology "
-                f"regime (sphere: matrix-Galerkin divergence at grazing µ; "
-                f"cylinder: R = (1/2) M^(-1) ill-conditioning amplified by "
-                f"the geometric series) and the closure overshoots k_inf. "
-                f"Recommended n_bc_modes ∈ {{1, 2, 3}} for thin cells. For "
-                f"thicker cells use closure='specular' (no multi-bounce) at "
-                f"higher rank, or closure='specular_multibounce' on slab "
-                f"(no pathology at any N).",
-                UserWarning,
-                stacklevel=4,
-            )
-        # Refactor #2-helper: the per-observer setup + per-geometry P/G
-        # builds are factored into shared helpers (see above) so the
-        # specular_multibounce and specular branches only differ in the
-        # geometric-series factor (I - T·R)^(-1) inserted between R and P.
-        R_cell, sig_t_n, rv, divisor = _specular_assembly_setup(
-            geometry, r_nodes, radii, sig_t_g,
-        )
-        N = n_bc_modes
-        if geometry.kind == "slab-polar":
-            # Slab MB: per-face block decomposition. The slab T is
-            # block off-diagonal so (I - T·R)^{-1} preserves the per-
-            # face block structure but couples outer ↔ inner via the
-            # transit factor.
-            P_slab, G_slab, R_slab = _build_slab_per_face_specular_PG(
-                r_nodes, r_wts, radii, sig_t_g, N, sig_t_n, rv,
-            )
-            T_slab = compute_T_specular_slab(radii, sig_t_g, N, n_quad=64)
-            ITR = np.eye(2 * N) - T_slab @ R_slab
-            K_bc = G_slab @ R_slab @ np.linalg.solve(ITR, P_slab)
-            return K + K_bc
-        # Sphere / cylinder: single-surface mode space (N modes).
-        if geometry.kind == "sphere-1d":
-            P, G = _build_sphere_specular_mode_PG(
-                geometry, r_nodes, r_wts, radii, sig_t_g, N,
-                sig_t_n, rv, divisor, R_cell,
-                n_angular, n_surf_quad, dps,
-            )
-            T = compute_T_specular_sphere(radii, sig_t_g, N, n_quad=64)
-        else:  # cylinder-1d
-            # Cylinder: T uses Ki_(3+k_m+k_n) — one Ki order higher than
-            # P/G — to carry the additional µ_3D = sin θ_p partial-
-            # current factor. P/G use the 3-D Knyazev primitives
-            # consistent with the bare specular cyl branch.
-            P, G = _build_cylinder_specular_mode_PG(
-                geometry, r_nodes, r_wts, radii, sig_t_g, N,
-                sig_t_n, rv, divisor,
-                n_angular, n_surf_quad, dps,
-            )
-            T = compute_T_specular_cylinder_3d(radii, sig_t_g, N, n_quad=64)
-        R_spec = reflection_specular(N)
-        ITR = np.eye(N) - T @ R_spec
-        K_bc = G @ R_spec @ np.linalg.solve(ITR, P)
-        return K + K_bc
     if closure == "specular_continuous_mu":
         # Phase 5 — Continuous-µ multi-bounce specular BC.
         #
@@ -5985,120 +6239,25 @@ def _build_full_K_per_group(
             f"phase5_round3_adaptive_quadrature.md` for the full "
             f"forensic record + Sphinx §peierls-phase5-retreat."
         )
-    if closure == "specular":
-        # Specular reflection BC: psi^-(r_b, mu_in) = psi^+(r_b, mu_in)
-        # at every surface point — exact angular preservation, no
-        # uniformity / averaging approximation.
-        #
-        # Implementation: K_bc = G · R_specular · P with R_specular =
-        # (1/2) M^{-1} (closed form derived in
-        # `derivations/peierls_specular_bc.py`). M_nm = ∫_0^1 µ
-        # P̃_n(µ) P̃_m(µ) dµ is the partial-current overlap on the
-        # half-range Legendre basis, which is symmetric tridiagonal.
-        # The construction satisfies J^-_m = J^+_m for all m =
-        # 0..N-1 — the exact rank-N partial-current identity.
-        #
-        # Why custom assembly (not via `build_closure_operator`):
-        # `build_closure_operator` uses `compute_P_esc_mode` for modes
-        # n >= 1, which carries an extra (rho_max/R)^2 surface-to-
-        # observer Jacobian that does NOT appear in the canonical
-        # partial-current-moment derivation (rho = s for sphere, so
-        # the Jacobian is identically 1; the factor was empirically
-        # added during the Issue #132 rank-N closure calibration
-        # for diagonal Marshak and is a known source of structural
-        # error per agent memory `direction_q_lambert_marshak_
-        # derivation.md`). The dense off-diagonal coupling in
-        # R_specular makes this basis mismatch destructive (rank-N
-        # specular DIVERGES from k_inf for homogeneous cells under
-        # the (rho/R)^2 convention). Here we use the
-        # **canonical no-Jacobian** P primitive for ALL modes to keep
-        # the basis uniform with the SymPy derivation. Mode 0 of the
-        # no-Jacobian primitive equals `compute_P_esc` exactly (since
-        # P̃_0 = 1 and the Jacobian was the only difference), so at
-        # rank-1 specular bit-equals rank-1 Mark.
-        # Refactor #2-helper: same factored helpers as
-        # closure="specular_multibounce" — the bare-specular branch
-        # differs only in the absence of the (I - T·R)^(-1) factor.
-        # See `_build_slab_per_face_specular_PG`,
-        # `_build_sphere_specular_mode_PG`, and
-        # `_build_cylinder_specular_mode_PG` for the per-geometry P/G
-        # construction (the slab block-diag uses DIVISOR_PER_FACE = 1,
-        # the bit-equivalence-preserving per-face decomposition rather
-        # than the legacy combined-face divisor = 2).
-        R_cell, sig_t_n, rv, divisor = _specular_assembly_setup(
-            geometry, r_nodes, radii, sig_t_g,
+    # Refactor #2-registry (Issue #137): every other closure routes
+    # through a registered ClosureRecipe that returns a
+    # BoundaryClosureOperator (bare or multi-bounce). The dispatcher
+    # walks the registry, runs validators, then assembles K_bc via
+    # `op.as_matrix()`.
+    if closure not in CLOSURE_REGISTRY:
+        valid = sorted([*CLOSURE_REGISTRY.keys(), "vacuum", "specular_continuous_mu"])
+        raise ValueError(
+            f"closure must be one of {valid} — or the deprecated aliases "
+            f"'white' / 'white_rank2'; got {closure!r}"
         )
-        N = n_bc_modes
-        if geometry.kind == "slab-polar":
-            P_slab, G_slab, R_slab = _build_slab_per_face_specular_PG(
-                r_nodes, r_wts, radii, sig_t_g, N, sig_t_n, rv,
-            )
-            K_bc = G_slab @ R_slab @ P_slab
-            return K + K_bc
-        if geometry.kind == "sphere-1d":
-            P, G = _build_sphere_specular_mode_PG(
-                geometry, r_nodes, r_wts, radii, sig_t_g, N,
-                sig_t_n, rv, divisor, R_cell,
-                n_angular, n_surf_quad, dps,
-            )
-        elif geometry.kind == "cylinder-1d":
-            P, G = _build_cylinder_specular_mode_PG(
-                geometry, r_nodes, r_wts, radii, sig_t_g, N,
-                sig_t_n, rv, divisor,
-                n_angular, n_surf_quad, dps,
-            )
-        else:  # pragma: no cover — guarded above for slab-polar
-            raise NotImplementedError(
-                f"closure='specular': unsupported geometry kind "
-                f"{geometry.kind!r}"
-            )
-        R_spec = reflection_specular(N)
-        K_bc = G @ R_spec @ P
-        return K + K_bc
-    if closure == "white_f4":
-        if n_bc_modes > 1:
-            raise NotImplementedError(
-                "closure='white_f4' with n_bc_modes > 1 is not a "
-                "shipped closure. The rank-N Marshak per-face path "
-                "was falsified by the 2026-04-22 research program "
-                "(see research log L21 and Sphinx §peierls-rank-n-"
-                "per-face-closeout). Use n_bc_modes=1 for F.4, or "
-                "closure='white_rank1_mark' for rank-1 Mark."
-            )
-        if getattr(geometry, "n_surfaces", 1) == 1:
-            import warnings as _warnings
-            _warnings.warn(
-                f"closure='white_f4' on a 1-surface (solid) geometry "
-                f"(kind={geometry.kind!r}, inner_radius="
-                f"{getattr(geometry, 'inner_radius', 0.0)}) silently "
-                f"collapses to rank-1 Mark because there is no second-"
-                f"face coupling. Use closure='white_rank1_mark' to "
-                f"make the intent explicit. This silent-collapse "
-                f"behavior will become a ValueError in a future "
-                f"release.",
-                DeprecationWarning,
-                stacklevel=4,
-            )
-        op = build_closure_operator(
-            geometry, r_nodes, r_wts, radii, sig_t_g,
-            n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
-            n_bc_modes=1, reflection="white",
-        )
-        return K + op.as_matrix()
-    raise ValueError(
-        f"closure must be 'vacuum', 'white_rank1_mark', "
-        f"'white_hebert' (sphere/cyl only — Issue #132 Hébert correction), "
-        f"'white_f4', 'specular' (slab/sphere/cyl — exact angular "
-        f"preservation; rank-N partial-current matching; per-face "
-        f"block-diagonal R for slab), 'specular_multibounce' (slab/"
-        f"sphere/cyl — matrix-Galerkin multi-bounce; sphere/cyl best "
-        f"at thin cells with N <= 3 with UserWarning at N >= 4; slab "
-        f"converges monotonically at any N), or 'specular_continuous_mu' "
-        f"(sphere only in Phase 5 — continuous-µ form via Sanchez 1986 "
-        f"Eq. (A6); no rank parameter, no UserWarning, homogeneous-only) "
-        f"— or the deprecated aliases 'white' / 'white_rank2'; "
-        f"got {closure!r}"
+    recipe = CLOSURE_REGISTRY[closure]
+    for validator in recipe.validators:
+        validator(geometry, n_bc_modes)
+    op = recipe.build(
+        geometry, r_nodes, r_wts, radii, sig_t_g, n_bc_modes,
+        n_angular=n_angular, n_surf_quad=n_surf_quad, dps=dps,
     )
+    return K + op.as_matrix()
 
 
 def solve_peierls_mg(

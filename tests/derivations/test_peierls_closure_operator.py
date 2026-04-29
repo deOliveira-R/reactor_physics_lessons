@@ -367,3 +367,120 @@ def test_factored_storage_scales_as_NrN():
         f"{factored_floats} vs dense {dense_floats}); expected < 0.5 "
         f"for N_r={op.n_nodes}, N={n_bc_modes}."
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 7. Multi-bounce mode (transmission T) — Issue #137 extension
+# ═══════════════════════════════════════════════════════════════════════
+#
+# `BoundaryClosureOperator` ships an optional transmission matrix `T`
+# that encodes the geometric-series multi-bounce factor
+# `(I - T·R)^{-1}` into the operator's `as_matrix` / `apply` paths.
+# When `T is None` the operator is bare (`G·R·P`); when `T` is
+# supplied the operator is multibounce (`G·R·(I - T·R)^{-1}·P`).
+# Used by `closure="white_hebert"` (rank-1 with R = Mark, T = [[P_ss]])
+# and `closure="specular_multibounce"` (rank-N with R = R_spec,
+# T = compute_T_specular_*) — both algebraically reduce to the same
+# rank-1 form, which is the load-bearing identity gating the
+# refactor.
+
+
+@pytest.mark.foundation
+def test_bare_op_has_T_none_and_is_multibounce_false():
+    """An operator constructed without `T` is bare; `is_multibounce`
+    reports `False` and `as_matrix` returns `G @ R @ P`."""
+    P = np.array([[1.0, 2.0, 3.0]])
+    G = np.array([[1.0], [2.0], [3.0]])
+    R = np.array([[0.5]])
+    op = BoundaryClosureOperator(P=P, G=G, R=R)
+    assert op.T is None
+    assert not op.is_multibounce
+    np.testing.assert_array_equal(op.as_matrix(), G @ R @ P)
+
+
+@pytest.mark.foundation
+def test_multibounce_geometric_series_is_one_over_one_minus_TR():
+    r"""At rank-1 with `R = [[1]]` and `T = [[t]]`, the multibounce
+    factor is `(I - T·R)^{-1}_{00} = 1/(1 - t)`. Verify
+    `as_matrix() == G @ R @ P / (1 - t)` for `t` in a non-pathological
+    range."""
+    rng = np.random.default_rng(seed=137)
+    P = rng.normal(size=(1, 5))
+    G = rng.normal(size=(5, 1))
+    R = np.array([[1.0]])
+    for t in (0.0, 0.1, 0.5, 0.9):
+        op = BoundaryClosureOperator(
+            P=P, G=G, R=R, T=np.array([[t]]),
+        )
+        assert op.is_multibounce
+        expected = G @ R @ P / (1.0 - t)
+        np.testing.assert_allclose(
+            op.as_matrix(), expected, rtol=1e-13, atol=1e-14,
+        )
+
+
+@pytest.mark.foundation
+def test_multibounce_apply_matches_as_matrix():
+    """The matrix-free `apply` path agrees with `as_matrix() @ q` for
+    a non-trivial `T`."""
+    rng = np.random.default_rng(seed=42)
+    N, N_r = 3, 8
+    P = rng.normal(size=(N, N_r))
+    G = rng.normal(size=(N_r, N))
+    R = reflection_specular(N)
+    T = rng.normal(size=(N, N)) * 0.1   # small to keep (I - T·R) well-conditioned
+    op = BoundaryClosureOperator(P=P, G=G, R=R, T=T)
+    K_dense = op.as_matrix()
+    for _ in range(3):
+        q = rng.normal(size=N_r)
+        np.testing.assert_allclose(
+            op.apply(q), K_dense @ q, rtol=1e-12, atol=1e-12,
+        )
+
+
+@pytest.mark.foundation
+def test_multibounce_T_zero_collapses_to_bare():
+    """`T = 0` reduces multibounce to bare: `(I - 0·R)^{-1} = I`."""
+    rng = np.random.default_rng(seed=99)
+    N, N_r = 4, 7
+    P = rng.normal(size=(N, N_r))
+    G = rng.normal(size=(N_r, N))
+    R = reflection_marshak(N)
+    op_bare = BoundaryClosureOperator(P=P, G=G, R=R)
+    op_zero_T = BoundaryClosureOperator(P=P, G=G, R=R, T=np.zeros((N, N)))
+    np.testing.assert_allclose(
+        op_zero_T.as_matrix(), op_bare.as_matrix(),
+        rtol=1e-13, atol=1e-14,
+    )
+
+
+@pytest.mark.foundation
+def test_T_shape_validation():
+    """`T.shape` must match `R.shape`; mismatched shapes raise."""
+    P = np.zeros((2, 3))
+    G = np.zeros((3, 2))
+    R = np.eye(2)
+    with pytest.raises(ValueError, match=r"T must be"):
+        BoundaryClosureOperator(P=P, G=G, R=R, T=np.eye(3))
+
+
+@pytest.mark.foundation
+def test_hebert_special_case_factor_matches_one_over_one_minus_Pss():
+    r"""`closure="white_hebert"` builds `BoundaryClosureOperator` with
+    R = [[1]] (Mark) and T = [[P_ss]]. The resulting `K_bc` equals
+    `K_bc^Mark / (1 - P_ss)` — the closed-form Hébert correction.
+    """
+    rng = np.random.default_rng(seed=132)
+    P = rng.normal(size=(1, 6))
+    G = rng.normal(size=(6, 1))
+    R = reflection_mark(1)             # = [[1]]
+    P_ss = 0.42
+    op_hebert = BoundaryClosureOperator(
+        P=P, G=G, R=R, T=np.array([[P_ss]]),
+    )
+    K_bc_mark = G @ R @ P
+    K_bc_hebert = K_bc_mark / (1.0 - P_ss)
+    np.testing.assert_allclose(
+        op_hebert.as_matrix(), K_bc_hebert,
+        rtol=1e-13, atol=1e-14,
+    )
