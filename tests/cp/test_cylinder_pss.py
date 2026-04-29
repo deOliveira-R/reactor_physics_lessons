@@ -162,11 +162,16 @@ def test_pss_multiregion_layer_order_matters_for_grazing_chords():
     in the tangential limit).
     """
     radii = np.array([0.5, 1.0])
+    # Signature is compute_P_ss_cylinder(radii, sig_t, ...) — pass radii
+    # first, sig_t second. The original test had the args swapped, which
+    # raised at the chord_quadrature contract (radii must be strictly
+    # increasing) once the recipe migration shipped (#134) and exposed
+    # the latent bug.
     p_thin_inner = compute_P_ss_cylinder(
-        np.array([0.1, 2.0]), radii, n_quad=64,
+        radii, np.array([0.1, 2.0]), n_quad=64,
     )
     p_thick_inner = compute_P_ss_cylinder(
-        np.array([2.0, 0.1]), radii, n_quad=64,
+        radii, np.array([2.0, 0.1]), n_quad=64,
     )
     # Strong inequality — grazing chords are much more transmissive
     # when the outer annulus is thin

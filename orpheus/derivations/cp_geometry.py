@@ -61,7 +61,7 @@ from typing import Callable
 import numpy as np
 
 from ._kernels import chord_half_lengths, e3_vec, ki_n_mp
-from .peierls_geometry import composite_gl_r
+from ._quadrature_recipes import chord_quadrature
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -281,13 +281,17 @@ def build_cp_matrix(
 
     # Outer quadrature setup
     if geom.has_y_quadrature:
-        # Shared composite-GL helper with the Peierls Nyström side — the
-        # ``n_panels_per_region=1, p_order=n_quad_y`` specialisation is
-        # what this CP use-case needs; panel-bounds are discarded here.
-        y_pts, y_wts, _ = composite_gl_r(
-            radii_or_thicknesses, n_panels_per_region=1, p_order=n_quad_y,
-        )
-        y_wts = y_wts * geom.outer_y_weight(y_pts)
+        # Issue #134: route through `chord_quadrature` for kink-aware
+        # subdivision at shell radii + visibility-cone-upper substitution
+        # absorbing the √(r_k² − y²) chord-Jacobian into the per-panel
+        # weights. With ``split_first_panel=True`` (default) the first
+        # impact-parameter panel ``[0, r_1]`` is split at ``r_1/2`` to
+        # dodge the upper-variant degeneracy at y=0; downstream callers
+        # consume the (y_pts, y_wts) pair through `chord_half_lengths`,
+        # which has no compensating 1/y singularity.
+        q = chord_quadrature(radii_or_thicknesses, n_per_panel=n_quad_y)
+        y_pts = q.pts
+        y_wts = q.wts * geom.outer_y_weight(q.pts)
         chords = chord_half_lengths(radii_or_thicknesses, y_pts)
     else:
         # Slab: trivial 1-point rule at y=0 with weight 0.25 so that

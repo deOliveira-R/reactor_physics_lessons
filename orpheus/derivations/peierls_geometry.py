@@ -60,7 +60,11 @@ from ._kernels import (  # noqa: F401
     ki_n_float,
     ki_n_mp,
 )
-from ._quadrature import adaptive_mpmath, composite_gauss_legendre
+from ._quadrature import (
+    adaptive_mpmath,
+    composite_gauss_legendre,
+    gauss_legendre,
+)
 from ._quadrature_recipes import (
     chord_quadrature,
     observer_angular_quadrature,
@@ -1240,13 +1244,6 @@ def build_volume_kernel(
     R = float(radii[-1])
 
     omega_low, omega_high = geometry.angular_range
-    ref_omega_nodes, ref_omega_wts = gl_nodes_weights(n_angular, dps)
-    ref_omega_nodes = np.array([float(x) for x in ref_omega_nodes])
-    ref_omega_wts = np.array([float(w) for w in ref_omega_wts])
-
-    ref_rho_nodes, ref_rho_wts = gl_nodes_weights(n_rho, dps)
-    ref_rho_nodes = np.array([float(x) for x in ref_rho_nodes])
-    ref_rho_wts = np.array([float(w) for w in ref_rho_wts])
 
     # Sorted unique panel-boundary radii (kink locations of the Lagrange
     # basis along each ray). Excludes the outer boundary R because that
@@ -1296,96 +1293,92 @@ def build_volume_kernel(
         ki = geometry.which_annulus(r_i, radii)
         sig_t_i = sig_t[ki]
 
-        # Subdivide ω at tangent-to-interior-boundary critical angles.
-        # For r_i > r_b, sin ω = r_b/r_i is the bifurcation where the
-        # ρ-crossing count jumps 2→0; the outer integrand has a C¹
-        # discontinuity at ω_c that fixed GL cannot integrate across.
-        tangent_angles = geometry.omega_tangent_angles(
-            r_i, interior_boundaries_r,
+        # Issue #135: outer ω-sweep with kink-aware subdivision via
+        # `observer_angular_quadrature`. The recipe uses panel-boundary
+        # radii (not shell radii) so the Lagrange-basis tangent kinks are
+        # resolved — see :issue:`114` for the original requirement.
+        # Bit-equivalent to the pre-#135 hand-coded `omega_tangent_angles`
+        # + per-panel GL loop modulo open-interval-vs-tolerance filtering
+        # at the angular endpoints (recipe uses strict open-interval; the
+        # legacy `omega_tangent_angles` used `1e-12` slack — academic
+        # difference for non-degenerate inputs).
+        q_omega = observer_angular_quadrature(
+            r_obs=float(r_i),
+            omega_low=omega_low, omega_high=omega_high,
+            radii=interior_boundaries_r,
+            n_per_panel=n_angular, dps=dps,
         )
-        omega_subintervals = [omega_low, *tangent_angles, omega_high]
+        cos_omegas = geometry.ray_direction_cosine(q_omega.pts)
+        angular_factor = geometry.angular_weight(q_omega.pts)
 
-        for t_idx in range(len(omega_subintervals) - 1):
-            om_a = omega_subintervals[t_idx]
-            om_b = omega_subintervals[t_idx + 1]
-            if om_b <= om_a:
+        for k in range(len(q_omega)):
+            cos_om = cos_omegas[k]
+            rho_max_val = geometry.rho_max(r_i, cos_om, R)
+            if rho_max_val <= 0.0:
                 continue
-            h_om = 0.5 * (om_b - om_a)
-            m_om = 0.5 * (om_a + om_b)
-            omega_pts = h_om * ref_omega_nodes + m_om
-            omega_wts = h_om * ref_omega_wts
-            cos_omegas = geometry.ray_direction_cosine(omega_pts)
-            angular_factor = geometry.angular_weight(omega_pts)
 
-            for k in range(n_angular):
-                cos_om = cos_omegas[k]
-                rho_max_val = geometry.rho_max(r_i, cos_om, R)
-                if rho_max_val <= 0.0:
+            # Phase F.4: for a hollow cell, the ray's first-flight
+            # stop is the inner shell r = r_0 if it intersects before
+            # the outer boundary. Cap ρ accordingly — any contribution
+            # beyond that is "after the ray escapes" and must not be
+            # counted in the volumetric integral.
+            if geometry.inner_radius > 0.0:
+                rho_in_minus, _ = geometry.rho_inner_intersections(
+                    r_i, cos_om,
+                )
+                if (
+                    rho_in_minus is not None
+                    and rho_in_minus < rho_max_val
+                ):
+                    rho_max_val = rho_in_minus
+
+            # Issue #135: inner ρ-sweep via `composite_gauss_legendre`
+            # over the panel-crossing breakpoints + dyadic τ-cap insertion.
+            # The τ-cap insertion is geometry-specific (no recipe carries
+            # it) and stays in `_insert_tau_breakpoints`.
+            crossings = geometry.rho_crossings_for_ray(
+                r_i, cos_om, rho_max_val, interior_boundaries_r,
+            )
+            rho_subintervals = _insert_tau_breakpoints(
+                [0.0, *crossings, rho_max_val]
+            )
+            # Drop empty sub-intervals (e.g., when a crossing coincides
+            # with rho_max within rounding) before constructing the rule.
+            rho_breakpoints = [rho_subintervals[0]]
+            for rho_b in rho_subintervals[1:]:
+                if rho_b > rho_breakpoints[-1]:
+                    rho_breakpoints.append(rho_b)
+            if len(rho_breakpoints) < 2:
+                continue
+            q_rho = composite_gauss_legendre(
+                rho_breakpoints, n_rho, dps=dps,
+            )
+
+            outer_weight = (
+                pref * sig_t_i * q_omega.wts[k] * angular_factor[k]
+            )
+            for m in range(len(q_rho)):
+                rho = float(q_rho.pts[m])
+                r_prime = geometry.source_position(r_i, rho, cos_om)
+                # Skip source contributions from inside the
+                # cavity of a hollow cell (Phase F.4): the cavity
+                # is void and carries no source; the Lagrange
+                # basis over annular nodes would otherwise
+                # extrapolate a spurious contribution.
+                if (
+                    geometry.inner_radius > 0.0
+                    and float(r_prime) < geometry.inner_radius
+                ):
                     continue
-
-                # Phase F.4: for a hollow cell, the ray's first-flight
-                # stop is the inner shell r = r_0 if it intersects before
-                # the outer boundary. Cap ρ accordingly — any contribution
-                # beyond that is "after the ray escapes" and must not be
-                # counted in the volumetric integral.
-                if geometry.inner_radius > 0.0:
-                    rho_in_minus, _ = geometry.rho_inner_intersections(
-                        r_i, cos_om,
-                    )
-                    if (
-                        rho_in_minus is not None
-                        and rho_in_minus < rho_max_val
-                    ):
-                        rho_max_val = rho_in_minus
-
-                # Subdivide ρ at panel-boundary crossings — without this,
-                # the Lagrange-basis kinks along the ray are unresolved
-                # and the fixed-order GL rule leaves ~1–5% error per
-                # K[i,j]. See issue #114. Then also cap any sub-interval
-                # whose optical length exceeds τ_cap (handles slab
-                # grazing rays and optically-thick curvilinear rays).
-                crossings = geometry.rho_crossings_for_ray(
-                    r_i, cos_om, rho_max_val, interior_boundaries_r,
+                tau = geometry.optical_depth_along_ray(
+                    r_i, cos_om, rho, radii, sig_t,
                 )
-                rho_subintervals = _insert_tau_breakpoints(
-                    [0.0, *crossings, rho_max_val]
+                kappa = geometry.volume_kernel_mp(tau, dps)
+                L_vals = lagrange_basis_on_panels(
+                    r_nodes, panel_bounds, float(r_prime),
                 )
-
-                outer_weight = (
-                    pref * sig_t_i * omega_wts[k] * angular_factor[k]
-                )
-                for s_idx in range(len(rho_subintervals) - 1):
-                    rho_a = rho_subintervals[s_idx]
-                    rho_b = rho_subintervals[s_idx + 1]
-                    if rho_b <= rho_a:
-                        continue
-                    h_r = 0.5 * (rho_b - rho_a)
-                    m_r = 0.5 * (rho_a + rho_b)
-                    rho_pts = h_r * ref_rho_nodes + m_r
-                    rho_wts = h_r * ref_rho_wts
-
-                    for m in range(n_rho):
-                        rho = rho_pts[m]
-                        r_prime = geometry.source_position(r_i, rho, cos_om)
-                        # Skip source contributions from inside the
-                        # cavity of a hollow cell (Phase F.4): the cavity
-                        # is void and carries no source; the Lagrange
-                        # basis over annular nodes would otherwise
-                        # extrapolate a spurious contribution.
-                        if (
-                            geometry.inner_radius > 0.0
-                            and float(r_prime) < geometry.inner_radius
-                        ):
-                            continue
-                        tau = geometry.optical_depth_along_ray(
-                            r_i, cos_om, rho, radii, sig_t,
-                        )
-                        kappa = geometry.volume_kernel_mp(tau, dps)
-                        L_vals = lagrange_basis_on_panels(
-                            r_nodes, panel_bounds, float(r_prime),
-                        )
-                        weight = outer_weight * rho_wts[m] * kappa
-                        K[i, :] += weight * L_vals
+                weight = outer_weight * float(q_rho.wts[m]) * kappa
+                K[i, :] += weight * L_vals
 
     return K
 
@@ -2316,21 +2309,23 @@ def compute_T_specular_slab(
     region_lengths = np.diff(np.concatenate([[0.0], radii]))
     tau_total = float(np.sum(sig_t * region_lengths))
 
-    # Half-range Gauss-Legendre on µ ∈ [0, 1].
-    nodes, wts = np.polynomial.legendre.leggauss(n_quad)
-    mu = 0.5 * (nodes + 1.0)
-    w = 0.5 * wts
+    # Half-range Gauss-Legendre on µ ∈ [0, 1] via the Quadrature1D
+    # contract. Issue #136: slab is plan-exempt from kink-aware
+    # subdivision (geometric immunity at µ→0 means plain GL is
+    # already spectral) but routes through the contract for module-
+    # wide consistency.
+    q = gauss_legendre(0.0, 1.0, n_quad)
+    mu = q.pts
 
     # τ(µ) = τ_total / µ for slab (chord = L/µ uniformly).
     decay = np.exp(-tau_total / mu)
-    mu_w = w * mu
 
     T_oi = np.zeros((n_modes, n_modes))
     for m in range(n_modes):
         Pm = _shifted_legendre_eval(m, mu)
         for n in range(n_modes):
             Pn = _shifted_legendre_eval(n, mu)
-            T_oi[m, n] = 2.0 * float(np.sum(mu_w * Pm * Pn * decay))
+            T_oi[m, n] = 2.0 * q.integrate_array(mu * Pm * Pn * decay)
 
     T = np.zeros((2 * n_modes, 2 * n_modes))
     T[:n_modes, n_modes:] = T_oi
@@ -2635,10 +2630,12 @@ def compute_K_bc_specular_continuous_mu_sphere(
     a = sigma * R
     rho_opt = sigma * r_nodes  # (N_r,)
 
-    # GL on µ ∈ [0, 1].
-    nodes, wts = np.polynomial.legendre.leggauss(n_quad)
-    mu_pts = 0.5 * (nodes + 1.0)
-    mu_wts = 0.5 * wts
+    # GL on µ ∈ [0, 1] via the Quadrature1D contract. Issue #136:
+    # this is a verification-tier reference, not a production
+    # primitive; routes through the contract for module-wide
+    # consistency.
+    q = gauss_legendre(0.0, 1.0, n_quad)
+    mu_pts = q.pts
 
     K_bc = np.zeros((N_r, N_r))
     for i in range(N_r):
@@ -2690,7 +2687,7 @@ def compute_K_bc_specular_continuous_mu_sphere(
                 * np.cosh(rho_p_mu_star[valid])  # cosh(ρ' · µ_*)
                 * decay_chord[valid]
             )
-            K_bc[i, j] = 2.0 * float(np.sum(mu_wts * integrand))
+            K_bc[i, j] = 2.0 * q.integrate_array(integrand)
 
     return K_bc
 

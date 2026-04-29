@@ -748,9 +748,30 @@ def test_observer_angular_quadrature_input_validation():
         )
     with pytest.raises(ValueError, match=r"r_obs must be"):
         observer_angular_quadrature(
-            r_obs=0.0, omega_low=0.0, omega_high=np.pi,
+            r_obs=-0.1, omega_low=0.0, omega_high=np.pi,
             radii=np.array([1.0]), n_per_panel=8,
         )
+
+
+@pytest.mark.foundation
+def test_observer_angular_quadrature_at_origin_is_plain_gl():
+    """``r_obs = 0`` (sphere centre / cylinder axis) is allowed; all
+    shells satisfy ``r_k >= r_obs`` so no tangent kinks exist and the
+    rule degenerates to plain GL on the full interval.
+
+    Issue #135: this case arises in ``build_volume_kernel`` when an
+    observer node sits at the radial origin (e.g., spherical solid-cell
+    meshes that include r=0)."""
+    q = observer_angular_quadrature(
+        r_obs=0.0, omega_low=0.0, omega_high=np.pi,
+        radii=np.array([1.0, 2.0, 5.0]), n_per_panel=16,
+    )
+    assert q.n_panels == 1
+    assert q.panel_bounds == ((0.0, np.pi),)
+    # Bit-equivalent to plain GL on [0, π].
+    q_plain = gauss_legendre(0.0, np.pi, 16)
+    np.testing.assert_array_equal(q.pts, q_plain.pts)
+    np.testing.assert_array_equal(q.wts, q_plain.wts)
 
 
 # ═══════════════════════════════════════════════════════════════════════

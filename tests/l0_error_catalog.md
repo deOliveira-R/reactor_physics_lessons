@@ -1424,6 +1424,74 @@ kernel.
 
 ---
 
+## ERR-031 — Test calls compute_P_ss_cylinder with radii/sig_t arguments swapped
+
+**Failure mode:** #1 Wrong formula — positional argument inversion;
+masked by the function not validating its inputs at the time the test
+was written.
+**Date:** 2026-04-29
+**Solver:** CP / Peierls cylinder P_ss
+(``orpheus.derivations.peierls_geometry.compute_P_ss_cylinder``,
+test ``tests/cp/test_cylinder_pss.py::test_pss_multiregion_layer_order_matters_for_grazing_chords``).
+
+**Bug:** ``compute_P_ss_cylinder`` has signature ``(radii, sig_t, *,
+n_quad, dps)``. The test was passing ``compute_P_ss_cylinder(sig_t,
+radii, n_quad=64)`` — first arg the cross-section vector, second arg
+the radii. Pre-Issue #134, this silently produced a numerically
+wrong P_ss because:
+
+- ``radii = np.array([0.1, 2.0])`` (the intended ``sig_t``) — happened
+  to be strictly increasing, so neither the "strictly increasing" nor
+  "all positive" guards triggered;
+- ``sig_t = np.array([0.5, 1.0])`` (the intended ``radii``) — used as
+  per-region cross sections in the τ build.
+
+The test compared two such broken calls against each other. Because
+both were broken in the same way (same argument inversion), the
+**ratio** ``p_thick_inner / p_thin_inner`` was still order-of-
+magnitude consistent with the test's qualitative claim ("> 5×
+asymmetry under sig_t swap"), so the assertion passed. The test
+was numerically meaningless — every value in the ratio was computed
+on a permuted-input integrand — but the ratio test held by accident.
+
+**Impact:** None on production code (production callers all pass
+keyword args or correct positional order). Test reported PASS for
+months while exercising a wrong code path. Caught at Issue #134
+when the chord_quadrature recipe migration introduced an upstream
+``radii must be strictly increasing`` validation that triggered on
+``[2.0, 0.1]`` (the second test call's intended-sig_t now decreasing
+from positional inversion).
+
+**How it hid from higher-level tests:**
+- The test imports ``compute_P_ss_cylinder`` directly and exercises
+  it in isolation; no integration test covered this specific call.
+- The function had no upstream validation that ``radii`` was
+  strictly increasing — so non-monotone "radii" silently flowed
+  through ``chord_half_lengths`` to produce nonsense chord lengths
+  rather than raising.
+- The qualitative-ratio assertion ``> 5×`` is loose enough that
+  even a mis-permuted integrand can satisfy it.
+
+**L0/L1 tests that catch it:**
+- After Issue #134 migration: the test now raises
+  ``ValueError: radii must be strictly increasing, got [2. 0.1]``
+  at the ``chord_quadrature`` contract.
+- After test-bug fix (this commit): the test passes with the right
+  args and verifies the qualitative ratio claim properly.
+
+**Fix:** ``tests/cp/test_cylinder_pss.py:164-170`` — swap the
+positional args to match ``compute_P_ss_cylinder(radii, sig_t, ...)``.
+
+**Lesson:** Contract validation upstream of consumers catches bugs
+that loose qualitative tests miss. Recipes that validate inputs at
+construction (this is the ``Quadrature1D`` contract pattern) push
+errors leftward — into clear failures at the test boundary instead
+of silent numerical drift in the integrand. The Issue #134 migration
+caught a year-old test bug as a side effect of routing CP through
+the recipe.
+
+---
+
 ## Meta-Lessons
 
 1. **1-group is degenerate.** k = νΣ_f/Σ_a regardless of flux shape.

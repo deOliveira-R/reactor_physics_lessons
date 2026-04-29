@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **1238**
+Total tests collected: **1239**
 
 V&V level distribution
 ----------------------
@@ -16,11 +16,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 585, 47.3%
+   L0, 585, 47.2%
    L1, 339, 27.4%
    L2, 36, 2.9%
    L3, 0, 0.0%
-   foundation, 267, 21.6%
+   foundation, 268, 21.6%
    unmarked, 11, 0.9%
 
 Tagging source
@@ -32,7 +32,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 1148
+   explicit, 1149
    verify, 0
    class-name, 46
    func-name, 0
@@ -82,7 +82,7 @@ Module × level grid
    derivations/test_peierls_sphere_prefactor, 6, 0, 0, 0, 0, 0
    derivations/test_peierls_sphere_white_bc, 0, 4, 0, 0, 0, 0
    derivations/test_peierls_unified_verification, 0, 4, 0, 0, 0, 0
-   derivations/test_quadrature, 7, 0, 0, 0, 43, 0
+   derivations/test_quadrature, 7, 0, 0, 0, 44, 0
    diffusion/test_continuous_reference, 0, 8, 0, 0, 0, 0
    diffusion/test_diffusion, 0, 2, 0, 0, 0, 0
    diffusion/test_properties, 3, 0, 0, 0, 0, 0
@@ -455,6 +455,7 @@ Every ``ERR-NNN`` entry in ``tests/l0_error_catalog.md`` and the tests that carr
    ``ERR-028``, 1
    ``ERR-029``, 6
    ``ERR-030``, 2
+   ``ERR-031``, **0 (MISSING)**
 
 Unmarked tests
 --------------

@@ -231,7 +231,11 @@ def observer_angular_quadrature(
     Parameters
     ----------
     r_obs : float
-        Observer radial position. Must be positive.
+        Observer radial position. Must be non-negative. The
+        :math:`r_{\rm obs} = 0` case (sphere centre / cylinder axis)
+        is allowed: every shell satisfies :math:`r_{k} \ge r_{\rm obs}`
+        so no tangent angle exists and the rule degenerates to plain
+        GL on :math:`[\omega_{\min}, \omega_{\max}]`.
     omega_low, omega_high : float
         Integration interval. Must satisfy ``omega_low < omega_high``.
     radii : np.ndarray, shape ``(N,)``
@@ -255,25 +259,35 @@ def observer_angular_quadrature(
     Tangent angles strictly outside ``(omega_low, omega_high)`` are
     silently dropped (they don't affect the integral on this interval).
     If no tangent angles fall inside, the rule degenerates to plain
-    GL on the full interval — i.e. for a homogeneous cell or when
-    the angular range doesn't span any tangency, this recipe is
-    bit-equivalent to a single :func:`gauss_legendre` call.
+    GL on the full interval — i.e. for a homogeneous cell, when
+    the angular range doesn't span any tangency, or when the observer
+    sits at the sphere centre / cylinder axis (:math:`r_{\rm obs} = 0`),
+    this recipe is bit-equivalent to a single :func:`gauss_legendre`
+    call.
     """
     if omega_high <= omega_low:
         raise ValueError(
             f"Need omega_high > omega_low, got "
             f"omega_low={omega_low}, omega_high={omega_high}"
         )
-    if r_obs <= 0:
-        raise ValueError(f"r_obs must be positive, got {r_obs}")
+    if r_obs < 0:
+        raise ValueError(f"r_obs must be non-negative, got {r_obs}")
     if n_per_panel < 1:
         raise ValueError(f"n_per_panel must be >= 1, got {n_per_panel}")
 
     radii = np.asarray(radii, dtype=float)
-    interior = radii[radii < r_obs]
-    forward = np.arcsin(np.clip(interior / r_obs, 0.0, 1.0))
-    backward = np.pi - forward
-    candidates = np.concatenate([forward, backward])
+    if r_obs == 0.0:
+        # Observer at sphere centre / cylinder axis: no shell can be
+        # interior (radii are positive), so no tangent kinks. Skip the
+        # candidate-angle computation to avoid the divide-by-zero in
+        # `interior / r_obs` (which would still produce a well-formed
+        # empty array but emits a numpy warning on some builds).
+        candidates = np.array([], dtype=float)
+    else:
+        interior = radii[radii < r_obs]
+        forward = np.arcsin(np.clip(interior / r_obs, 0.0, 1.0))
+        backward = np.pi - forward
+        candidates = np.concatenate([forward, backward])
 
     inside = (candidates > omega_low) & (candidates < omega_high)
     tangents = np.sort(candidates[inside])
