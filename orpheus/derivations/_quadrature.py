@@ -14,10 +14,13 @@ ORPHEUS speaks:
   on a sorted breakpoint list.
 - :func:`gauss_laguerre` — :math:`\int_0^\infty f(x)\,e^{-x/\sigma}
   \,\mathrm dx` rule on :math:`[0, \infty)`.
+- :class:`AdaptiveQuadrature1D` + :func:`adaptive_mpmath` — adaptive
+  (no-fixed-nodes) rule for verification-tier integrals where the
+  consumer only needs the scalar; backed by :func:`mpmath.quad`.
 
 Geometry-aware recipes (``chord_quadrature``,
 ``observer_angular_quadrature``) live in
-:mod:`._quadrature_recipes` and compose these primitives.
+:mod:`._quadrature_recipes` and compose the static primitives.
 
 Design notes
 ------------
@@ -369,6 +372,129 @@ def _concat(rules: Iterable["Quadrature1D"]) -> "Quadrature1D":
     if not rules:
         raise ValueError("Cannot concatenate an empty rule list")
     return functools.reduce(operator.or_, rules)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Adaptive 1-D quadrature (no fixed nodes)
+# ═══════════════════════════════════════════════════════════════════════
+
+@dataclass(frozen=True)
+class AdaptiveQuadrature1D:
+    r"""Adaptive 1-D quadrature on :math:`[a, b]` with optional
+    breakpoint hints.
+
+    Unlike :class:`Quadrature1D`, an adaptive rule has *no* fixed
+    nodes — the rule chooses its own subdivision at evaluation time
+    (currently delegated to :func:`mpmath.quad`). The only public
+    operation is :meth:`integrate`, which evaluates the integrand at
+    rule-chosen points and returns a scalar. Consumers that need
+    static nodes/weights for downstream basis evaluation must use
+    :class:`Quadrature1D`; adaptive rules are appropriate when the
+    integrand has well-known structural breakpoints (panel edges,
+    tangent angles, log singularities) and the consumer only needs
+    the final scalar.
+
+    Attributes
+    ----------
+    interval : tuple of (float, float)
+        ``(a, b)`` with ``a < b``.
+    breakpoints : tuple of float
+        Optional sorted breakpoints in :math:`(a, b)` passed as
+        subdivision hints to the underlying adaptive engine. Use
+        when the integrand has known kinks (e.g. tangent angles for
+        chord-traversal integrals, panel boundaries for piecewise-
+        polynomial bases).
+    dps : int
+        mpmath working precision (decimal digits).
+    maxdegree : int or None
+        Optional cap on the underlying engine's adaptive recursion
+        depth. ``None`` defers to the engine's default.
+
+    Notes
+    -----
+    See :class:`Quadrature1D` for the static-nodes counterpart.
+    Both share the consumer-side ``integrate(f) -> float`` ergonomic
+    so a function whose integration domain might be either static
+    or adaptive can accept either type.
+    """
+
+    interval: tuple[float, float]
+    breakpoints: tuple[float, ...] = field(default=())
+    dps: int = 30
+    maxdegree: int | None = None
+
+    def __post_init__(self) -> None:
+        a, b = self.interval
+        if not a < b:
+            raise ValueError(
+                f"AdaptiveQuadrature1D: need interval[0] < interval[1], "
+                f"got {self.interval}"
+            )
+        if self.dps < 1:
+            raise ValueError(f"dps must be >= 1, got {self.dps}")
+        for bp in self.breakpoints:
+            if not (a < bp < b):
+                raise ValueError(
+                    f"AdaptiveQuadrature1D: breakpoint {bp} not in "
+                    f"open interval ({a}, {b})"
+                )
+        if list(self.breakpoints) != sorted(self.breakpoints):
+            raise ValueError(
+                f"AdaptiveQuadrature1D: breakpoints must be sorted "
+                f"ascending, got {self.breakpoints}"
+            )
+
+    def integrate(self, f: Callable[[float], float]) -> float:
+        r"""Adaptively integrate ``f`` over :math:`[a, b]`.
+
+        ``f`` must accept a *scalar* argument (mpmath number or float)
+        and return a scalar — the underlying :func:`mpmath.quad`
+        evaluates the integrand point-by-point at rule-chosen
+        :math:`x` values. Returns the integral cast to ``float``.
+        """
+        with mpmath.workdps(self.dps):
+            args = [self.interval[0], *self.breakpoints, self.interval[1]]
+            kwargs = (
+                {} if self.maxdegree is None
+                else {"maxdegree": self.maxdegree}
+            )
+            return float(mpmath.quad(f, args, **kwargs))
+
+
+def adaptive_mpmath(
+    a: float,
+    b: float,
+    *,
+    breakpoints: Sequence[float] = (),
+    dps: int = 30,
+    maxdegree: int | None = None,
+) -> AdaptiveQuadrature1D:
+    r"""Construct an :class:`AdaptiveQuadrature1D` backed by
+    :func:`mpmath.quad`.
+
+    Use this when:
+
+    - The integrand has known structural breakpoints (panel edges,
+      tangent angles, log singularities) but the consumer only needs
+      the scalar integral, *not* fixed nodes for downstream basis
+      evaluation.
+    - High precision (``dps > 53``) is required for verification-tier
+      computations where static GL would need too many nodes.
+    - The integrand's regularity is unknown a priori — adaptive
+      refinement converges where static GL might miss.
+
+    For static-nodes consumers (Lagrange basis evaluation, downstream
+    panel-aware operations) use :func:`composite_gauss_legendre` or
+    one of the geometry-aware recipes in
+    :mod:`._quadrature_recipes` instead — those return
+    :class:`Quadrature1D` with full per-panel slicing metadata.
+    """
+    return AdaptiveQuadrature1D(
+        interval=(float(a), float(b)),
+        breakpoints=tuple(float(bp) for bp in breakpoints),
+        dps=dps,
+        maxdegree=maxdegree,
+    )
 
 
 def gauss_laguerre(

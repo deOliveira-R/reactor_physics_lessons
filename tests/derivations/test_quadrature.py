@@ -30,7 +30,9 @@ import numpy as np
 import pytest
 
 from orpheus.derivations._quadrature import (
+    AdaptiveQuadrature1D,
     Quadrature1D,
+    adaptive_mpmath,
     composite_gauss_legendre,
     gauss_laguerre,
     gauss_legendre,
@@ -304,6 +306,95 @@ def test_visibility_cone_input_validation():
         gauss_legendre_visibility_cone(0.0, 1.0, 0)
     with pytest.raises(ValueError, match=r"singular_endpoint"):
         gauss_legendre_visibility_cone(1.0, 2.0, 16, singular_endpoint="middle")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Adaptive (mpmath) quadrature — no fixed nodes, breakpoint-hint API
+# ═══════════════════════════════════════════════════════════════════════
+
+@pytest.mark.foundation
+def test_adaptive_mpmath_integrates_polynomial():
+    r"""``adaptive_mpmath`` integrates :math:`\int_0^1 x^k\,\mathrm dx
+    = 1/(k+1)` to mpmath precision via :func:`mpmath.quad`."""
+    q = adaptive_mpmath(0.0, 1.0, dps=30)
+    for k in range(6):
+        truth = 1.0 / (k + 1)
+        approx = q.integrate(lambda x, k=k: x ** k)
+        assert approx == pytest.approx(truth, rel=1e-13, abs=1e-13)
+
+
+@pytest.mark.foundation
+def test_adaptive_mpmath_breakpoints_resolve_kink():
+    r"""For an integrand with a known kink, supplying breakpoint hints
+    lets mpmath.quad converge cleanly. Tests
+    :math:`\int_0^2 |x - 1|\,\mathrm dx = 1` with the breakpoint at
+    :math:`x = 1` (kink) and without."""
+    f = lambda x: abs(float(x) - 1.0)  # noqa: E731
+    truth = 1.0
+    # With breakpoint: machine-precision convergence — mpmath splits
+    # at the kink and integrates each smooth half exactly.
+    q_hinted = adaptive_mpmath(0.0, 2.0, breakpoints=(1.0,), dps=20)
+    assert q_hinted.integrate(f) == pytest.approx(truth, abs=1e-14)
+    # Without breakpoint: mpmath misses the C¹ kink and saturates at
+    # ~1e-5, demonstrating *why* the breakpoint-hint API matters.
+    # This is the exact failure mode that justifies the existence of
+    # the AdaptiveQuadrature1D contract: callers with structural
+    # knowledge (panel edges, tangent angles) must pass it through.
+    q_naive = adaptive_mpmath(0.0, 2.0, dps=20)
+    naive_err = abs(q_naive.integrate(f) - truth)
+    assert naive_err > 1e-7, (
+        f"naive mpmath.quad on |x-1| converged unexpectedly "
+        f"({naive_err:.3e}) — the breakpoint-hint argument is moot"
+    )
+
+
+@pytest.mark.foundation
+def test_adaptive_mpmath_high_precision():
+    r"""``dps`` truly raises the working precision: a smooth oscillatory
+    integrand (Fresnel-like :math:`\int_0^{\sqrt{\pi}}\cos(x^2)\,
+    \mathrm dx`) is converged at ``dps=50`` to 1e-15 even though the
+    default float64 ``mpmath.quad`` would saturate earlier."""
+    truth = float(mpmath.quad(
+        lambda x: mpmath.cos(x * x), [0, mpmath.sqrt(mpmath.pi)],
+    ))
+    q = adaptive_mpmath(0.0, float(np.sqrt(np.pi)), dps=50)
+    assert q.integrate(lambda x: mpmath.cos(x * x)) == pytest.approx(
+        truth, abs=1e-14,
+    )
+
+
+@pytest.mark.foundation
+def test_adaptive_mpmath_input_validation():
+    """Bad inputs raise ``ValueError``."""
+    with pytest.raises(ValueError, match=r"interval"):
+        adaptive_mpmath(2.0, 1.0)
+    with pytest.raises(ValueError, match=r"dps"):
+        adaptive_mpmath(0.0, 1.0, dps=0)
+    with pytest.raises(ValueError, match=r"breakpoint"):
+        adaptive_mpmath(0.0, 1.0, breakpoints=(1.5,))  # outside (a, b)
+    with pytest.raises(ValueError, match=r"sorted"):
+        adaptive_mpmath(0.0, 1.0, breakpoints=(0.7, 0.3))
+
+
+@pytest.mark.foundation
+def test_adaptive_quadrature1d_is_distinct_type():
+    """``AdaptiveQuadrature1D`` is a sibling of ``Quadrature1D``, not
+    a subclass. Both expose ``integrate(f) -> float`` so a function
+    that only needs the scalar can accept either, but they do NOT
+    share static node fields (the adaptive type has no ``pts``)."""
+    q_static = gauss_legendre(0.0, 1.0, 5)
+    q_adaptive = adaptive_mpmath(0.0, 1.0, dps=20)
+    assert isinstance(q_static, Quadrature1D)
+    assert isinstance(q_adaptive, AdaptiveQuadrature1D)
+    assert not isinstance(q_adaptive, Quadrature1D)
+    # Adaptive type does not expose pts/wts (would defeat its purpose
+    # — the rule chooses nodes at evaluation time).
+    assert not hasattr(q_adaptive, "pts")
+    assert not hasattr(q_adaptive, "wts")
+    # Both integrate the same constant correctly.
+    one = lambda x: 1.0  # noqa: E731
+    assert q_static.integrate(lambda x: np.ones_like(x)) == pytest.approx(1.0)
+    assert q_adaptive.integrate(one) == pytest.approx(1.0, abs=1e-13)
 
 
 # ═══════════════════════════════════════════════════════════════════════

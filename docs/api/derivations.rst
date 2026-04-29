@@ -46,6 +46,10 @@ Submodules
        :func:`gauss_legendre`,
        :func:`gauss_legendre_visibility_cone`,
        :func:`composite_gauss_legendre`, :func:`gauss_laguerre`.
+       Plus the sibling
+       :class:`~orpheus.derivations._quadrature.AdaptiveQuadrature1D`
+       (no-fixed-nodes adaptive rule built via
+       :func:`~orpheus.derivations._quadrature.adaptive_mpmath`).
    * - :mod:`~orpheus.derivations._quadrature_recipes`
      - Geometry-aware quadrature recipes:
        :func:`chord_quadrature` (impact-parameter integrals on

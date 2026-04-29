@@ -8487,6 +8487,20 @@ recurring ORPHEUS chord-and-angular patterns. The contract details
 and design rationale are documented in the
 :class:`~orpheus.derivations._quadrature.Quadrature1D` docstring.
 
+For verification-tier integrals where the consumer needs only the
+scalar (no fixed nodes, no per-panel basis evaluation), the sibling
+:class:`~orpheus.derivations._quadrature.AdaptiveQuadrature1D`
+type — built via :func:`~orpheus.derivations._quadrature.adaptive_mpmath`
+— shares the ``integrate(f) -> float`` consumer ergonomic with
+:class:`Quadrature1D` while delegating node selection to
+:func:`mpmath.quad` at evaluation time. Use the static
+:class:`Quadrature1D` family for production assemblies that exploit
+fixed nodes (Lagrange basis, panel slicing, ndarray-of-integrand
+assembly); use :class:`AdaptiveQuadrature1D` when the integrand has
+known structural breakpoints (panel edges, tangent angles, log
+singularities) but the consumer only needs the scalar at high
+precision.
+
 22.1 Principle: transforms relocate singularities, they don't eliminate them
 ----------------------------------------------------------------------------
 
