@@ -41,6 +41,7 @@ from orpheus.derivations._quadrature import (
 from orpheus.derivations._quadrature_recipes import (
     chord_quadrature,
     observer_angular_quadrature,
+    surface_centred_angular_quadrature,
 )
 
 
@@ -749,6 +750,157 @@ def test_observer_angular_quadrature_input_validation():
         observer_angular_quadrature(
             r_obs=0.0, omega_low=0.0, omega_high=np.pi,
             radii=np.array([1.0]), n_per_panel=8,
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# surface_centred_angular_quadrature recipe — chord-quadratic kink
+# subdivision for the legacy cylinder G_bc Ki_1/d form
+# ═══════════════════════════════════════════════════════════════════════
+
+@pytest.mark.foundation
+def test_surface_centred_no_interior_shells_is_plain_gl():
+    """When no shell satisfies r_k < min(r_obs, r_surface) the recipe
+    degenerates to plain Gauss-Legendre on [phi_low, phi_high] — one
+    panel, bit-equivalent to a single ``gauss_legendre`` call."""
+    # Observer in the innermost shell, outer-surface case: only outer
+    # surface (r_k = R = r_obs in this test) — no shells with r_k < r_obs.
+    R = 5.0
+    q = surface_centred_angular_quadrature(
+        r_obs=2.0, r_surface=R,
+        radii=np.array([R]),
+        n_per_panel=16,
+    )
+    assert q.n_panels == 1
+    assert q.panel_bounds == ((0.0, np.pi),)
+    # Bit-equivalent to plain GL on [0, π].
+    q_plain = gauss_legendre(0.0, np.pi, 16)
+    np.testing.assert_array_equal(q.pts, q_plain.pts)
+    np.testing.assert_array_equal(q.wts, q_plain.wts)
+
+
+@pytest.mark.foundation
+def test_surface_centred_inner_surface_case_is_plain_gl():
+    """Inner-surface configuration: r_surface < r_obs. For typical
+    hollow-cell shell layouts every shell satisfies r_k >= r_surface,
+    so no shell qualifies as 'interior to both' and the rule degenerates
+    to plain GL — bit-equivalent to the legacy gl_float for the
+    ``compute_G_bc_inner`` cylinder branch."""
+    # r_obs = 3.0, r_surface = r_0 = 1.0 (inner surface), shells 2.0, 3.5, 5.0.
+    # min(r_obs, r_surface) = 1.0; no shell satisfies r_k < 1.0.
+    q = surface_centred_angular_quadrature(
+        r_obs=3.0, r_surface=1.0,
+        radii=np.array([2.0, 3.5, 5.0]),
+        n_per_panel=12,
+    )
+    assert q.n_panels == 1
+    assert q.panel_bounds == ((0.0, np.pi),)
+
+
+@pytest.mark.foundation
+def test_surface_centred_inserts_tangent_breakpoints_closed_form():
+    """For two-region cylinder (radii=[r_1, R]) with observer in the
+    outer shell, the tangent angles at shell r_1 are
+    ``arccos(c±)`` where
+    ``c± = (r_1² ± sqrt((r_obs²-r_1²)(R²-r_1²)))/(r_obs·R)``.
+    Verify the panel boundaries match the closed form to machine
+    precision."""
+    r_obs = 3.0
+    R = 5.0
+    r_1 = 2.0  # interior shell; r_1 < r_obs and r_1 < R, so two tangents.
+    q = surface_centred_angular_quadrature(
+        r_obs=r_obs, r_surface=R,
+        radii=np.array([r_1, R]),
+        n_per_panel=8,
+    )
+    sqrt_disc = math.sqrt((r_obs ** 2 - r_1 ** 2) * (R ** 2 - r_1 ** 2))
+    c_plus = (r_1 ** 2 + sqrt_disc) / (r_obs * R)
+    c_minus = (r_1 ** 2 - sqrt_disc) / (r_obs * R)
+    phi_lo_expected = math.acos(c_plus)
+    phi_hi_expected = math.acos(c_minus)
+
+    # Three panels: [0, φ_lo], [φ_lo, φ_hi], [φ_hi, π].
+    assert q.n_panels == 3
+    np.testing.assert_allclose(
+        [q.panel_bounds[0][1], q.panel_bounds[1][1]],
+        [phi_lo_expected, phi_hi_expected],
+        atol=1e-14,
+    )
+    assert q.panel_bounds[2][1] == pytest.approx(np.pi)
+
+
+@pytest.mark.foundation
+def test_surface_centred_window_filters_out_of_range_tangents():
+    """Tangent angles strictly outside ``(phi_low, phi_high)`` are
+    silently dropped — pinning the partial-φ-range window behaviour."""
+    r_obs = 3.0
+    R = 5.0
+    r_1 = 2.0
+    sqrt_disc = math.sqrt((r_obs ** 2 - r_1 ** 2) * (R ** 2 - r_1 ** 2))
+    phi_lo = math.acos((r_1 ** 2 + sqrt_disc) / (r_obs * R))
+    phi_hi = math.acos((r_1 ** 2 - sqrt_disc) / (r_obs * R))
+    # Window that contains only the lower tangent.
+    q = surface_centred_angular_quadrature(
+        r_obs=r_obs, r_surface=R,
+        radii=np.array([r_1, R]),
+        n_per_panel=8,
+        phi_low=0.0, phi_high=0.5 * (phi_lo + phi_hi),
+    )
+    assert q.n_panels == 2
+    assert q.panel_bounds[0][1] == pytest.approx(phi_lo, abs=1e-14)
+
+
+@pytest.mark.foundation
+def test_surface_centred_constant_integrand_recovers_length():
+    """``∫_{phi_low}^{phi_high} 1 dφ = phi_high - phi_low`` independent
+    of subdivision — sanity that the panel concatenation is correct."""
+    for radii in [
+        np.array([5.0]),
+        np.array([2.0, 5.0]),
+        np.array([1.0, 2.5, 5.0]),
+    ]:
+        q = surface_centred_angular_quadrature(
+            r_obs=3.0, r_surface=5.0,
+            radii=radii, n_per_panel=8,
+        )
+        assert q.integrate(lambda x: np.ones_like(x)) == pytest.approx(
+            np.pi, abs=1e-13,
+        )
+    # Partial window.
+    q_part = surface_centred_angular_quadrature(
+        r_obs=3.0, r_surface=5.0,
+        radii=np.array([1.0, 2.5, 5.0]),
+        n_per_panel=8,
+        phi_low=0.5, phi_high=2.5,
+    )
+    assert q_part.integrate(lambda x: np.ones_like(x)) == pytest.approx(
+        2.0, abs=1e-13,
+    )
+
+
+@pytest.mark.foundation
+def test_surface_centred_input_validation():
+    """Bad inputs raise ``ValueError``."""
+    with pytest.raises(ValueError, match=r"r_obs"):
+        surface_centred_angular_quadrature(
+            r_obs=0.0, r_surface=5.0,
+            radii=np.array([5.0]), n_per_panel=8,
+        )
+    with pytest.raises(ValueError, match=r"r_surface"):
+        surface_centred_angular_quadrature(
+            r_obs=3.0, r_surface=-1.0,
+            radii=np.array([5.0]), n_per_panel=8,
+        )
+    with pytest.raises(ValueError, match=r"phi_high > phi_low"):
+        surface_centred_angular_quadrature(
+            r_obs=3.0, r_surface=5.0,
+            radii=np.array([5.0]), n_per_panel=8,
+            phi_low=2.0, phi_high=1.0,
+        )
+    with pytest.raises(ValueError, match=r"n_per_panel"):
+        surface_centred_angular_quadrature(
+            r_obs=3.0, r_surface=5.0,
+            radii=np.array([5.0]), n_per_panel=0,
         )
 
 

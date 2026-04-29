@@ -64,6 +64,7 @@ from ._quadrature import adaptive_mpmath, composite_gauss_legendre
 from ._quadrature_recipes import (
     chord_quadrature,
     observer_angular_quadrature,
+    surface_centred_angular_quadrature,
 )
 
 
@@ -1574,33 +1575,42 @@ def compute_G_bc(
 
         return np.array([_sphere_per_obs(float(r_i)) for r_i in r_nodes])
 
-    # Cylinder: surface-centred form, Ki_1/d kernel.
-    phi_pts, phi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-    cos_phis = np.cos(phi_pts)
-    sin_phis = np.sin(phi_pts)
+    # Cylinder: surface-centred form, Ki_1/d kernel. Q-L3: route through
+    # `surface_centred_angular_quadrature` for kink-aware subdivision at
+    # the chord-quadratic tangent angles. Homogeneous (radii=[R]) cells
+    # have no shells with r_k < min(r_obs, R) = r_obs, so the rule
+    # degenerates to plain GL — bit-equivalent to the pre-L3 single
+    # gl_float(n_surf_quad, 0, π) call.
     inv_pi = 1.0 / np.pi
 
-    for i in range(N):
-        r_i = r_nodes[i]
-        total = 0.0
-        for k in range(n_surf_quad):
-            cf = cos_phis[k]
-            d_sq = r_i * r_i + R * R - 2.0 * r_i * R * cf
-            d = np.sqrt(max(d_sq, 0.0))
-            if d <= 0.0:
-                continue
-            if len(radii) == 1:
-                tau = sig_t[0] * d
-            else:
-                cb = (R * cf - r_i) / d
-                sb = R * sin_phis[k] / d  # noqa: F841 (kept for symmetry)
-                tau = geometry.optical_depth_along_ray(
-                    r_i, cb, d, radii, sig_t,
-                )
-            ki1 = float(ki_n_mp(1, float(tau), dps))
-            total += phi_wts[k] * ki1 / d
-        G_bc[i] = 2.0 * inv_pi * R * total
-    return G_bc
+    def _per_node_kernel(r_i: float, cf: float) -> float:
+        d_sq = r_i * r_i + R * R - 2.0 * r_i * R * cf
+        d = float(np.sqrt(max(d_sq, 0.0)))
+        if d <= 0.0:
+            return 0.0
+        if len(radii) == 1:
+            tau = float(sig_t[0]) * d
+        else:
+            cb = (R * cf - r_i) / d
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, cb, d, radii, sig_t,
+            ))
+        ki1 = float(ki_n_mp(1, tau, dps))
+        return ki1 / d
+
+    def _cyl_per_obs(r_i: float) -> float:
+        q = surface_centred_angular_quadrature(
+            r_obs=r_i, r_surface=R,
+            radii=radii, n_per_panel=n_surf_quad, dps=dps,
+        )
+        cos_phi = np.cos(q.pts)
+        kernel = np.fromiter(
+            (_per_node_kernel(r_i, float(c)) for c in cos_phi),
+            dtype=float, count=len(q),
+        )
+        return 2.0 * inv_pi * R * q.integrate_array(kernel)
+
+    return np.array([_cyl_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_G_bc_cylinder_3d(
@@ -3176,33 +3186,40 @@ def compute_G_bc_outer(
 
         return np.array([_sphere_per_obs(float(r_i)) for r_i in r_nodes])
 
-    # Cylinder outer — surface-centred, Ki_1/d kernel.
-    phi_pts, phi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-    cos_phis = np.cos(phi_pts)
-    sin_phis = np.sin(phi_pts)
+    # Cylinder outer — surface-centred, Ki_1/d kernel. Q-L3: route
+    # through `surface_centred_angular_quadrature` for kink-aware
+    # subdivision at the chord-quadratic tangent angles.
     inv_pi = 1.0 / np.pi
-    G = np.zeros(N)
-    for i in range(N):
-        r_i = r_nodes[i]
-        total = 0.0
-        for k in range(n_surf_quad):
-            cf = cos_phis[k]
-            d_sq = r_i * r_i + R * R - 2.0 * r_i * R * cf
-            d = float(np.sqrt(max(d_sq, 0.0)))
-            if d <= 0.0:
-                continue
-            if len(radii) == 1 and geometry.inner_radius == 0.0:
-                tau = sig_t[0] * d
-            else:
-                cb = (R * cf - r_i) / d
-                _ = R * sin_phis[k] / d  # symmetry only
-                tau = geometry.optical_depth_along_ray(
-                    r_i, cb, d, radii, sig_t,
-                )
-            ki1 = float(ki_n_mp(1, float(tau), dps))
-            total += phi_wts[k] * ki1 / d
-        G[i] = 2.0 * inv_pi * R * total
-    return G
+    is_solid_homogeneous = len(radii) == 1 and geometry.inner_radius == 0.0
+
+    def _per_node_kernel(r_i: float, cf: float) -> float:
+        d_sq = r_i * r_i + R * R - 2.0 * r_i * R * cf
+        d = float(np.sqrt(max(d_sq, 0.0)))
+        if d <= 0.0:
+            return 0.0
+        if is_solid_homogeneous:
+            tau = float(sig_t[0]) * d
+        else:
+            cb = (R * cf - r_i) / d
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, cb, d, radii, sig_t,
+            ))
+        ki1 = float(ki_n_mp(1, tau, dps))
+        return ki1 / d
+
+    def _per_obs(r_i: float) -> float:
+        q = surface_centred_angular_quadrature(
+            r_obs=r_i, r_surface=R,
+            radii=radii, n_per_panel=n_surf_quad, dps=dps,
+        )
+        cos_phi = np.cos(q.pts)
+        kernel = np.fromiter(
+            (_per_node_kernel(r_i, float(c)) for c in cos_phi),
+            dtype=float, count=len(q),
+        )
+        return 2.0 * inv_pi * R * q.integrate_array(kernel)
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_G_bc_inner(
@@ -3282,35 +3299,44 @@ def compute_G_bc_inner(
         return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
     # Cylinder inner — surface-centred on r=r_0, Ki_1/d_inner kernel.
-    phi_pts, phi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-    cos_phis = np.cos(phi_pts)
-    sin_phis = np.sin(phi_pts)
+    # Q-L3: route through `surface_centred_angular_quadrature` with
+    # r_surface = r_0. The shell layout for a hollow cylinder has
+    # r_k >= r_0 for every shell, so min(r_obs, r_surface) = r_0 and
+    # no shell qualifies as "interior to both" — the recipe degenerates
+    # to plain GL on [0, π], bit-equivalent to the pre-L3 gl_float.
     inv_pi = 1.0 / np.pi
-    G = np.zeros(N)
-    for i in range(N):
-        r_i = r_nodes[i]
-        total = 0.0
-        for k in range(n_surf_quad):
-            cf = cos_phis[k]
-            d_sq = r_i * r_i + r0 * r0 - 2.0 * r_i * r0 * cf
-            d = float(np.sqrt(max(d_sq, 0.0)))
-            if d <= 0.0:
-                continue
-            if len(radii) == 1:
-                tau = sig_t[0] * d
-            else:
-                # Direction cosine from observer at r_i to a surface point
-                # on r=r_0. Mirror of the outer-surface formula with the
-                # inner radius substituted.
-                cb = (r0 * cf - r_i) / d
-                _ = r0 * sin_phis[k] / d
-                tau = geometry.optical_depth_along_ray(
-                    r_i, cb, d, radii, sig_t,
-                )
-            ki1 = float(ki_n_mp(1, float(tau), dps))
-            total += phi_wts[k] * ki1 / d
-        G[i] = 2.0 * inv_pi * r0 * total
-    return G
+
+    def _per_node_kernel(r_i: float, cf: float) -> float:
+        d_sq = r_i * r_i + r0 * r0 - 2.0 * r_i * r0 * cf
+        d = float(np.sqrt(max(d_sq, 0.0)))
+        if d <= 0.0:
+            return 0.0
+        if len(radii) == 1:
+            tau = float(sig_t[0]) * d
+        else:
+            # Direction cosine from observer at r_i to a surface point
+            # on r=r_0. Mirror of the outer-surface formula with the
+            # inner radius substituted.
+            cb = (r0 * cf - r_i) / d
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, cb, d, radii, sig_t,
+            ))
+        ki1 = float(ki_n_mp(1, tau, dps))
+        return ki1 / d
+
+    def _per_obs(r_i: float) -> float:
+        q = surface_centred_angular_quadrature(
+            r_obs=r_i, r_surface=r0,
+            radii=radii, n_per_panel=n_surf_quad, dps=dps,
+        )
+        cos_phi = np.cos(q.pts)
+        kernel = np.fromiter(
+            (_per_node_kernel(r_i, float(c)) for c in cos_phi),
+            dtype=float, count=len(q),
+        )
+        return 2.0 * inv_pi * r0 * q.integrate_array(kernel)
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 def compute_G_bc_outer_mode(
@@ -4031,36 +4057,40 @@ def compute_G_bc_mode(
         return np.array([_sphere_per_obs(float(r_i)) for r_i in r_nodes])
 
     # Cylinder: surface-centred Ki_1/d kernel, weighted by P̃_n(|μ_s_2D|).
-    phi_pts, phi_wts = gl_float(n_surf_quad, 0.0, np.pi, dps)
-    cos_phis = np.cos(phi_pts)
-    sin_phis = np.sin(phi_pts)
+    # Q-L3: route through `surface_centred_angular_quadrature` for
+    # kink-aware subdivision at the chord-quadratic tangent angles.
     inv_pi = 1.0 / np.pi
 
-    for i in range(N):
-        r_i = r_nodes[i]
-        total = 0.0
-        for k in range(n_surf_quad):
-            cf = cos_phis[k]
-            d_sq = r_i * r_i + R * R - 2.0 * r_i * R * cf
-            d = np.sqrt(max(d_sq, 0.0))
-            if d <= 0.0:
-                continue
-            if len(radii) == 1:
-                tau = sig_t[0] * d
-            else:
-                cb = (R * cf - r_i) / d
-                sb = R * sin_phis[k] / d  # noqa: F841 (kept for symmetry)
-                tau = geometry.optical_depth_along_ray(
-                    r_i, cb, d, radii, sig_t,
-                )
-            mu_s = (R - r_i * cf) / d
-            p_tilde = float(
-                _shifted_legendre_eval(n_mode, np.array([mu_s]))[0]
-            )
-            ki1 = float(ki_n_mp(1, float(tau), dps))
-            total += phi_wts[k] * p_tilde * ki1 / d
-        G[i] = 2.0 * inv_pi * R * total
-    return G
+    def _per_node(r_i: float, cf: float) -> float:
+        d_sq = r_i * r_i + R * R - 2.0 * r_i * R * cf
+        d = float(np.sqrt(max(d_sq, 0.0)))
+        if d <= 0.0:
+            return 0.0
+        if len(radii) == 1:
+            tau = float(sig_t[0]) * d
+        else:
+            cb = (R * cf - r_i) / d
+            tau = float(geometry.optical_depth_along_ray(
+                r_i, cb, d, radii, sig_t,
+            ))
+        mu_s = (R - r_i * cf) / d
+        p_tilde = float(_shifted_legendre_eval(n_mode, np.array([mu_s]))[0])
+        ki1 = float(ki_n_mp(1, tau, dps))
+        return p_tilde * ki1 / d
+
+    def _per_obs(r_i: float) -> float:
+        q = surface_centred_angular_quadrature(
+            r_obs=r_i, r_surface=R,
+            radii=radii, n_per_panel=n_surf_quad, dps=dps,
+        )
+        cos_phi = np.cos(q.pts)
+        kernel = np.fromiter(
+            (_per_node(r_i, float(c)) for c in cos_phi),
+            dtype=float, count=len(q),
+        )
+        return 2.0 * inv_pi * R * q.integrate_array(kernel)
+
+    return np.array([_per_obs(float(r_i)) for r_i in r_nodes])
 
 
 # ═══════════════════════════════════════════════════════════════════════

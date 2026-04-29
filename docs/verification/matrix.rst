@@ -7,7 +7,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **1182**
+Total tests collected: **1238**
 
 V&V level distribution
 ----------------------
@@ -16,12 +16,12 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 578, 48.9%
-   L1, 339, 28.7%
-   L2, 36, 3.0%
+   L0, 585, 47.3%
+   L1, 339, 27.4%
+   L2, 36, 2.9%
    L3, 0, 0.0%
-   foundation, 217, 18.4%
-   unmarked, 12, 1.0%
+   foundation, 267, 21.6%
+   unmarked, 11, 0.9%
 
 Tagging source
 --------------
@@ -32,12 +32,12 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 1091
+   explicit, 1148
    verify, 0
    class-name, 46
    func-name, 0
    case, 33
-   unmarked, 12
+   unmarked, 11
 
 Module × level grid
 -------------------
@@ -76,12 +76,13 @@ Module × level grid
    derivations/test_peierls_rank_n_conservation, 0, 0, 0, 0, 4, 0
    derivations/test_peierls_rank_n_primitives, 19, 0, 0, 0, 0, 0
    derivations/test_peierls_reference, 40, 25, 0, 0, 16, 0
-   derivations/test_peierls_specular_bc, 0, 0, 0, 0, 17, 1
+   derivations/test_peierls_specular_bc, 0, 0, 0, 0, 24, 0
    derivations/test_peierls_sphere_eigenvalue, 0, 4, 0, 0, 0, 0
    derivations/test_peierls_sphere_geometry, 21, 0, 0, 0, 0, 0
    derivations/test_peierls_sphere_prefactor, 6, 0, 0, 0, 0, 0
    derivations/test_peierls_sphere_white_bc, 0, 4, 0, 0, 0, 0
    derivations/test_peierls_unified_verification, 0, 4, 0, 0, 0, 0
+   derivations/test_quadrature, 7, 0, 0, 0, 43, 0
    diffusion/test_continuous_reference, 0, 8, 0, 0, 0, 0
    diffusion/test_diffusion, 0, 2, 0, 0, 0, 0
    diffusion/test_properties, 3, 0, 0, 0, 0, 0
@@ -235,6 +236,7 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
    ``diffusion-transcendental``, 8
    ``diffusion-trigonometric-branch``, 8
    ``dd-solve``, 7
+   ``gauss-legendre-visibility-cone``, 7
    ``bar-psi``, 6
    ``boyd-eq-45``, 6
    ``characteristic-ode``, 6
@@ -297,7 +299,7 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
 Orphan equations
 ----------------
 
-Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **52** of the testable equations found on theory pages are orphan.
+Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **53** of the testable equations found on theory pages are orphan.
 
 - ``c-in-jacobian``
 - ``c-in-remapping``
@@ -327,6 +329,7 @@ Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding
 - ``peierls-moment-vandermonde``
 - ``peierls-operator-factorisation``
 - ``peierls-operator-form``
+- ``peierls-phase5-sanchez-A6``
 - ``peierls-rank-n-P-esc-moment``
 - ``peierls-rank-n-jacobian-derivation``
 - ``peierls-slab-Gbc-mode``
@@ -355,7 +358,7 @@ Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding
 Documented-only equations
 -------------------------
 
-Theory labels marked ``.. vv-status: <label> documented`` in their RST source. These are excluded from the orphan-equation gate because they are either definitional (no single implementing function — e.g. ``boltzmann``), describe a module whose Python port does not yet exist (e.g. the thermal-hydraulics / fuel-behaviour / reactor-kinetics equations), or have a deliberately deferred test paired with a tracking issue. **52** labels carry the directive. See ``docs/testing/architecture.rst``:ref:`vv-status-documented` for the full taxonomy.
+Theory labels marked ``.. vv-status: <label> documented`` in their RST source. These are excluded from the orphan-equation gate because they are either definitional (no single implementing function — e.g. ``boltzmann``), describe a module whose Python port does not yet exist (e.g. the thermal-hydraulics / fuel-behaviour / reactor-kinetics equations), or have a deliberately deferred test paired with a tracking issue. **55** labels carry the directive. See ``docs/testing/architecture.rst``:ref:`vv-status-documented` for the full taxonomy.
 
 - ``bickley-integral``
 - ``boltzmann``
@@ -403,6 +406,9 @@ Theory labels marked ``.. vv-status: <label> documented`` in their RST source. T
 - ``peierls-sphere-r-prime``
 - ``peierls-sphere-rho-max``
 - ``peierls-sphere-row-sum-identity``
+- ``peierls-surface-centred-chord-discriminant``
+- ``peierls-surface-centred-chord-quadratic``
+- ``peierls-surface-centred-tangent-angles``
 - ``peierls-tau-coordinate-transform``
 - ``peierls-unified``
 - ``power-equation``
@@ -453,7 +459,7 @@ Every ``ERR-NNN`` entry in ``tests/l0_error_catalog.md`` and the tests that carr
 Unmarked tests
 --------------
 
-**12 tests** have no V&V level marker.
+**11 tests** have no V&V level marker.
 This is a gap — every test in the tree should carry either
 a physics-ladder marker (``l0``..``l3``) or the orthogonal
 ``foundation`` marker (``@pytest.mark.foundation``) for
@@ -466,5 +472,4 @@ equations. See ``docs/testing/architecture.rst``
    :widths: 60, 10
 
    ``tests/sn/test_boundary_conditions.py``, 11
-   ``tests/derivations/test_peierls_specular_bc.py``, 1
 

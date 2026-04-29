@@ -26,7 +26,19 @@ patterns:
   (``compute_P_esc_*_mode``, ``compute_G_bc_*_mode``) can inherit
   it for free instead of each open-coding a smaller version.
 
-Both recipes return a :class:`~._quadrature.Quadrature1D` so
+- :func:`surface_centred_angular_quadrature` — surface-centred
+  :math:`\phi`-sweep with the chord
+  :math:`d^{2}(\phi) = r_{\rm obs}^{2} + r_{\rm surf}^{2}
+  - 2\,r_{\rm obs}\,r_{\rm surf}\cos\phi`. Subdivides at the tangent
+  angles where the chord-quadratic discriminant
+  :math:`(r_{\rm obs}^{2} - r_{k}^{2})(r_{\rm surf}^{2} - r_{k}^{2})`
+  is positive — i.e., for shells with
+  :math:`r_{k} < \min(r_{\rm obs}, r_{\rm surf})`. Used by the legacy
+  cylinder :math:`G_{\rm bc}^{\rm cyl}` :math:`\mathrm{Ki}_{1}/d`
+  branches retained for backward compatibility with the rank-1 Mark
+  closure tests.
+
+All three recipes return a :class:`~._quadrature.Quadrature1D` so
 consumers integrate via ``q.integrate(f)`` (or
 ``q.integrate_array(values)``) without ever indexing the node
 array.
@@ -267,6 +279,139 @@ def observer_angular_quadrature(
     tangents = np.sort(candidates[inside])
 
     breakpoints = np.concatenate([[omega_low], tangents, [omega_high]])
+    return composite_gauss_legendre(
+        breakpoints.tolist(), n_per_panel, dps=dps,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Recipe 3: surface-centred angular quadrature
+# ═══════════════════════════════════════════════════════════════════════
+
+def surface_centred_angular_quadrature(
+    r_obs: float,
+    r_surface: float,
+    radii: np.ndarray,
+    n_per_panel: int,
+    *,
+    phi_low: float = 0.0,
+    phi_high: float = np.pi,
+    dps: int = 53,
+) -> Quadrature1D:
+    r"""Surface-centred :math:`\phi`-quadrature on
+    :math:`[\phi_{\min}, \phi_{\max}]` for the legacy cylinder
+    :math:`G_{\mathrm{bc}}` form, with kink-aware subdivision at the
+    tangent angles where the chord from observer to surface point becomes
+    tangent to each interior shell.
+
+    Geometry (2-D polar with origin at the cell axis): observer at
+    :math:`P = (r_{\rm obs}, 0)`, surface point at
+    :math:`Q(\phi) = (r_{\rm surf}\cos\phi,\ r_{\rm surf}\sin\phi)`.
+    The chord length is
+    :math:`d(\phi) = \sqrt{r_{\rm obs}^{2} + r_{\rm surf}^{2}
+    - 2\,r_{\rm obs}\,r_{\rm surf}\cos\phi}` and the impact parameter
+    :math:`b(\phi) = r_{\rm obs}\,r_{\rm surf}\,|\sin\phi|/d(\phi)`.
+    The chord crosses shell :math:`r_{k}` iff :math:`b(\phi) < r_{k}`,
+    a quadratic condition in :math:`c = \cos\phi` whose discriminant
+    factors to
+    :math:`\Delta = 4\,r_{\rm obs}^{2}\,r_{\rm surf}^{2}\,
+    (r_{k}^{2} - r_{\rm obs}^{2})(r_{k}^{2} - r_{\rm surf}^{2})`.
+    The discriminant is **positive** only when
+    :math:`r_{k} < \min(r_{\rm obs},\,r_{\rm surf})` (both factors
+    negative, product positive); the chord becomes tangent to such a
+    shell at the two angles
+    :math:`\phi_{\pm} = \arccos\!\left(c_{\pm}\right)`,
+    :math:`c_{\pm} = (r_{k}^{2} \pm \sqrt{(r_{\rm obs}^{2} - r_{k}^{2})
+    (r_{\rm surf}^{2} - r_{k}^{2})})/(r_{\rm obs}\,r_{\rm surf})`.
+    Shells with :math:`r_{k}` between :math:`\min` and :math:`\max` of
+    :math:`(r_{\rm obs}, r_{\rm surf})` are crossed unconditionally
+    (no tangent); shells with :math:`r_{k} > \max` are not reached.
+
+    Compare with :func:`observer_angular_quadrature`, which has the
+    closed-form tangent locations :math:`\arcsin(r_{k}/r_{\rm obs})`
+    — the special case where one chord endpoint sits at the origin of
+    the angular coordinate. The surface-centred form has the observer
+    at finite radius and the surface at finite radius, so the tangent
+    angles depend on **both** :math:`r_{\rm obs}` and :math:`r_{\rm surf}`
+    via the chord-quadratic, not just on :math:`r_{k}/r_{\rm obs}`.
+
+    Parameters
+    ----------
+    r_obs : float
+        Observer radial position. Must be positive.
+    r_surface : float
+        Radius of the cylindrical surface the chord terminates on.
+        Must be positive. May be smaller than ``r_obs`` (inner-surface
+        case) or larger (outer-surface case); the math is symmetric in
+        :math:`(r_{\rm obs}, r_{\rm surf})`.
+    radii : np.ndarray, shape ``(N,)``
+        Outer shell radii. Tangent angles are computed only for those
+        shells with :math:`r_{k} < \min(r_{\rm obs}, r_{\rm surf})`
+        — the only regime where the chord-quadratic discriminant is
+        positive.
+    n_per_panel : int
+        Plain Gauss-Legendre nodes per sub-panel.
+    phi_low, phi_high : float, keyword-only
+        Integration interval. Defaults to :math:`[0, \pi]` (the legacy
+        cylinder :math:`G_{\rm bc}` integration domain — the other
+        half-plane is folded by symmetry).
+    dps : int, keyword-only
+        Decimal precision for the underlying Gauss-Legendre nodes.
+        Default ``53`` (float64); pass higher to use mpmath.
+
+    Returns
+    -------
+    Quadrature1D
+        Composite plain-GL rule on :math:`[\phi_{\min}, \phi_{\max}]`
+        with ``panel_bounds`` recording the tangent-angle subdivision.
+        For an observer in the innermost shell of an outer-surface
+        configuration (no shells with :math:`r_{k} < r_{\rm obs}`) or
+        for any inner-surface configuration where every shell satisfies
+        :math:`r_{k} \ge r_{\rm surf}` (the typical hollow-cell
+        layout), the rule degenerates to plain GL on the full interval
+        — bit-equivalent to a single
+        ``gauss_legendre(phi_low, phi_high, n_per_panel)`` call.
+
+    Notes
+    -----
+    Tangent angles strictly outside ``(phi_low, phi_high)`` are silently
+    dropped. The discriminant clamp (``np.maximum(disc, 0.0)``) and the
+    ``np.clip(c_pm, -1, 1)`` guard handle the degenerate
+    :math:`r_{k} = \min(r_{\rm obs}, r_{\rm surf})` case (single tangent
+    where :math:`c_{+} = c_{-}`) and floating-point rounding at the
+    interval boundaries.
+    """
+    if r_obs <= 0.0:
+        raise ValueError(f"r_obs must be positive, got {r_obs}")
+    if r_surface <= 0.0:
+        raise ValueError(f"r_surface must be positive, got {r_surface}")
+    if phi_high <= phi_low:
+        raise ValueError(
+            f"Need phi_high > phi_low, got "
+            f"phi_low={phi_low}, phi_high={phi_high}"
+        )
+    if n_per_panel < 1:
+        raise ValueError(f"n_per_panel must be >= 1, got {n_per_panel}")
+
+    radii = np.asarray(radii, dtype=float)
+    cutoff = min(r_obs, r_surface)
+    interior = radii[radii < cutoff]
+
+    if interior.size == 0:
+        candidates = np.array([], dtype=float)
+    else:
+        rk_sq = interior * interior
+        disc = (r_obs * r_obs - rk_sq) * (r_surface * r_surface - rk_sq)
+        sqrt_disc = np.sqrt(np.maximum(disc, 0.0))
+        denom = r_obs * r_surface
+        c_plus = np.clip((rk_sq + sqrt_disc) / denom, -1.0, 1.0)
+        c_minus = np.clip((rk_sq - sqrt_disc) / denom, -1.0, 1.0)
+        candidates = np.concatenate([np.arccos(c_plus), np.arccos(c_minus)])
+
+    inside = (candidates > phi_low) & (candidates < phi_high)
+    tangents = np.unique(np.sort(candidates[inside]))
+
+    breakpoints = np.concatenate([[phi_low], tangents, [phi_high]])
     return composite_gauss_legendre(
         breakpoints.tolist(), n_per_panel, dps=dps,
     )

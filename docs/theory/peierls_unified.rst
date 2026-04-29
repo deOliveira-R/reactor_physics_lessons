@@ -8480,9 +8480,10 @@ transform is a *constructor* of that contract — :func:`gauss_legendre`,
 :func:`gauss_laguerre` — and consumers integrate via
 ``q.integrate(f)`` (callable broadcast at the nodes) or
 ``q.integrate_array(values)`` (precomputed values), composing
-panels via the ``q1 | q2`` operator. Two geometry-aware recipes
-(:func:`chord_quadrature` and :func:`observer_angular_quadrature`
-in :mod:`._quadrature_recipes`) compose these primitives into the
+panels via the ``q1 | q2`` operator. Three geometry-aware recipes
+(:func:`chord_quadrature`, :func:`observer_angular_quadrature`,
+:func:`surface_centred_angular_quadrature` in
+:mod:`._quadrature_recipes`) compose these primitives into the
 recurring ORPHEUS chord-and-angular patterns. The contract details
 and design rationale are documented in the
 :class:`~orpheus.derivations._quadrature.Quadrature1D` docstring.
@@ -9564,6 +9565,226 @@ integrand makes the visibility-cone substitution insufficient, and
 :func:`~orpheus.derivations._kernels.chord_half_lengths` for the chord
 primitive whose annular partition the substitution is built to
 complement.
+
+
+22.8 Surface-centred angular quadrature for cylinder :math:`G_{\rm bc}`
+-----------------------------------------------------------------------
+
+.. _section-22-8-surface-centred-angular:
+
+Sections §22.7 and the :func:`observer_angular_quadrature` recipe
+catalogued the *observer-centred* :math:`\omega`-sweep for chord
+integrals from an interior observer outward. A fourth recurring
+pattern appears in the legacy cylinder boundary-closure
+:math:`G_{\rm bc}^{\rm cyl}` integrand: an integral over the
+**surface point's azimuthal angle** :math:`\phi` rather than the
+observer's ray direction. The two are related by a change of
+variables but the kink structure is **not** the same — the
+observer-centred form has tangent angles
+:math:`\arcsin(r_{k}/r_{\rm obs})`, while the surface-centred form
+has tangent angles given by the **chord-quadratic in**
+:math:`\cos\phi`. This subsection derives the chord-quadratic
+explicitly, identifies the regimes where tangent angles exist, and
+documents the
+:func:`~orpheus.derivations._quadrature_recipes.surface_centred_angular_quadrature`
+recipe that subdivides at those tangents.
+
+Geometry
+~~~~~~~~
+
+Let the cylinder be in 2-D polar coordinates with origin at the cell
+axis. Place the observer at :math:`P = (r_{\rm obs}, 0)` and the
+surface point at :math:`Q(\phi) = (r_{\rm surf}\cos\phi,\,
+r_{\rm surf}\sin\phi)` for :math:`\phi \in [0, \pi]` (the other
+half-plane folds by symmetry). The chord length is
+
+.. math::
+
+   d(\phi) \;=\; \sqrt{r_{\rm obs}^{2} + r_{\rm surf}^{2}
+       - 2\,r_{\rm obs}\,r_{\rm surf}\cos\phi},
+
+and the impact parameter (perpendicular distance from origin to
+chord-line) is
+
+.. math::
+
+   b(\phi) \;=\; \frac{r_{\rm obs}\,r_{\rm surf}\,|\sin\phi|}
+                       {d(\phi)}.
+
+The :math:`r_{\rm obs} \cdot r_{\rm surf}\sin\phi` numerator is the
+2-D cross product :math:`P \times (Q - P)`, and dividing by
+:math:`d` gives the perpendicular distance from origin to the line
+through :math:`P` and :math:`Q`.
+
+Tangency condition and the chord-quadratic
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The chord crosses cylindrical shell :math:`r_{k}` iff
+:math:`b(\phi) < r_{k}`. Substituting the closed forms for
+:math:`b` and :math:`d`,
+
+.. math::
+
+   r_{\rm obs}^{2}\,r_{\rm surf}^{2}\,\sin^{2}\phi
+       \;<\; r_{k}^{2}\,d^{2}(\phi)
+       \;=\; r_{k}^{2}\,(r_{\rm obs}^{2} + r_{\rm surf}^{2}
+                          - 2\,r_{\rm obs}\,r_{\rm surf}\cos\phi),
+
+and rearranging into a quadratic in :math:`c = \cos\phi`:
+
+.. math::
+   :label: peierls-surface-centred-chord-quadratic
+
+   r_{\rm obs}^{2}\,r_{\rm surf}^{2}\,c^{2}
+   \;-\; 2\,r_{k}^{2}\,r_{\rm obs}\,r_{\rm surf}\,c
+   \;+\; \bigl(r_{k}^{2}\,(r_{\rm obs}^{2} + r_{\rm surf}^{2})
+                 - r_{\rm obs}^{2}\,r_{\rm surf}^{2}\bigr)
+   \;>\; 0.
+
+.. vv-status: peierls-surface-centred-chord-quadratic documented
+
+The discriminant of :eq:`peierls-surface-centred-chord-quadratic`,
+after a non-trivial cancellation, factors as
+
+.. math::
+   :label: peierls-surface-centred-chord-discriminant
+
+   \Delta \;=\;
+       4\,r_{\rm obs}^{2}\,r_{\rm surf}^{2}\,
+       \bigl(r_{k}^{2} - r_{\rm obs}^{2}\bigr)\,
+       \bigl(r_{k}^{2} - r_{\rm surf}^{2}\bigr).
+
+.. vv-status: peierls-surface-centred-chord-discriminant documented
+
+The sign of :math:`\Delta` partitions the shell-:math:`r_{k}` regimes
+into three cases.
+
+.. list-table:: Discriminant sign and the chord–shell crossing regime
+   :header-rows: 1
+   :widths: 35 15 50
+
+   * - Shell radius regime
+     - :math:`\Delta`
+     - Geometric meaning
+   * - :math:`r_{k} < \min(r_{\rm obs},\,r_{\rm surf})`
+     - :math:`> 0`
+     - Two real roots :math:`c_{\pm}` in :math:`[-1, 1]`. The chord
+       is **tangent** to shell :math:`r_{k}` at exactly two angles
+       :math:`\phi_{\pm} = \arccos(c_{\pm})`, with the shell
+       *not* crossed for :math:`\phi \in (\phi_{-}^{\rm low},
+       \phi_{+}^{\rm high})` and crossed otherwise. **These are the
+       integrand kinks.**
+   * - :math:`\min \le r_{k} \le \max\;` of
+       :math:`(r_{\rm obs}, r_{\rm surf})`
+     - :math:`\le 0`
+     - No real roots; the chord-quadratic is positive for all
+       :math:`c`, so the chord crosses shell :math:`r_{k}` for
+       *every* :math:`\phi`. No tangent angle. (Geometrically: the
+       chord goes from inside-:math:`r_{k}` to outside-:math:`r_{k}`
+       — or vice versa — by continuity.)
+   * - :math:`r_{k} > \max(r_{\rm obs},\,r_{\rm surf})`
+     - :math:`> 0`
+     - Two real roots, but with :math:`c_{\pm} > 1` (or
+       :math:`< -1`); after clipping to :math:`[-1, 1]` the
+       "tangent" angles collapse to the interval endpoints and are
+       filtered out. Geometrically: the chord never reaches
+       :math:`r_{k}`.
+
+For shells in the first regime the explicit tangent angles are
+
+.. math::
+   :label: peierls-surface-centred-tangent-angles
+
+   c_{\pm}(r_{k}) \;=\;
+     \frac{r_{k}^{2} \;\pm\; \sqrt{(r_{\rm obs}^{2} - r_{k}^{2})
+                                    (r_{\rm surf}^{2} - r_{k}^{2})}}
+          {r_{\rm obs}\,r_{\rm surf}},
+   \qquad
+   \phi_{\pm}(r_{k}) \;=\; \arccos\bigl(c_{\pm}(r_{k})\bigr).
+
+.. vv-status: peierls-surface-centred-tangent-angles documented
+
+Recipe and consumer pattern
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The
+:func:`~orpheus.derivations._quadrature_recipes.surface_centred_angular_quadrature`
+recipe enumerates the candidate tangent angles
+:eq:`peierls-surface-centred-tangent-angles` for every interior
+shell, filters those falling strictly inside
+:math:`(\phi_{\min}, \phi_{\max})`, and returns a
+:class:`~orpheus.derivations._quadrature.Quadrature1D` composite
+plain-GL rule with one panel per smooth sub-interval. Per-panel
+plain Gauss-Legendre is spectral on each sub-interval modulo the
+:math:`\sqrt{|\phi - \phi_{\pm}|}` derivative singularity at the
+panel endpoints (which is the kink to begin with — the subdivision
+isolates each kink as a panel boundary, recovering spectral
+convergence on the interior of every sub-panel).
+
+The four legacy cylinder :math:`G_{\rm bc}` branches in
+:mod:`~orpheus.derivations.peierls_geometry`
+(:func:`compute_G_bc`, :func:`compute_G_bc_outer`,
+:func:`compute_G_bc_inner`, :func:`compute_G_bc_mode`) consume the
+recipe through the standard ``_per_obs(r_i)`` template:
+
+.. code-block:: python
+
+   q = surface_centred_angular_quadrature(
+       r_obs=r_i, r_surface=R,
+       radii=radii, n_per_panel=n_surf_quad, dps=dps,
+   )
+   cos_phi = np.cos(q.pts)
+   kernel = np.fromiter(
+       (per_node_kernel(r_i, float(c)) for c in cos_phi),
+       dtype=float, count=len(q),
+   )
+   return prefactor * q.integrate_array(kernel)
+
+where ``per_node_kernel`` evaluates the legacy
+:math:`\mathrm{Ki}_{1}(\tau)/d` integrand (and the rank-:math:`n`
+:math:`\tilde P_{n}(|\mu_{s}|)` weight in the mode primitive). The
+homogeneous (single-region) case has no shells with
+:math:`r_{k} < r_{\rm obs}`, so the recipe degenerates to plain
+Gauss-Legendre on :math:`[0, \pi]` — bit-equivalent to the legacy
+:func:`gl_float` call. The inner-surface case
+(:func:`compute_G_bc_inner`, :math:`r_{\rm surf} = r_{0} <
+r_{\rm obs}`) typically has every shell satisfying
+:math:`r_{k} \ge r_{\rm surf}`, so the same plain-GL degeneracy
+holds — the recipe is a no-op there but routes the call uniformly
+through the :class:`Quadrature1D` contract for consistency with the
+other three branches.
+
+Why a separate recipe instead of unifying with
+:func:`observer_angular_quadrature`? The observer-centred form is the
+**special case** of the chord-quadratic where one chord endpoint
+sits at the origin of the angular coordinate; the remaining endpoint
+introduces the :math:`\arcsin(r_{k}/r_{\rm obs})` closed form. The
+surface-centred form has both endpoints at finite radius and the
+tangent angles depend on **both** :math:`r_{\rm obs}` and
+:math:`r_{\rm surf}` via the chord-quadratic. Forcing the two
+patterns into a single recipe would obscure the structural difference
+and require either branching on a special-case flag or carrying a
+zero-radius sentinel — neither cleaner than the two clearly named
+recipes.
+
+Provenance and non-goals
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The corrected, observer-centred 3-D cylinder
+:math:`G_{\rm bc}^{\rm cyl}` shipped on commit ``0f29294``
+(:func:`compute_G_bc_cylinder_3d`, Issue #112 Phase C) and on
+``compute_G_bc_cylinder_3d_mode`` for the rank-:math:`N` follow-up.
+Those production paths are observer-centred and therefore route
+through :func:`observer_angular_quadrature` (Q3 migration). The
+surface-centred :math:`\mathrm{Ki}_{1}/d` form is preserved for
+backward compatibility with the rank-1 Mark closure tests
+(``test_specular_*_cylinder_*`` in
+``tests/derivations/test_peierls_specular_bc.py``); migrating those
+four sites to the new recipe was the L3 work that landed this
+section. The recipe **does not** unify the surface- and
+observer-centred forms (they have different kink math) and **does
+not** retire the legacy paths (they remain the rank-1 reference for
+the Mark closure tests).
 
 
 Section 23 — Monte Carlo connections
