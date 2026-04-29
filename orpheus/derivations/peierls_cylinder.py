@@ -3,13 +3,14 @@ r"""Peierls integral equation reference for cylindrical CP verification.
 Cylindrical specialisation of the unified polar-form Peierls Nyström
 infrastructure in :mod:`orpheus.derivations.peierls_geometry`. This
 module is a THIN FACADE: it owns the cylinder-specific API names
-(kept stable for backward compatibility with the Phase-4.2 tests),
-the chord-form :math:`\tau^{\pm}` walker from the C2 scaffold, the
-``_build_peierls_cylinder_case`` case builder, and the
-``continuous_cases`` registration. Everything else — volume-kernel
-assembly, Lagrange basis, angular/radial composite quadrature,
-white-BC rank-1 closure, eigenvalue power iteration — dispatches
-through the unified
+(``solve_peierls_cylinder_{1g,mg}`` permanent wrappers per
+:ref:`theory-peierls-api-posture`), the
+:class:`PeierlsCylinderSolution` dataclass, and the
+``_build_peierls_cylinder_case`` registry constructors. Everything
+else — volume-kernel assembly, Lagrange basis, angular/radial
+composite quadrature, white-BC rank-1 closure, eigenvalue power
+iteration — lives in
+:mod:`~orpheus.derivations.peierls_geometry` and dispatches through
 :class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
 with ``kind = "cylinder-1d"``.
 
@@ -44,7 +45,6 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import peierls_geometry as _pg
-from ._kernels import ki_n_mp  # noqa: F401 re-exported
 from ._reference import (
     ContinuousReferenceSolution,
     ProblemSpec,
@@ -58,152 +58,11 @@ from ._xs_library import LAYOUTS, get_mixture, get_xs
 # ═══════════════════════════════════════════════════════════════════════
 
 # Production cylinder path: ``CYLINDER_1D`` with the natural
-# :math:`\mathrm{Ki}_1` kernel evaluated via :func:`ki_n_mp` /
-# :func:`ki_n_float`. The cylinder-polar variant (explicit out-of-plane
-# :math:`\varphi`-quadrature, formerly the production path) was
-# archived 2026-04-19 as mathematically equivalent — see
+# :math:`\mathrm{Ki}_1` kernel. The cylinder-polar variant (explicit
+# out-of-plane :math:`\varphi`-quadrature, formerly the production
+# path) was archived 2026-04-19 as mathematically equivalent — see
 # :file:`derivations/archive/peierls_cylinder_polar_assembly.py`.
 GEOMETRY = _pg.CYLINDER_1D
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Backward-compatible public API (re-exports from peierls_geometry)
-# ═══════════════════════════════════════════════════════════════════════
-
-composite_gl_r = _pg.composite_gl_r
-
-
-_lagrange_basis_on_panels = _pg.lagrange_basis_on_panels
-
-
-def _rho_max(r_obs: float, cos_beta: float, R: float) -> float:
-    """Ray-exit distance along angle :math:`\\beta`."""
-    return GEOMETRY.rho_max(r_obs, cos_beta, R)
-
-
-def _optical_depth_along_ray(
-    r_obs: float,
-    cos_beta: float,
-    sin_beta: float,  # noqa: ARG001  (kept in signature for backward compat)
-    rho: float,
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-) -> float:
-    """Optical depth along the ray from :math:`r_{\\rm obs}` in direction
-    :math:`\\beta` for distance :math:`\\rho`.
-
-    The ``sin_beta`` argument is unused (the walker only needs
-    :math:`\\cos\\beta`) but is kept in the signature so the Phase-4.2
-    C4 tests calling with the three-argument form continue to work.
-    """
-    return GEOMETRY.optical_depth_along_ray(r_obs, cos_beta, rho, radii, sig_t)
-
-
-def _which_annulus(r: float, radii: np.ndarray) -> int:
-    return GEOMETRY.which_annulus(r, radii)
-
-
-def build_volume_kernel(
-    r_nodes: np.ndarray,
-    panel_bounds: list[tuple[float, float, int, int]],
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    n_beta: int,
-    n_rho: int,
-    dps: int = 30,
-) -> np.ndarray:
-    """Cylindrical volume Nyström kernel. Backward-compatible signature
-    (``n_beta`` names the angular-integration order)."""
-    return _pg.build_volume_kernel(
-        GEOMETRY, r_nodes, panel_bounds, radii, sig_t,
-        n_angular=n_beta, n_rho=n_rho, dps=dps,
-    )
-
-
-def compute_P_esc(
-    r_nodes: np.ndarray,
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    n_beta: int = 32,
-    dps: int = 25,
-) -> np.ndarray:
-    """Cylindrical uncollided escape probability."""
-    return _pg.compute_P_esc(
-        GEOMETRY, r_nodes, radii, sig_t,
-        n_angular=n_beta, dps=dps,
-    )
-
-
-def compute_G_bc(
-    r_nodes: np.ndarray,
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    n_phi: int = 32,
-    dps: int = 25,
-) -> np.ndarray:
-    """Cylindrical surface-to-volume Green's function."""
-    return _pg.compute_G_bc(
-        GEOMETRY, r_nodes, radii, sig_t,
-        n_surf_quad=n_phi, dps=dps,
-    )
-
-
-def build_white_bc_correction(
-    r_nodes: np.ndarray,
-    r_wts: np.ndarray,
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    *,
-    n_beta: int = 32,
-    n_phi: int = 32,
-    dps: int = 25,
-) -> np.ndarray:
-    r"""Rank-1 white-BC correction for the cylindrical Peierls kernel.
-
-    Returns :math:`K_{\rm bc}[i, j] = u[i]\,v[j]` with
-    :math:`u[i] = \Sigma_t(r_i)\,G_{\rm bc}(r_i) / R` and
-    :math:`v[j] = r_j\,w_j\,P_{\rm esc}(r_j)`.
-
-    .. warning::
-
-       **Approximation level.** The rank-1 closure is exact for the
-       scalar partial-current balance (:math:`J^-=J^+` is a single
-       scalar by radial symmetry) but assumes isotropic-Mark angular
-       distribution for the re-entering current. At the pointwise-
-       Nyström level this shows up as a spread in the row-sum
-       identity :math:`(K_{\rm vol}+K_{\rm bc})\cdot\mathbf 1 \approx
-       \Sigma_t` that grows with inverse cell size:
-
-       =====  ======================
-       R/MFP  max \|K_tot·1 − Σ_t\|
-       =====  ======================
-       0.5    0.32
-       1.0    0.16
-       2.0    0.20
-       5.0    0.12
-       10     < 0.04
-       =====  ======================
-
-       White-BC :math:`k_{\rm eff}` agrees with :math:`k_\infty`
-       only asymptotically:
-
-       =====  ==========  ==========
-       R/MFP  k(white)    err vs k∞
-       =====  ==========  ==========
-       1.0    1.19        21 %
-       2.0    1.40        7 %
-       5.0    1.48        2 %
-       10     1.49        1 %
-       =====  ==========  ==========
-
-       Parallel to sphere issue #100. Rigorous fix requires a
-       higher-rank angular decomposition of the surface currents —
-       deferred follow-up.
-    """
-    return _pg.build_white_bc_correction(
-        GEOMETRY, r_nodes, r_wts, radii, sig_t,
-        n_angular=n_beta, n_surf_quad=n_phi, dps=dps,
-    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -697,20 +556,3 @@ def _build_peierls_cylinder_hollow_f4_case(
 _F4_CYL_TOL = {0.1: "1.4 %", 0.2: "5.4 %", 0.3: "13 %"}
 
 
-def continuous_cases() -> list[ContinuousReferenceSolution]:
-    r"""Deprecated: per-geometry case registration is centralized.
-
-    Returns an empty list. Peierls continuous references are
-    registered by
-    :func:`orpheus.derivations.peierls_cases.continuous_cases`
-    (the topology-organized single source of truth — see
-    :file:`.claude/plans/topology-based-consolidation.md` Stage T2).
-
-    The case-builder :func:`_build_peierls_cylinder_hollow_f4_case`
-    remains as the underlying constructor; ``peierls_cases`` imports
-    it. This function is preserved for back-compat with callers that
-    enumerate ``continuous_cases()`` per-module; future code should
-    call ``peierls_cases.continuous_cases()`` or
-    ``reference_values.continuous_all()`` directly.
-    """
-    return []

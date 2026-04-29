@@ -703,16 +703,3 @@ def _build_peierls_slab_case(
     )
 
 
-def continuous_cases() -> list[ContinuousReferenceSolution]:
-    """Deprecated: per-geometry case registration is centralized.
-
-    Returns an empty list. Peierls continuous references are
-    registered by
-    :func:`orpheus.derivations.peierls_cases.continuous_cases`
-    (the topology-organized single source of truth — see
-    :file:`.claude/plans/topology-based-consolidation.md` Stage T2).
-
-    The case-builder :func:`_build_peierls_slab_case` remains as
-    the underlying constructor; ``peierls_cases`` imports it.
-    """
-    return []

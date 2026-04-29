@@ -7,7 +7,7 @@ on the unified :class:`~peierls_geometry.CurvilinearGeometry`
 (``kind="sphere-1d"``).
 
 Scope limits imposed by the rank-1 white-BC closure
-(:class:`~peierls_sphere.build_white_bc_correction` and Issue #103):
+(:func:`~peierls_geometry.build_white_bc_correction` and Issue #103):
 
 - At :math:`R \\lesssim 2` MFP the rank-1 Peierls white BC over/
   undershoots CP's flat-source white BC, making the per-point flux
@@ -26,11 +26,14 @@ import pytest
 
 from orpheus.cp.solver import CPParams, solve_cp
 from orpheus.derivations._xs_library import get_mixture
-from orpheus.derivations.peierls_sphere import (
-    PeierlsSphereSolution,
+from orpheus.derivations.peierls_geometry import (
     build_volume_kernel,
     build_white_bc_correction,
     composite_gl_r,
+)
+from orpheus.derivations.peierls_sphere import (
+    GEOMETRY,
+    PeierlsSphereSolution,
 )
 from orpheus.geometry import CoordSystem, Mesh1D
 
@@ -56,12 +59,12 @@ def _build_peierls_sphere_reference(
         radii, n_panels, p_order, dps=dps,
     )
     K_vol = build_volume_kernel(
-        r_nodes, panels, radii, sig_t_arr,
-        n_theta=n_theta, n_rho=n_rho, dps=dps,
+        GEOMETRY, r_nodes, panels, radii, sig_t_arr,
+        n_angular=n_theta, n_rho=n_rho, dps=dps,
     )
     K_bc = build_white_bc_correction(
-        r_nodes, r_wts, radii, sig_t_arr,
-        n_theta=n_theta, n_phi=n_phi, dps=dps,
+        GEOMETRY, r_nodes, r_wts, radii, sig_t_arr,
+        n_angular=n_theta, n_surf_quad=n_phi, dps=dps,
     )
     K = K_vol + K_bc
 

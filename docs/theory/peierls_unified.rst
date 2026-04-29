@@ -3126,7 +3126,7 @@ A single scaffolding function
 
 could then drive all three Peierls references, with geometry-specific
 logic confined to three concrete ``PeierlsGeometry`` implementations.
-The :func:`~orpheus.derivations.peierls_cylinder.build_volume_kernel`
+The :func:`~orpheus.derivations.peierls_geometry.build_volume_kernel`
 already reads as such a scaffold minus one indirection — the
 kernel :math:`\mathrm{Ki}_1` and the :math:`\rho_{\max}` formula
 are hard-coded where they could accept injected callables. This
@@ -3626,7 +3626,8 @@ gives the **rank-1** correction
      \;=\; u_i\,v_j.
 
 This is the form implemented in
-:func:`~orpheus.derivations.peierls_cylinder.build_white_bc_correction`:
+:func:`~orpheus.derivations.peierls_geometry.build_white_bc_correction`
+(the cylinder branch dispatches on ``GEOMETRY = CYLINDER_1D``):
 :math:`u_i = \Sigma_t(r_i)\,G_{\rm bc}(r_i)/R`,
 :math:`v_j = r_j\,w_j\,P_{\rm esc}(r_j)`, because :math:`A_d = 2\pi R`
 and :math:`A_j \propto r_j`. A future sphere version would use
@@ -3667,8 +3668,9 @@ outgoing angular distribution is anisotropic; imposing an
 at the per-node level.
 
 The deviation is a function of the cell's optical size. For a
-homogeneous bare cylinder tested in
-:func:`~orpheus.derivations.peierls_cylinder.build_white_bc_correction`:
+homogeneous bare cylinder tested via
+:func:`~orpheus.derivations.peierls_geometry.build_white_bc_correction`
+on ``CYLINDER_1D``:
 
 .. list-table:: Rank-1 white-BC error (cylinder, 1-region, homogeneous)
    :header-rows: 1
@@ -7266,19 +7268,22 @@ standard tests.
    reference (:math:`E_1`).
 
    :mod:`orpheus.derivations.peierls_cylinder` — Phase-4.2 cylinder
-   Peierls reference (:math:`\mathrm{Ki}_1`), including the
-   vacuum-BC driver
-   (:func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g`
-   with ``boundary="vacuum"``) and the rank-1 white-BC correction
-   (:func:`~orpheus.derivations.peierls_cylinder.build_white_bc_correction`).
+   Peierls reference (:math:`\mathrm{Ki}_1`), a thin façade over the
+   unified :class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
+   (``kind = "cylinder-1d"``). Eigenvalue driver
+   :func:`~orpheus.derivations.peierls_cylinder.solve_peierls_cylinder_1g`;
+   the rank-1 white-BC correction lives at
+   :func:`~orpheus.derivations.peierls_geometry.build_white_bc_correction`
+   on ``CYLINDER_1D``.
 
    :mod:`orpheus.derivations.peierls_sphere` — Phase-4.3 sphere
-   Peierls reference (:math:`e^{-\tau}`), a thin facade over the
+   Peierls reference (:math:`e^{-\tau}`), a thin façade over the
    unified :class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
    (``kind = "sphere-1d"``). Eigenvalue driver
    :func:`~orpheus.derivations.peierls_sphere.solve_peierls_sphere_1g`;
-   white-BC correction
-   :func:`~orpheus.derivations.peierls_sphere.build_white_bc_correction`.
+   white-BC correction at
+   :func:`~orpheus.derivations.peierls_geometry.build_white_bc_correction`
+   on ``SPHERE_1D``.
 
    :mod:`orpheus.derivations.peierls_geometry` — unified
    polar-form Nyström infrastructure; ``CurvilinearGeometry``

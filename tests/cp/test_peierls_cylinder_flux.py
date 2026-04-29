@@ -4,7 +4,7 @@ C8 of the Phase-4.2 campaign. Tests CP cylindrical flux shapes against
 the polar-form Peierls reference built by C7.
 
 Scope limits imposed by the rank-1 white-BC closure (documented in
-``orpheus.derivations.peierls_cylinder.build_white_bc_correction``):
+``orpheus.derivations.peierls_geometry.build_white_bc_correction``):
 
 - At :math:`R \\lesssim 2` MFP the rank-1 Peierls white BC over/
   undershoots CP's flat-source white BC by :math:`\\mathcal O(10\\%)`
@@ -25,7 +25,10 @@ import pytest
 from orpheus.cp.solver import CPParams, solve_cp
 from orpheus.derivations._xs_library import get_mixture
 from orpheus.derivations.peierls_cylinder import (
+    GEOMETRY,
     PeierlsCylinderSolution,
+)
+from orpheus.derivations.peierls_geometry import (
     build_volume_kernel,
     build_white_bc_correction,
     composite_gl_r,
@@ -54,12 +57,12 @@ def _build_peierls_cylinder_reference(
         radii, n_panels, p_order, dps=dps,
     )
     K_vol = build_volume_kernel(
-        r_nodes, panels, radii, sig_t_arr,
-        n_beta=n_beta, n_rho=n_rho, dps=dps,
+        GEOMETRY, r_nodes, panels, radii, sig_t_arr,
+        n_angular=n_beta, n_rho=n_rho, dps=dps,
     )
     K_bc = build_white_bc_correction(
-        r_nodes, r_wts, radii, sig_t_arr,
-        n_beta=n_beta, n_phi=n_phi, dps=dps,
+        GEOMETRY, r_nodes, r_wts, radii, sig_t_arr,
+        n_angular=n_beta, n_surf_quad=n_phi, dps=dps,
     )
     K = K_vol + K_bc
 

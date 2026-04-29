@@ -22,11 +22,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from orpheus.derivations.peierls_sphere import (
+from orpheus.derivations.peierls_geometry import (
     build_volume_kernel,
     build_white_bc_correction,
     composite_gl_r,
 )
+from orpheus.derivations.peierls_sphere import GEOMETRY
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -49,8 +50,8 @@ class TestSphereRowSumIdentity:
             radii, n_panels_per_region=2, p_order=5, dps=dps,
         )
         K = build_volume_kernel(
-            r_nodes, panels, radii, sig_t,
-            n_theta=n_theta, n_rho=n_rho, dps=dps,
+            GEOMETRY, r_nodes, panels, radii, sig_t,
+            n_angular=n_theta, n_rho=n_rho, dps=dps,
         )
         return r_nodes, r_wts, K, R
 
@@ -98,8 +99,8 @@ class TestSphereRowSumIdentity:
         deficits = []
         for n_q in (12, 20, 28):
             K = build_volume_kernel(
-                r_nodes, panels, radii, sig_t,
-                n_theta=n_q, n_rho=n_q, dps=20,
+                GEOMETRY, r_nodes, panels, radii, sig_t,
+                n_angular=n_q, n_rho=n_q, dps=20,
             )
             deficits.append(abs(sig_t[0] - (K @ sig_t_vec)[probe]))
         assert deficits[-1] < deficits[0], (
@@ -132,12 +133,12 @@ class TestSphereWhiteBCRowSum:
             radii, n_panels_per_region=2, p_order=5, dps=25,
         )
         K_vol = build_volume_kernel(
-            r_nodes, panels, radii, sig_t,
-            n_theta=n_theta, n_rho=n_rho, dps=25,
+            GEOMETRY, r_nodes, panels, radii, sig_t,
+            n_angular=n_theta, n_rho=n_rho, dps=25,
         )
         K_bc = build_white_bc_correction(
-            r_nodes, r_wts, radii, sig_t,
-            n_theta=n_theta, n_phi=n_phi, dps=25,
+            GEOMETRY, r_nodes, r_wts, radii, sig_t,
+            n_angular=n_theta, n_surf_quad=n_phi, dps=25,
         )
         return r_nodes, sig_t[0], K_vol + K_bc
 
@@ -179,11 +180,11 @@ class TestSphereGBCVacuumLimit:
     scalar flux φ = 4 J⁻ (4π sr times ψ_in = J⁻/π equals 4)."""
 
     def test_vacuum_G_bc_is_four(self):
-        from orpheus.derivations.peierls_sphere import compute_G_bc
+        from orpheus.derivations.peierls_geometry import compute_G_bc
 
         radii = np.array([1.0])
         # Σ_t·R = 1e-8: effectively vacuum at double precision.
         sig_t = np.array([1e-8])
         r_nodes = np.array([0.0, 0.25, 0.5, 0.75, 0.99])
-        G_bc = compute_G_bc(r_nodes, radii, sig_t, n_theta=32, dps=20)
+        G_bc = compute_G_bc(GEOMETRY, r_nodes, radii, sig_t, n_surf_quad=32, dps=20)
         np.testing.assert_allclose(G_bc, 4.0, rtol=1e-5, atol=1e-5)

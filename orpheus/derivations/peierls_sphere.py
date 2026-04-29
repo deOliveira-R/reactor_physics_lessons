@@ -3,11 +3,14 @@ r"""Peierls integral equation reference for spherical CP verification.
 Spherical specialisation of the unified polar-form Peierls Nyström
 infrastructure in :mod:`orpheus.derivations.peierls_geometry`. This
 module is a THIN FACADE that mirrors :mod:`peierls_cylinder`: it owns
-the sphere-specific API names, the ``_build_peierls_sphere_case``
-case builder, and the ``continuous_cases`` registration. Everything
+the sphere-specific API names (``solve_peierls_sphere_{1g,mg}``
+permanent wrappers per :ref:`theory-peierls-api-posture`), the
+:class:`PeierlsSphereSolution` dataclass, and the
+``_build_peierls_sphere_case`` registry constructors. Everything
 else — volume-kernel assembly, Lagrange basis, angular/radial
 composite quadrature, white-BC rank-1 closure, eigenvalue power
-iteration — dispatches through the unified
+iteration — lives in
+:mod:`~orpheus.derivations.peierls_geometry` and dispatches through
 :class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`
 with ``kind = "sphere-1d"``.
 
@@ -74,137 +77,6 @@ from ._xs_library import LAYOUTS, get_mixture, get_xs
 # ═══════════════════════════════════════════════════════════════════════
 
 GEOMETRY = _pg.SPHERE_1D
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Public API (mirrors peierls_cylinder, dispatches to peierls_geometry)
-# ═══════════════════════════════════════════════════════════════════════
-
-composite_gl_r = _pg.composite_gl_r
-_lagrange_basis_on_panels = _pg.lagrange_basis_on_panels
-
-
-def _rho_max(r_obs: float, cos_theta: float, R: float) -> float:
-    """Ray-exit distance along polar angle :math:`\\theta`."""
-    return GEOMETRY.rho_max(r_obs, cos_theta, R)
-
-
-def _optical_depth_along_ray(
-    r_obs: float,
-    cos_theta: float,
-    rho: float,
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-) -> float:
-    """Line-integrated optical depth along a ray from :math:`r_{\\rm obs}`
-    in direction :math:`\\theta` for distance :math:`\\rho`.
-
-    Identical walker to the cylinder case — the 1-D radial annulus
-    crossings are geometry-agnostic."""
-    return GEOMETRY.optical_depth_along_ray(r_obs, cos_theta, rho, radii, sig_t)
-
-
-def _which_annulus(r: float, radii: np.ndarray) -> int:
-    return GEOMETRY.which_annulus(r, radii)
-
-
-def build_volume_kernel(
-    r_nodes: np.ndarray,
-    panel_bounds: list[tuple[float, float, int, int]],
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    n_theta: int,
-    n_rho: int,
-    dps: int = 30,
-) -> np.ndarray:
-    """Spherical volume Nyström kernel.
-
-    ``n_theta`` names the polar-angle integration order (the
-    :math:`\\sin\\theta` weight is applied internally by the unified
-    geometry dispatch)."""
-    return _pg.build_volume_kernel(
-        GEOMETRY, r_nodes, panel_bounds, radii, sig_t,
-        n_angular=n_theta, n_rho=n_rho, dps=dps,
-    )
-
-
-def compute_P_esc(
-    r_nodes: np.ndarray,
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    n_theta: int = 32,
-    dps: int = 25,
-) -> np.ndarray:
-    r"""Spherical uncollided escape probability.
-
-    .. math::
-
-       P_{\rm esc}(r_i) \;=\; \tfrac12 \int_0^\pi \sin\theta\,
-         e^{-\tau(r_i,\,\rho_{\max}(r_i,\theta),\,\theta)}\,\mathrm d\theta.
-    """
-    return _pg.compute_P_esc(
-        GEOMETRY, r_nodes, radii, sig_t,
-        n_angular=n_theta, dps=dps,
-    )
-
-
-def compute_G_bc(
-    r_nodes: np.ndarray,
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    n_theta: int = 32,
-    dps: int = 25,
-) -> np.ndarray:
-    r"""Spherical surface-to-volume Green's function.
-
-    .. math::
-
-       G_{\rm bc}(r_i) \;=\; R^2 \!\int_0^\pi \sin\theta\,
-         \frac{e^{-\tau_{\rm surf}(r_i,\theta)}}{d(r_i,R,\theta)^2}
-         \,\mathrm d\theta,
-       \quad d = \sqrt{r_i^2 + R^2 - 2 r_i R \cos\theta}.
-
-    The implementation lives in
-    :func:`peierls_geometry.compute_G_bc`, which dispatches on
-    ``geometry.kind == "sphere-1d"``.
-    """
-    return _pg.compute_G_bc(
-        GEOMETRY, r_nodes, radii, sig_t,
-        n_surf_quad=n_theta, dps=dps,
-    )
-
-
-def build_white_bc_correction(
-    r_nodes: np.ndarray,
-    r_wts: np.ndarray,
-    radii: np.ndarray,
-    sig_t: np.ndarray,
-    *,
-    n_theta: int = 32,
-    n_phi: int = 32,
-    dps: int = 25,
-) -> np.ndarray:
-    r"""Rank-1 white-BC correction for the spherical Peierls kernel.
-
-    Returns :math:`K_{\rm bc}[i, j] = u[i]\,v[j]` with
-    :math:`u[i] = \Sigma_t(r_i)\,G_{\rm bc}(r_i) / R` and
-    :math:`v[j] = r_j^{2}\,w_j\,P_{\rm esc}(r_j)`.
-
-    .. warning::
-
-       **Approximation level.** The rank-1 closure assumes the
-       re-entering angular distribution is Mark/isotropic. By
-       radial symmetry the scalar partial-current balance
-       :math:`J^- = J^+` is exact, but the angular moments beyond
-       the zeroth are approximated. The resulting error in
-       :math:`k_{\rm eff}` grows with inverse cell size, mirroring
-       the cylindrical case — see Issue #100. Deferred higher-rank
-       fix is tracked by Issue #103 (N1).
-    """
-    return _pg.build_white_bc_correction(
-        GEOMETRY, r_nodes, r_wts, radii, sig_t,
-        n_angular=n_theta, n_surf_quad=n_phi, dps=dps,
-    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -682,13 +554,3 @@ def _build_peierls_sphere_hollow_f4_case(
 _F4_SPH_TOL = {0.1: "0.4 %", 0.2: "1.2 %", 0.3: "3.3 %"}
 
 
-def continuous_cases() -> list[ContinuousReferenceSolution]:
-    r"""Deprecated: per-geometry case registration is centralized.
-
-    Returns an empty list. Peierls continuous references are
-    registered by
-    :func:`orpheus.derivations.peierls_cases.continuous_cases`
-    (the topology-organized single source of truth — see
-    :file:`.claude/plans/topology-based-consolidation.md` Stage T2).
-    """
-    return []

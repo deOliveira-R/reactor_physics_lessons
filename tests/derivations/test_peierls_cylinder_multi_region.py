@@ -1,8 +1,10 @@
 """L0 multi-region verification for the cylindrical Peierls Nyström operator.
 
 C4 of the Phase-4.2 campaign. The volume kernel builder from C3 already
-handles multi-region via :func:`_optical_depth_along_ray` (ray
-annular-boundary walking) and :func:`_lagrange_basis_on_panels`
+handles multi-region via
+:meth:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry.optical_depth_along_ray`
+(ray annular-boundary walking) and
+:func:`~orpheus.derivations.peierls_geometry.lagrange_basis_on_panels`
 (piecewise-Lagrange source interpolation across panels). This test
 file adds the direct unit-tests on those two helpers and verifies
 the ``build_volume_kernel`` output for a thick **inhomogeneous**
@@ -23,16 +25,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from orpheus.derivations.peierls_cylinder import (
-    _lagrange_basis_on_panels,
-    _optical_depth_along_ray,
+from orpheus.derivations.peierls_cylinder import GEOMETRY
+from orpheus.derivations.peierls_geometry import (
     build_volume_kernel,
     composite_gl_r,
+    lagrange_basis_on_panels,
 )
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# _optical_depth_along_ray — multi-region annular walker
+# CurvilinearGeometry.optical_depth_along_ray — multi-region annular walker
 # ═══════════════════════════════════════════════════════════════════════
 
 @pytest.mark.l0
@@ -43,8 +45,8 @@ class TestOpticalDepthAlongRay:
     def test_homogeneous_short_circuit(self):
         """For a single annulus, :math:`\\tau = \\Sigma_t \\cdot \\rho`
         exactly."""
-        tau = _optical_depth_along_ray(
-            r_obs=0.5, cos_beta=1.0, sin_beta=0.0,
+        tau = GEOMETRY.optical_depth_along_ray(
+            r_obs=0.5, cos_omega=1.0,
             rho=0.3, radii=np.array([1.0]), sig_t=np.array([2.5]),
         )
         assert tau == pytest.approx(2.5 * 0.3, rel=1e-14)
@@ -55,8 +57,8 @@ class TestOpticalDepthAlongRay:
         (:math:`r > r_1 = 0.5`) for all :math:`\rho \le 0.2`."""
         radii = np.array([0.5, 1.0])
         sig_t = np.array([1.0, 3.0])
-        tau = _optical_depth_along_ray(
-            r_obs=0.8, cos_beta=1.0, sin_beta=0.0,
+        tau = GEOMETRY.optical_depth_along_ray(
+            r_obs=0.8, cos_omega=1.0,
             rho=0.2, radii=radii, sig_t=sig_t,
         )
         # Ray traverses only the outer annulus
@@ -74,8 +76,8 @@ class TestOpticalDepthAlongRay:
         rho = 0.5  # > r_1 - r_obs = 0.2
         radii = np.array([r_1, 1.0])
         sig_t = np.array([1.0, 3.0])
-        tau = _optical_depth_along_ray(
-            r_obs=r_obs, cos_beta=1.0, sin_beta=0.0,
+        tau = GEOMETRY.optical_depth_along_ray(
+            r_obs=r_obs, cos_omega=1.0,
             rho=rho, radii=radii, sig_t=sig_t,
         )
         rho_star = r_1 - r_obs  # 0.2
@@ -95,8 +97,8 @@ class TestOpticalDepthAlongRay:
         rho = R + r_obs
         radii = np.array([r_1, R])
         sig_t = np.array([1.0, 3.0])
-        tau = _optical_depth_along_ray(
-            r_obs=r_obs, cos_beta=-1.0, sin_beta=0.0,
+        tau = GEOMETRY.optical_depth_along_ray(
+            r_obs=r_obs, cos_omega=-1.0,
             rho=rho, radii=radii, sig_t=sig_t,
         )
         # Path: outer (r_obs - r_1), inner (2·r_1), outer (R + r_obs - (r_obs + r_1))
@@ -117,15 +119,15 @@ class TestOpticalDepthAlongRay:
         sig_t = np.array([1.0, 3.0])
         # β = π/2: ray is tangent to the observer's radial direction, so
         # the line has impact parameter y = r_obs · |sin β| = 0.8 > r_1
-        tau = _optical_depth_along_ray(
-            r_obs=r_obs, cos_beta=0.0, sin_beta=1.0,
+        tau = GEOMETRY.optical_depth_along_ray(
+            r_obs=r_obs, cos_omega=0.0,
             rho=0.4, radii=radii, sig_t=sig_t,
         )
         assert tau == pytest.approx(sig_t[1] * 0.4, rel=1e-12)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# _lagrange_basis_on_panels — piecewise-polynomial basis
+# lagrange_basis_on_panels — piecewise-polynomial basis
 # ═══════════════════════════════════════════════════════════════════════
 
 @pytest.mark.foundation
@@ -140,7 +142,7 @@ class TestLagrangeBasisOnPanels:
             radii, n_panels_per_region=2, p_order=4, dps=20,
         )
         for r_eval in np.linspace(0.05, 0.95, 19):
-            L = _lagrange_basis_on_panels(r_nodes, panels, r_eval)
+            L = lagrange_basis_on_panels(r_nodes, panels, r_eval)
             assert L.sum() == pytest.approx(1.0, abs=1e-12), (
                 f"Partition of unity fails at r = {r_eval}: sum = {L.sum()}"
             )
@@ -160,7 +162,7 @@ class TestLagrangeBasisOnPanels:
         # Pick an interior evaluation point in each panel
         for pa, pb, _, _ in panels:
             r_eval = 0.5 * (pa + pb)
-            L = _lagrange_basis_on_panels(r_nodes, panels, r_eval)
+            L = lagrange_basis_on_panels(r_nodes, panels, r_eval)
             reproduction = np.dot(L, p_vals_at_nodes)
             truth = np.polyval(p_coeffs[::-1], r_eval)
             assert reproduction == pytest.approx(truth, abs=1e-12), (
@@ -178,7 +180,7 @@ class TestLagrangeBasisOnPanels:
         # Evaluate at the midpoint of the middle panel
         pa, pb, i_start, i_end = panels[1]
         r_eval = 0.5 * (pa + pb)
-        L = _lagrange_basis_on_panels(r_nodes, panels, r_eval)
+        L = lagrange_basis_on_panels(r_nodes, panels, r_eval)
         # L should be zero on nodes outside [i_start:i_end]
         assert np.allclose(L[:i_start], 0.0, atol=1e-14)
         assert np.allclose(L[i_end:], 0.0, atol=1e-14)
@@ -226,8 +228,8 @@ class TestMultiRegionKernel:
             radii, n_panels_per_region=2, p_order=5, dps=20,
         )
         K = build_volume_kernel(
-            r_nodes, panels, radii, sig_t,
-            n_beta=24, n_rho=24, dps=20,
+            GEOMETRY, r_nodes, panels, radii, sig_t,
+            n_angular=24, n_rho=24, dps=20,
         )
 
         # Build q_j = Σ_t(r_j) on the grid using the same panel lookup
@@ -266,8 +268,8 @@ class TestMultiRegionKernel:
             np.array([R]), n_panels_per_region=2, p_order=5, dps=20,
         )
         K_1 = build_volume_kernel(
-            r_nodes_1, panels_1, np.array([R]), np.array([sig_t_val]),
-            n_beta=20, n_rho=20, dps=20,
+            GEOMETRY, r_nodes_1, panels_1, np.array([R]), np.array([sig_t_val]),
+            n_angular=20, n_rho=20, dps=20,
         )
 
         # Multi-region: 4 annuli with identical Σ_t
@@ -276,8 +278,8 @@ class TestMultiRegionKernel:
             radii_4, n_panels_per_region=1, p_order=5, dps=20,
         )
         K_4 = build_volume_kernel(
-            r_nodes_4, panels_4, radii_4, np.array([sig_t_val] * 4),
-            n_beta=20, n_rho=20, dps=20,
+            GEOMETRY, r_nodes_4, panels_4, radii_4, np.array([sig_t_val] * 4),
+            n_angular=20, n_rho=20, dps=20,
         )
         rs_1 = K_1.sum(axis=1)
         rs_4 = K_4.sum(axis=1)

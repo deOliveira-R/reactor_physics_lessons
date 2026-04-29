@@ -3,7 +3,7 @@
 These tests land with C3 of the Phase-4.2 verification campaign and
 constitute the **prefactor-bug gate**: passing them proves that the
 1/π prefactor, the Ki₁ kernel choice, and the polar (β, ρ) Nyström
-assembly in :func:`orpheus.derivations.peierls_cylinder.build_volume_kernel`
+assembly in :func:`orpheus.derivations.peierls_geometry.build_volume_kernel`
 are all individually correct.
 
 Physical identity under test
@@ -37,7 +37,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from orpheus.derivations.peierls_cylinder import (
+from orpheus.derivations.peierls_cylinder import GEOMETRY
+from orpheus.derivations.peierls_geometry import (
     build_volume_kernel,
     composite_gl_r,
 )
@@ -59,8 +60,8 @@ class TestRowSumIdentity:
             radii, n_panels_per_region=2, p_order=5, dps=dps,
         )
         K = build_volume_kernel(
-            r_nodes, panels, radii, sig_t,
-            n_beta=n_beta, n_rho=n_rho, dps=dps,
+            GEOMETRY, r_nodes, panels, radii, sig_t,
+            n_angular=n_beta, n_rho=n_rho, dps=dps,
         )
         return r_nodes, K, R
 
@@ -110,8 +111,8 @@ class TestRowSumIdentity:
         results = []
         for n_q in (12, 20, 28):
             K = build_volume_kernel(
-                r_nodes, panels, radii, sig_t,
-                n_beta=n_q, n_rho=n_q, dps=20,
+                GEOMETRY, r_nodes, panels, radii, sig_t,
+                n_angular=n_q, n_rho=n_q, dps=20,
             )
             results.append(K[probe_idx].sum())
 
@@ -145,8 +146,8 @@ class TestMultiRegionRowSum:
             np.array([R]), n_panels_per_region=2, p_order=5, dps=20,
         )
         K_1 = build_volume_kernel(
-            r_nodes_1, panels_1, np.array([R]), np.array([sig_t_val]),
-            n_beta=20, n_rho=20, dps=20,
+            GEOMETRY, r_nodes_1, panels_1, np.array([R]), np.array([sig_t_val]),
+            n_angular=20, n_rho=20, dps=20,
         )
         rs_1 = K_1.sum(axis=1)
 
@@ -158,8 +159,8 @@ class TestMultiRegionRowSum:
             radii_2, n_panels_per_region=1, p_order=5, dps=20,
         )
         K_2 = build_volume_kernel(
-            r_nodes_2, panels_2, radii_2, sig_t_2,
-            n_beta=20, n_rho=20, dps=20,
+            GEOMETRY, r_nodes_2, panels_2, radii_2, sig_t_2,
+            n_angular=20, n_rho=20, dps=20,
         )
         rs_2 = K_2.sum(axis=1)
 

@@ -2,7 +2,8 @@
 
 C7 of the Phase-4.2 campaign. Exercises the ``boundary='white'``
 path of :func:`solve_peierls_cylinder_1g` and the two helpers
-:func:`compute_P_esc` and :func:`compute_G_bc`.
+:func:`~orpheus.derivations.peierls_geometry.compute_P_esc` and
+:func:`~orpheus.derivations.peierls_geometry.compute_G_bc`.
 
 .. important::
 
@@ -12,7 +13,7 @@ path of :func:`solve_peierls_cylinder_1g` and the two helpers
    becomes thinner — the Wigner-Seitz exact identity
    ``k_eff(white) = k_inf`` holds only asymptotically. See the
    caveat block in
-   :func:`~orpheus.derivations.peierls_cylinder.build_white_bc_correction`
+   :func:`~orpheus.derivations.peierls_geometry.build_white_bc_correction`
    for the error table. Tests here gate on the **thick-limit**
    behaviour, where the closure is quantitatively accurate.
 
@@ -35,9 +36,12 @@ import numpy as np
 import pytest
 
 from orpheus.derivations.peierls_cylinder import (
+    GEOMETRY,
+    solve_peierls_cylinder_1g,
+)
+from orpheus.derivations.peierls_geometry import (
     compute_G_bc,
     compute_P_esc,
-    solve_peierls_cylinder_1g,
 )
 
 
@@ -55,8 +59,8 @@ class TestPescProperties:
     def test_bounded_in_unit_interval(self):
         r_nodes = np.array([0.1, 0.3, 0.5, 0.7, 0.9])
         P_esc = compute_P_esc(
-            r_nodes, np.array([1.0]), np.array([1.0]),
-            n_beta=16, dps=20,
+            GEOMETRY, r_nodes, np.array([1.0]), np.array([1.0]),
+            n_angular=16, dps=20,
         )
         assert np.all(P_esc >= 0.0)
         assert np.all(P_esc <= 1.0)
@@ -66,8 +70,8 @@ class TestPescProperties:
         easily (shorter mean chord to surface)."""
         r_nodes = np.linspace(0.05, 0.95, 7)
         P_esc = compute_P_esc(
-            r_nodes, np.array([1.0]), np.array([1.0]),
-            n_beta=16, dps=20,
+            GEOMETRY, r_nodes, np.array([1.0]), np.array([1.0]),
+            n_angular=16, dps=20,
         )
         diffs = np.diff(P_esc)
         assert np.all(diffs > -1e-6), (
@@ -83,8 +87,8 @@ class TestGbcProperties:
     def test_positive_everywhere(self):
         r_nodes = np.array([0.1, 0.5, 0.95])
         G_bc = compute_G_bc(
-            r_nodes, np.array([1.0]), np.array([1.0]),
-            n_phi=16, dps=20,
+            GEOMETRY, r_nodes, np.array([1.0]), np.array([1.0]),
+            n_surf_quad=16, dps=20,
         )
         assert np.all(G_bc > 0.0)
 
@@ -93,8 +97,8 @@ class TestGbcProperties:
         the boundary (unattenuated path length is shorter)."""
         r_nodes = np.linspace(0.05, 0.95, 7)
         G_bc = compute_G_bc(
-            r_nodes, np.array([1.0]), np.array([1.0]),
-            n_phi=16, dps=20,
+            GEOMETRY, r_nodes, np.array([1.0]), np.array([1.0]),
+            n_surf_quad=16, dps=20,
         )
         diffs = np.diff(G_bc)
         assert np.all(diffs > -1e-6), (
