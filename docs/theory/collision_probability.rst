@@ -3900,9 +3900,12 @@ so the divisor is :math:`R`. These two cases are dispatched by
    enormous overestimation of :math:`k_{\rm eff}`: the white-BC
    correction, having the wrong normalisation, feeds a spuriously
    large boundary source back into the fission eigenvalue. A
-   previous attempt (see :ref:`issue-100-retraction` below) hit
-   exactly this wall and reported :math:`k_{\rm eff} \approx 6.7`
-   for a 1-G bare sphere where :math:`k_\infty = 1.5`. The
+   previous attempt — see the historical retraction in
+   :ref:`issue-100-retraction` and the full debate in
+   `Issue #100 <https://github.com/deOliveira-R/ORPHEUS/issues/100>`_
+   — hit exactly this wall and reported
+   :math:`k_{\rm eff} \approx 6.7` for a 1-G bare sphere where
+   :math:`k_\infty = 1.5`. The
    :meth:`~CurvilinearGeometry.rank1_surface_divisor` abstraction
    exists precisely to make this mistake impossible in new code.
 
@@ -3915,25 +3918,12 @@ dispatch in :func:`peierls_geometry.build_white_bc_correction`.
 
 .. _issue-100-retraction:
 
-Issue #100 — retraction of the ":math:`k_{\rm eff} \approx 6.7`" claim
------------------------------------------------------------------------
+Rank-1 white-BC numerical evidence (sphere)
+-------------------------------------------
 
-The earlier discussion in :doc:`peierls_unified` (§8, "Sphere —
-Issue #100") reported that an initial Phase-4.3 sphere Peierls
-attempt produced :math:`k_{\rm eff} \approx 6.7` for a 1-G
-1-region bare sphere (:math:`k_\infty = 1.5`), and concluded that
-the rank-1 Mark closure **fails structurally** on the sphere
-because the ratio :math:`P_{\rm esc}(r) / G_{\rm bc}(r)` varies
-~40 % across the sphere radius — implying that no constant outer
-product can absorb the variation.
-
-**That conclusion is retracted.** With the corrected :math:`R^{2}`
-divisor implemented in the unified infrastructure, the sphere's
-rank-1 white-BC behaviour **parallels the cylinder's** — a large
-error at thin :math:`R`, monotone convergence to :math:`k_\infty`
-as :math:`R \to \infty`. The numerical evidence, produced by the
-Phase-4.3 ``TestWhiteBCRank1ErrorScan`` suite and reproduced here
-directly from the implementation with
+The :math:`R^{2}`-divisor rank-1 closure is pinned by
+``TestWhiteBCRank1ErrorScan`` against the bare-sphere
+:math:`k_\infty = 1.5` reference at
 :math:`(\Sigma_t, \Sigma_s, \nu\Sigma_f) = (1, 0.5, 0.75)` and
 :math:`n_\theta = n_\rho = 20`, :math:`n_\phi = 32`, ``dps = 25``:
 
@@ -3970,8 +3960,11 @@ directly from the implementation with
      - 0.4 %
      - —
 
-The beyond-:math:`R = 10` MFP plateau at
-:math:`|k_{\rm eff} - k_\infty|/k_\infty \approx 0.3\%\,\text{--}\,0.4\%`
+The sphere's rank-1 white-BC behaviour **parallels the
+cylinder's** — large error at thin :math:`R`, monotone convergence
+to :math:`k_\infty` as :math:`R \to \infty`. The
+beyond-:math:`R = 10` MFP plateau at
+:math:`|k_{\rm eff} - k_\infty|/k_\infty \approx 0.3\,\text{--}\,0.4\%`
 is the quadrature-noise floor at the cited
 :math:`(n_\theta, n_\rho, n_\phi)` order, not a rank-1 closure
 defect. Under refinement the floor drops further
@@ -4004,45 +3997,25 @@ identity to better than 1 % — pinned in
 ``TestSphereWhiteBCRowSum.test_medium_sphere_residual_below_five_percent``
 and ``test_thick_sphere_residual_below_two_percent``.
 
-**Root cause of the earlier failure.** The earlier implementation
-was a direct port of the cylinder rank-1 closure that divided
-:math:`u_i` by :math:`R` unconditionally. For the sphere the
-correct divisor is :math:`R^{2}`, because :math:`A_d = 4\pi R^{2}`
-and :math:`A_j = 4\pi r_j^{2}\,w_j` (not :math:`2\pi R` and
-:math:`2\pi r_j\,w_j` as on the cylinder). Under-dividing by
-:math:`R` amounts to **multiplying** :math:`u_i` by :math:`R`,
-injecting a spurious factor of :math:`R` into the boundary
-correction. At :math:`R \sim 1` MFP this inflates
-:math:`k_{\rm eff}` by roughly the same factor; at :math:`R \to
-\infty` the leakage goes to zero but the spurious factor goes to
-infinity, so the original attempt would have diverged rather than
-approached :math:`k_\infty`. The reported :math:`k_{\rm eff}
-\approx 6.7` is therefore **consistent with an :math:`R \approx
-4{-}5` inflation at :math:`R \sim 1` MFP**, not with a genuine
-structural failure of the rank-1 Mark closure.
-
-**The earlier :math:`P_{\rm esc} / G_{\rm bc}` ratio argument does
-not apply.** The rank-1 closure is an outer product
-:math:`u_i\,v_j` with :math:`u_i \propto G_{\rm bc}(r_i)` and
-:math:`v_j \propto P_{\rm esc}(r_j) \cdot r_j^{2}\,w_j`.
-:math:`u` and :math:`v` can individually vary with radius; what
-the rank-1 closure *approximates* is the re-entering angular
-distribution on the sphere surface (treated as uniform isotropic
-by Mark) rather than the :math:`(i, j)` coupling structure of
-volume-to-volume terms. The pointwise Nyström deficit that grows
-as :math:`R \to 0` has the same root cause on sphere and cylinder:
-the Mark closure is *flat-source accurate* and becomes poor at
-pointwise resolution when the emission density varies
-significantly within a cell. That deficit is Issue #103 / N1, the
-higher-rank angular decomposition; it is a real limitation of the
-rank-1 closure, just not a sphere-specific one.
-
-**Historical context retained.** The earlier discussion is kept as
-a footnote in :doc:`peierls_unified` §8 with the update flag at
-the top — the record of what was tried and why it failed is
-valuable for future AI sessions reading this page as a knowledge
-base. Do not delete historical failure analyses even after the
-retraction; they prevent the same mistake from being made twice.
+**Issue #100 historical retraction.** A pre-:math:`R^{2}`-divisor
+sphere prototype reported :math:`k_{\rm eff} \approx 6.7` and
+attributed the blow-up to a structural rank-1 failure on the
+sphere (:math:`P_{\rm esc} / G_{\rm bc}` 40 %-variation argument).
+That conclusion is **retracted** — the spurious factor of
+:math:`R` injected by the cylinder-port divisor
+(:math:`u_i / R` instead of :math:`u_i / R^{2}`) accounts for the
+inflation at :math:`R \sim 1` MFP, and the
+:math:`P_{\rm esc} / G_{\rm bc}` ratio argument conflated
+:math:`u_i\,v_j` with the volume-to-volume coupling. The full
+debate (pre-correction "ratio varies 40 % so rank-1 fails"
+argument and the divisor-bug post-mortem) lives in
+`Issue #100 <https://github.com/deOliveira-R/ORPHEUS/issues/100>`_
+and the sister stub in :doc:`peierls_unified` §8. The
+**residual** rank-1 deficit at :math:`R \to 0` is the genuine
+flat-source-accuracy limit shared by sphere and cylinder; it is
+tracked under
+`Issue #103 <https://github.com/deOliveira-R/ORPHEUS/issues/103>`_
+(higher-rank N1 closure), not as a sphere-specific bug.
 
 Boundary conditions — rank-1 white and vacuum
 ----------------------------------------------
