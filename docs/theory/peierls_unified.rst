@@ -6344,105 +6344,27 @@ now **CLOSED**) was resolved **structurally**: the new code never
 uses the legacy names ``Ki3_vec`` or ``ki4_vec``, so there was
 nothing to rename — only a kernel to replace.
 
-Replacement table (what each legacy call became)
-------------------------------------------------
+The full retirement narrative — replacement table mapping every
+legacy ``BickleyTables`` call to its canonical mpmath / Chebyshev
+successor, the three-phase Phase B.1 / B.2 / B.4 commit chain, and
+the four-bullet measured-impact postmortem — has been relocated to
+the `Issue #94 close-out comment
+<https://github.com/deOliveira-R/ORPHEUS/issues/94#issuecomment-4348744341>`_.
+The headline measured impacts are:
 
-.. list-table:: Legacy ``BickleyTables`` methods and their canonical replacements
-   :header-rows: 1
-   :widths: 36 36 28
-
-   * - Legacy call (pre-Phase B.4)
-     - Canonical replacement (post-Phase B.4)
-     - A&S identity
-   * - ``tables.ki3(x)`` / ``ki3_vec(x)``
-     - ``ki_n_mp(2, x, dps=30)``
-     - canonical :math:`\mathrm{Ki}_2(x)`
-   * - ``tables.ki4(x)`` / ``ki4_vec(x)``
-     - :func:`~orpheus.derivations.cp_geometry._ki3_mp` (fast) or
-       ``ki_n_mp(3, x, dps=30)`` (arbitrary precision)
-     - canonical :math:`\mathrm{Ki}_3(x)`
-   * - ``tables.Ki2_vec(x)`` (canonical alias, added Phase 4.2)
-     - ``ki_n_mp(2, x, dps=30)``
-     - canonical :math:`\mathrm{Ki}_2(x)`
-   * - ``tables.Ki3_vec(x)`` (canonical alias, added Phase 4.2)
-     - :func:`~orpheus.derivations.cp_geometry._ki3_mp` (fast) or
-       ``ki_n_mp(3, x, dps=30)`` (arbitrary precision)
-     - canonical :math:`\mathrm{Ki}_3(x)`
-   * - ``e3(x)`` / ``e3_vec(x)`` (slab)
-     - :func:`~orpheus.derivations._kernels.e3_vec` (retained;
-       already double-precision via :func:`scipy.special.expn`)
-     - canonical :math:`E_3(x)`
-
-Retirement sequence (what actually happened)
---------------------------------------------
-
-1. **Phase B.1** (commit ``ea6b05e``, theory-first):
-   :doc:`peierls_unified` §§12–17 landed as a theory page before
-   any code changed, naming the forthcoming modules and the unified
-   :math:`\Delta^{2}` operator.
-2. **Phase B.2** (commits ``f1b869b`` +  ``bf128d3``): the new
-   :mod:`orpheus.derivations.cp_geometry` module was implemented
-   with ``FlatSourceCPGeometry`` and the three singletons
-   :data:`SLAB`, :data:`CYLINDER_1D`, :data:`SPHERE_1D`; the
-   pre-existing :mod:`~orpheus.derivations.cp_slab`,
-   :mod:`~orpheus.derivations.cp_cylinder`, and
-   :mod:`~orpheus.derivations.cp_sphere` modules became thin facades
-   over the geometry-dispatching core. ``BickleyTables`` was
-   **no longer imported** by any ``cp_*`` derivation module, but
-   the class itself was kept in :mod:`~orpheus.derivations._kernels`
-   so the Phase B.2 commit was a drop-in refactor with bit-identity
-   to Phase A (safety milestone).
-3. **Phase B.4** (commit ``6badbe5``, this postmortem's subject):
-   ``BickleyTables`` and ``bickley_tables()`` were deleted from
-   :mod:`~orpheus.derivations._kernels`. The cylinder kernel was
-   replaced by :func:`~orpheus.derivations.cp_geometry._ki3_mp`, a
-   Chebyshev polynomial of degree 63 fit to the scaled kernel
-   :math:`e^{\tau}\,\mathrm{Ki}_3(\tau)` on :math:`[0, 50]` at
-   Chebyshev-Gauss-Lobatto nodes (~:math:`5\times 10^{-6}`
-   absolute accuracy; build cost ~0.3 s, lazy via
-   :func:`functools.lru_cache`). The runtime solver
-   :mod:`orpheus.cp.solver` was rewired in the *same commit* to
-   import ``_ki3_mp`` from :mod:`~orpheus.derivations.cp_geometry`
-   and consume it via ``_setup_cylindrical``; the solver's own
-   private ``_build_ki_tables`` + ``_ki4_lookup`` pair (~30 lines
-   of cumsum-based :math:`O(h)` quadrature) were deleted. Solver
-   ``keff`` and derivation ``k_inf`` now evaluate :math:`\mathrm{Ki}_3`
-   through the **same code path** — the solver/derivation
-   kernel-split bias that had been hiding behind the
-   ``CPParams.n_ki_table`` knob is gone (the knob is retained as
-   an unused no-op for construction-site backwards compatibility).
-
-Phase B.4 postmortem — measured impact
---------------------------------------
-
-The kernel swap was an **improvement**, not a regression. The
-measurable shifts are:
-
-- **Cylinder** :math:`k_\infty` **reference values** shifted by up to
-  ~:math:`4\times 10^{-4}` for multi-region 1-group cases. The
-  Bickley tabulation's trapezoidal :math:`O(\Delta x^2)` error had
-  been the dominant bias in the reference; each new value is
-  closer to the exact mpmath result than the pre-refactor one.
-- **Solver/reference agreement**. The ``solve_cp`` cylinder
-  ``keff`` now agrees with the shifted :math:`k_\infty` reference
-  to machine precision (same kernel on both sides). All nine
-  ``cp_cyl1D_*`` L1 eigenvalue tests pass at their declared
-  ``tolerance = 1e-5`` with actual error ~:math:`10^{-7}` — about
-  100× headroom, where previously the ``1e-5`` tolerance had been
-  the *actual* floor set by kernel bias.
-- **Tabulation-size sensitivity test retired**. The old
-  ``test_cylindrical_ki4_convergence_with_table_size`` (which
-  documented that 5 000 → 20 000 → 40 000 points gave diminishing
-  returns) was replaced by
-  ``test_ki3_kernel_is_insensitive_to_n_ki_table``: ``n_ki_table``
-  is a no-op, and ``keff`` is bit-identical across
-  ``{5000, 20000, 40000}``.
-- **Solver startup latency**. The 20 000-point
-  :func:`scipy.integrate.quad` loop at ``CPMesh`` construction is
-  gone; the Chebyshev polynomial is built lazily on first call to
-  ``_ki3_mp`` (~0.3 s once per process) and cached via
-  :func:`~functools.lru_cache`. Repeated solves pay zero kernel
-  setup cost.
+- **Cylinder** :math:`k_\infty` reference values shifted by up to
+  ~:math:`4\times 10^{-4}` (Bickley's trapezoidal :math:`O(\Delta x^2)`
+  bias was the dominant residual error; each post-Phase-B.4 value is
+  closer to exact mpmath).
+- **Solver/reference agreement** is now to machine precision (same
+  ``_ki3_mp`` kernel on both sides); the nine ``cp_cyl1D_*`` L1
+  eigenvalue tests pass at ``tolerance = 1e-5`` with actual error
+  ~:math:`10^{-7}` (≈100× headroom).
+- **Tabulation-size sensitivity** retired; ``n_ki_table`` is a no-op
+  and ``keff`` is bit-identical across :math:`\{5000, 20000, 40000\}`.
+- **Startup latency**: the 20 000-point ``scipy.integrate.quad`` loop
+  is gone; ``_ki3_mp`` is built lazily once per process (~0.3 s) and
+  ``functools.lru_cache``-shared.
 
 Why a Chebyshev interpolant and not direct mpmath
 --------------------------------------------------
