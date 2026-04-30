@@ -2997,77 +2997,34 @@ Status
 ------
 
 **Issue #119 is CLOSED as of 2026-04-21.** The Phase F.4 *scalar
-rank-2 per-face* closure is the production path for hollow 2-surface
-cells under white BC. The :exc:`NotImplementedError` guard in
+rank-2 per-face* closure (Stamm'ler & Abbate 1983 Ch. IV Eq. 34 =
+Hébert 2009 §3.8.4 Eq. 3.323) is the production path for hollow
+2-surface cells under white BC. The :exc:`NotImplementedError`
+guard in
 :func:`~orpheus.derivations.peierls_geometry.build_closure_operator`
 (``n_bc_modes > 1`` + ``reflection="white"`` on 2-surface cells)
-**remains in place by design** — the guard is not a bug, it is the
-documented refusal of a structurally unreachable closure. Five
-independent authoritative references converge on scalar / DP-0 for
-1D curvilinear interface-current methods; a novel per-mode
-Villarino-Stamm'ler extension tested in this investigation does not
-break the plateau; two research-tag pathways remain open for future
-work. The Marshak/Sanchez rank-N primitives are retained as tested
-dead code for that future research.
+**remains in place by design**: five independent textbook
+references (Ligou 1982, Sanchez-Mao-Santandrea 2002, Stamm'ler &
+Abbate 1983, Stacey 2007, Hébert 2009) converge on scalar / DP-0
+for 1D curvilinear interface-current methods, and a novel per-mode
+Villarino-Stamm'ler extension tested in this investigation does
+not break the plateau. Two research-tag pathways remain open
+(Issue #120 geometry-adapted Legendre, Issue #121 PCA sectors).
+The full literature synthesis + tabulated closure-form audit
+across all five references is in
+`Issue #119 close-out
+<https://github.com/deOliveira-R/ORPHEUS/issues/119#issuecomment-4348745180>`_.
 
-Motivation (preserved from the original open-issue section)
------------------------------------------------------------
+The Marshak/Sanchez rank-N primitives are retained as tested dead
+code (see :ref:`peierls-f5-infrastructure-retained` below) so
+future research does not need to reproduce ~1500 LoC of
+peer-reviewed infrastructure.
 
-The scalar rank-2 per-face white BC closes the Wigner-Seitz identity
-on slab exactly (via the legacy :math:`E_2` / :math:`E_3` bilinear
-form) but leaves a 1–13 % residual on curved hollow cells. Extending
-to rank-:math:`N` per face — so each surface's outgoing distribution
-is resolved into more than one angular moment — was expected to drive
-that residual toward machine precision. The single-surface rank-:math:`N`
-Gelbard DP\ :sub:`N-1` path
-(:func:`~orpheus.derivations.peierls_geometry.build_white_bc_correction_rank_n`)
-converges monotonically with :math:`N` for the solid cylinder /
-sphere, so per-face generalisation — two surfaces coupled by a
-:math:`(2N \times 2N)` transmission matrix :math:`W_N` — looked
-inevitable. **It is not.** The remainder of this section is the
-archival record of why.
+The keystone fact — Hébert 2009 Eq. 3.323
+-----------------------------------------
 
-Five-reference literature synthesis
------------------------------------
-
-Five authoritative reactor-physics references were scanned for an
-independent derivation of the Sanchez-McCormick 1982 §III.F.1
-Legendre-moment rank-:math:`N` ladder applied to curvilinear
-(hollow cylindrical / spherical) cells. The surprising finding is
-that **no such derivation exists in the canonical textbook corpus**.
-
-.. list-table:: Curvilinear interface-current closures across five references
-   :header-rows: 1
-   :widths: 28 26 26 20
-
-   * - Reference
-     - Location
-     - Closure form
-     - Verdict
-   * - Ligou (1982)
-     - Ch. 8 §8.2.3, Eq. 8.47
-     - Scalar :math:`j^-` with cosine return
-     - Scalar (= F.4)
-   * - Sanchez, Mao, Santandrea (2002)
-     - NSE 140:23, Eqs. 37, 40
-     - Piecewise-constant angular (PCA) sectors OR collocation-:math:`\delta_2`
-     - Sector-based, not Legendre
-   * - Stamm'ler & Abbate (1983)
-     - Ch. IV §10, Eqs. 29–34
-     - Scalar :math:`j^-` + cosine multi-reflection
-     - Scalar (= F.4)
-   * - Stacey (2007)
-     - Ch. 9 §9.4–§9.5, Eqs. 9.66–9.110
-     - DP-0 per face (isotropic hemisphere)
-     - Cartesian-only DP-0
-   * - Hébert (2009)
-     - Ch. 3 §3.8.1 (abstract) and §3.8.4 Eq. 3.323 (1D cyl)
-     - DP\ :sub:`N` machinery for 2D Cartesian pincells; scalar Eq. 3.323 for 1D curvilinear
-     - Cartesian-only DP\ :sub:`N`; 1D = F.4
-
-**The keystone fact.** Hébert 2009 Eq. 3.323 is the *modern textbook
-statement* of the 1D cylindrical interface-current closure under
-white BC:
+Hébert 2009 Eq. 3.323 is the modern textbook statement of the 1D
+cylindrical interface-current closure under white BC:
 
 .. math::
    :label: hebert-3-323
@@ -3077,33 +3034,29 @@ white BC:
 
 With :math:`\beta^+ = 1` (white BC), this is **Stamm'ler Eq. 34** in
 modern notation, and it is **ORPHEUS F.4** in the rank-0 limit:
-rank-0 scalar :math:`P_{SS}` (cylinder face return probability) with
-the scalar geometric series :math:`(1 - P_{SS})^{-1}` is exactly the
-:math:`(I - W)^{-1}` we ship at :math:`N = 1`. Three independent
-textbook lineages (Ligou, Stamm'ler, Hébert) and one slab-response
-textbook (Stacey) arrive at the same scalar closure. The rank-:math:`N`
-Legendre ladder of Sanchez-McCormick 1982 §III.F.1 has **zero
-cross-validation** among these five references.
-
-The same equation is the production F.4 closure on BOTH 1D
-curvilinear geometries shipped in ORPHEUS (:class:`~orpheus.derivations.peierls_geometry.CurvilinearGeometry`,
-``kind`` ∈ :code:`{"cylinder-1d", "sphere-1d"}`), with the
-geometry-specific transmission matrix :math:`W` supplied by
+rank-0 scalar :math:`P_{SS}` (face return probability) with the
+scalar geometric series :math:`(1 - P_{SS})^{-1}` is exactly the
+:math:`(I - W)^{-1}` we ship at :math:`N = 1`. The same equation is
+the production F.4 closure on BOTH 1D curvilinear geometries shipped
+in ORPHEUS, with the geometry-specific transmission matrix :math:`W`
+supplied by
 :func:`~orpheus.derivations.peierls_geometry.compute_hollow_cyl_transmission`
 (cylinder, Ki\ :sub:`3` Bickley fold of the Lambertian emission) or
 :func:`~orpheus.derivations.peierls_geometry.compute_hollow_sph_transmission`
 (sphere, bare :math:`\exp(-\tau)` with explicit :math:`\theta`
 integration). The two geometries differ in the :math:`W_{oi} /
 W_{io}` reciprocity: cylinder uses circumference per unit length so
-:math:`W_{oi} = (R / r_0)\,W_{io}` (FIRST power), sphere uses surface
-area so :math:`W_{oi} = (R / r_0)^2\,W_{io}` (squared). The
+:math:`W_{oi} = (R / r_0)\,W_{io}` (first power), sphere uses
+surface area so :math:`W_{oi} = (R / r_0)^2\,W_{io}` (squared). The
 zero-absorption conservation pair
 :math:`W_{oo} + W_{io} = W_{oi} = 1`, :math:`W_{ii} = 0` holds in
 both geometries and is regressed by
 ``test_hollow_{cyl,sph}_transmission_zero_absorption_conservation``
-(see :file:`tests/derivations/test_peierls_rank2_bc.py`).
+(in :file:`tests/derivations/test_peierls_rank2_bc.py`).
+
 Residuals at default quadrature (2 panels × p_order=4, n_angular=24,
-n_rho=24, n_surf_quad=24, dps=15):
+n_rho=24, n_surf_quad=24, dps=15) — production data, kept here as
+the verification target the rank-N extension was supposed to beat:
 
 .. list-table:: F.4 residual across :math:`r_0 / R` at :math:`k_\infty = 1.5` (:math:`\Sigma_t = 1`, :math:`\Sigma_s = 0.5`, :math:`\nu\Sigma_f = 0.75`)
    :header-rows: 1
@@ -3135,14 +3088,7 @@ Sphere residuals are 3–10× tighter than cylinder at the same
 more angular structure at the scalar mode, while the cylinder's
 out-of-plane :math:`\theta` fold into Ki\ :sub:`3` averages
 irreversibly over that dimension. Neither is improvable via rank-N
-refinement — see the Phase F.5 close-out below and research log
-lesson L21.
-
-See :file:`.claude/agent-memory/literature-researcher/rank_n_closure_four_references_synthesis.md`
-for the Ligou / Sanchez 2002 / Stamm'ler IV / Stacey 9
-side-by-side, and
-:file:`.claude/agent-memory/literature-researcher/hebert_2009_ch3_interface_currents.md`
-for the Hébert 2009 Ch. 3 extraction (5th reference, keystone).
+refinement — see "the structural obstruction" below.
 
 The structural obstruction — the :math:`c_{\rm in}` remapping
 ----------------------------------------------------------------
@@ -3222,102 +3168,29 @@ geometric distortion inside the kernel. This was confirmed by the
 every tested assembly reached the same 1.42 % plateau at
 :math:`\sigma_t \cdot R = 5`, :math:`N \ge 2`.
 
-Villarino-Stamm'ler per-mode extension (novel, falsified 2026-04-21)
---------------------------------------------------------------------
+Villarino-Stamm'ler per-mode extension (falsified 2026-04-21)
+-------------------------------------------------------------
 
-Hébert 2009 Ch. 3 explicitly warns (p. 129) that the rank-0 DP\
-:sub:`N` primitives are *not* guaranteed conservative and recommends
-an a-posteriori **Villarino-Stamm'ler normalisation**
-(Eqs. 3.347–3.352). Villarino-Stamm'ler (V-S) is a 30-line
-Gauss-Seidel fixed-point iteration that multiplies the symmetric
-rank-0 :math:`t` matrix by an additive symmetric correction to
-force row conservation while preserving reciprocity.
-
-.. math::
-   :label: hebert-3-350
-
-   \hat{t}_{\ell m} \;=\; (z_{\ell} + z_{m})\, t_{\ell m},
-   \qquad \ell,\, m \;=\; 1, \ldots, \Lambda + I.
-
-Reciprocity is preserved by construction because the scalar factor
-:math:`(z_{\ell} + z_{m})` is symmetric in :math:`\ell \leftrightarrow m`
-and :math:`t_{\ell m}` is already symmetric (Hébert p. 129).
-
-Hébert defines V-S only on rank-0 primitives. The novel extension
-tested here is **per-diagonal-mode V-S on the rank-:math:`N` W**:
-for each mode :math:`n \in \{0, \ldots, N{-}1\}`, extract the 2×2
-diagonal block
-
-.. math::
-
-   W_{\rm sub}[n] \;=\;
-   \begin{pmatrix}
-      W[n,\, n] & W[n,\, N{+}n] \\[2pt]
-      W[N{+}n,\, n] & W[N{+}n,\, N{+}n]
-   \end{pmatrix},
-
-solve the 2-unknown V-S system for :math:`(z_{\rm outer}^{(n)},
-z_{\rm inner}^{(n)})`, and apply the additive symmetric correction
-per mode. The target is the F.4 scalar row sum (mode-0 conserves
-against F.4's target as a sanity check; :math:`n \ge 1` is forced
-onto F.4's mode-0 target, which is the strongest possible demand
-for per-mode conservation). Off-diagonal cross-mode blocks
-:math:`n \ne m` are left untouched.
-
-.. list-table:: Per-mode V-S residuals on hollow sphere (:math:`r_0/R = 0.3`, :math:`\sigma_t \cdot R = 5`)
-   :header-rows: 1
-   :widths: 10 22 22 22 22
-
-   * - :math:`N`
-     - µ-ortho raw
-     - µ-ortho + V-S
-     - Shipped Marshak raw
-     - Shipped Marshak + V-S
-   * - 1
-     - 2.55 %
-     - 2.17 %
-     - 13.53 %
-     - 13.53 %
-   * - 2
-     - **1.42 %**
-     - **1.87 % WORSE**
-     - 10.86 %
-     - 10.83 %
-   * - 3
-     - 1.42 %
-     - 1.87 % WORSE
-     - 10.70 %
-     - 10.66 %
-   * - 4
-     - 1.43 %
-     - 1.88 % WORSE
-     - 10.70 %
-     - 10.66 %
-
-Reciprocity is preserved at machine precision
-(:math:`A_i\, W_{ij} - A_j\, W_{ji} \le 10^{-16}`) for every row of
-the table, both pre- and post-V-S, confirming that the additive
-symmetric form does what Hébert Eqs. 3.350 claim (p. 129). The V-S
-scheme *also* hits its design target: at :math:`\sigma_t = 0` the
-per-mode row sums are driven to the F.4 scalar targets for every
-mode :math:`n` (e.g., at :math:`N = 3`: outer row sum
-:math:`2.137 \to 1.910`, inner :math:`0.118 \to 0.090` for
-:math:`n = 0`; outer :math:`1.191 \to 1.910`,
-:math:`0.547 \to 1.910` for :math:`n = 1, 2`).
-
-**The falsification is unambiguous.** Enforcing per-mode
-conservation does not close the plateau — on the µ-ortho pipeline
-it makes k\ :sub:`eff` **worse** (1.42 % → 1.87 %); on the shipped
-Marshak pipeline it is essentially a no-op (10.86 % → 10.83 %).
-**The plateau is a cross-mode coupling failure, not a
-conservation-forcing failure.** Correcting the diagonal blocks
-distorts the balance between diagonal and off-diagonal coupling,
-shifting the closure further off rather than toward k\ :sub:`inf`.
-
-Diagnostic at
-:file:`derivations/diagnostics/diag_rank_n_villarino_stammler_per_mode.py`;
-full memo at
-:file:`.claude/agent-memory/numerics-investigator/peierls_villarino_stammler_per_mode.md`.
+Hébert 2009 Ch. 3 (p. 129) recommends an a-posteriori
+Villarino-Stamm'ler additive symmetric correction
+(Eqs. 3.347–3.352) as the standard fix for non-conservative rank-0
+DP\ :sub:`N` primitives. A novel **per-diagonal-mode V-S on the
+rank-N** :math:`W` was tested as a candidate to drive the curvilinear
+plateau toward machine precision; it does not. On the µ-ortho
+pipeline it makes k\ :sub:`eff` **worse** (1.42 % → 1.87 % at
+rank :math:`N \ge 2`); on the shipped Marshak pipeline it is
+essentially a no-op (10.86 % → 10.83 %). The plateau is a
+cross-mode coupling failure, not a conservation-forcing failure
+— forcing per-mode row sums correct distorts the balance between
+diagonal and off-diagonal coupling. Reciprocity is preserved at
+machine precision throughout, confirming the additive symmetric
+form does what Hébert Eqs. 3.350 claim. The full per-mode V-S
+residual table (µ-ortho + Marshak, ranks 1–4, with reciprocity
+machine-precision evidence) is in
+`Issue #119 close-out
+<https://github.com/deOliveira-R/ORPHEUS/issues/119#issuecomment-4348745180>`_;
+diagnostic at
+:file:`derivations/diagnostics/diag_rank_n_villarino_stammler_per_mode.py`.
 
 Production closure decision
 ---------------------------
@@ -3669,6 +3542,8 @@ the Frame 5 memo; not shipped because no current closure passes
 Frame 5. Issue #128 tracks the optional migration of F.4 production
 quadrature from product-Gauss to randomized QMC; LOW priority, not
 on the critical path.
+
+.. _peierls-f5-infrastructure-retained:
 
 Infrastructure retained (dead-code-guarded for future research)
 ----------------------------------------------------------------
