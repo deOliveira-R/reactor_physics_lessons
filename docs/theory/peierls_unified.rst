@@ -1317,9 +1317,9 @@ housed in:
 - :mod:`orpheus.derivations.peierls_cylinder` — cylinder
   :math:`\mathrm{Ki}_1` reference (Phase 4.2, shipped; companion
   theory page in :doc:`collision_probability`).
-- (Planned) ``orpheus.derivations.peierls_sphere`` — sphere
-  :math:`e^{-\tau}` reference (Phase 4.3, deferred on the white-BC
-  closure; see GitHub Issue #100).
+- :mod:`orpheus.derivations.peierls_sphere` — sphere
+  :math:`e^{-\tau}` reference (registry-only façade per Issue #138;
+  canonical entry is ``solve_peierls_mg(_pg.SPHERE_1D, ...)``).
 
 Read naively, these three modules implement three different
 equations with three different kernels (:math:`E_1`,
