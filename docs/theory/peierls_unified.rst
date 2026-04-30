@@ -4096,68 +4096,30 @@ fission L1 reference would need either (a) the Mark closure replaced
 by an angular-distribution-preserving alternative, or (b) acceptance
 of the source-spectrum-dependent error magnitude.
 
-Follow-up direction investigation (2026-04-25)
-----------------------------------------------
+Follow-up directions
+--------------------
 
-Three candidate paths to address the Mark uniformity overshoot were
-investigated by parallel numerics-investigator dispatch:
+Two abandoned directions: **Davison method-of-images** is
+structurally impossible (white BC re-emits the AVERAGED angular
+distribution :math:`\psi^- = J^+/\pi`, which cannot be reproduced by
+mirror sources; the image series solves the specular-reflection
+problem instead). **Augmented Nyström** (adding :math:`J^+(\mu)` as
+extra unknowns enforcing :math:`J^- = J^+` as constraints) is
+algebraically equivalent to the existing
+:math:`K_{\rm bc} = G \cdot R \cdot P` Schur reduction to machine
+precision (:math:`6.66\times10^{-16}` at :math:`M = 1`); only the
+choice of :math:`M`-mode basis remains a knob, and the same Issue
+#100 normalisation floor blocks every basis tested. The full
+Davison + augmented-Nyström forensic (image-series convergence
+table, Schur-reduction algebraic-equivalence proof, µ-Nyström
+endpoint-singularity analysis) is in
+`Issue #132 close-out
+<https://github.com/deOliveira-R/ORPHEUS/issues/132>`_.
 
-**1. Davison method-of-images (ABANDONED, structurally impossible)**
+The active resolution direction is the cylinder Hébert
+:math:`(1 - P_{ss})^{-1}` extension via Issue #112 Phase C.
 
-For sphere with vacuum at center (Davison :math:`u(0)=0`) and white
-BC at outer surface, the image series
-
-.. math::
-
-    K_{\rm white}(r, r') = \sum_{n} (-1)^{|n|}
-        \bigl[E_1(\tau|r - 2nR - r'|) - E_1(\tau|r - 2nR + r'|)\bigr]
-
-converges fast (saturates at ~5 image terms, exponentially decaying)
-but to the **wrong eigenvalue** (-53 % off cp_sphere k_inf for
-1G/1R fuel A). Root cause: method-of-images requires the BC to act
-**pointwise on the angular flux**. Vacuum (:math:`\psi^- = 0`) and
-specular (:math:`\psi^-(\Omega) = \psi^+(\Omega - 2(\Omega \cdot \mathbf
-n)\mathbf n)`) qualify. White BC (Mark) does NOT — it re-emits returning
-current with the AVERAGED angular distribution
-:math:`\psi^-(\Omega) = J^+/\pi`, which cannot be reproduced by mirror
-sources. The image series solves the SPECULAR-reflection problem
-instead. **No method-of-images formulation exists for white BC**, even
-on a homogeneous sphere; this is a hard structural barrier.
-
-Probes:
-``derivations/diagnostics/diag_sphere_davison_image_{01..04}_*.py``;
-agent memory:
-:file:`.claude/agent-memory/numerics-investigator/issue_132_davison_image_series.md`.
-
-**2. Augmented Nyström (ABANDONED, algebraically equivalent)**
-
-Adding the surface partial current :math:`J^+(\mu)` as :math:`M`
-extra unknowns in an :math:`(N+M)\times(N+M)` block system, enforcing
-:math:`J^- = J^+` as constraint equations rather than a closure
-approximation. **Verified algebraically equivalent** to the existing
-:math:`K_{\rm bc} = G \cdot R \cdot P` Schur reduction in
-:class:`BoundaryClosureOperator` to machine precision
-(:math:`6.66\times10^{-16}` at :math:`M = 1`). The block formulation
-pre-elimination IS the Schur reduction; eliminating
-:math:`J^+` from the bottom block recovers the existing closure with
-:math:`R = (I - W_{\rm eff})^{-1}`. **The augmented direction provides
-zero new physics beyond the existing rank-:math:`M` closure** — the
-only knob is the choice of :math:`M`-mode basis, and:
-
-- µ-Nyström-collocation is structurally non-convergent (:math:`r`-
-  dependent endpoint singularity at :math:`\mu_{\min}(r) = \sqrt{1 -
-  (r/R)^2}`).
-- Marshak Legendre rank-:math:`M` plateaus at +2.4 % — the same
-  Issue #100 mode-0/mode-:math:`n\geq1` normalisation floor that
-  prevented the rank-:math:`N` Marshak path from being shipped
-  originally.
-
-Probes:
-``derivations/diagnostics/diag_sphere_augmented_nystrom_{a..e}_*.py``;
-memory:
-:file:`.claude/agent-memory/numerics-investigator/issue_132_augmented_nystrom.md`.
-
-**3. Cylinder Hébert + Issue #112 Phase C (RESOLVED for homogeneous)**
+**Cylinder Hébert + Issue #112 Phase C (RESOLVED for homogeneous)**
 
 The cylinder analog of :func:`compute_P_ss_sphere` derives cleanly:
 
@@ -4261,65 +4223,25 @@ derivation:
 memory:
 :file:`.claude/agent-memory/numerics-investigator/issue_132_cylinder_hebert.md`.
 
-**Synthesis**
+**Synthesis** — three independent investigations (Davison
+method-of-images, augmented Nyström, Sanchez 1977 NSE 64 rank-N IC)
+all confirm that the chi-dependent Mark uniformity overshoot is the
+**intrinsic structural limit of the rank-N interface-current closure
+family**. Sanchez 1977's empirical bound on heterogeneous LWR cells
+is ~1–3 % with rank-3 — an order of magnitude smaller than the
++50 % cyl 2G/2R overshoot. Live candidate paths (none yet
+PDF-verified to actually solve the heterogeneous-Mark problem):
 
-For Class B sphere AND cylinder (after Issue #112 Phase C), the
-chi-dependent Mark uniformity overshoot is the **intrinsic structural
-limit** of the rank-N interface-current closure family. Three
-independent investigations confirm this:
-
-- **Davison method-of-images** is structurally impossible (white BC
-  acts on the *averaged* angular distribution, not pointwise).
-- **Augmented Nyström** is algebraically equivalent to the existing
-  rank-M Schur reduction (verified to machine precision at M=1).
-- **Sanchez 1977 NSE 64 rank-N IC formulation** (PDF read 2026-04-25
-  — see :file:`.claude/agent-memory/literature-researcher/sanchez_1977_nse64_canonical_ic.md`)
-  uses 3 modes per face = same algebraic class as rank-M Schur with
-  M=3 per face. The paper is fixed-source only — its
-  :math:`(I - A\cdot P_{ss})^{-1}` is *multi-cell coupling*, not a
-  multi-collision K_∞ closure as the earlier ORPHEUS narration
-  asserted. The Hébert :math:`(1 - P_{ss})^{-1}` is a *different
-  object* (single-cell self-multiplication), not the rank-0 collapse
-  of Sanchez 1977. The empirical bound from Sanchez's Tables VI-VII
-  on heterogeneous LWR cells is ~1-3 % residual with rank-3 — an
-  order of magnitude smaller than the +50 % cyl 2G/2R overshoot, so
-  rank-3 cannot close the gap.
-
-To address the overshoot at L1 tolerance for source-localised spectra
-requires a fundamentally different approach. Live candidate paths
-(none yet PDF-verified to actually solve the heterogeneous-Mark
-problem):
-
-- **Sanchez 2002 NSE 142** — double-PN extension of the rank-N IC
-  formulation. Genuinely distinct surface response if the double-PN
-  basis spans more than the per-face piecewise-uniform basis of
-  Sanchez 1977.
-- **Bogado Leite 1998 ANE** — orphaned reference per
-  :file:`.claude/agent-memory/literature-researcher/rank_n_ic_curvilinear_literature_leads.md`,
-  candidate for a non-rank-N approach.
-- Direct Sn or MOC angular-flux discretisation of the surface
-  reflection — departs from the Peierls integral-equation paradigm.
+- **Sanchez 2002 NSE 142** — double-:math:`P_N` extension; tracked
+  in Issue #132.
+- **Bogado Leite 1998 ANE** — non-rank-N approach lead; tracked
+  in Issue #132.
+- Direct :math:`S_N` or MOC angular-flux discretisation of the
+  surface reflection (departs from the Peierls paradigm).
 - Acceptance of the chi-dependent overshoot as the Mark-closure
   documented limit; restrict L1-tolerance verification to
-  configurations that route through near-uniform-σ_t groups (default
-  2G XS chi=[1, 0]).
-
-To fully resolve the 1G/2R case requires either:
-
-(a) An angular-distribution-preserving closure — the rank-N Marshak
-    path was falsified (Issue #132, this session); rank-N does NOT
-    converge structurally.
-(b) The Davison sphere kernel via method-of-images, absorbing the
-    surface reflection analytically into the volume kernel itself
-    via the spherical inversion :math:`r' \mapsto R^2/r'`. This
-    requires literature confirmation that a closed form exists; the
-    method is feasible in principle but no canonical textbook
-    reference was found in the 2026-04-25 literature pull.
-(c) Augmented Nyström — adding the surface partial current
-    :math:`J^+` as an extra unknown in the matrix system, enforcing
-    :math:`J^- = J^+` as a constraint equation rather than a closure
-    approximation. Issue #100 original suggestion; engineering work
-    but no novel mathematics.
+  configurations that route through near-uniform-σ_t groups
+  (default 2G XS chi = [1, 0]).
 
 Issue #132 stays OPEN for the 1G/2R limitation; the Hébert closure
 ships as a substantial partial fix.
@@ -4328,23 +4250,21 @@ Code reference
 --------------
 
 - :func:`compute_P_ss_sphere` — analytical / numerical surface-to-
-  surface probability for sphere with white BC. Implements
-  :eq:`peierls-class-b-Pss-homogeneous` (homogeneous closed form when
-  reduced) and the multi-region piecewise generalisation.
-- ``boundary="white_hebert"`` in
-  :func:`solve_peierls_mg` (and the 1G wrapper
-  :func:`solve_peierls_1g`) — applies the
+  surface probability for sphere with white BC; implements
+  :eq:`peierls-class-b-Pss-homogeneous` (homogeneous closed form
+  when reduced) plus multi-region piecewise generalisation.
+- :func:`compute_P_ss_cylinder` — cylinder analog
+  (:eq:`peierls-cyl-Pss-derivation`) using the Ki\ :sub:`3` Bickley
+  fold of the 3-D cosine.
+- :func:`compute_G_bc_cylinder_3d` — 3-D corrected cylinder rank-1
+  Mark primitive (:eq:`peierls-cyl-Gbc-3d-final`); Issue #112 Phase
+  C resolution.
+- ``boundary="white_hebert"`` in :func:`solve_peierls_mg` (and the
+  1G wrapper :func:`solve_peierls_1g`) — applies
   :math:`K \to K_{\rm vol} + K_{\rm bc}^{\rm Mark}/(1 - P_{ss})`
-  correction.
-
-The closure is currently **sphere-only**. ``cylinder-1d`` raises
-:class:`NotImplementedError` because the cylinder rank-1 primitive
-needs Issue #112 Phase C (Knyazev :math:`\mathrm{Ki}_{2+k}`
-expansion) for the 3D-vs-2D angular normalisation correction before
-the Hébert series can be applied. ``slab-polar`` uses the E_2
-piecewise sum (:doc:`Issue #131 close-out </theory/peierls_unified>`
-§ ``theory-peierls-slab-polar-g5-diagnosis``) which is structurally
-different.
+  for sphere AND cylinder. ``slab-polar`` uses the E\ :sub:`2`
+  piecewise sum (see :ref:`theory-peierls-slab-polar-g5-diagnosis`),
+  which is structurally different.
 
 Test reference
 --------------
