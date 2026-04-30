@@ -159,7 +159,7 @@ re-derivation — see :ref:`peierls-rank-n-per-face-closeout` and
   :math:`r_0 = 0.1 R` → 0.4 % (70× over rank-1 Mark),
   :math:`r_0 = 0.2 R` → 1.2 % (24×),
   :math:`r_0 = 0.3 R` → 3.3 % (10×).
-- **Historical note.** Standard references
+- **Why polar form, not chord coordinates.** Standard references
   ([Sanchez1982]_, [Hebert2020]_, [Stamm1983]_, [BellGlasstone1970]_,
   [CaseZweifel1967]_) present each geometry in **chord coordinates**
   :math:`(y, r')` because those coordinates admit closed-form flat-source
@@ -169,47 +169,20 @@ re-derivation — see :ref:`peierls-rank-n-per-face-closeout` and
   averaging. For pointwise Nyström with general polynomial sources the
   observer-centred polar form is the cleaner choice, and this page is
   the written record of that choice.
-- **Production status (2026-04-20).** The slab K matrix is now
-  assembled by the **unified verification primitive**
-  :func:`~orpheus.derivations.peierls_geometry.K_vol_element_adaptive`
-  — adaptive ``mpmath.quad`` over the polar form, polymorphic across
-  all three geometries via :class:`CurvilinearGeometry`. This is the
-  single ground-truth K-element computation; production-tier
-  curvilinear paths (cylinder-1d, sphere-1d) verify against it at
-  spectral-but-finite-rate convergence. The slab moment-form Nyström
-  architecture (closed-form polynomial moments via
-  Lewis–Miller / Hébert / Stamm'ler integration-by-parts) was archived
-  on 2026-04-19 to
-  :file:`derivations/archive/peierls_slab_moments_assembly.py`
-  and tracked under
-  `GitHub Issue #117 <https://github.com/deOliveira-R/ORPHEUS/issues/117>`_
-  for future application to a higher-order production discrete CP
-  solver. The cylinder-polar variant (explicit out-of-plane
-  :math:`\varphi`-quadrature) was likewise archived to
-  :file:`derivations/archive/peierls_cylinder_polar_assembly.py` —
-  cylinder-1d (with :math:`\mathrm{Ki}_1` evaluated directly) is the
-  natural-kernel form and the active production path.
-- **Vacuum-BC verification milestone (2026-04-20).** Machine-precision
-  (rel tol :math:`10^{-10}`) analytical references for the uniform-source
-  vacuum-BC flux exist for all three geometries:
-  :func:`~orpheus.derivations.peierls_reference.slab_uniform_source_analytical`
-  (closed-form :math:`E_2` differences),
-  :func:`~orpheus.derivations.peierls_reference.cylinder_uniform_source_analytical`
-  (one ``mpmath.quad`` over in-plane azimuth with :math:`\mathrm{Ki}_2`
-  absorbing the polar integral), and
-  :func:`~orpheus.derivations.peierls_reference.sphere_uniform_source_analytical`
-  (one ``mpmath.quad`` over :math:`\mu = \cos\Theta`). The row-sum
-  identity :math:`\sum_j K_{ij} \cdot 1 = \Sigma_t\,\varphi_d(r_i)` is
-  gated against these references by
+- **Production status.** Slab :math:`K` is production via the unified
+  adaptive ``mpmath.quad`` path
+  (:func:`~orpheus.derivations.peierls_geometry.K_vol_element_adaptive`).
+- **Vacuum-BC verification.** Machine-precision (rel tol
+  :math:`10^{-10}`) analytical references exist for the uniform-source
+  vacuum-BC flux in all three geometries; the row-sum identity
+  :math:`\sum_j K_{ij} \cdot 1 = \Sigma_t\,\varphi_d(r_i)` is gated by
   ``TestSlabKernelRowSum``, ``TestCylinderKernelRowSum``, and
-  ``TestSphereKernelRowSum`` in :mod:`tests.derivations.test_peierls_reference`.
-  Full derivations live at :ref:`peierls-vacuum-bc-analytical-references`.
-  Because vacuum BC is :math:`R = 0` in the boundary-closure tensor
-  network :math:`K_{\rm bc} = G\cdot R\cdot P` (see
-  :class:`~orpheus.derivations.peierls_geometry.BoundaryClosureOperator`),
-  this closes the volume-kernel verification at the flux level; the BC
-  tensor-network expansion (Mark / Marshak DP_N / albedo) proceeds on a
-  verified foundation.
+  ``TestSphereKernelRowSum`` in
+  :mod:`tests.derivations.test_peierls_reference`. Because vacuum BC is
+  :math:`R = 0` in the closure tensor network
+  :math:`K_{\rm bc} = G\cdot R\cdot P`, this closes volume-kernel
+  verification at the flux level. Full derivations live at
+  :ref:`peierls-vacuum-bc-analytical-references`.
 
 
 .. _theory-peierls-capabilities:
