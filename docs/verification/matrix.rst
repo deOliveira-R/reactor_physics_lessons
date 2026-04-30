@@ -300,12 +300,10 @@ Every Sphinx ``.. math:: :label:`` block declared in ``docs/theory/*.rst`` and t
 Orphan equations
 ----------------
 
-Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **53** of the testable equations found on theory pages are orphan.
+Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding labels explicitly marked ``:vv-status: documented``. **43** of the testable equations found on theory pages are orphan.
 
-- ``c-in-jacobian``
 - ``c-in-remapping``
 - ``e1-decomposition``
-- ``hebert-3-350``
 - ``mode-conservation-target``
 - ``peierls-M-rank-1``
 - ``peierls-M-rank-2``
@@ -321,16 +319,8 @@ Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding
 - ``peierls-factored-kernel``
 - ``peierls-half-range-inner-products``
 - ``peierls-mg-operator``
-- ``peierls-moment-J-E1``
-- ``peierls-moment-J-Ki1``
-- ``peierls-moment-K-assembly``
-- ``peierls-moment-K-source-form``
-- ``peierls-moment-contraction``
-- ``peierls-moment-segment``
-- ``peierls-moment-vandermonde``
 - ``peierls-operator-factorisation``
 - ``peierls-operator-form``
-- ``peierls-phase5-sanchez-A6``
 - ``peierls-rank-n-P-esc-moment``
 - ``peierls-rank-n-jacobian-derivation``
 - ``peierls-slab-Gbc-mode``
@@ -457,6 +447,7 @@ Every ``ERR-NNN`` entry in ``tests/l0_error_catalog.md`` and the tests that carr
    ``ERR-029``, 6
    ``ERR-030``, 2
    ``ERR-031``, **0 (MISSING)**
+   ``ERR-032``, 4
 
 Unmarked tests
 --------------

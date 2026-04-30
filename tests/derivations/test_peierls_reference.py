@@ -105,6 +105,7 @@ def _build_slab_K_and_nodes(L, sig_t, n_panels=8, p_order=6, dps=30):
 
 @pytest.mark.l1
 @pytest.mark.verifies("peierls-unified")
+@pytest.mark.catches("ERR-032")
 class TestSlabKernelRowSum:
     """ORPHEUS slab K-matrix row-sum equals closed-form flux from
     uniform source on pure absorber with vacuum BC.

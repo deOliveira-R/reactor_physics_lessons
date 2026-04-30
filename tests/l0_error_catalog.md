@@ -1492,6 +1492,89 @@ the recipe.
 
 ---
 
+## ERR-032 — Slab white-BC analytical reference: wrong ∫E₂ antiderivative (factor-of-two algebra bug)
+
+**Failure mode:** #1 Wrong formula — wrong exponential-integral
+antiderivative used to evaluate the partial-current balance for the
+slab white-BC closed form.
+**Date:** 2026-04-20 introduced (commit ``2538cfe``); caught
+shortly after when the first-order ``K_bc`` row-sum identity was
+exercised against the new analytical reference.
+**Solver:** Peierls slab, white-BC analytical reference
+(``orpheus.derivations.peierls_reference.slab_uniform_source_white_bc_analytical``).
+
+**Bug:** Commit ``2538cfe`` shipped the closed form
+
+.. code-block::
+
+    φ_wrong(x) = (1/(2 Σ_t)) · [2 + (2β − 1) · (E_2(τ) + E_2(τ'))]
+    β = (1 − E_3(Σ_t L)) / (1 − 2 · E_3(Σ_t L))
+
+obtained from ``J^+(L)|_vol = (1/(2 Σ_t)) · (1 − E_3(τ_L))`` — which
+uses the wrong antiderivative identity ``∫E_2 = 1 − E_3``. The correct
+identity is ``∫E_2 = ½ − E_3``, and the algebraic simplification
+``(½ − E_3)/(1 − 2 E_3) = ½`` collapses ``J^-`` to the constant
+``1/(4 Σ_t)``, giving ``φ ≡ 1/Σ_t`` exactly (the Wigner-Seitz identity
+for a uniform absorber cell).
+
+**Why two "independent" derivations agreed at 1e-39:** A fixed-point
+diagnostic of the partial-current balance was used as the
+"independent" cross-check for the analytical formula. Both the
+analytical derivation **and** the fixed-point iteration applied the
+same wrong antiderivative when reducing volume integrals of ``E_2`` to
+``E_3``. They converged to the same wrong number to machine precision
+because they shared a factor-of-two algebra mistake — not because
+either was right. **Lesson generalises beyond this bug:** "two
+independent derivations agreeing at 1e-39" is worthless evidence if
+both derivations share an upstream identity.
+
+**Impact:** No production code consumed ``φ_wrong`` (it was a fresh
+analytical reference, not a solver). The bug was caught before any
+downstream rank-N or MR code was wired to it.
+
+**How it hid from higher-level tests:** The reference was new — there
+were no upstream consumers to drive it through a regression. The
+fixed-point cross-check that "should have" caught it was structurally
+unable to catch it (same factor-of-two error in both branches). Only
+exercising the row-sum identity ``Σ_j K_{ij} · 1 = ∫_0^L ½ E_1(Σ_t |
+x_i − x'|) dx' = (1/(2 Σ_t)) [2 − E_2(τ_i) − E_2(τ_i')]`` — a
+*different* analytical identity, derived from a *different* integrand
+(the kernel itself, not its volume integral) — exposed the
+disagreement: factor ``~ 2.2`` between row-sum from ``K`` and
+``φ_wrong``.
+
+**L1 test that catches it:**
+- ``tests/derivations/test_peierls_reference.py::TestSlabKernelRowSum::test_row_sum_matches_analytical_uniform_source``
+  (``@pytest.mark.l1``, ``@pytest.mark.verifies("peierls-unified")``,
+  ``@pytest.mark.catches("ERR-032")``). Asserts the row-sum identity
+  to ``< 1e-8`` over a small ``(L, Σ_t)`` grid using the *vacuum-BC*
+  uniform-source analytical (``slab_uniform_source_analytical``),
+  which uses the correct ``∫E_2 = ½ − E_3`` identity. Disagreement of
+  ``φ_wrong`` with this row-sum was the first-order fingerprint.
+
+**Fix:** Re-derive ``J^-`` with the correct antiderivative; the result
+collapses algebraically to ``φ ≡ 1/Σ_t`` (uniform Wigner-Seitz). The
+shipped function in
+``orpheus.derivations.peierls_reference.slab_uniform_source_white_bc_analytical``
+returns this constant. See ``docs/theory/peierls_unified.rst``
+``§White-BC analytical flux — slab`` (the canonical derivation; the
+"History of the algebra bug" subsection in that page now points at
+this catalog entry).
+
+**Lesson:** Cross-checks must be *structurally* independent, not just
+*procedurally* independent. A fixed-point iteration written in
+parallel with an analytical derivation is procedurally independent
+(different code paths) but structurally coupled (both reduce the same
+class of integrals using the same antiderivative table from the same
+human's working memory). The most reliable cross-checks come from a
+different integrand or a different identity — not the same identity
+written in two ways. Apply at every analytical-reference shipping
+point: pick the cross-check from the *kernel* (row-sum, balance) and
+the *closed form* (eigenvalue, asymptotic limit) — not two
+derivations of the same closed form.
+
+---
+
 ## Meta-Lessons
 
 1. **1-group is degenerate.** k = νΣ_f/Σ_a regardless of flux shape.
