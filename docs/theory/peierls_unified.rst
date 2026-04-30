@@ -8194,8 +8194,7 @@ re-derivation.
 
 .. seealso::
 
-   **Phase B target modules** (all shipped; see commits
-   ``f1b869b`` → ``bf128d3`` → ``6badbe5``):
+   **Phase B target modules** (all shipped):
 
    :mod:`orpheus.derivations.cp_geometry` — the unified
    :class:`~orpheus.derivations.cp_geometry.FlatSourceCPGeometry`
@@ -8250,8 +8249,7 @@ re-derivation.
 
    GitHub Issue `#94
    <https://github.com/deOliveira-R/ORPHEUS/issues/94>`_ —
-   ``BickleyTables`` naming discrepancy, **CLOSED** by commit
-   ``6badbe5`` (Phase B.4).
+   ``BickleyTables`` naming discrepancy, **CLOSED** in Phase B.4.
 
 
 Part IV — Tensor structure of the boundary closure
@@ -8736,113 +8734,18 @@ Empirical variant scan
 
 Bare homogeneous 1G 1-region white-BC eigenvalue
 (:math:`\Sigma_t = 1`, :math:`\Sigma_s = 0.5`,
-:math:`\nu\Sigma_f = 0.75`, :math:`k_\infty = 1.5`):
-
-.. list-table:: Sphere :math:`k_{\rm eff}` error vs rank :math:`N`
-   :header-rows: 1
-   :widths: 10 14 14 14 14 14 14 14
-
-   * - Variant
-     - Description
-     - R=1 N=1
-     - R=1 N=2
-     - R=1 N=3
-     - R=1 N=8
-     - R=10 N=1
-     - R=10 N=8
-   * - V1
-     - Current (shipped)
-     - 27 %
-     - **1.2 %**
-     - 2.3 %
-     - 2.5 %
-     - 0.28 %
-     - 0.17 %
-   * - V2
-     - Jacobian mode 0, :math:`R=\mathrm{diag}(2n+1)`
-     - 50 %
-     - 29 %
-     - 25 %
-     - 24 %
-     - 5.3 %
-     - 5.2 %
-   * - V4
-     - Jacobian mode 0, :math:`R=B^{-1}`
-     - 29 %
-     - 16 %
-     - 15 %
-     - 15 %
-     - 5.2 %
-     - 5.2 %
-   * - V6
-     - Cosine-:math:`\mu` integrand, :math:`R=B^{-1}`
-     - **1.1 %**
-     - 19 %
-     - 19 %
-     - 19 %
-     - 6.3 %
-     - 6.9 %
-
-.. list-table:: Cylinder :math:`k_{\rm eff}` error vs rank :math:`N`
-   :header-rows: 1
-   :widths: 10 14 14 14 14 14 14 14
-
-   * - Variant
-     - Description
-     - R=1 N=1
-     - R=1 N=2
-     - R=1 N=3
-     - R=1 N=8
-     - R=10 N=1
-     - R=10 N=8
-   * - V1
-     - Current (shipped)
-     - 21 %
-     - 8.3 %
-     - 27 %
-     - 107 %
-     - 1.1 %
-     - 0.9 %
-   * - V2
-     - Jacobian mode 0, :math:`R=\mathrm{diag}(2n+1)`
-     - 41 %
-     - 17 %
-     - **0.45 %**
-     - 65 %
-     - —
-     - —
-   * - V4
-     - Jacobian mode 0, :math:`R=B^{-1}`
-     - 23 %
-     - 2.6 %
-     - 13 %
-     - 78 %
-     - —
-     - —
-
-Observations
-------------
-
-1. **V1 is empirically the best overall**. Sphere converges to a
-   :math:`\sim 2.5\,\%` plateau at thin :math:`R`; thick cells are
-   sub-percent. Cylinder rank-1 matches legacy Mark accurately.
-
-2. **V2 cylinder at rank-3 R=1 MFP hits the canonical DP_2
-   prediction** (:math:`0.45\,\%`). This *proves* that the factored
-   structure :math:`G R P` is capable of canonical rank-:math:`N`
-   convergence — but only at the cost of a **degraded rank-1**
-   convention (41 % error at rank 1).
-
-3. **V6's cosine-integrand rank-1 is accidentally good for sphere at
-   R=1** (1.1 %) but its rank-:math:`N` never improves. The rank-1
-   match is a geometric coincidence at thin :math:`R` where
-   :math:`\mu_{\rm exit} \approx 1` for most rays, not a canonical
-   result.
-
-4. **Changing** :math:`R` **from** :math:`\mathrm{diag}(2n+1)` **to**
-   :math:`B^{-1}` **does not rescue** a degraded mode-0 convention.
-   V4 improves sphere from 24 % plateau (V2) to 15 % plateau — a
-   marginal cosmetic change on a badly-conditioned rank-1.
+:math:`\nu\Sigma_f = 0.75`, :math:`k_\infty = 1.5`) was scanned
+across four canonical variants (V1/V2/V4/V6) for sphere and cylinder
+across rank :math:`N \in \{1, 2, 3, 8\}` and :math:`R \in \{1, 10\}`
+MFP. The full :math:`k_{\rm eff}` error tables and per-variant
+description are recorded in the
+`Issue #112 investigation log
+<https://github.com/deOliveira-R/ORPHEUS/issues/112#issuecomment-4348744624>`_.
+Headline empirical findings: V1 is the best overall and remains
+shipped; V2 cylinder rank-3 at :math:`R=1` MFP hits the canonical
+DP_2 prediction (0.45 %), proving the factored :math:`GRP` structure
+is *capable* of canonical rank-:math:`N` convergence — but only at
+the cost of a degraded rank-1 convention (41 % at rank 1).
 
 What this teaches
 -----------------
