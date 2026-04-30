@@ -963,12 +963,9 @@ preserved as convenient bindings of the canonical ``CYLINDER_1D`` /
 Retirement candidates (active)
 -------------------------------
 
-This subsection is intentionally empty. As of 2026-04-29 the only
-remaining transitional wrapper is the slab native E₁ Nyström, which
-is classified below as **verification-of-verification** rather than
-"retirement candidate" — its retirement is gated on the parallel
-Green's function approach (next session), not on a within-session
-sweep.
+None as of 2026-04-30; the slab native E₁ Nyström is classified as
+verification-of-verification (see *Retirement gate (slab native E₁
+Nyström)* below), not transitional.
 
 Verification-of-verification
 -----------------------------
