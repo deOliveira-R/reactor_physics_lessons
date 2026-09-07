@@ -146,3 +146,4 @@ quantity carries the units it does.
 - [Pyright ignored-package measurement](reference_pyright_ignored_package_measurement.md)
   — true error count for a `[tool.pyright]`-ignored package: CLI file args + a /tmp
   ignore-free config; discount the editable-install import artifacts.
+- [Census predicates: bound-method reference + activation traceback](census_predicates_bound_reference_and_activation_traceback.md) — a CALL census reads a BOUND verb as dead (0/1/0 = bound, say so); receiver-name regexes miss `head * bulk`; wrap-and-run with a 3-frame traceback finds the HOTTEST client (the R6 guard line = 58/118 densifier mints).

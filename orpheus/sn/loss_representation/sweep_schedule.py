@@ -17,7 +17,8 @@ splitting is selected ONCE, by choosing the schedule):
 * **Gauss-Seidel** — one group per in-plane octant (:class:`OctantLabel`), in
   quadrature sweep order; after each group its reflective OUTGOING faces are
   re-reflected (the face-restricted
-  :meth:`~orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_into_inflow`),
+  :meth:`~orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace`,
+  bound by the scheduled resolvent),
   so a LATER group reads the fresh current-iterate reflection. Octants swept
   before their specular partner keep the lagged seed (the cyclic ``B_upper``
   back-edges — e.g. a both-faces-reflective axis is a 2-cycle ⟹ only PARTIAL
