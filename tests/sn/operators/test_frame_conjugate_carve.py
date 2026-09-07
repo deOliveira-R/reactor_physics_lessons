@@ -411,9 +411,10 @@ class TestProductionApplyEqualsComposedOperator:
         nx, ny = sn_mesh.spatial_shape
         N = sn_mesh.quad.N
         iso = np.zeros((ng, nx, ny))
-        # ``add_iso_source`` is the SI driver's bare-array seam (R-3 retired
-        # its typed arm): ndarray Q, ndarray φ.
-        op.add_iso_source(iso, phi.values)
+        # The P0 emission in place through the channel FIELD's verb (the
+        # operator-level seam ``add_iso_source`` retired at #448): ndarray Q,
+        # ndarray φ.
+        op.transfer.add_p0_source(iso, phi.values)
         expected = np.broadcast_to(
             (iso / sum_w)[None, :, :, :], (N, ng, nx, ny),
         ) + aniso

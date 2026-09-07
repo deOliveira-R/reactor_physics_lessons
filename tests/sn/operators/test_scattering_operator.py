@@ -1,19 +1,23 @@
 """Foundation tests for :class:`orpheus.transport.operators.scattering.ScatteringOperator`.
 
 Round 1.2 of Wave D of the SN reshape campaign (Issue #162). The
-operator carries the same math :class:`SNSolver` used to expose under
-``_add_scattering_source``, ``_build_aniso_scattering``, and
-``_add_n2n_source`` (now thin delegators); these tests pin the lifted
-math at the operator level so any drift would be observable here as
-well as via the underscore-prefixed delegators.
+operator carries the math :class:`SNSolver` used to expose under
+``_add_scattering_source``, ``_build_aniso_scattering`` and
+``_add_n2n_source`` — thin delegators that RETIRED at #448 together with
+the operator's own in-place seams ``add_iso_source`` / ``build_aniso_source``
+(the eigenvalue finalize they fed became one step of the driven iteration,
+which acts through ``apply``); these tests pin the lifted math at the
+operator level through the bodies that survive: the channel FIELD's P0
+verb ``transfer.add_p0_source`` (the in-place P0 emission), the angular
+end's ℓ ≥ 1 redistribution route ``_redistribute_ordinates`` (``(1/W)·kernel``,
+:eq:`pn-scatter`), and ``apply`` (their combine).
 
 The load-bearing test is the **bit-identical extraction** suite: a
-synthetic ``(psi, phi, Q)`` triple is fed through both the new
-:meth:`ScatteringOperator.apply` (and the in-place helpers
-:meth:`add_iso_source` / the solver's ``_add_n2n_source`` delegator (the operator-level ``add_n2n_source`` retired at §14.1; the verb is the (n,2n) field's ``add_p0_source``) / :meth:`build_aniso_source`)
-and the explicit per-cell reference implementations from
-``test_solver_components.py``. The two paths must agree to round-off,
-because the operator is a structural extraction, not a re-derivation.
+synthetic ``(psi, phi, Q)`` triple is fed through :meth:`ScatteringOperator.apply`
+(and the surviving bodies above) and the explicit per-cell reference
+implementations from ``test_solver_components.py``. The two paths must agree
+to round-off, because the operator is a structural extraction, not a
+re-derivation.
 """
 
 from __future__ import annotations
@@ -235,8 +239,8 @@ class TestBitIdenticalExtractionP0:
     """The lifted math must match the legacy reference per-cell code."""
 
     @pytest.mark.sentinel
-    def test_add_iso_source_matches_reference(self, solver_2g_p0):
-        """ScatteringOperator.add_iso_source = the per-cell reference.
+    def test_p0_scattering_emission_matches_reference(self, solver_2g_p0):
+        """The P0 emission verb ``transfer.add_p0_source`` = the per-cell reference.
 
         Issue #196 PR-INDEX-4: principled ``(ng, nx, ny)`` end-to-end.
         """
@@ -248,11 +252,11 @@ class TestBitIdenticalExtractionP0:
         expected = _ref_iso_scatter_inplace(solver_2g_p0, Q, phi)
 
         Q_actual = Q.copy()
-        solver_2g_p0.scattering_op.add_iso_source(Q_actual, phi)
+        solver_2g_p0.scattering_op.transfer.add_p0_source(Q_actual, phi)
 
         np.testing.assert_allclose(Q_actual, expected, rtol=1e-13)
 
-    def test_add_n2n_source_matches_reference(self, solver_2g_p0_n2n):
+    def test_p0_n2n_emission_matches_reference(self, solver_2g_p0_n2n):
         """The (n,2n) emission verb = the per-cell reference (§14.1: the
         verb lives on the solver-held N2NOperator's energy binding now).
 
@@ -260,7 +264,7 @@ class TestBitIdenticalExtractionP0:
         asymmetric ``Sig2`` in the fuel) rather than the library
         ``solver_2g_p0`` (``Sig2 = 0``), so the ``2·Σ_2n`` term is
         genuinely constrained — a sign/factor mutation in
-        the solver's ``_add_n2n_source`` delegator or the (n,2n) field's ``add_p0_source`` reddens this test (see the in-process
+        the (n,2n) field's ``add_p0_source`` reddens this test (see the in-process
         monkeypatch proof in #269 closeout).  The reference
         :func:`_ref_n2n_inplace` is a structurally-independent per-cell
         loop (explicit ``2·Σ_2nᵀ@φ``), not the SUT's reduction.
@@ -289,15 +293,15 @@ class TestBitIdenticalExtractionP0:
         (:meth:`~orpheus.transport.operators.angular_lift.AngularLift._isotropic_source`,
         since CS4c step 5) routes the SN forward isotropic source through) is
         **bit-identical**
-        (0-ULP) to the legacy ``add_iso_source`` then ``add_n2n_source`` in-place
+        (0-ULP) to the two channel fields' ``add_p0_source`` in-place
         accumulation.
 
         Both reach the SAME per-material ``mat_xs`` verbs, so the K_iso routing
         introduces zero numerical change — this is the 0-ULP-inheritance anchor
         for the #276 P2 forward re-expression (the structural CORRECTNESS of the
         verbs themselves is pinned independently by
-        :meth:`test_add_iso_source_matches_reference` /
-        :meth:`test_add_n2n_source_matches_reference` against the per-cell
+        :meth:`test_p0_scattering_emission_matches_reference` /
+        :meth:`test_p0_n2n_emission_matches_reference` against the per-cell
         reference loops).  Non-zero (n,2n) fixture (#269) + scalar AND LD
         (trailing :math:`2^d` spectator axis, #240 D5b-S3).  ``-O``-safe
         (``np.testing``).
@@ -316,18 +320,18 @@ class TestBitIdenticalExtractionP0:
         k_iso = _energy_pair_on(solver_2g_p0_n2n, trailing)
         got = k_iso.apply(phi)
 
-        # Legacy path: zeros → the two in-place channel verbs (the FIELD's
-        # einsum is spatial-moment-agnostic, #240 D5b-S3, so it needs no
-        # re-binding — which is exactly why the widened SPACE is the honest
+        # Reference path: zeros → the two channel FIELDS' in-place verb (the
+        # field's einsum is spatial-moment-agnostic, #240 D5b-S3, so it needs
+        # no re-binding — which is exactly why the widened SPACE is the honest
         # spelling of what this row was always exercising).
         ref = np.zeros_like(phi)
-        op.add_iso_source(ref, phi)
+        op.transfer.add_p0_source(ref, phi)
         solver_2g_p0_n2n.n2n_op.isotropic_energy.transfer.add_p0_source(ref, phi)
 
         np.testing.assert_array_equal(
             got, ref,
             err_msg="the solver-composed K_iso (#276 P2 → §14.1) must "
-            "equal the legacy add_iso_source + add_n2n_source accumulation (0-ULP).",
+            "equal the two channel fields' add_p0_source accumulation (0-ULP).",
         )
 
     def test_zero_flux_zero_addition(self, solver_2g_p0):
@@ -336,51 +340,8 @@ class TestBitIdenticalExtractionP0:
         Q = np.ones((ng, nx, ny))
         phi = np.zeros_like(Q)
         Q_before = Q.copy()
-        solver_2g_p0.scattering_op.add_iso_source(Q, phi)
+        solver_2g_p0.scattering_op.transfer.add_p0_source(Q, phi)
         np.testing.assert_array_equal(Q, Q_before)
-
-    def test_delegators_match_operator_directly(self, solver_2g_p0):
-        """SNSolver._add_scattering_source delegates to op.add_iso_source bit-identically.
-
-        Issue #196 PR-INDEX-5: delegator's PUBLIC contract is now
-        principled ``(ng, nx, ny)``.  No bridge.
-        """
-        np.random.seed(7)
-        (nx, ny), ng = solver_2g_p0.sn_mesh.spatial_shape, solver_2g_p0.ng
-        phi = np.random.rand(ng, nx, ny) + 0.1
-        Q_init = np.random.rand(ng, nx, ny)
-
-        Q_via_delegator = Q_init.copy()
-        solver_2g_p0._add_scattering_source(Q_via_delegator, phi)
-
-        Q_via_operator = Q_init.copy()
-        solver_2g_p0.scattering_op.add_iso_source(Q_via_operator, phi)
-
-        np.testing.assert_array_equal(Q_via_delegator, Q_via_operator)
-
-    def test_delegator_n2n_matches_operator_directly(self, solver_2g_p0_n2n):
-        """SNSolver._add_n2n_source delegates to the N2N field verb bit-identically (§14.1).
-
-        Issue #196 PR-INDEX-5: principled ``(ng, nx, ny)`` end-to-end.
-        #269 (Mode-10 cure): rides the NON-zero ``Sig2`` fixture so the
-        delegated quantity is a genuinely non-trivial (n,2n) source — a
-        delegator that dropped/altered the (n,2n) term would now diverge
-        from the operator's output (library ``Sig2=0`` made both sides
-        the un-mutated input, hiding any term drift).
-        """
-        solver = solver_2g_p0_n2n
-        np.random.seed(11)
-        (nx, ny), ng = solver.sn_mesh.spatial_shape, solver.ng
-        phi = np.random.rand(ng, nx, ny) + 0.1
-        Q_init = np.random.rand(ng, nx, ny)
-
-        Q_via_delegator = Q_init.copy()
-        solver._add_n2n_source(Q_via_delegator, phi)
-
-        Q_via_operator = Q_init.copy()
-        solver.n2n_op.isotropic_energy.transfer.add_p0_source(Q_via_operator, phi)
-
-        np.testing.assert_array_equal(Q_via_delegator, Q_via_operator)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -389,7 +350,9 @@ class TestBitIdenticalExtractionP0:
 
 
 class TestAnisotropicScatteringExtraction:
-    """build_aniso_source must reproduce the legacy _build_aniso_scattering."""
+    """The ℓ ≥ 1 Galerkin reconstruction (:eq:`pn-scatter`) — the angular
+    end's redistribution route ``_redistribute_ordinates`` = ``(1/W)·kernel``,
+    the body the retired ``build_aniso_source`` verb wrapped (#448)."""
 
     @pytest.fixture
     def solver_2g_p1(self):
@@ -406,20 +369,13 @@ class TestAnisotropicScatteringExtraction:
         quad = Quadrature.lebedev(order=17)
         return SNSolver(SNMesh(mesh, quad, {0: mix}), scattering_order=1)
 
-    def test_returns_none_for_p0(self, solver_2g_p0):
-        """L=0 => Pℓ contribution is None (signal: no aniso source needed)."""
-        N = solver_2g_p0.quad.N
-        (nx, ny), ng = solver_2g_p0.sn_mesh.spatial_shape, solver_2g_p0.ng
-        # D-I.2: typed AngularFlux carrier.
-        psi_values = np.ones((N, ng, nx, ny))
-        psi = AngularFlux(values=psi_values, space=solver_2g_p0.sn_mesh.angular_bulk_space)
-        out = solver_2g_p0.scattering_op.build_aniso_source(psi)
-        assert out is None
-
-    def test_returns_none_for_no_angular_flux(self, solver_2g_p0):
-        """First-iteration sentinel: psi=None => return None."""
-        out = solver_2g_p0.scattering_op.build_aniso_source(None)
-        assert out is None
+    def test_l0_binding_is_isotropic_and_selects_no_redistribution(self, solver_2g_p0):
+        """L=0 ⟹ the binding is isotropic and no ℓ ≥ 1 body is selected —
+        the predicate the retired ``build_aniso_source``'s ``None`` return
+        used to encode (#448: the sentinel was the predicate wearing a
+        return value)."""
+        op = solver_2g_p0.scattering_op
+        assert op.is_isotropic  # ``_redistribution is None`` is DERIVED from this in __post_init__
 
     def test_isotropic_flux_zero_aniso_source(self, solver_2g_p1):
         """Isotropic ψ_n = const for every ordinate => P1+ Galerkin moments = 0."""
@@ -427,29 +383,8 @@ class TestAnisotropicScatteringExtraction:
         N = solver_2g_p1.sn_mesh.quad.N
         psi_iso_values = np.ones((N, solver_2g_p1.ng, *solver_2g_p1.sn_mesh.spatial_shape))
         psi_iso = AngularFlux(values=psi_iso_values, space=solver_2g_p1.sn_mesh.angular_bulk_space)
-        Q_aniso = op.build_aniso_source(psi_iso)
-        assert Q_aniso is not None
+        Q_aniso = op._redistribute_ordinates(psi_iso)
         np.testing.assert_allclose(Q_aniso.values, 0, atol=1e-12)
-
-    def test_delegator_matches_operator(self, solver_2g_p1):
-        """SNSolver._build_aniso_scattering delegates bit-identically.
-
-        D-I.2 — the delegator preserves a bare-ndarray external
-        contract for backward compat (solver.py:1203 caller); the
-        operator now consumes typed :class:`AngularFlux` and returns
-        :class:`AngularSourceSink`.  Compare ``out_via_delegator``
-        (bare ndarray) to ``out_via_operator.values`` (typed
-        :class:`AngularSourceSink` unwrapped).
-        """
-        op = solver_2g_p1.scattering_op
-        N = solver_2g_p1.sn_mesh.quad.N
-        np.random.seed(42)
-        psi_values = np.random.rand(N, solver_2g_p1.ng, *solver_2g_p1.sn_mesh.spatial_shape) + 0.1
-        psi_typed = AngularFlux(values=psi_values, space=solver_2g_p1.sn_mesh.angular_bulk_space)
-
-        out_via_delegator = solver_2g_p1._build_aniso_scattering(psi_values)
-        out_via_operator = op.build_aniso_source(psi_typed)
-        np.testing.assert_array_equal(out_via_delegator, out_via_operator.values)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -495,7 +430,7 @@ class TestApplySemantics:
         # Reference: compute Q_iso explicitly, then project to
         # per-ordinate via /sum_w (R-1 Step 4 A1).
         Q_iso = np.zeros((ng, nx, ny))
-        op.add_iso_source(Q_iso, phi)
+        op.transfer.add_p0_source(Q_iso, phi)
         sum_w = float(solver_2g_p0.sn_mesh.quad.weights.sum())
         expected = np.broadcast_to(
             (Q_iso / sum_w)[None, :, :, :], psi_values.shape,
@@ -718,7 +653,7 @@ class TestP0AlgebraicIdentities:
 
         phi = np.ones((solver.ng, nx, ny))
         Q = np.zeros_like(phi)
-        op.add_iso_source(Q, phi)
+        op.transfer.add_p0_source(Q, phi)
 
         # Hand-computed: Q[g] = Σ_g' σ_s0[g'->g] · φ[g'] = column-sum · 1.
         sig_s0_dense = np.array(mix.SigS[0].todense())
@@ -755,7 +690,7 @@ class TestP0AlgebraicIdentities:
         # Issue #196 PR-INDEX-4: principled (ng, nx, ny).
         phi = np.random.rand(solver.ng, nx, ny) + 0.1
         Q = np.zeros_like(phi)
-        op.add_iso_source(Q, phi)
+        op.transfer.add_p0_source(Q, phi)
         # P0 contribution should be zero
         np.testing.assert_allclose(Q, 0, atol=1e-15)
 
@@ -1285,8 +1220,8 @@ class TestAnisoMomentSourcePath:
     The two aniso paths are:
 
     * the ANGULAR binding — the full-angular path, ``(1/W)·kernel`` where
-      ``kernel = frame.conjugate(Λ) = R∘Λ∘M`` (``build_aniso_source`` is the
-      SI driver's bare-array spelling of the same map);
+      ``kernel = frame.conjugate(Λ) = R∘Λ∘M`` (``_redistribute_ordinates`` is
+      its per-ordinate spelling — the body the angular end selects);
     * the MOMENT-DOMAIN sibling ``S.on_moment_domain()`` — the windowed SI
       driver's binding, whose operand IS ``φ = Mψ`` (the 2-D Cartesian
       angular-windowing iterate), so ``M`` is already done; its body is the
@@ -1303,7 +1238,7 @@ class TestAnisoMomentSourcePath:
     (``_aniso_source_from_moment_values``) is RETIRED — the crosscheck moved
     up a tier to the two operators' own actions
     (``test_scattering_kernel_crosscheck.py``).
-    ``build_aniso_source``'s numerical correctness is pinned by the
+    ``_redistribute_ordinates``'s numerical correctness is pinned by the
     pre-T.3 bit-identical snapshot below (a structurally-independent
     reference captured BEFORE the kernel ever existed).  This class adds
     the load-bearing Phase-5a guard: the moment ``apply`` arm reproduces
@@ -1461,7 +1396,7 @@ class TestAnisoMomentSourcePath:
         `nulp ≤ 4·scattering_order`.
 
         Post-T.3c the AngularFlux arm inherits the kernel-routed
-        numerics via its call to `build_aniso_source`.  P0 + (n,2n)
+        numerics via `_redistribute_ordinates`.  P0 + (n,2n)
         contribution is bit-identical (unchanged code path).  The
         per-ℓ aniso contribution may drift by `(L+1) × ULP` per the
         principled-equivalence three-criteria gate; the
@@ -1494,7 +1429,7 @@ class TestAnisoMomentSourcePath:
         ⛔ RE-KEYED (CS4c step 5, R-3). The frozen array is the value the
         retired ``S.apply(ScalarFlux)`` arm returned: P0 + (n,2n) in iso
         scalar magnitude, no :math:`1/W`, no aniso (the arm never called
-        ``build_aniso_source`` and therefore never the kernel). That arm is
+        the redistribution route and therefore never the kernel). That arm is
         gone — a scalar operand is the ENERGY binding's, and the ENERGY
         binding is exactly what the arm delegated to — so the snapshot is
         now read against ``S.isotropic_energy.apply(φ.values) +
@@ -1551,11 +1486,13 @@ class TestAnisoMomentSourcePath:
             snapshots["p1_apply_timed_full_field_boundary"],
         )
 
-    def test_build_aniso_source_bit_identical_to_pre_t3_snapshot(
+    def test_redistribution_bit_identical_to_pre_t3_snapshot(
         self, op_p1, solver_2g_p1_n2n,
     ):
-        """L1-4 per spec §3 — `build_aniso_source` output matches the
-        pre-T.3 captured snapshot within `nulp ≤ 4·scattering_order`.
+        """L1-4 per spec §3 — the ℓ ≥ 1 redistribution route's output
+        (`_redistribute_ordinates`; until #448 the `build_aniso_source` verb
+        wrapping it) matches the pre-T.3 captured snapshot within
+        `nulp ≤ 4·scattering_order`.
 
         Pre-T.3 the body inlined `R(Λ(M(psi))) / sum_w`.  Post-Phase-5a
         the body projected `φ = M(psi)` once, then applied the shared
@@ -1591,8 +1528,8 @@ class TestAnisoMomentSourcePath:
         )
         psi = AngularFlux(values=psi_values, space=sn_mesh.angular_bulk_space)
 
-        # Post-T.3c output via the kernel-routed `build_aniso_source`.
-        out_post_t3 = op.build_aniso_source(psi).values
+        # Post-T.3c output via the kernel-routed redistribution.
+        out_post_t3 = op._redistribute_ordinates(psi).values
 
         # Pre-T.3 snapshot.
         from tests.sn._test_helpers import SN_TESTS_ROOT

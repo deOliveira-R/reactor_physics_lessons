@@ -568,7 +568,7 @@ class TransferOperator(AngularLift[IsotropicTransfer]):
           :attr:`~orpheus.numerics.frame.FrameBase.reconstruction` face).
 
         This is the production :math:`\ell\ge 1` map on the angular end
-        (:meth:`build_aniso_source` is ``(1/W)·kernel``) and the moment
+        (:meth:`_redistribute_ordinates` is ``(1/W)·kernel``) and the moment
         end's 0-ULP crosscheck oracle (the typed route is production
         there). The producer-side :math:`1/W` lives OUTSIDE the kernel
         (at the ``apply`` boundary), so ``kernel.apply`` returns the
@@ -595,7 +595,7 @@ class TransferOperator(AngularLift[IsotropicTransfer]):
                 f"above l=0 exactly zero (order 0, an absent section, an NL=1 "
                 f"evaluation, or a padded stack), so R∘Λ∘M is the zero "
                 f"operator. The P0 emission is the LOCAL component, handled by "
-                f"add_iso_source."
+                f"the lift's l=0 half (isotropic_energy)."
             )
         # Λ carries real spaces (== frame.basis_space), so the OperatorProduct
         # composability guard validates the composition natively — NO cast.
@@ -639,9 +639,26 @@ class TransferOperator(AngularLift[IsotropicTransfer]):
         )
 
     def _redistribute_ordinates(self, bulk: BulkField) -> AngularSourceSink:
-        r"""The angular end: :math:`(1/W)\,R\,\Lambda_{\ell\ge1}\,M\,\psi`
-        through the cached :attr:`kernel` — one composition, one
-        reduction tree (the 0-ULP canary's spelling)."""
+        r"""The angular end's :math:`\ell \ge 1` emission:
+        :math:`(1/W)\,R\,\Lambda_{\ell\ge1}\,M\,\psi` through the cached
+        :attr:`kernel` — one composition, one reduction tree (the 0-ULP
+        canary's spelling).
+
+        Implements the Galerkin reconstruction :eq:`pn-scatter` from the
+        angular-flux moments :eq:`flux-moments` as the literal operator
+        composition :math:`Q^{\rm aniso}_n = \tfrac{1}{W}\,(R\,\Lambda\,M\,
+        \psi)_n`.  The trailing :math:`1/W` is the producer-side
+        per-ordinate projection (the source enters the sweep already in
+        per-ordinate magnitude, so the sweep does NOT apply ``/W`` again);
+        the full derivation — the M/Λ/R faces, the addition-theorem
+        :math:`(2\ell+1)` factor, the :math:`1/W` normalisation chain — is
+        in ``docs/theory/methods/sn/slab_multigroup.rst §pn-scatter-rlm`` and
+        ``docs/theory/foundations/spherical_harmonics.rst``.  Reached
+        through :meth:`apply` (which admits the operand) as the body the
+        :class:`AngularEnd` selects; until #448 a public verb
+        ``build_aniso_source`` wrapped it for the eigenvalue finalize's
+        hand-rolled source — retired with that finalize (the operator-tier
+        gates probe this route directly)."""
         return AngularSourceSink(
             values=self.kernel.apply(bulk.values) / self.total_weight,
             space=self._codomain_interior,
@@ -658,72 +675,6 @@ class TransferOperator(AngularLift[IsotropicTransfer]):
             cast(HarmonicMomentFlux, bulk),
         )
         return self.source_reconstruction.apply(emitted) / self.total_weight
-
-    # ── In-place helpers (the SI driver's bare-array seams) ──────────
-
-    def add_iso_source(self, Q: np.ndarray, phi: np.ndarray) -> None:
-        r"""Add the P0 emission :math:`y\,\Sigma_{c,0}^T\phi` to ``Q`` in place.
-
-        Vectorised by material: per cell ``c`` of material ``mid``,
-        ``Q[:, ic, jc] += y · p0[mid].T @ phi[:, ic, jc]`` where
-        ``p0[mid]`` is ``(ng, ng)`` indexed ``[g_from, g_to]``. Bare
-        arrays in, ``None`` out — the legacy in-place seam the SI driver
-        feeds (`[M]` 345 production calls from ``sn/solver.py``); the
-        typed emission is :meth:`apply`. The per-material dispatch lives
-        inside
-        :meth:`~orpheus.transport.material_field.TransferMaterialField.add_p0_source`.
-        """
-        self.transfer.add_p0_source(Q, phi)
-
-    def build_aniso_source(
-        self,
-        angular_flux: "AngularFlux | None",
-    ) -> "AngularSourceSink | None":
-        r"""Build the per-ordinate Pℓ (:math:`\ell \ge 1`) emission.
-
-        Implements the Galerkin reconstruction :eq:`pn-scatter` from the
-        angular-flux moments :eq:`flux-moments` as the literal operator
-        composition :math:`Q^{\rm aniso}_n = \tfrac{1}{W}\,(R\,\Lambda\,M\,
-        \psi)_n` — i.e. ``(1/W)·`` :attr:`kernel`. The trailing :math:`1/W`
-        is the producer-side per-ordinate projection (the source enters the
-        sweep already in per-ordinate magnitude, so the sweep does NOT apply
-        ``/W`` again). The full derivation — M/Λ/R faces, the addition-theorem
-        :math:`(2\ell+1)` factor, and the :math:`1/W` normalisation chain —
-        is in ``docs/theory/methods/sn/slab_multigroup.rst §pn-scatter-rlm``
-        and ``docs/theory/foundations/spherical_harmonics.rst``.
-
-        Parameters
-        ----------
-        angular_flux : AngularFlux or None
-            Angular flux shape ``(N, ng, nx, ny)`` from the most recent sweep,
-            or ``None`` on the first source iteration before any sweep has run.
-            Only the typed :class:`AngularFlux` on this binding's own
-            (angular) domain interior is accepted.
-
-        Returns
-        -------
-        AngularSourceSink or None
-            ``(N, ng, nx, ny)`` per-ordinate :math:`\ell \ge 1` contribution in
-            **per-ordinate magnitude** (the trailing ``/W`` is applied here).
-            Returns ``None`` when the binding :attr:`is_isotropic` (order 0,
-            or exactly zero above :math:`\ell = 0`) or ``angular_flux is None``.
-        """
-        if self.is_isotropic or angular_flux is None:
-            return None
-        if angular_flux.space != self._domain_interior:
-            raise TypeError(
-                f"{type(self).__name__}.build_aniso_source: the angular flux "
-                f"rides {angular_flux.space!r} but this binding's domain "
-                f"interior is {self._domain_interior!r} — the per-ordinate "
-                f"route is the ANGULAR binding's; a moment iterate is the "
-                f"moment binding's apply."
-            )
-        # T_aniso = (1/W)·kernel: the §5.6 :attr:`kernel` is the R∘Λ∘M
-        # redistribution; the producer-side /W lives OUTSIDE it (applied here).
-        # RΛM is spatial-moment-axis-agnostic (#240 D5b-S3): the source
-        # rides the iterate's own space (CS4b S4 — same space, new role),
-        # so the moment factor travels with it.
-        return self._redistribute_ordinates(angular_flux)
 
     # ── Foldable / residual split ─────────────────────────────────────
     #

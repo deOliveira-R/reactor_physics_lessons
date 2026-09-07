@@ -590,7 +590,7 @@ class TestRLambdaMRoundTrip:
         psi = AngularFlux(values=psi_values, space=sn_mesh.angular_bulk_space)
 
         # Typed pipeline output.
-        out = op.build_aniso_source(psi)
+        out = op._redistribute_ordinates(psi)
         # Must be AngularSourceSink (not bare ndarray) under typed-in.
         assert isinstance(out, AngularSourceSink)
         assert out.values.shape == (N, mix.ng, nx, ny)

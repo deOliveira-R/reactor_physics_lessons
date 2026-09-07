@@ -2417,8 +2417,9 @@ def _build_p1_aniso_continuous_reference() -> ContinuousReferenceSolution:
             derivation_notes=(
                 "1-group P1 anisotropic scattering SN MMS. Ansatz "
                 "ψ_n(x) = (1/W)(A(x) + α μ_n B(x)) with A=B=sin(πx/L), "
-                "α=0.1. Exercises the P1 scattering slot in "
-                "_build_aniso_scattering. Manufactured source includes "
+                "α=0.1. Exercises the l=1 scattering emission (the "
+                "ScatteringOperator's redistribution route, driven as the "
+                "SI gain). Manufactured source includes "
                 "the standard streaming + removal terms plus α μ_n "
                 "(Σ_t − Σ_s^1) B and α μ_n² B' from the P1 current."
             ),

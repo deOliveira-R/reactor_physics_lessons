@@ -873,9 +873,10 @@ what the shared combine's ``iso`` slot carries.
        boundary) source
      - 1/(cm³·s·sr)
      - ``(N, ng, nx, ny)``
-     - ``Q_aniso`` arg of the retired ``transport_sweep``;
-       output of
-       :meth:`~orpheus.transport.operators.scattering.ScatteringOperator.build_aniso_source`
+     - ``Q_aniso`` arg of the retired ``transport_sweep``; the interior
+       leaf of :meth:`ScatteringOperator.apply
+       <orpheus.transport.operators.transfer.TransferOperator.apply>`
+       (the combined :math:`(\text{iso}/W) + \text{aniso}` emission)
    * - ``ResidualSource``
      - :math:`r = q - A\psi_D` for hybrid corrections (Grand
        Report v3 §25.1)
@@ -1802,30 +1803,45 @@ hot path consumes bare ndarray throughout.
 one-cycle ``Q_aniso=`` keyword and the bare/typed dual entry — retired with
 the operator-free ``transport_sweep`` entry at step 6, R-6.1.)
 
-ScatteringOperator typed action
--------------------------------
+The collision gain's emission — which type comes out of which tier
+------------------------------------------------------------------
 
-:meth:`~orpheus.transport.operators.transfer.TransferOperator.add_iso_source`
-gains return-new semantics under typed input (its former (n,2n) sibling
-``add_n2n_source`` retired with the CS4c §14.1 extraction — the channel's
-verbs live on
-:class:`~orpheus.transport.material_field.TransferMaterialField`, raw-array
-in-place, and since #426 step 2 they are the SAME verbs for both
-channels, scaled by the yield):
+There are three tiers, and each has exactly one output convention.  ⛔
+This section described two *public verbs*, ``add_iso_source`` and
+``build_aniso_source``, until 2026-09-06 — including a "return-new under
+typed input" arm that ``add_iso_source`` never had (its signature was
+``(Q: ndarray, phi: ndarray) -> None`` for its whole life).  Both verbs
+retired at #448 with the hand-built eigenvalue-finalize source that was
+their only production caller
+(:doc:`ERR-083 </theory/verification/error_catalog>`); what ships is the
+tier ladder below.
 
-* Raw ``np.ndarray`` in → mutates in place, returns ``None`` (legacy
-  contract preserved).
-* :class:`~orpheus.transport.source_sinks.ScalarSourceSink` in → returns
-  a fresh :class:`~orpheus.transport.source_sinks.ScalarSourceSink`
-  (Pattern 4 — frozen typed inputs stay immutable; the caller spells
-  the algebra as ``Q = scattering.add_iso_source(Q, phi)``).
-
-:meth:`~orpheus.transport.operators.transfer.TransferOperator.build_aniso_source`
-returns :class:`~orpheus.transport.source_sinks.AngularSourceSink` when
-its angular-flux input is
-:class:`~orpheus.transport.fields.angular_flux.AngularFlux`, preserving
-the type chain through the transfer composition — for :math:`N_{2n}` as
-much as for :math:`S`, since #426 step 2.
+* **The array verb** —
+  :meth:`~orpheus.transport.material_field.TransferMaterialField.add_p0_source`
+  (with its transpose sibling and the per-\ :math:`\ell`
+  ``moment_source`` pair): raw ``np.ndarray`` in, **mutates in place**,
+  returns ``None``.  This is the per-material dispatch — the loop, the
+  gathered ``einsum``, the yield — and since #426 step 2 it is the SAME
+  verb for both channels, scaled by the datum's multiplicity.
+* **The energy binding** —
+  :meth:`IsotropicTransfer.apply
+  <orpheus.transport.operators.isotropic_transfer.IsotropicTransfer.apply>`:
+  bare ndarray of the domain's shape in, bare ndarray out (the
+  model-portable contract; ``admit_array`` is the admission).  It
+  allocates and calls the array verb, so nothing mutates a caller's
+  buffer.
+* **The lifted gain** — :meth:`TransferOperator.apply
+  <orpheus.transport.operators.transfer.TransferOperator.apply>`: the
+  composite ``FullField`` in, composite out, whose **interior leaf is an**
+  :class:`~orpheus.transport.source_sinks.AngularSourceSink` and whose
+  trace leaf is the zero source/sink (a collision gain is volumetric).
+  The interior is the producer-side combine
+  :math:`(\text{iso}/W) + \text{aniso}`: the :math:`\ell = 0` part as a
+  :class:`~orpheus.transport.source_sinks.ScalarSourceSink` from the
+  energy binding, the :math:`\ell \ge 1` part from the
+  construction-selected redistribution body.  The type chain is preserved
+  for :math:`N_{2n}` exactly as for :math:`S`, since #426 step 2 made them
+  two instances of one binding.
 
 Cross-references
 ----------------

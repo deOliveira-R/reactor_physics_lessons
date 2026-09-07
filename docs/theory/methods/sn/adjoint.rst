@@ -710,7 +710,9 @@ principled.**  The production FORWARD source keeps the scalar fast-path
 for P0 — since the CS4c §14.1 extraction the :math:`(n,2n)` term is the
 first-class :class:`~orpheus.transport.operators.n2n.N2NOperator`, whose
 lift and transpose ride the same producer-side combine — and the
-per-:math:`\ell` ``build_aniso_source``)
+per-:math:`\ell` redistribution body behind
+:meth:`~orpheus.transport.operators.transfer.TransferOperator.apply`,
+spelled ``build_aniso_source`` until #448)
 for SI-sweep performance; the **adjoint** — not the hot path — rides the
 validated frame form instead.  The two are thus structurally *different*
 representations of the same operator, which is exactly what makes the

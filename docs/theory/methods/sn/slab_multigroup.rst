@@ -224,8 +224,17 @@ all groups :math:`g'`):
 
 The vectorised form for batched cells is ``phi @ SigS`` (equivalent to
 :math:`(\text{SigS}^T \phi^T)^T` for row-vector :math:`\phi`); the
-production hook is :meth:`SNSolver._add_scattering_source`, which
-performs exactly this contraction per material.
+production hook is the array verb
+:meth:`~orpheus.transport.material_field.TransferMaterialField.add_p0_source`,
+which performs exactly this contraction per material and carries the
+channel's yield.  It is reached through the :math:`\ell = 0` half of the
+collision gain — the energy binding
+:attr:`~orpheus.transport.operators.transfer.TransferOperator.isotropic_energy`
+that :meth:`TransferOperator.apply
+<orpheus.transport.operators.transfer.TransferOperator.apply>` lifts.
+(A thin ``SNSolver._add_scattering_source`` delegator stood in front of it
+until #448; it retired with the hand-built finalize source that was its
+only production caller.)
 
 Note the transpose: :math:`\text{SigS}^T[g, g'] = \Sigs{g'\to g}`
 gives the in-scatter contribution, so
@@ -270,11 +279,21 @@ real spherical harmonics: it ensures that the P\ :sub:`L` expansion
 reproduces the angular flux moments exactly when the angular flux is a
 polynomial of degree :math:`\leq L`.
 
-**Implementation in** :meth:`SNSolver._build_aniso_scattering`:
+**Implementation**, in the collision gain's own :math:`\ell \ge 1` body
+(:meth:`TransferOperator.apply
+<orpheus.transport.operators.transfer.TransferOperator.apply>` selects it at
+construction from the binding's two ends; on the per-ordinate end that body
+is ``TransferOperator._redistribute_ordinates``):
 
-1. **Compute spherical harmonics** at construction time:
-   :math:`Y[n, \ell, \ell+m]` for all ordinates, stored as ``self._Y``
-   with shape ``(N, L+1, 2L+1)``.
+1. **Evaluate the angular basis** once, at frame-construction time —
+   :meth:`SphericalHarmonicBasis.evaluate
+   <orpheus.numerics.basis.SphericalHarmonicBasis.evaluate>` at the
+   ordinates, cached on the interned
+   :class:`~orpheus.transport.frames.harmonic_frame.HarmonicFrame` as its
+   analysis and reconstruction faces.  ⛔ This step read *"stored as* ``self._Y`` *with
+   shape* ``(N, L+1, 2L+1)``\ *"* until 2026-09-06: no such attribute has
+   existed on :class:`SNSolver` since the frame carve, and the head's shape
+   is the BASIS's rather than a fixed table — see the ⚠ note below.
 
    **Convention.** The polar axis is :math:`\mu_x`, so
    :math:`\cos\theta = \mu_x` and
@@ -383,8 +402,9 @@ polynomial of degree :math:`\leq L`.
    fabrication (:ref:`sh-legendre-is-the-1d-family`).
 
 3. **Reconstruct per-ordinate source**: for each Legendre order
-   :math:`\ell \geq 1` (the :math:`\ell = 0` term is handled by
-   :meth:`SNSolver._add_scattering_source`) and each :math:`m`, the
+   :math:`\ell \geq 1` (the :math:`\ell = 0` term is the energy
+   binding's, added by the producer-side combine — step 4) and each
+   :math:`m`, the
    scattered moment ``moment @ sig_s_l[l]`` is multiplied by
    :math:`(2\ell+1) Y_\ell^m(\hat{\Omega}_n)` and accumulated into
    ``Q_aniso[n, :, :, :]``.
@@ -396,9 +416,12 @@ polynomial of degree :math:`\leq L`.
 **Equivalence of the code to the mathematical form.**
 Equation :eq:`pn-scatter` writes the sum as
 :math:`\sum_\ell \sum_m \sum_{g'} \Sigs{}^{(\ell)} f_\ell^m Y_\ell^m`.
-The code separates the :math:`\ell = 0` term (isotropic, handled by
-``_add_scattering_source``) from the :math:`\ell \geq 1` terms
-(anisotropic, handled by ``_build_aniso_scattering``).  For :math:`\ell = 0`,
+The code separates the :math:`\ell = 0` term (isotropic — the energy
+binding's reaction-rate fast path, no moment tensor allocated) from the
+:math:`\ell \geq 1` terms (anisotropic — the cached :math:`R\Lambda M`
+redistribution), and adds them in the ONE producer-side combine
+(``AngularLift._combine``, which is also where the :math:`1/W` lives).
+For :math:`\ell = 0`,
 :math:`Y_0^0 = 1` and :math:`(2 \cdot 0 + 1) = 1`, so the sum reduces to
 :math:`\sum_{g'} \Sigs{g' \to g}^{(0)} f_{0,g'}^0 = \sum_{g'} \Sigs{g' \to g}^{(0)} \phi_{g'}`,
 which is exactly the P\ :sub:`0` source.  The split is therefore exact
@@ -523,7 +546,7 @@ until 2026-09-04,
 and that row keeps its own label because it is what several distinct
 things still are: the row the reaction-rate **fast path** evaluates
 (through the P0 energy binding, with no moment tensor allocated), the
-row :meth:`SNSolver._add_n2n_source` adds before the sweep, and the
+row the P0 energy binding evaluates as the driver's lagged gain, and the
 **whole** source for every scalar-flux consumer — CP, MoC, Monte Carlo
 and the 1-D diffusion solver — whose emission is isotropic *by
 construction*, a property of the method and not of this channel.
@@ -568,8 +591,9 @@ gathered ``einsum``, the yield — is the array verb
 (with its transpose sibling and the per-:math:`\ell`
 :meth:`~orpheus.transport.material_field.TransferMaterialField.moment_source`
 pair), on the kernel-field pairing described at
-:ref:`scattering-binding-cs4c`.  The solver-facing delegator
-:meth:`SNSolver._add_n2n_source` routes to it.  What that verb does
+:ref:`scattering-binding-cs4c`.  (A solver-facing ``SNSolver._add_n2n_source``
+delegator routed to it until #448, when the eigenvalue finalize — its only
+production caller — stopped building a source of its own.)  What that verb does
 *not* decide is which operator the channel belongs to — and that
 question turns out to be the interesting one.
 
@@ -594,8 +618,8 @@ giving it its own operator, for three stated reasons:
 
 1. The bookkeeping is identical to in-scatter (vectorise-by-material,
    add-into-:math:`Q`).
-2. The legacy code placement
-   (:meth:`SNSolver._add_n2n_source`) is inside the same source-
+2. The legacy code placement (then ``SNSolver._add_n2n_source``, retired
+   at #448) was inside the same source-
    construction block as scattering. Wave D Issue 13's bit-identical
    extraction needed to preserve that placement to keep the regression
    snapshots bit-identical.
@@ -685,8 +709,18 @@ The normalization chain in the code ensures consistent scaling:
    fission **energy** binding's ``apply`` (the dyad bound at the mesh's
    scalar bulk space); the :math:`1/k` stays here.
 
-2. **Scattering source** (:meth:`SNSolver._add_scattering_source`):
-   :math:`Q_s = \text{SigS}^T \cdot \phi` --- also un-normalised.
+2. **Scattering source** — the collision gain applied to the iterate,
+   :meth:`TransferOperator.apply
+   <orpheus.transport.operators.transfer.TransferOperator.apply>`.  Its
+   :math:`\ell = 0` row is :math:`Q_s = \text{SigS}^T \cdot \phi`, in
+   scalar-flux units and un-normalised; its :math:`\ell \ge 1` rows are
+   already per-ordinate, which is why the :math:`1/W` of step 3 is applied
+   to the isotropic part *inside* the operator's own combine
+   (:math:`(\text{iso}/W) + \text{aniso}`) rather than again by the sweep.
+   ⚠ Since #448 this is the ONLY assembly of the scattering source on the
+   eigenvalue path — the finalize evaluates these same gains instead of
+   rebuilding a :math:`P_0` copy of them
+   (:doc:`ERR-083 </theory/verification/error_catalog>`).
 
 3. **Sweep** (the within-group resolvent ``solve``,
    :meth:`~orpheus.sn.operators.streaming.StreamingCollisionOperator.solve`): applies
@@ -837,9 +871,12 @@ verification of the addition theorem lives at
    <orpheus.numerics.basis.SphericalHarmonicBasis.evaluate>`
    is the canonical generic infrastructure consumed here.
 
-   **Wave 1 (commit ff454f2)**:
-   :meth:`~orpheus.transport.operators.scattering.ScatteringOperator.build_aniso_source`
-   is now the literal §9 line 1230 operator-algebra composition
+   **Wave 1 (commit ff454f2)**: the anisotropic source verb — then
+   ``ScatteringOperator.build_aniso_source``, since #448 the
+   construction-selected body ``TransferOperator._redistribute_ordinates``
+   behind :meth:`TransferOperator.apply
+   <orpheus.transport.operators.transfer.TransferOperator.apply>` — became
+   the literal §9 line 1230 operator-algebra composition
 
    .. math::
       :label: pn-scatter-rlm
@@ -919,11 +956,23 @@ Wave E Round 2 (Issue #164) wired the operator algebra
 BiCGSTAB inner-solver path with Krylov-on-``A.apply`` (GMRES
 with the sweep as preconditioner).  The
 ``build_transport_linear_operator*`` and ``build_rhs*`` helpers
-were retired; the per-method delegators on
-:class:`SNSolver` (:meth:`_add_scattering_source`,
-:meth:`_build_aniso_scattering`, :meth:`_add_n2n_source`,
-:meth:`compute_fission_source`) remain as thin wrappers over the
-new operators for the EigenvalueSolver Protocol surface.
+were retired, and four per-method delegators on :class:`SNSolver` —
+``_add_scattering_source``, ``_build_aniso_scattering``,
+``_add_n2n_source`` and
+:meth:`~orpheus.sn.solver.SNSolver.compute_fission_source` — were kept as
+thin wrappers over the new operators.
+
+⛔ **The reason this paragraph gave for keeping them was wrong, and it was
+wrong when written.**  It read *"for the EigenvalueSolver Protocol
+surface"*; ``[M]`` :class:`~orpheus.numerics.eigenvalue.EigenvalueSolver`
+declares exactly **five** members — ``initial_flux_distribution``,
+``compute_fission_source``, ``solve_fixed_source``, ``compute_keff`` and
+``measure_stopping_criteria`` — and only ``compute_fission_source`` is
+among them.  The other three survived because the eigenvalue finalize
+called them to build its own reconstruction source, which is
+:doc:`ERR-083 </theory/verification/error_catalog>`; all three retired with
+that source at #448 (2026-09-06).  ``compute_fission_source`` is genuinely
+on the Protocol and stays.
 
 Wave E Round 3 (Issue #98 follow-up) extended the FD operator's
 boundary handling to consume the

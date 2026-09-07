@@ -556,7 +556,7 @@ class SNBoundaryOperator(LinearOperator):
 
         This is the **single source of truth** for the boundary reflection: both
         the full-field :meth:`apply` (lifted onto a zero-bulk carrier) and the
-        trace-only :meth:`reflect_into_inflow` (the direct-loop inflow seed) route
+        trace-only :meth:`reflect_into_inflow` (the bare-sweep inflow seed) route
         through it, so the two cannot drift (Cardinal Rule 2).
         """
         from orpheus.transport.source_sinks import AngularBoundarySourceSink
@@ -755,14 +755,16 @@ class SNBoundaryOperator(LinearOperator):
         **inflow** ordinate slots carry the per-face reflected outflow (``R·G``
         for reflective, the angular average for white, zero for vacuum) and whose
         outflow slots are zero. It is :meth:`apply` without the zero-bulk carrier
-        — the entry the direct fixed-source SI loop and the final eigenvalue
-        reconstruction sweep use to seed ``ψ.inflow = B·ψ.outflow`` on a bare
-        boundary buffer, without fabricating a throwaway zero-bulk field just to
-        reach the ``A_ss`` block.
+        — the trace-only entry for seeding ``ψ.inflow = B·ψ.outflow`` on a bare
+        boundary buffer without fabricating a throwaway zero-bulk field just to
+        reach the ``A_ss`` block.  No production driver seeds by hand any more
+        (every within-group solve — and, since #448, the eigenvalue finalize's
+        one reconstruction step — receives ``B·ψ.outflow`` as the ``B`` GAIN
+        through ``rhs.boundary``); its consumers are the sweep-tier gates that
+        drive bare sweeps in a loop, through :meth:`reflect_inflow_inplace`.
 
         ``faces`` (Phase 3 Gauss-Seidel): ``None`` (default) reflects every
-        boundary face — the whole-trace Jacobi reflect used by the fixed-source
-        SI loop and the final reconstruction sweep.  A face subset restricts the
+        boundary face — the whole-trace Jacobi reflect.  A face subset restricts the
         reflection to those faces: the octant-group G-S schedule reflects only
         the just-swept group's reflective OUTGOING faces between octant-group
         sweeps, so a later group reads the fresh reflected inflow (the
@@ -783,11 +785,17 @@ class SNBoundaryOperator(LinearOperator):
         The MUTATING façade over :meth:`reflect_into_inflow` (single source —
         both route through :meth:`_reflect_trace`), carrying the sweep
         substrate's reflect signature
-        (``Callable[[AngularBoundaryFlux, tuple[str, ...]], None]``). Its
-        production consumer is the whole-trace form (``faces=None``) reached
-        through :func:`orpheus.sn.solver._reflect_outflow_into_inflow`, which
-        seeds ``ψ.inflow = B·ψ.outflow`` before the eigenvalue reconstruction
-        sweep.
+        (``Callable[[AngularBoundaryFlux, tuple[str, ...]], None]``).
+        `[M]` #448: **no production caller** — the eigenvalue finalize's reflect
+        of the converged trace (its last one) retired when the finalize became
+        one step of the driven iteration, in which ``B`` is a gain; the
+        octant-group Gauss-Seidel resolvent never routed here (it binds
+        :meth:`SNMaskedBoundaryOperator.reflect_rows_inplace`, below).  It
+        stays as the operator's own MUTATING verb for the sweep-tier gates
+        that drive bare sweeps in a loop
+        (``tests/sn/_test_helpers.py::reflect_outflow_into_inflow`` and the
+        #448 trace gate) — the inflow-row selection is the operator's
+        knowledge, not a test's.
 
         ⚠ NOT the reflect the reified ``M = (L+C−B_lower)`` supplies to
         :func:`~orpheus.sn.loss_representation._sweep_scheduled`. That one is
@@ -799,10 +807,11 @@ class SNBoundaryOperator(LinearOperator):
         lagged — the dissolved ``_GaussSeidelResolvent``'s overwrite defect
         (#226 §17 falsifier-3, round-trip O(1) at 2.667).
 
-        Trace-only: the ψ½ ray-corner analogue is
-        :meth:`RadialCharacteristicBoundaryOperator.reflect_corner_inplace`
-        (``B_b``), the System-B boundary — the reconstruction sweep calls BOTH,
-        one per system (RULING P1).
+        Trace-only: the ψ½ ray corner is System B's boundary ``B_b``
+        (:class:`RadialCharacteristicBoundaryOperator`), reflected by the
+        coupled gain grid on a carrying mesh — one operator per system (RULING
+        P1); its in-place ray sibling ``reflect_corner_inplace`` retired at
+        #448 with its last caller (the pre-#448 finalize).
         """
         reflected = self.reflect_into_inflow(boundary_flux, faces=faces)
         trace = self.sn_mesh.angular_trace
@@ -1134,29 +1143,6 @@ class RadialCharacteristicBoundaryOperator(LinearOperator):
         """
         return self._apply_faces(ray, "apply_transpose")
 
-    def reflect_corner_inplace(
-        self, radial_characteristic: "RadialCharacteristicField",
-    ) -> None:
-        r"""In place: overwrite the ψ½ inflow-corner slots with the law's corner
-        action on its OUTFLOW corners — ``ψ½.corner(p, −1) ← (B_b·ψ½).corner(p,
-        −1)`` (vacuum ⇒ 0, reflective ⇒ the specular swap).
-
-        The ray-corner analogue of :meth:`SNBoundaryOperator.reflect_inflow_inplace`
-        (#282 route (a)): the final eigenvalue reconstruction sweep + the direct
-        fixed-source SI loop call BOTH — ``B_a`` for the trace, ``B_b`` for the
-        ray — one per system (RULING P1). The input is System B's composite
-        (the walk marches it natively since 4e); the corner LAW has ONE body
-        (:meth:`_reflect_corner`) acting on the boundary member. Non-``None``
-        by signature since B.2b: a seedless B_b is unconstructable, so the
-        caller guards presence (see ``_reflect_boundary_inplace``).
-        """
-        boundary_member = radial_characteristic.boundary
-        corner_reflected = self._reflect_corner(boundary_member, "apply")
-        for level in boundary_member.space.levels:
-            boundary_member.corner(level, -1)[...] = (
-                corner_reflected.corner(level, -1)
-            )
-
 
 class SNMaskedBoundaryOperator(LinearOperator["FullField", "FullField"]):
     r"""One half of the schedule split ``B = B_lower + B_upper`` — the
@@ -1235,10 +1221,10 @@ class SNMaskedBoundaryOperator(LinearOperator["FullField", "FullField"]):
         and it stamped fresh values onto rows the iterate defines as lagged.
 
         Contrast :meth:`SNBoundaryOperator.reflect_inflow_inplace` — the
-        whole-face ASSIGNMENT ``ψ.inflow ← B·ψ.outflow`` between sweeps,
-        which is the right semantics for the direct fixed-source SI loop
-        and the reconstruction sweep (there the inflow is wholly recomputed
-        each sweep, not a solved unknown of a linear row).
+        whole-face ASSIGNMENT ``ψ.inflow ← B·ψ.outflow`` between BARE sweeps,
+        the right semantics where the inflow is wholly recomputed each sweep
+        rather than a solved unknown of a linear row (the sweep-tier gates;
+        no production driver since #448).
         """
         selected = {
             face: self.rows[face]

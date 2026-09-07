@@ -1,7 +1,10 @@
 """Wave T step T.3a — pre-T.3 snapshot capture script.
 
 Captures the numerical output of `ScatteringOperator.apply` (each
-dispatch arm), `ScatteringOperator.build_aniso_source`, and
+dispatch arm), `ScatteringOperator.build_aniso_source` (the verb retired at
+#448; the route it wrapped is `_redistribute_ordinates`, which is what the
+script calls now so it can still RUN — ⛔ never re-capture: the `.npz` is the
+pre-T.3 structurally-independent anchor), and
 `TransferMaterialField.moment_source` (né the facade arm) on deterministic
 fixtures, BEFORE the T.3 lift rewires `build_aniso_source` to use the
 `SumOfTensorProductsOperator` kernel.  The captured arrays are loaded
@@ -189,7 +192,7 @@ def main() -> None:
     )
 
     # L1-4: build_aniso_source direct (the inner R · Λ · M pipeline)
-    aniso = p1_op.build_aniso_source(psi)
+    aniso = p1_op._redistribute_ordinates(psi)
     snapshots["p1_build_aniso_source"] = aniso.values.copy()
 
     # L6-1: per-material per-ℓ einsum invariance at P1

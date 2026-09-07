@@ -19,6 +19,44 @@ every retired symbol leaves no present-tense-false mention · the build's WARNIN
 retirement shim, scanner finding, plan line and "MEASURED" block are point-in-time snapshots.
 Verify, then write, then FLAG every scope-expansion the verification forced.
 
+- **⭐⭐ WHEN THE CARVE IS UNCOMMITTED, HEAD *IS* THE PRE-CARVE TREE — a before/after
+  table costs 20 s.** `git worktree add /tmp/x HEAD --detach`, run the SAME probe on both.
+  ⚠ strip the venv's editable `sys.meta_path` finder and PRINT `orpheus.__file__` as proof.
+  ⟹ before trusting any relayed pre-carve `[M]`, ask whether HEAD is that tree. **And any
+  cross-carve table owes a line naming WHICH statistic is comparable**: `[M]` my post-fix
+  L=0 balance defect is **13.7× LARGER** (the two finalizes construct ψ differently), so
+  only the RATIO down the budget compares — publishing the raw rows would have shipped a
+  regression narrative inside a repair entry. The tell that you need that line: the CONTROL
+  column moved. → L-095, L-050
+- **⭐⭐ A CARVE'S OWN DOCSTRING EDITS ARE UNVERIFIED CLAIMS — AST-census the callee it says
+  still has a consumer.** `[M]` the carve wrote *"its production consumer is the G-S
+  resolvent"* onto a verb with **0 Call sites and 0 attribute refs** tree-wide, four lines
+  above its own ⚠ paragraph naming the DIFFERENT verb that really is bound. A retirement
+  answers *"who called what I removed?"* and nobody asks the dual. → L-095
+- **⭐⭐ THE HTML SLICE CATCHES A ROLE SEVERAL LINES INSIDE AN OPEN `**bold**` RUN; an
+  ADJACENCY regex does not, and `-W` is EXIT=0 either way.** `[M]` mine rendered
+  `:doc:`…`` as literal text on a clean build. ⟹ source-side, pair `\*\*(.+?)\*\*` with
+  `re.S` over your ADDED lines and look for `:[a-z:]+:\`` INSIDE; then run the HTML gate
+  (strip tags → unescape → slice by section title → `re.findall(r"\`+")`, **0** is the
+  gate). Discriminate mine-vs-pre by testing each hit line against `git show HEAD:<file>`.
+  → L-095, L-074
+- **⭐⭐ A MODULE UNDER CONCURRENT EDIT: publish NOTHING you count in it.** `[M]` the gate
+  module went **45 → 86 rows** and **7 → 8 arms** while I wrote. Point at the artefact that
+  RE-MEASURES it (`matrix.rst` regenerates row counts); for a count you must state, date it
+  and name the census (`ast.AnnAssign` over the registry, not the module's own stale table),
+  and check whether a pre-carve claim used a different denominator. → L-095, L-074
+- **⭐⭐ A DOC'S STATED **REASON** for keeping dead-looking code can be false while its
+  membership is right — and that is the stronger finding.** `[M]` *"kept for the
+  EigenvalueSolver Protocol surface"*: the Protocol declares **5** members
+  (`sorted(Proto.__protocol_attrs__)`, briefed as 3) and only ONE of the four listed
+  delegators is among them; the real reason three survived is the defect itself. → L-095
+- **⭐ `catches("ERR-NNN")` makes `-W` FAIL, and `grep WARNING` UNDER-counts it** — the
+  nexus per-marker lines carry no `WARNING:` prefix (`[M]` grep read 1, the log had 5).
+  Read the whole log. ⭐ And my role probe's fallback ladder is now FOUR: `hasattr` →
+  `dataclasses.fields` → `self.x=` **across `cls.__mro__`** → construct; plus strip the
+  `py:method:` prefix form and treat a leading `!` as a deliberately-suppressed xref
+  (8 + 6 false dead). → L-095, L-093, L-076
+
 - **⛔⛔ A CORPUS PASS FOR A CARVE THAT LANDED WITHOUT ONE IS A BUILD REPAIR FIRST —
   measure the baseline before believing the brief's framing.** `[M]` #426 step 3 opened at
   **EXIT=1, 13 WARNINGs**, all `[nexus.directive]`: a `.. implements::` `:by:` resolves

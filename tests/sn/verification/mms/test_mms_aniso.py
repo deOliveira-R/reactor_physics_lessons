@@ -2,7 +2,8 @@ r"""L1 MMS test for SN — P1 anisotropic scattering.
 
 Phase 3.5 of the verification campaign.  Verifies that the P1
 anisotropic scattering source assembly
-(:meth:`orpheus.sn.solver.SNSolver._build_aniso_scattering`) preserves
+(the :class:`~orpheus.transport.operators.scattering.ScatteringOperator`'s
+ℓ ≥ 1 redistribution, driven as the SI gain) preserves
 :math:`\mathcal{O}(h^{2})` diamond-difference convergence on a 1D
 Cartesian slab with a weakly anisotropic angular flux ansatz.
 

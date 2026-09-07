@@ -37,33 +37,23 @@ history" changelog at `docs/theory/methods/sn/history.rst` (⚠ NOT the pre-spli
 grep must `test -f` the SOURCE). Active track = **#231** (§3); main agent commits, I
 stage + gate.
 
-**In flight — ONE line each. The STATE is in git (`git status --porcelain -- docs/`),
-never in this list; the evidence is in the lesson.** Branch `fix/n2n-anisotropy`, docs
+**In flight — ONE line each. The STATE is in git (`git status --porcelain -- docs/`), never in
+this list; the evidence is in the lesson.** Branch `fix/sn-eigenvalue-finalize-448`, docs
 UNCOMMITTED (I stage + gate; the main agent commits).
 
-- **#426 step 3 — the corpus pass for a carve that landed WITHOUT one, so the gate was
-  EXIT=0 and not count-unchanged** (2026-09-04, HEAD `1a3b78ec` → `f52877db`; 21 `.rst`,
-  0 `orpheus/`/`tests/` edits). `[M]` baseline **EXIT=1 / 13 WARNINGs**, every one a
-  `.. implements::` `:by:` the carve retired. Landed: `adjoint.rst`'s truncation warning
-  → dated HISTORY with a 3-site `fate at step 2` table + a new `sn-n2n-anisotropy-shipped-ladder`
-  SSOT block; `sn-n2n-isotropic-lift`/`-adjoint-source`/`n2n-source` all KEPT and re-scoped
-  to their ℓ=0 block (the third is a live `verifies()` target — read the test BODY);
-  3 new sentinel labels (matrix 594→**597**, predicted); **ERR-082**; the SN changelog entry.
-  Exits: `-E -W` **0-byte**, `dead_references` 9→**0/65**, own probe **0/1355**, 45 retired-spelling
-  survivors all adjudicated ``literal``-history (0 roles), adjoint+slab HTML **0 backticks**.
-  ⚠ The elegance pass COMMITTED mid-task and falsified 4 sentences I had already built clean
-  → [[lessons-L94]]
-- **#426 step 1 — a P0 truncation that MOVES TIERS (data → operator), not one that dies**
-  (2026-09-03; 4 `.rst` + 4 `orpheus/` docstrings. `cross_section_data.rst`: ingest note
-  relabelled `n2n-p0-truncation-at-ingest` → `n2n-legendre-stack-at-ingest` with its 3
-  intra-file citers, new `elastic-legendre-order-ladder` / `mf6-one-yield-per-stack` /
-  `h5-store-format-refusal` anchors + 1 new eq-label. `adjoint.rst`: `sn-n2n-p0-truncation`
-  rewritten + new `sn-n2n-p0-truncation-measured` SSOT block (3 fixtures × 3 conventions).
-  Also `slab_multigroup.rst`, `sn/index.rst` (machine header + a doc code-block that RAISED
-  post-retype). `-E -W` EXIT=0, **0-byte** log both sides; `dead_references` 0/52; stock xref
-  gate 0/14821; my import probe 258 roles / 0 real dead; sentinels **593→594**. `matrix.rst`
-  regenerated +80 TESTS — the main agent's gates, not mine. Three brief claims refuted)
-  → [[lessons-L93]]
+- **#448 — a solver's RETURN is a claim, and the two guards' complements did not cover the exit**
+  (2026-09-06; 16 `.rst`, 0 `orpheus/`/`tests/`). The eigenvalue finalize hand-built a **P0-only**
+  reconstruction source, so at every `scattering_order ≥ 1` the returned ψ solved a different
+  equation from the one the power iteration converged. Landed: **ERR-083** (minted, all numbers
+  MINE on both trees — `git worktree add HEAD --detach` IS the pre-carve tree while the carve is
+  uncommitted); a new H2 `sn-finalize-one-step` in `solver.rst` + eq-label `sn-finalize-map`
+  (sentinels 597→**598**, predicted) + the `sn-exit-balance-projection` label and its ⛔ warning;
+  the SN changelog row; 30 retired-symbol sites re-pointed across 16 files. Gate: **EXIT=1 / 1
+  WARNING + 4 nexus `catches` lines → EXIT=0, 102-byte log**; `dead_references` **0/67**; my role
+  probe **0/7056**; `:by:` **0/416**; HTML backtick gate **0** in all 8 new slices. ⚠ Three brief
+  claims refuted (26 sites → 30; Protocol "3 members" → **5**; "7 arms" → **8**, the module grew
+  45→86 rows mid-task). ⛔ 4 `orpheus/` docstring lies reported, NOT fixed (report §6)
+  → [[lessons-L95]]
 
 ⏹ **MERGED 2026-09-03 — branch `fix/angular-phantom-support` is gone (`[M]` its commits are
 ancestors of HEAD); every entry that used to sit here is landed.** #428, #434 R1–R4, #432 and

@@ -2652,3 +2652,136 @@ patching the `ClassVar` alone reports MC inert. → `L76h`
   whole **258.85 s** (2.8× the core scope for 5 reachable rows — the windowed +
   gate-dispatch files extract at **2.85 s**), `tests/sn/eigenvalue` **118.74 s**.
   Let the excluded numbers justify themselves in the plan. → `L77i`
+
+## #448 additions (2026-09-05, the eigenvalue-finalize reconstruction) → `L78`
+
+**§1 (gates that cannot red).**
+
+- **⭐⭐ When a solver returns TWO members of one object, the reduction identity
+  between them is a FREE L1 gate — and it is the only gate that can see a defect
+  in the RETURN.** ORPHEUS has no structurally-independent eigenvalue reference
+  for a heterogeneous reflected 421-group slab, so the way past is not a weaker
+  gate but a different CLAIM LAYER: `Solution.scalar_flux` is *defined* as
+  `∫ Solution.angular_flux dΩ`, needs no external truth, and is a flux-shape
+  claim (so the pillar rules hold). `[M]` #448 separates by **1.6e6–3.6e6 ×**
+  its band on 8 arms, at L≥1, while every L=0 control is green with ≥316 ×
+  headroom. → `L78a`
+- **⛔⛔ A "complementary pair" of guards can be complementary in ONE variable and
+  both silent in another — draw both complements and check they COVER.** `[M]`
+  `_exit_balance_defect` returns early on `record.fully_converged`; its stated
+  complement `_certify_within_group_exit` fires on the converged side but **inside
+  the inner solves, on the ITERATE**. Between them nothing evaluates the object the
+  caller RECEIVES (`balance_defect=None`, `nwarn=0` on 12/12 converged rows) — the
+  hole #448 lived in for its whole life. The pair is complementary in
+  *converged/not* and blind in *iterate/return*. → `L78b`
+- **⭐ A diagnostic whose docstring forbids THRESHOLDING can still be gated on
+  whether it RESPONDS to the knob it claims to measure.** `[M]` on truncated exits
+  `balance_defect` falls **1.45e6 ×** over `max_outer` 3→12 at L=0 and **1.0002 ×**
+  at L=1 — the number shipped as "how truncated was I" is a defect FLOOR. A rate
+  claim, not a magnitude claim. → `L78c`
+- **⛔ When a "remove the step" mutation is NULL, try "corrupt the step" before
+  writing the gate off — idempotence at a fixed point makes REMOVAL invisible and
+  CORRUPTION loud.** `[M]` skipping the finalize's `_reflect_outflow_into_inflow`
+  moves the answer **2.03e-13 / 2.31e-15 / exactly 0.0** (the converged inflow
+  already equals `B·ψ_out`); DOUBLING the reflected trace moves G1
+  **5.207e-12 → 2.758e-01** and **3.164e-11 → 2.569e-01**, vacuum arm bit-identical.
+  Corollary for the carve: a step measured inert is a NUMBER in the commit message,
+  never a gate. → `L78e`
+- **⭐⭐ Ship one DECLARED PARTIAL NULL arm that states the flagship gate's own
+  Mode-12 blindness.** `[M]` removing the ℓ≥1 emission EVERYWHERE turns the
+  consistency gate fully GREEN at L≥1 (a finalize that drops an absent term IS
+  consistent) while the frozen value anchors and the activation rows all red ⟹
+  **the gate measures CONSISTENCY, never PRESENCE**, and the three test classes
+  partition the claim. An arm designed to go green is the only instrument that can
+  state that partition. → `L78f`
+
+**§2 (harness discipline).**
+
+- **⭐ To mutate ONE BLOCK of a function that reuses shared verbs, wrap the
+  module-level binding of whatever that block calls LAST BEFORE it and flip a phase
+  flag on return.** Three lines. `[M]` #448: `orpheus.sn.solver.power_iteration` (read
+  by the finalize's own call site) turns `compute_fission_source`,
+  `_cell_average_angular` and `_reflect_outflow_into_inflow` — all also called from
+  the inner solves — into finalize-only mutations, so a PRE-carve battery can
+  validate the gate set before the fix exists. Without it every arm is vv#18's
+  over-powered mutation (it changes the CONVERGED answer, not the block). → `L78g`
+
+**§1 (gates that cannot red) — the R2 additions.**
+
+- **⛔⛔ A DECLARED BLINDNESS must name the RIGHT symbol and its mutation must
+  stay inside the problem's CONVERGENT regime — otherwise the fixture's own
+  convergence guard fires first and every red attributes nothing.** `[M]`
+  #448 R2: I declared the trace gate blind to a wrong reflective law because
+  two verbs "both route through `_apply_faces`/`_reflect_trace`". `_apply_faces`
+  is **not** shared (it is the gain's outer LIFT of the trace-only
+  `_reflect_trace`), so that arm was a second gain-route mutation wearing a
+  shared-body label — 27 reds. Then `_reflect_trace × 2` on a REFLECTIVE
+  eigenvalue problem is not a perturbation but a different, DIVERGENT problem:
+  all 9 reds read *"did not fully converge"*. Only `× 1.001` was readable, and
+  it CONFIRMED the blindness (`T-law`/`T-conv` green on 6 rows; `G1` red at
+  **6.84e-04**, `G2` red). ⟹ the partition, measured: **value gates catch a
+  wrong LAW, the trace class catches wrong WIRING.** → `L78l`
+- **⛔ A defect with TWO ENDS needs TWO arms, and the arm you write covers the
+  end you were looking at.** `[M]` zeroing the ℓ≥1 emission on
+  `_redistribute_ordinates` reddens 17 rows and leaves both WINDOWED arms
+  green — a windowed driver's gains are `S.on_moment_domain()`, whose body is
+  `_redistribute_moments`. The second arm reddens exactly those two. Nothing
+  but running the first arm says the claim was unverified on 2 of 8 arms.
+  → `L78m`
+- **⛔ A solver entry's STRATEGY DEFAULT decides which production branch a
+  whole module ever poses — `inspect.signature` the entry and enumerate the
+  defaults before claiming branch coverage.** `[M]` `solve_sn(...,
+  inner_schedule="jacobi")`: **0 of 161** inner solves in a 45-row module
+  about the FINALIZE ever built the Gauss-Seidel `ScheduledInvertibleOperator`,
+  so that reconstruction arm had no witness anywhere. An arm table built from
+  geometries and solvers silently pins one value of every OTHER knob; and the
+  new arm owes its own precondition gate (it really does pose the other
+  splitting), or it is a duplicate wearing a new id. → `L78o`
+- **⭐ A pass-through row asserting EQUALITY is usually unreddenable —
+  IDENTITY is what gives it teeth, and the way you find out is that no arm in
+  your own battery touches it.** `[M]` `assert_array_equal(lagged_source(q, (),
+  ψ), q)` survived arms A1–A7; `assert out is q` made it reddenable and one
+  arm (`+ 0.0 * p`) now reddens it ALONE. → `L78p`
+
+**§2 (harness discipline) — the R2 additions.**
+
+- **⛔ A phase-scoped mutation hook needs a CLOSE, not only an OPEN.** `[M]`
+  #448: the window opened at `power_iteration`'s RETURN and never shut, so a
+  gate that runs a SECOND production entry after its solve (the cross-route
+  oracle) had that oracle mutated too — *"POSITIVE CONTROL FAILED"*, an
+  unattributable red. Closing it at `_package_solution`'s entry: `fired`
+  359 → 14 and the row reds on its subject with the control passing. ⭐ Note
+  what caught it: the gate's OWN positive control, which is the entire reason
+  a cross-route row carries one. → `L78k`
+- **⛔ `dead_references` on an UNCOMMITTED working tree reports GRAPH
+  staleness — settle it with a control-validated grep, not by repairing.**
+  `[M]` it read 5 dead / 12 sites post-carve; the graph was stamped at HEAD
+  with both the carve and an archivist's docs pass uncommitted on top, and an
+  independent census (positive control: 8 hits for the surviving verb, 0 for
+  the retired ones) found **0** live xrefs. Re-run after the next
+  `sphinx-build`. → `L78n`
+
+**§3 (config blindness — ORPHEUS fixture facts).**
+
+- **⛔⛔ A manufactured cross section that is NOT balanced into `Σ_t` makes the
+  reported φ differ from `∫ψ_conv dΩ` by an EXACT GLOBAL SCALE — and the damage is
+  that the L=0 CONTROL reds too, so the gate attributes nothing.** `[M]` adding
+  `Sig2` to a library mixture without `SigT += rowsum(Sig2)`: scale spread
+  **[1.100212, 1.100212]** (constant to 6 d.p.), G1(L=0) **3.100e-02** instead of
+  1.24e-11. Balanced (the `tests/cp`/`tests/mc` house spelling
+  `sig_t = sig_c + sig_f + rowsum(sig_s) + rowsum(sig2)`) it returns to 1.238e-11.
+  ⚠ And `[M]` **every** `xs_library` mixture (A/B/C/D × 2g/4g) ships `Sig2 = 0`, so
+  a fast (n,2n) fixture MUST be manufactured — there is no library alternative, and
+  `Mixture.Sig2` is a Legendre STACK (`replace(mix, Sig2=[p0, p0*0.6])`). → `L78d`
+
+**§6 (carve archetypes) — RETIREMENT audits.**
+
+- **⛔ The three-search retirement audit misses a FOURTH surface: the corpus's
+  DECLARED `:by:` provenance edges.** `[M]` `docs/theory/foundations/
+  operator_algebra.rst:4043` declares `.. implements:: … :by: …build_aniso_source`
+  — a real graph edge `provenance_chain` confirms is DECLARED, invisible to any
+  `tests/` grep, deleted by the retirement. One regex over `docs/theory/**/*.rst`
+  for `:by:` × the retiring names answers it (here: 1 of 26 doc hits). Re-POINT it;
+  do not delete it. ⚠ Sibling: **a retired `@pytest.mark.sentinel` is a lost
+  capability-node canary** — the marker migrates with the rewire, and nothing in a
+  symbol grep flags it. → `L78i`, `L78j`

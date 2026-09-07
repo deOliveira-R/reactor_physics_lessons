@@ -79,7 +79,8 @@ def test_c2_production_carrying_solve_passes_the_certificate(inner):
     solver.solve_fixed_source(
         np.ones((sn.ng, sn.nx)), np.ones((sn.ng, sn.nx)),
     )
-    psi_pair = solver._psi_typed
+    assert solver._inner is not None
+    psi_pair = solver._inner.iterate
     if psi_pair is None:
         pytest.fail(f"[{inner}] no converged iterate stored")
     if not np.isfinite(np.asarray(psi_pair.to_flat())).all():

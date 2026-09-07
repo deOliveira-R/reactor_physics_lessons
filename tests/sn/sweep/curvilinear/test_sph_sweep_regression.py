@@ -110,8 +110,7 @@ class TestSphericalSweepRegression:
         This caught the missing weight_norm (1/sum_w) normalization in
         the spherical sweep source term.
         """
-        from tests.sn._test_helpers import sweep_once
-        from orpheus.sn.solver import _reflect_outflow_into_inflow
+        from tests.sn._test_helpers import reflect_outflow_into_inflow, sweep_once
         from orpheus.transport.source_sinks import AngularSourceSink
 
         mesh = _homogeneous_mesh(10, 1.0, mat_id=0, coord=CoordSystem.SPHERICAL)
@@ -128,7 +127,7 @@ class TestSphericalSweepRegression:
             # Wave O (#208) O.4a.2 — bare sweep: drive the −B reflective
             # coupling explicitly before each sweep (the sweep no longer
             # re-applies the BC at entry).  Mirrors _solve_fixed_source_si.
-            _reflect_outflow_into_inflow(boundary_flux, sn_mesh)
+            reflect_outflow_into_inflow(boundary_flux, sn_mesh)
             _, phi = sweep_once(source, sig_t, sn_mesh, boundary_flux)
 
         V = sn_mesh.volumes
@@ -142,7 +141,7 @@ class TestSphericalSweepRegression:
         Catches the negative-denominator bug from using signed α
         instead of |α| at the innermost cell where A=0.
         """
-        from tests.sn._test_helpers import sweep_once
+        from tests.sn._test_helpers import reflect_outflow_into_inflow, sweep_once
         from orpheus.transport.source_sinks import AngularSourceSink
 
         mesh = _homogeneous_mesh(10, 2.0, mat_id=0, coord=CoordSystem.SPHERICAL)

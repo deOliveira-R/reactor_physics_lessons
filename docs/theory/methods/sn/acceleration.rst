@@ -1179,7 +1179,7 @@ composition seam nobody had gated.
    G3 full-composite reciprocity gates red.
 #. *Call-site role conversions* — every caller that passed an
    **iterate** trace (stale outflow rows) as ``rhs.boundary`` (the
-   ``solve_sn`` eigenvalue-finalize and a test helper) now routes
+   ``solve_sn`` eigenvalue-finalize and a test helper) was routed
    through the existing
    :meth:`AngularBoundarySourceSink.prescribed_inflow` factory (inflow
    slots only; outflow rows unrepresentable by construction — the
@@ -1189,6 +1189,12 @@ composition seam nobody had gated.
    and caught **only** by the 2-D reflective trace-balance gate (defect
    :math:`8.8\times10^{-2}` at exact :math:`k_{\rm eff}` — a Mode-12
    lesson: the balance functional sees what the eigenvalue cannot).
+   ⛔ The finalize's own call site is **moot since #448**
+   (:ref:`sn-finalize-one-step`): it passes no trace at all — its
+   external boundary source is zero and :math:`B` arrives as a gain — so
+   the role confusion is unspellable there rather than projected away.
+   The test helper's use, the factory, and the solve/transpose halves of
+   this fix are untouched.
 #. *Honest scope, two frontiers.*  On a product-quadrature cylinder the
    degenerate pure-azimuthal rows (:math:`\mu_r = 0`, excluded from both
    selectors) are **free DOFs** of the composite — the forward is a

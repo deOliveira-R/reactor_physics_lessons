@@ -3317,17 +3317,28 @@ source of truth, Cardinal Rule 2):
        :func:`_solve_fixed_source_krylov <orpheus.sn.solver._solve_fixed_source_krylov>`)
        — every solve that routes through a driver.
    * - **Direct helper**
-       (:func:`_reflect_outflow_into_inflow <orpheus.sn.solver._reflect_outflow_into_inflow>`)
+       (:meth:`SNBoundaryOperator.reflect_inflow_inplace
+       <orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_inflow_inplace>`,
+       whole-trace form)
      - Fills each face's inflow slots with
        :math:`B\,\psi.\text{outflow}` in place on the boundary buffer,
        via the same :class:`SNBoundaryOperator`, before the bare
        sweep.
-     - The loops that have **no driver to route through**: the final
-       eigenvalue reconstruction sweep in
-       :func:`solve_sn <orpheus.sn.solver.solve_sn>`, and the
-       octant-restricted Gauss-Seidel variant (Phase 3). The direct
-       fixed-source SI loop now routes through the variadic driver, so
-       it no longer needs this helper.
+     - ⛔ **No production caller since 2026-09-06 (#448).**  This row
+       used to name two loops with *"no driver to route through"* — the
+       direct fixed-source SI loop, which moved onto the variadic driver
+       at Wave O O.2a, and the eigenvalue reconstruction sweep in
+       :func:`solve_sn <orpheus.sn.solver.solve_sn>`, which became one
+       step of that same driven map at #448
+       (:ref:`sn-finalize-one-step`).  ``[M]`` by AST the verb has zero
+       call sites in ``orpheus/``; its consumer is the sweep-tier gates'
+       inter-sweep helper
+       (``tests/sn/_test_helpers.py::reflect_outflow_into_inflow``, where
+       the module-level ``_reflect_outflow_into_inflow`` moved).  The
+       *face-restricted* form is a different question — see
+       :meth:`~orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace`
+       for the reflect the reified :math:`M` actually supplies to the
+       scheduled sweep.
 
 The direct helper is **not** a fold of :math:`B` into :math:`S`: it is
 the trace-only :math:`A_{ss}` action of the *same* :math:`B`, expressed
@@ -3422,11 +3433,13 @@ geometry paths cannot drift: ``sn_mesh.reduced is not None`` is the
 representation's ``supports``) reads to select the 1-D scan
 (:class:`~orpheus.sn.loss_representation.CumprodScan`) vs the 2-D
 wavefront body, and the **same**
-predicate the direct-helper guards
-(:func:`_solve_fixed_source_si <orpheus.sn.solver._solve_fixed_source_si>`,
-:func:`solve_sn <orpheus.sn.solver.solve_sn>`) check before calling
-:func:`_reflect_outflow_into_inflow <orpheus.sn.solver._reflect_outflow_into_inflow>`.
-Both branches are now bare-sweep + sibling :math:`-B`; the predicate
+predicate the two entries' reconstructions read.  ⛔ This clause named
+*"the direct-helper guards … before calling
+``_reflect_outflow_into_inflow``"* until 2026-09-06: neither entry calls a
+direct helper any more (the fixed-source SI loop stopped at Wave O O.2a,
+the eigenvalue finalize at #448 — :ref:`sn-finalize-one-step`), so the
+predicate now selects a *representation*, which was always what it was
+about.  Both branches are now bare-sweep + sibling :math:`-B`; the predicate
 selects the *fold shape* (1-D parallel-prefix scan vs 2-D wavefront
 DAG), **not** a bare-vs-bc-in-sweep distinction.
 
@@ -3953,11 +3966,11 @@ in the O.2 close-out** (:ref:`affine-typed-residual`):
   the dense-probe oracle + the L11 wrong-metric control
   (:ref:`g-adjoint`).
 
-The direct-helper
-:func:`_reflect_outflow_into_inflow <orpheus.sn.solver._reflect_outflow_into_inflow>`
-also survives O.2a (the driver no longer routes through it, but the
-final eigenvalue reconstruction sweep and the Gauss-Seidel variant
-still do — :ref:`bc-extraction-two-routes`); the
+The direct-helper survived O.2a (the driver stopped routing through it,
+but the final eigenvalue reconstruction sweep still did) and has **no
+production caller at all since #448**, when that sweep became one step of
+the driven map (:ref:`sn-finalize-one-step`); it now lives with the
+sweep-tier gates (:ref:`bc-extraction-two-routes`).  The
 :attr:`ScatteringOperator.domain` typing completion that was once a
 documented seam **landed in P4.5 W-D** — :math:`S` now carries the
 composite full-field space (:ref:`bc-extraction-scope-future`).

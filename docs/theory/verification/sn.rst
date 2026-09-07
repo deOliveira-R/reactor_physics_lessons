@@ -676,8 +676,11 @@ streaming of :math:`B(x)`.
   :func:`orpheus.derivations.continuous.mms.sn.build_p1_aniso_mms_case`.
 - Test:
   :func:`tests.sn.verification.mms.test_mms_aniso.test_sn_p1_aniso_mms_converges_second_order`.
-- P1 assembly:
-  :meth:`orpheus.sn.solver.SNSolver._build_aniso_scattering`.
+- P1 assembly: the collision gain's :math:`\ell \ge 1` body,
+  ``TransferOperator._redistribute_ordinates``, reached through
+  :meth:`~orpheus.transport.operators.transfer.TransferOperator.apply`
+  (it was ``SNSolver._build_aniso_scattering`` → ``build_aniso_source``
+  until #448).
 
 
 .. _sn-mms-curvilinear-isotropic-verification:
@@ -1792,7 +1795,9 @@ Issue #9 is about the *second*; everything above (#229, the
   Path-(I) test-design floor.
 * **Path-(II) — Legendre SCATTERING moments.**  The
   :math:`P_1{+}` scattering source :math:`R\,\Lambda\,M`
-  (``scattering.build_aniso_source``, ``scattering_order ≥ 1``),
+  (the collision gain's :math:`\ell \ge 1` body at
+  ``scattering_order ≥ 1``; the verb was ``scattering.build_aniso_source``
+  until #448),
   geometry-**agnostic**, wired identically for all geometries through
   :func:`~orpheus.sn.coupled_system.build_within_group_system` (the
   :math:`S` gain of the :math:`(L+C),\,S,\,B` decomposition carries

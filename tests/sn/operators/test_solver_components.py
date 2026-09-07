@@ -20,11 +20,12 @@ from orpheus.derivations.common.xs_library import get_mixture
 from orpheus.geometry import Mesh1D, Mesh2D
 from orpheus.sn.mesh.augmented_mesh import SNMesh
 from orpheus.numerics.quadrature import Quadrature
-from orpheus.sn.solver import SNSolver, solve_sn, _reflect_outflow_into_inflow
+from orpheus.sn.solver import SNSolver, solve_sn
 from orpheus.transport.source_sinks import ScalarSourceSink, AngularSourceSink
-from tests.sn._test_helpers import sweep_once
+from tests.sn._test_helpers import reflect_outflow_into_inflow, sweep_once
 from tests.sn._test_helpers import SN_TESTS_ROOT
 from orpheus.transport.fields.angular_boundary_flux import AngularBoundaryFlux
+from orpheus.transport.fields.angular_flux import AngularFlux
 
 pytestmark = pytest.mark.l0  # SN solver method-in-isolation component checks
 
@@ -145,7 +146,7 @@ def _ref_compute_keff(solver, flux):
 
 # ── Component tests ──────────────────────────────────────────────────
 
-class TestAddScatteringSource:
+class TestP0ScatteringEmission:
     @pytest.mark.verifies("p0-scatter-source", "mg-inscatter-source")
     def test_matches_reference(self, solver_2g):
         solver, *_ = solver_2g
@@ -156,7 +157,7 @@ class TestAddScatteringSource:
         expected = _ref_add_scattering(solver, Q, phi)
 
         Q_actual = Q.copy()
-        solver._add_scattering_source(Q_actual, phi)
+        solver.scattering_op.transfer.add_p0_source(Q_actual, phi)
 
         np.testing.assert_allclose(Q_actual, expected, rtol=1e-13,
                                    err_msg="Scattering source mismatch")
@@ -167,17 +168,17 @@ class TestAddScatteringSource:
         phi = np.zeros_like(Q)
 
         Q_before = Q.copy()
-        solver._add_scattering_source(Q, phi)
+        solver.scattering_op.transfer.add_p0_source(Q, phi)
         np.testing.assert_array_equal(Q, Q_before)
 
 
-class TestAddN2NSource:
+class TestP0N2NEmission:
     @pytest.mark.verifies("n2n-source")
     def test_matches_reference(self, solver_2g_n2n):
         """#269 (Mode-10 cure): rides ``solver_2g_n2n`` (NON-zero ``Sig2``)
         rather than the library ``solver_2g`` (``Sig2 = 0``), so the
         ``2·Σ_2n`` term is genuinely constrained — a sign/factor mutation
-        in ``_add_n2n_source`` reddens this test.  The reference
+        in the (n,2n) field's ``add_p0_source`` reddens this test.  The reference
         :func:`_ref_add_n2n` is a structurally-independent per-cell loop
         (explicit ``2·Σ_2nᵀ@φ``), not the SUT's reduction."""
         solver, *_ = solver_2g_n2n
@@ -188,7 +189,7 @@ class TestAddN2NSource:
         expected = _ref_add_n2n(solver, Q, phi)
 
         Q_actual = Q.copy()
-        solver._add_n2n_source(Q_actual, phi)
+        solver.n2n_op.isotropic_energy.transfer.add_p0_source(Q_actual, phi)
 
         np.testing.assert_allclose(Q_actual, expected, rtol=1e-13,
                                    err_msg="N2N source mismatch")
@@ -457,13 +458,13 @@ class TestQuadratureWeightConservation:
         boundary_flux = AngularBoundaryFlux.zeros(local_sn_mesh.angular_trace)
         src = AngularSourceSink.from_isotropic(Q, local_sn_mesh)
         # Wave O #208 O.4b E1: the 2-D sweep is now BARE — the reflective
-        # coupling is the EXTERNAL _reflect_outflow_into_inflow applied once
+        # coupling is the EXTERNAL reflect_outflow_into_inflow applied once
         # per iteration (mirroring production: _solve_fixed_source_si /
         # solve_sn), NOT an in-sweep bc.apply.  Without it the bare sweep
         # reads a zero inflow (vacuum-like) and never reaches the
         # infinite-medium φ = Q/Σ_t.  Converges to machine precision here.
         for _ in range(200):
-            _reflect_outflow_into_inflow(boundary_flux, local_sn_mesh)
+            reflect_outflow_into_inflow(boundary_flux, local_sn_mesh)
             _, phi = sweep_once(src, solver.mat_xs.total_cross_section, local_sn_mesh, boundary_flux)
 
         expected = Q / solver.mat_xs.total_cross_section
@@ -625,12 +626,20 @@ class TestAnisotropicScattering:
         solver = SNSolver(SNMesh(mesh, quad, {0: mix}), scattering_order=1)
 
         N = quad.N
-        angular = np.ones((N, solver.ng, 2, 2))
+        angular = AngularFlux(
+            values=np.ones((N, solver.ng, 2, 2)),
+            space=solver.sn_mesh.angular_bulk_space,
+        )
 
-        aniso = solver._build_aniso_scattering(angular)
-        if aniso is not None:
-            np.testing.assert_allclose(aniso, 0, atol=1e-12,
-                                       err_msg="P1 source nonzero for isotropic flux")
+        # The ℓ ≥ 1 body the angular end selects (``(1/W)·kernel``; the
+        # ``build_aniso_source`` verb wrapping it retired at #448).  The
+        # fixture is P1 by construction, so the activation is ASSERTED, not
+        # branched on — a branch would pass asserting nothing if it flipped.
+        op = solver.scattering_op
+        assert not op.is_isotropic
+        aniso = op._redistribute_ordinates(angular)
+        np.testing.assert_allclose(aniso.values, 0, atol=1e-12,
+                                   err_msg="P1 source nonzero for isotropic flux")
 
 
 class TestFissionSource:
@@ -691,16 +700,16 @@ class TestPerformanceBaseline:
         t0 = time.perf_counter()
         for _ in range(n_reps):
             Q_tmp = Q.copy()
-            solver._add_scattering_source(Q_tmp, phi)
+            solver.scattering_op.transfer.add_p0_source(Q_tmp, phi)
         t_scat = (time.perf_counter() - t0) / n_reps * 1000
-        print(f"\n  _add_scattering_source: {t_scat:.3f} ms")
+        print(f"\n  P0 scattering (transfer.add_p0_source): {t_scat:.3f} ms")
 
         t0 = time.perf_counter()
         for _ in range(n_reps):
             Q_tmp = Q.copy()
-            solver._add_n2n_source(Q_tmp, phi)
+            solver.n2n_op.isotropic_energy.transfer.add_p0_source(Q_tmp, phi)
         t_n2n = (time.perf_counter() - t0) / n_reps * 1000
-        print(f"  _add_n2n_source: {t_n2n:.3f} ms")
+        print(f"  P0 (n,2n) (transfer.add_p0_source): {t_n2n:.3f} ms")
 
         t0 = time.perf_counter()
         for _ in range(n_reps):
@@ -740,6 +749,6 @@ class TestPerformanceBaseline:
         t0 = time.perf_counter()
         for _ in range(n_reps):
             Q_tmp = Q.copy()
-            solver._add_scattering_source(Q_tmp, phi)
+            solver.scattering_op.transfer.add_p0_source(Q_tmp, phi)
         t_scat = (time.perf_counter() - t0) / n_reps * 1000
-        print(f"\n  [421g] _add_scattering_source: {t_scat:.2f} ms")
+        print(f"\n  [421g] P0 scattering (transfer.add_p0_source): {t_scat:.2f} ms")

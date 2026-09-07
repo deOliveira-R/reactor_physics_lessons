@@ -35,6 +35,90 @@ them.  Trust ``git``, not this column.
      - Issue
      - Where
    * - in dev
+       (2026-09-06)
+     - **The eigenvalue finalize is ONE step of the iteration it
+       finalizes — the returned flux now solves the equation the solve
+       reports** (#448).
+       **(1) The defect.**  ``solve_sn`` returns
+       :attr:`~orpheus.sn.solution.Solution.angular_flux` reconstructed by
+       one final within-group solve, and until this change that solve's
+       right-hand side was built by hand as fission + :math:`P_0`
+       scattering + :math:`P_0` :math:`(n,2n)`, lifted isotropically.  So
+       at every ``scattering_order ≥ 1`` the :math:`\ell \ge 1` half of
+       BOTH collision channels was absent from the reconstruction while
+       the loss arm the iterate converged against carried it: the returned
+       :math:`\psi` solved a different equation from the one the power
+       iteration converged, and its own angular moment did not reproduce
+       the ``scalar_flux`` shipped beside it.  ``[M]`` on the ERR-082
+       Be-reflected U slab (421 groups, GL-8, :math:`L = 2`) the returned
+       flux missed the converged iterate by **8.776e-02** and its own
+       reported :math:`\phi` by **3.405e-02** (per group up to 1.76e-01;
+       per ordinate 4–9 %); at :math:`L = 0` both read ~1e-10, the
+       control.  ``keff`` and ``scalar_flux`` are the power iteration's and
+       were never affected — which is exactly why every eigenvalue-value
+       gate in the tree was blind.  A second shipped surface was corrupted
+       too: ``history.balance_defect`` on a TRUNCATED exit was pinned at a
+       #448 floor (``[M]`` 7.48654e-02 → 7.48474e-02 over ``max_outer``
+       3 → 12 at :math:`L = 1`, i.e. **1.0002 ×**, against 1.45 × 10⁶ at
+       :math:`L = 0`), so the number a user is shown as *"how truncated was
+       I"* was reading the reconstruction instead of the truncation.
+       **(2) The fix — option B, ruled 2026-09-05.**  The finalize
+       evaluates the splitting iteration's own map ONCE at the converged
+       iterate with the CONVERGED fission source,
+       :math:`\psi = M^{-1}(q_F(\phi,k) + \sum_i N_i\psi_{\rm conv})`,
+       through the splitting the last inner solve DROVE.  At a fixed point
+       :math:`G(\psi^\star) = \psi^\star`, so one step reconstructs the
+       iterate — and it un-windows a moment iterate for free, because the
+       identity does not care which right-inverse of :math:`M` is used.
+       Two new named objects carry it:
+       :func:`~orpheus.numerics.iteration.fixed_point_step` /
+       :func:`~orpheus.numerics.iteration.lagged_source` (the map and its
+       rhs, named once and shared with
+       :meth:`SourceIteration.solve <orpheus.numerics.iteration.SourceIteration.solve>`)
+       and :class:`~orpheus.sn.solver.InnerSolve`, the record each inner
+       solve leaves — its posed system, its forward :math:`M`, its gains
+       and its converged iterate, written at one site and read as one
+       fact.  A third, :func:`~orpheus.sn.solver._eigenvalue_driver_source`,
+       is the ONE construction of the eigenvalue rhs (``[M]`` **3** call
+       sites: the SI inner, the Krylov inner, the finalize), so what the
+       drivers converge against IS what the finalize rebuilds from, by
+       construction.
+       **(3) What retired.**  The three solver-side :math:`P_0`
+       delegators (``_add_scattering_source``, ``_build_aniso_scattering``,
+       ``_add_n2n_source``) and the two operator verbs beneath them
+       (``TransferOperator.add_iso_source`` / ``build_aniso_source``) — the
+       surviving bodies are the channel field's ``add_p0_source``, the
+       construction-selected ``_redistribute_ordinates``, and the
+       producer-side combine.  ``_reflect_outflow_into_inflow`` moved out of
+       production to ``tests/sn/_test_helpers.py`` (``[M]`` its finalize
+       call was INERT on a converged exit: 2.0e-13 / 2.3e-15 /
+       bit-identical on vacuum), and the write-only ``_boundary_flux``
+       buffer went with it.  ⛔ ``max_outer = 0`` now RAISES: the finalize
+       is one step of the iteration and has no cold-solve fallback, by
+       design.
+       **(4) Evidence.**  ``[M]`` post-fix the returned flux is 1.236e-10
+       from the converged iterate at :math:`L = 2` and its moments
+       reproduce :math:`\phi` to 3.170e-10; :math:`k` is bit-identical at
+       both orders; the truncated-exit diagnostic now falls by 1.43 × 10⁷
+       (:math:`L = 0`) and 3.46 × 10⁷ (:math:`L = 1`) over the same budget
+       sweep.  New gate module
+       ``tests/sn/solve/test_eigenvalue_finalize_reconstruction.py``, over
+       a registry of ``[M]`` **8** arms (slab vacuum / reflective /
+       live-\ :math:`\ell\ge1`-\ :math:`(n,2n)`, coupled sphere and
+       cylinder, 2-D Cartesian windowed under Jacobi and under boundary
+       Gauss-Seidel, Krylov slab) — **ten** rows RED on the pre-carve tree
+       (the seven arms it then carried, at :math:`L \ge 1`, plus the
+       421-group production row, the fixed-source cross-route and the
+       balance-defect response; the eighth arm, ``cart2d_gs``, was added
+       after the fix and has no pre-carve twin), four carrying
+       ``@pytest.mark.catches("ERR-083")``, none marked ``slow``.
+       Its row count is regenerated in
+       :doc:`the V&V matrix </theory/verification/matrix>`.  Full account: :ref:`sn-finalize-one-step`,
+       :doc:`ERR-083 </theory/verification/error_catalog>`.
+     - `#448 <https://github.com/deOliveira-R/ORPHEUS/issues/448>`_
+     - the carve on ``fix/sn-eigenvalue-finalize-448``
+       (unmerged at the time of writing — trust ``git``)
+   * - in dev
        (2026-09-05)
      - **Each binding acts through the body its ends select — the
        carrier dispatch of the transport operator family is retired**

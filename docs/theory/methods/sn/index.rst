@@ -1978,7 +1978,7 @@ Solver-coordination traps
   :meth:`~orpheus.sn.solver.SNSolver.solve_fixed_source` and
   :meth:`~orpheus.sn.solver.SNSolver.compute_keff`.  So
   ``compute_keff`` sees the *renormalised* :math:`\phi`, while the stored
-  ``_psi_typed.boundary`` is the *un-renormalised* trace — the scale
+  ``_inner.iterate.boundary`` is the *un-renormalised* trace — the scale
   bridge (:ref:`sn-keff-estimator`) is what makes the leakage term
   consistent across that boundary.  Reordering the two (report before
   renormalise) would break the bridge's ``1.0`` shortcut.

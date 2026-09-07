@@ -6,8 +6,8 @@ source shared across ALL transport models. These gates pin them in isolation
 (synthetic per-material XS — the operators touch ONLY the per-material dispatch;
 the real-mesh SN integration is the P2 forward / P3 adjoint bit-identity gates):
 
-* **apply ≡ fast-path** — the OperatorSum re-expression of ``add_iso_source`` +
-  the solver's ``_add_n2n_source`` delegator is byte-identical (the same (n,2n) field verb, ``add_p0_source``, same accumulation).
+* **apply ≡ fast-path** — the OperatorSum re-expression of the two channel
+  fields' ``add_p0_source`` is byte-identical (same verb, same accumulation).
 * **transpose** — Euclidean reciprocity ``⟨Kφ,χ⟩=⟨φ,Kᵀχ⟩`` + a structurally-
   independent dense ``Σ @ vec`` per-material reference (a wrong group axis reds).
 * **as_dense ≡ apply** — the two consumption modes agree (the LHS-fold view).

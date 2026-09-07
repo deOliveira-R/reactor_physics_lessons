@@ -1244,3 +1244,42 @@ def rc_march(sn_mesh, total_cross_section):
             reduced, sn_mesh.radial_characteristic_levels,
         ),
     )
+
+
+def reflect_outflow_into_inflow(boundary_flux, sn_mesh: "SNMesh") -> None:
+    r"""In-place: fill each face's inflow ordinate slots with the realized
+    boundary law applied to that face's outflow trace — the ``−B`` reflective
+    coupling, externalised for a BARE sweep (Wave O #208 O.4a.2).
+
+    **A test-tree helper since #448.** The bare sweep reads the inflow
+    ordinate slots of its boundary buffer as the inflow seed and does not
+    re-apply ``bc`` to the outflow internally; PRODUCTION delivers the
+    coupling as the ``B`` gain of every within-group driver (Wave O O.2a —
+    since B.2d the :func:`~orpheus.sn.coupled_system.build_within_group_system`
+    record's ``explicit_gains``), and since #448 the eigenvalue finalize is
+    one :func:`~orpheus.numerics.iteration.fixed_point_step` of that same
+    map, so no production path sets inflow slots by hand any more.  The
+    sweep-tier gates that drive ``sweep_once`` / ``_sweep_jacobi`` in a loop
+    (the 2-D octant equivalence suite, the curvilinear sweep regressions,
+    the ng=2 layout guard, the iteration primitive's SN fixture) still need
+    the inter-sweep ``ψ.inflow = B·ψ.outflow``, which is what this helper is:
+    the whole-trace form of
+    :meth:`~orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_inflow_inplace`
+    (``B_a`` — the SAME core the matvec / SI driver consume as the boundary
+    gain, so the two routes cannot drift).  `[M]` its last production call
+    site — the pre-#448 finalize's reflect of the converged trace — was
+    inert on a converged exit (2.0e-13 / 2.3e-15 / bit-identical on a
+    vacuum arm), which is why moving it cost no gate.
+
+    For vacuum ``B = 0`` so the inflow slots stay zero; for
+    reflective/white/albedo it is the same ``R·G`` reflection the
+    pre-extraction sweep applied at entry, relocated to the caller.  The
+    ψ½ ray corner (System B's ``B_b``) is NOT wrapped here — `[M]` 0 of the
+    14 consumer sites ever passed a ray, and its in-place verb
+    ``reflect_corner_inplace`` retired at #448 with the finalize that was its
+    only caller; on a carrying mesh the corner is the coupled gain grid's
+    business.  The helper carries exactly the arm the gates drive.
+    """
+    from orpheus.sn.operators.boundary import SNBoundaryOperator
+
+    SNBoundaryOperator(sn_mesh).reflect_inflow_inplace(boundary_flux)

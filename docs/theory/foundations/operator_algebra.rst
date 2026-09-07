@@ -727,7 +727,8 @@ multiplier. A consumer that holds a composite and wants an energy
 binding's action does not get a ``FullField`` arm on the energy binding —
 it *lifts* (next subsection). That is ruling **R-4** of the step-5 design
 round, and it is what keeps the array carriers where the numerics tier
-(:func:`~orpheus.numerics.operator.as_matrix`,
+(:meth:`LinearOperator.as_matrix
+<orpheus.numerics.operator.LinearOperator.as_matrix>`,
 :class:`~orpheus.numerics.operator.OperatorSum`, ``power_iteration``'s
 protocol vector) can reach them without a typed wrapper.
 
@@ -4040,9 +4041,9 @@ role transition itself is the carriers' declared partnership
 (:ref:`role-partner-declaration`) rather than a polymorphic verb.
 
 .. implements:: scattering-aniso-composite
-   :by: orpheus.transport.operators.transfer.TransferOperator.build_aniso_source
+   :by: orpheus.transport.operators.transfer.TransferOperator._redistribute_ordinates
 
-   **Implemented by** literally ``self.kernel.apply(angular_flux.values)
+   **Implemented by** literally ``self.kernel.apply(bulk.values)
    / self.total_weight`` — i.e.
    :math:`\tfrac{1}{W}(R\circ\Lambda\circ M)`, the equation with its
    producer-side normalisation applied at the ``apply`` boundary.
@@ -4543,8 +4544,9 @@ which end of the retained analysis face the domain's interior is
 (:ref:`cs4c-ends-select-the-body`):
 
 * The **angular-end** binding (every 1-D, curvilinear, Krylov and
-  un-windowed iterate; :ref:`sn-angular-windowing-factoring`,
-  :meth:`~orpheus.transport.operators.transfer.TransferOperator.build_aniso_source`)
+  un-windowed iterate; :ref:`sn-angular-windowing-factoring`, the body
+  ``TransferOperator._redistribute_ordinates`` — a public
+  ``build_aniso_source`` wrapper stood in front of it until #448)
   consumes the §5.6 :attr:`kernel <orpheus.transport.operators.transfer.TransferOperator.kernel>`
   ``= frame.conjugate(Λ)`` — the **single composed** ``np.ndarray``
   operator. This is the 0-ULP canary: one composition, one reduction
@@ -5037,9 +5039,12 @@ factor naturally as a **tensor product** of per-axis operators:
      \Sigma_{s,\ell}(g'\!\to\!g)\,\phi_\ell^m\big|_{g'}`, dispatched
      per-material through the cell axis. Production's default
      ``skip_l0=True`` omits the :math:`\ell = 0` block, which the separate
-     :math:`P_0` in-transfer fast path
-     (:meth:`~orpheus.transport.operators.transfer.TransferOperator.add_iso_source`)
-     carries; ``skip_l0=False`` restores the full sum for the
+     :math:`P_0` in-transfer fast path carries — the energy binding
+     :attr:`~orpheus.transport.operators.transfer.TransferOperator.isotropic_energy`
+     over
+     :meth:`~orpheus.transport.material_field.TransferMaterialField.add_p0_source`
+     (a ``TransferOperator.add_iso_source`` delegator fronted it until
+     #448); ``skip_l0=False`` restores the full sum for the
      :math:`R\Lambda M\psi` composition.
 
   .. warning:: **The left side is** :math:`\Lambda`, **not** :math:`S`.

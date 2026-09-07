@@ -37,7 +37,7 @@ from collections.abc import Iterable
 from dataclasses import replace
 from functools import reduce
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar, cast
 
 import numpy as np
 from scipy.sparse.linalg import gmres
@@ -87,7 +87,11 @@ if TYPE_CHECKING:
     # Annotation-only names for the late-imported operator/driver types
     # (their runtime imports stay inside the function bodies — the
     # boundary/iteration modules are one-way late imports here).
-    from orpheus.numerics.iteration import KrylovAcceleration, SourceIteration
+    from orpheus.numerics.iteration import (
+        KrylovAcceleration,
+        SourceIteration,
+        SupportsSeededApply,
+    )
     from orpheus.numerics.operator import LinearOperator
     from orpheus.transport.fields.angular_flux import AngularFlux
     from orpheus.transport.fields.scalar_flux import ScalarFlux
@@ -959,9 +963,11 @@ def _radial_characteristic_source_from_per_ordinate(
 
     The PER-ORDINATE typed entry to the one fold kernel
     (:func:`~orpheus.numerics.spaces.radial_characteristic_space.fold_moments_to_radial_characteristic`),
-    used where the source is genuinely per-ordinate (possibly anisotropic): the
-    final total-source reconstruction and the fixed-source rhs external
-    source. The eigenvalue FISSION q½ seed uses the
+    used where the source is genuinely per-ordinate (possibly anisotropic):
+    the fixed-source rhs external source (:func:`_build_fixed_source_rhs`, its
+    ONE caller since #448 — the eigenvalue finalize's total-source fold
+    retired when the finalize became one step of the driven iteration, whose
+    ψ½ member arrives as the fission seed). The eigenvalue FISSION q½ seed uses the
     MOMENTS entry :func:`_radial_characteristic_fission_seed` instead (its ℓ=0
     emission is already a moment, so the direct fold skips this factory's
     per-ordinate round-trip). Both bottom out in the SAME kernel — no twin, a
@@ -1052,6 +1058,92 @@ def _coupled_source_state(
             f"(got None) — the joint solve consumes System B's true source."
         )
     return CoupledField(systems=(q_a, q_half))
+
+
+class InnerSolve(NamedTuple):
+    r"""What the LAST within-group solve left behind — the posed
+    :class:`~orpheus.sn.coupled_system.WithinGroupSystem` record, the
+    forward ``M`` whose inverse the driver applied (the un-windowed
+    ``base_implicit`` on the SI arm; the record's ``implicit_operator`` on
+    Krylov), the lagged gains ``N`` it evaluated each step (moment-bound when
+    the SI iterate was windowed; the coupled gain grid when carrying), and
+    the converged iterate itself (System A's bulk ⊕ trace, paired with
+    System B's ψ½ member on a carrying mesh — B.2d).
+
+    Written by both eigenvalue inner solves as ``SNSolver._inner`` (``None``
+    before the first inner solve — the truthful type of a state that does
+    not exist yet), read as the next inner's warm start, by ``compute_keff``'s
+    leakage term (the converged trace), and by the finalize
+    (:func:`solve_sn`), which evaluates the SAME map once more —
+    :func:`~orpheus.numerics.iteration.fixed_point_step` on the converged
+    iterate with the converged fission source — through the operators the
+    iteration actually converged against.  The record IS the history (#340
+    N2b-ii): nothing re-selects a splitting the inner already chose, so the
+    reconstruction cannot drift from the iteration (#448), and the four
+    members travel as one fact — they are written at one site and never
+    independently.
+    """
+
+    system: "WithinGroupSystem"
+    implicit: "CoupledOperator | StreamingCollisionOperator | ScheduledInvertibleOperator"
+    gains: "tuple[LinearOperator, ...]"
+    iterate: "TimedFullField | CoupledField"
+
+
+def _eigenvalue_driver_source(
+    fission_source: np.ndarray, sn_mesh: SNMesh, *, context: str,
+) -> "TimedFullField | CoupledField":
+    r"""The eigenvalue solve's ``q_ext`` for ONE within-group solve: the
+    fission source :math:`F\phi/k` lifted to the per-ordinate composite,
+    paired with its ψ½ seed on a carrying mesh.
+
+    The single construction site the three eigenvalue solves share — the SI
+    inner (:meth:`SNSolver._solve_source_iteration`), the Krylov inner
+    (:meth:`SNSolver._solve_krylov`) and the finalize (:func:`solve_sn`,
+    which reconstructs the returned flux by ONE
+    :func:`~orpheus.numerics.iteration.fixed_point_step` from the converged
+    iterate).  What the drivers converge against IS what the finalize
+    rebuilds from, by construction — #448 was exactly that drift (the
+    finalize hand-built a P0-only source of its own).
+
+    * bulk — the per-ordinate density via the canonical
+      :meth:`~orpheus.transport.source_sinks.AngularSourceSink.from_isotropic`
+      factory (the ``/W`` projection at the factory boundary — Pattern 7
+      producer-side normalisation; the legacy ``(fission_source /
+      sum_w)[None]`` broadcast is GONE);
+    * trace — ZERO: the EXTERNAL boundary source.  The reflective coupling
+      is NOT pre-staged here — it is the ``B`` gain the drivers apply each
+      step (Wave O O.2a; since B.2d the record's ``explicit_gains``), so the
+      inflow is a live solved unknown carried in ``ψ.boundary``;
+    * on a carrying mesh (the mesh HAS a radial-characteristic space — the
+      same partition :func:`_build_fixed_source_rhs` reads, derived here
+      rather than passed as a flag) the pair with System B's member: the
+      ℓ = 0 fold of the FISSION source as the ψ½ march's entry
+      (:func:`_radial_characteristic_fission_seed`, #282 route (a)) — the
+      gains carry everything else (the coupled gain grid's ``Emission`` and
+      ``B_b`` blocks), so the seed folds the fission source alone, exactly
+      as the inner solves pass it.
+    """
+    from orpheus.transport.source_sinks import (
+        AngularBoundarySourceSink,
+        AngularSourceSink,
+    )
+    from orpheus.transport.timed_full_field import TimedFullField
+
+    q_composite = TimedFullField(
+        interior=AngularSourceSink.from_isotropic(fission_source, sn_mesh),
+        boundary=AngularBoundarySourceSink.zeros(sn_mesh.angular_trace),
+        _history=(),
+        history_depth=2,
+    )
+    if sn_mesh.radial_characteristic_field_space is None:
+        return q_composite
+    return _coupled_source_state(
+        q_composite,
+        _radial_characteristic_fission_seed(fission_source, sn_mesh),
+        sn_mesh,
+        context=context,
+    )
 
 
 def _select_si_splitting(
@@ -1178,12 +1270,14 @@ def _within_group_si(
     Returns ``(si, base_implicit, gains, windowed)``:
 
     * ``si`` — the :class:`SourceIteration` primitive;
-    * ``base_implicit`` — the un-inverted FORWARD ``M`` (the fixed-source
-      path needs it for the one-shot full-angular reconstruction of
-      ``Solution.angular_flux``);
+    * ``base_implicit`` — the un-inverted FORWARD ``M`` (both finalizes
+      need it for the one-shot full-angular reconstruction of
+      ``Solution.angular_flux`` — the fixed-source windowed arm directly,
+      the eigenvalue finalize through the :class:`InnerSolve` record
+      the inner solve leaves beside its iterate);
     * ``gains`` — the lagged couplings ``N`` actually driven (the record's,
-      except the G-S arm's re-split ``(S, B_upper)``), also needed to
-      rebuild the converged source for that reconstruction;
+      except the G-S arm's re-split ``(S, N₂ₙ, B_upper)``), the other half
+      of that reconstruction (:func:`~orpheus.numerics.iteration.fixed_point_step`);
     * ``windowed`` — whether the iterate is the moment representation (2-D
       Cartesian) vs full-angular (curvilinear / 1-D).
 
@@ -1381,11 +1475,15 @@ class SNSolver:
         # Weight normalization (1/sum(w) — works for both GL and Lebedev)
         self.weight_norm = 1.0 / sn_mesh.quad.weights.sum()
 
-        # Persistent boundary flux state (passed to sweep).
-        # Issue #197 PR-TYPED-2: typed :class:`AngularBoundaryFlux` replaces
-        # the stringly-typed ``psi_bc: dict``.  Per-face buffers
-        # become named attributes; typos surface as AttributeError.
-        self._boundary_flux = AngularBoundaryFlux.zeros(sn_mesh.angular_trace)
+        #: The last within-group solve — its posed system, the splitting it
+        #: drove and its converged iterate (:class:`InnerSolve`); ``None``
+        #: until the first inner solve runs.  Warm start for the next inner,
+        #: the converged trace for ``compute_keff``'s leakage term, and the
+        #: operand of the finalize's one reconstruction step (#448).  (The
+        #: write-only ``_boundary_flux`` buffer that sat here since #197
+        #: retired with the finalize's hand reflect — the trace is a live
+        #: unknown carried in ``iterate.boundary`` since Wave O O.4a.2.)
+        self._inner: InnerSolve | None = None
 
         #: Inner records, newest last — one per within-group solve this
         #: instance has run.  Appended in ``_solve_source_iteration`` /
@@ -1746,7 +1844,7 @@ class SNSolver:
         <orpheus.transport.fields.angular_boundary_flux.AngularBoundaryFlux.net_current>`,
         the single source of the :math:`\Omega\cdot\hat n\,w`
         contraction), read from the trace of the last inner solve
-        (``self._psi_typed.boundary``). On the converged trace a vacuum
+        (``self._inner.iterate.boundary``). On the converged trace a vacuum
         face's inflow slots are zero, so net = outflow; the signed form
         stays honest if a prescribed-inflow law ever lands.
 
@@ -1804,7 +1902,7 @@ class SNSolver:
         ]
         if not leaking_faces:
             return 0.0
-        psi = getattr(self, "_psi_typed", None)
+        psi = None if self._inner is None else self._inner.iterate
         phi_of_trace = getattr(self, "_phi_of_trace", None)
         if psi is None or phi_of_trace is None:
             raise RuntimeError(
@@ -1984,46 +2082,6 @@ class SNSolver:
         from orpheus.transport.fields.angular_boundary_flux import (
             AngularBoundaryFlux,
         )
-        from orpheus.transport.source_sinks import (
-            AngularSourceSink,
-            AngularBoundarySourceSink,
-        )
-        from orpheus.transport.timed_full_field import TimedFullField
-
-        # ── Build the composite RHS ─────────────────────────────────
-        # R-1 Step 4 A1 — q_ext as per-ordinate density via the canonical
-        # ``AngularSourceSink.from_isotropic`` factory.  The /W projection
-        # lives at the factory boundary (Pattern 7 producer-side
-        # normalisation); the legacy
-        # ``q_per_ord = (fission_source / sum_w)[None, :, :, :]``
-        # broadcast pattern is GONE.
-        q_ext_per_ord = AngularSourceSink.from_isotropic(
-            fission_source, self.sn_mesh,
-        )
-        # D-H.1c stage 2 — q_ext composite carries:
-        #   * bulk = per-ordinate source values on the L2 AngularFlux.
-        #   * boundary = ZERO (the EXTERNAL boundary source — zero for
-        #     vacuum/reflective; non-zero only for prescribed inflow).
-        # Wave O (#208) O.4a.2 — the partner-flux seeding
-        # (``boundary = self._boundary_flux``) is RETIRED: the reflective
-        # inflow is no longer pre-staged into the source.  It is driven by
-        # the sibling ``−B`` delivered as a SEPARATE coupling gain (O.2a;
-        # since B.2d the system record's ``explicit_gains``): each SI iterate
-        # adds ``B·ψ.outflow`` to ``rhs.boundary``, which ``(L+C).solve``'s
-        # bare sweep reads as the inflow seed (operator.py
-        # ``_solve_timed_full_field`` seeds from ``rhs.boundary``).  The
-        # boundary inflow is thus a live solved unknown carried in
-        # ``ψ.boundary``, not an externally-recomputed partner trace.
-        q_ext_composite = TimedFullField(
-            # B.5.2: q_ext IS a source — carry the AngularSourceSink bulk AND
-            # the AngularBoundarySourceSink inflow trace (zero for vacuum/reflective;
-            # prescribed inflow otherwise). The SI rhs q_ext + S.apply + B.apply
-            # closes on AngularBoundarySourceSink (operator outputs are sources).
-            interior=q_ext_per_ord,
-            boundary=AngularBoundarySourceSink.zeros(self.sn_mesh.angular_trace),
-            _history=(),
-            history_depth=2,
-        )
 
         # ── Build the within-group system (single source of truth —
         # :func:`~orpheus.sn.coupled_system.build_within_group_system`;
@@ -2052,11 +2110,11 @@ class SNSolver:
         # (accepted-and-dropped by the direct sweeps since #282/2.5d; the
         # previous iterate's boundary trace seeds the reflective-BC
         # partner-flux state — pinned by the seed-threading spy).
-        # Post-B.2d ``self._psi_typed`` is a CoupledField on a carrying
-        # mesh (the previous inner's converged pair — already split) and
-        # a :class:`TimedFullField` elsewhere; both propagate through the
-        # iteration primitive via the ravellable protocol.
-        initial_guess = getattr(self, "_psi_typed", None)
+        # Post-B.2d the previous inner's iterate (``self._inner.iterate``)
+        # is a CoupledField on a carrying mesh (the converged pair — already
+        # split) and a :class:`TimedFullField` elsewhere; both propagate
+        # through the iteration primitive via the ravellable protocol.
+        initial_guess = None if self._inner is None else self._inner.iterate
         if initial_guess is None:
             # B.5.2: cold-start iterate is an all-zeros FLUX composite,
             # decoupled from q_ext's AngularSourceSink type.  Phase 5a: when
@@ -2073,20 +2131,13 @@ class SNSolver:
                     _coupled_flux_state(cold, self.sn_mesh) if coupled else cold
                 )
 
-        # #282 route (a): on a carrying mesh the coupled rhs pairs the
-        # 2-block source with the q½ fold of the (isotropic) fission
-        # source — the TRUE starting-direction source the joint solve
-        # consumes (System B's member, never a composite block — B.2d).
-        q_driver = (
-            _coupled_source_state(
-                q_ext_composite,
-                _radial_characteristic_fission_seed(
-                    fission_source, self.sn_mesh,
-                ),
-                self.sn_mesh,
-                context="SNSolver._solve_source_iteration",
-            )
-            if coupled else q_ext_composite
+        # The driver's rhs — the ONE construction site the finalize shares
+        # (:func:`_eigenvalue_driver_source`): the fission source lifted to
+        # the composite, paired with its ψ½ fold on a carrying mesh (#282
+        # route (a) — System B's member, never a composite block, B.2d).
+        q_driver = _eigenvalue_driver_source(
+            fission_source, self.sn_mesh,
+            context="SNSolver._solve_source_iteration",
         )
         psi_typed, record = si.solve(
             q_driver, initial_guess=initial_guess,
@@ -2108,7 +2159,10 @@ class SNSolver:
         # pass count, not ``len(trajectory)`` — SI measures the difference
         # between successive iterates, so the trajectory is one short (F10).
         self.inner_records.append(record)
-        self._psi_typed = psi_typed
+        # What this solve DROVE and what it converged to, as ONE record —
+        # the next inner's warm start; the finalize evaluates the same map
+        # once more on it (#448).
+        self._inner = InnerSolve(system, _base, _gains, psi_typed)
 
         # Scalar flux for the eigenvalue outer's contract.  Windowed: the
         # ℓ=0 moment IS the scalar flux (Y_0^0 = 1 ⇒ bit-identical to
@@ -2191,33 +2245,7 @@ class SNSolver:
         from orpheus.transport.fields.angular_boundary_flux import (
             AngularBoundaryFlux,
         )
-        from orpheus.transport.source_sinks import (
-            AngularSourceSink,
-            AngularBoundarySourceSink,
-        )
         from orpheus.transport.timed_full_field import TimedFullField
-
-        # ── Build the composite RHS ─────────────────────────────────
-        # R-1 Step 4 A1 — q_ext as per-ordinate density via the canonical
-        # ``AngularSourceSink.from_isotropic`` factory.  /W lives at the
-        # factory boundary (Pattern 7 producer-side normalisation).
-        # D-H.1c stage 2 — TimedFullField bulk + zero boundary (the
-        # Krylov path does NOT pre-seed q_ext.boundary; reflective-BC
-        # state threads through ``initial_guess`` per the audit §5
-        # contract).
-        q_ext_per_ord = AngularSourceSink.from_isotropic(
-            fission_source, self.sn_mesh,
-        )
-        q_ext_composite = TimedFullField(
-            # B.5.2: q_ext IS a source — carry the AngularSourceSink bulk AND
-            # the AngularBoundarySourceSink inflow trace (zero for vacuum/reflective;
-            # prescribed inflow otherwise). The SI rhs q_ext + S.apply + B.apply
-            # closes on AngularBoundarySourceSink (operator outputs are sources).
-            interior=q_ext_per_ord,
-            boundary=AngularBoundarySourceSink.zeros(self.sn_mesh.angular_trace),
-            _history=(),
-            history_depth=2,
-        )
 
         # ── Build the within-group system (single source of truth —
         # :func:`~orpheus.sn.coupled_system.build_within_group_system` /
@@ -2232,12 +2260,12 @@ class SNSolver:
 
         # ── Warm start (composite / coupled pair) — built BEFORE the
         # driver so the GMRES restart is sized from the FULL ravel. ───
-        # Post-B.2d ``self._psi_typed`` is a CoupledField on a carrying
-        # mesh and a TimedFullField elsewhere; the Krylov ravellable
-        # protocol detects either via ``to_flat`` / ``from_flat``
-        # (D-H.1b.1) and threads it through the matvec / unravel cycle
-        # natively.
-        initial_guess = getattr(self, "_psi_typed", None)
+        # Post-B.2d the previous inner's iterate (``self._inner.iterate``)
+        # is a CoupledField on a carrying mesh and a TimedFullField
+        # elsewhere; the Krylov ravellable protocol detects either via
+        # ``to_flat`` / ``from_flat`` (D-H.1b.1) and threads it through the
+        # matvec / unravel cycle natively.
+        initial_guess = None if self._inner is None else self._inner.iterate
         if initial_guess is None:
             # B.5.2: cold-start iterate is a FLUX composite, decoupled from
             # q_ext's now-AngularSourceSink type.  x0 stays all-zeros
@@ -2263,16 +2291,9 @@ class SNSolver:
             max_iter=self.max_inner, tol=self.inner_tol,
         )
 
-        q_driver = (
-            _coupled_source_state(
-                q_ext_composite,
-                _radial_characteristic_fission_seed(
-                    fission_source, self.sn_mesh,
-                ),
-                self.sn_mesh,
-                context="SNSolver._solve_krylov",
-            )
-            if coupled else q_ext_composite
+        q_driver = _eigenvalue_driver_source(
+            fission_source, self.sn_mesh,
+            context="SNSolver._solve_krylov",
         )
         psi_typed, record = krylov.solve(
             q_driver, initial_guess=initial_guess,
@@ -2292,7 +2313,12 @@ class SNSolver:
         # trajectory length agree — the opposite of SI's offset, which is why
         # each driver states its own (#340 F11).
         self.inner_records.append(record)
-        self._psi_typed = psi_typed
+        # What this solve DROVE and what it converged to, as ONE record —
+        # GMRES on ``(M − N)ψ = q`` with the record's own splitting; the
+        # finalize evaluates ``M⁻¹(q + N·ψ)`` once on it (#448).
+        self._inner = InnerSolve(
+            system, system.implicit_operator, system.explicit_gains, psi_typed,
+        )
 
         # Reduce angular → scalar flux for the eigenvalue outer's contract.
         # The parse reifies the driver-template contract (the solve echoes
@@ -2309,144 +2335,10 @@ class SNSolver:
         self._phi_of_trace = phi
         return phi
 
-    # ── Source computation helpers ────────────────────────────────────
-    #
-    # The scattering math lives on :class:`ScatteringOperator`.  The methods
-    # below are thin delegators preserved for the EigenvalueSolver Protocol
-    # surface and the underscore-prefixed test probes; all four delegate to
-    # the same precomputed-by-construction ``self.scattering_op``, so
-    # bit-identity is by construction.
-
-    def _add_scattering_source(self, Q: np.ndarray, phi: np.ndarray) -> None:
-        """Add P0 scattering source to Q in-place (delegates to ScatteringOperator).
-
-        Issue #196 PR-INDEX-5: every solver-public flux is principled
-        ``(ng, nx, ny)``; the PR-INDEX-4 transpose pair retired.
-        """
-        self.scattering_op.add_iso_source(Q, phi)
-
-    def _build_aniso_scattering(
-        self, angular_flux: np.ndarray | None,
-    ) -> np.ndarray | None:
-        """Build per-ordinate anisotropic Pℓ scattering source (delegates to ScatteringOperator).
-
-        Issue #196 PR-INDEX-5: ``angular_flux`` is principled
-        ``(N, ng, nx, ny)``; return shape ``(N, ng, nx, ny)`` (or
-        ``None`` when ``L == 0``).
-
-        D-I.2 (2026-05-29): the underlying
-        :meth:`ScatteringOperator.build_aniso_source` retired its
-        bare-ndarray arm and now accepts only typed
-        :class:`AngularFlux`.  This delegator wraps the inbound
-        ``angular_flux`` ndarray as :class:`AngularFlux` at the helper
-        boundary, then unwraps the resulting
-        :class:`AngularSourceSink` via ``.values`` so the bare-ndarray
-        external contract is preserved for legacy consumers in
-        :func:`_solve_fixed_source_si` and the verification probes in
-        :mod:`tests.sn.operators.test_scattering_operator`.
-        """
-        if angular_flux is None:
-            return None
-        from orpheus.transport.fields.angular_flux import AngularFlux
-        typed = AngularFlux(values=angular_flux, space=self.sn_mesh.angular_bulk_space)
-        result = self.scattering_op.build_aniso_source(typed)
-        if result is None:
-            return None
-        return result.values
-
-    def _add_n2n_source(self, Q: np.ndarray, phi: np.ndarray) -> None:
-        """Add the P0 (n,2n) source to Q in-place (delegates to the
-        first-class N2NOperator's energy binding — §14.1; the field verb
-        carries the per-material dispatch and the multiplicity).
-
-        Issue #196 PR-INDEX-5: both arguments are principled
-        ``(ng, nx, ny)``.
-        """
-        self.n2n_op.isotropic_energy.transfer.add_p0_source(Q, phi)
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
-
-def _reflect_outflow_into_inflow(
-    boundary_flux, sn_mesh: SNMesh, faces: "Iterable[str] | None" = None,
-    *,
-    radial_characteristic: "RadialCharacteristicField | None" = None,
-) -> None:
-    r"""In-place: fill each face's inflow ordinate slots with the realized
-    boundary law applied to that face's outflow trace — the ``−B`` reflective
-    coupling, externalised for the bare sweep (Wave O #208 O.4a.2).
-
-    The bare sweep reads the inflow ordinate slots of its boundary buffer as
-    the inflow seed; it no longer re-applies ``bc`` to the outflow internally.
-    The SI driver path supplies ``B·ψ.outflow`` through ``rhs.boundary`` (as the
-    ``B`` coupling gain), but the DIRECT fixed-source SI loop
-    (:func:`_solve_fixed_source_si`) and the final eigenvalue reconstruction
-    sweep (:func:`solve_sn`) do not route through that driver — they call this
-    helper to set ``ψ.inflow = B·ψ.outflow`` on the buffer before each sweep.
-    Post-un-weld ``B = B_a + B_b`` is the direct sum of the two per-system
-    boundaries (RULING P1), so this helper reflects each system through its OWN
-    operator: the trace via
-    :meth:`~orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_inflow_inplace`
-    (``B_a``) and the ψ½ ray corner via
-    :meth:`~orpheus.sn.operators.boundary.RadialCharacteristicBoundaryOperator.reflect_corner_inplace`
-    (``B_b``) — the SAME two cores the matvec / SI driver consume as the
-    ``B_a + B_b`` gain (single source of truth; the two routes cannot drift).
-
-    For vacuum ``B = 0`` so the inflow slots stay zero (bit-identical to the
-    pre-extraction ``bc.apply`` of a vacuum law); for reflective/white/albedo
-    it is the same ``R·G`` reflection the pre-extraction sweep applied at entry,
-    merely relocated to the caller.
-
-    This is the TWIN of the driver route: the within-group SI/Krylov drivers
-    deliver the SAME ``−B`` coupling via the SAME
-    :class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`, as a first-class
-    coupling gain (Wave O O.2a — since B.2d the
-    :func:`~orpheus.sn.coupled_system.build_within_group_system` record's
-    ``gains``).  The two differ only in plumbing: this helper writes the
-    buffer's inflow slots directly; the driver's ``B`` gain rides
-    ``B·ψ.outflow`` in ``rhs.boundary``.  The DRIVER route no longer needs this
-    helper (O.2a collapsed it); it survives for the final eigenvalue
-    reconstruction sweep (which has no driver to route through) AND Phase 3's
-    octant-group Gauss-Seidel resolvent (which calls it face-restricted between
-    octant-group sweeps — see ``faces``).
-
-    ``faces`` (Phase 3 G-S): ``None`` (default) reflects EVERY boundary face —
-    the whole-trace ``−B`` used by the reconstruction sweep + the SI seed. A
-    face subset restricts the reflect to those faces' inflow slots, leaving the
-    rest untouched: the G-S resolvent absorbs a just-swept group's outgoing
-    reflective faces into ``boundary_flux``, then calls this to reflect ONLY
-    those faces' outflow into inflow, so the next group reads the fresh
-    current-iterate inflow. ``B`` is block-diagonal over faces ⟹ exact
-    restriction.
-    """
-    from orpheus.sn.operators.boundary import (
-        RadialCharacteristicBoundaryOperator,
-        SNBoundaryOperator,
-    )
-
-    # Trace-only ``A_ss`` action — no zero-bulk probe (the bulk was only ever
-    # a carrier to reach ``B``'s boundary block).  The mutating write-back is
-    # ``B_a``'s own :meth:`reflect_inflow_inplace` verb (#226 step 2 moved it
-    # onto the operator so the scheduled sweep's inter-group reflect and this
-    # helper share ONE body); it routes through ``_reflect_trace`` with
-    # ``B_a.apply``, so the helper and the matvec / SI driver cannot drift.
-    SNBoundaryOperator(sn_mesh).reflect_inflow_inplace(boundary_flux, faces=faces)
-    # ``radial_characteristic`` (#282 route (a)): the ψ½ carrier whose
-    # inflow-corner slots get the law's corner action — the seed analogue,
-    # through System B's OWN boundary ``B_b`` (RULING P1: one reflect per
-    # system; ``B_b.reflect_corner_inplace`` is the ray sibling of ``B_a``'s
-    # trace reflect above). Presence-guarded at the call site since B.2b:
-    # a seedless mesh has no System B, so B_b is unconstructable there (the
-    # old in-method ``None`` no-op moved here — a None ray ⟺ seedless).
-    if radial_characteristic is not None:
-        RadialCharacteristicBoundaryOperator(
-            sn_mesh.radial_characteristic_field_space, sn_mesh.bc["xmax"].law,
-        ).reflect_corner_inplace(
-            radial_characteristic,
-        )
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Public API
@@ -2563,132 +2455,76 @@ def solve_sn(
         outcome.keff, outcome.keff_history, outcome.flux_distribution,
     )
 
-    # Final sweep to get angular flux.  Issue #196 PR-INDEX-5: every
-    # array is principled — scalar_flux ``(ng, nx, ny)``, angular_flux
-    # ``(N, ng, nx, ny)``.
-    # R-1 Step 4 A1: typed source via the canonical
-    # :meth:`AngularSourceSink.from_isotropic` factory (Pattern 7
-    # producer-side normalisation — /W projection at the factory
-    # boundary).
-    from orpheus.transport.source_sinks import AngularSourceSink
-    from orpheus.transport.fields.angular_boundary_flux import (
-        AngularBoundaryFlux as _BoundaryFlux,
-    )
-    Q_final = solver.compute_fission_source(scalar_flux, keff)
-    solver._add_scattering_source(Q_final, scalar_flux)
-    solver._add_n2n_source(Q_final, scalar_flux)
-    # Wave O #208 O.4a.2 — BARE final reconstruction sweep: seed its inflow
-    # from the CONVERGED boundary trace.  The inner solves drive the inflow as
-    # a live unknown in ``ψ.boundary`` (carried on ``solver._psi_typed`` from
-    # the last inner solve), so ``solver._boundary_flux`` is no longer the
-    # partner-flux carrier (it stays all-zeros).  Reflect the converged outflow
-    # into the inflow slots via −B (no-op for vacuum; idempotent here since the
-    # converged inflow already equals ``B·ψ.outflow``), then sweep.
-    converged = getattr(solver, "_psi_typed", None)
-    # B.2d: the converged iterate is the coupled pair on a carrying mesh;
-    # System A carries the trace, System B the converged ψ½ state.
-    converged_a = _system_a_member(converged) if converged is not None else None
-    final_boundary = (
-        converged_a.boundary if converged_a is not None
-        else _BoundaryFlux.zeros(sn_mesh.angular_trace)
-    )
-    # #289-F2 role parse: the reconstruction sweep seeds its inflow from the
-    # ANGULAR trace; the widened composite slot erases the family.
-    if not isinstance(final_boundary, _BoundaryFlux):
-        raise TypeError(
-            f"eigenvalue finalize: the converged trace must be an "
-            f"AngularBoundaryFlux; got {type(final_boundary).__name__}."
+    # ── The returned angular flux: ONE source-iteration step from the
+    # converged iterate (#448). ─────────────────────────────────────────
+    #
+    # The power iteration converged ``(k, φ)`` on the inner solves' iterate
+    # ``solver._inner.iterate`` — the full within-group state: System A's
+    # (bulk ⊕ trace), paired with System B's ψ½ member on a carrying mesh
+    # (B.2d), the bulk a ``HarmonicMomentFlux`` when the 2-D Cartesian inner
+    # was windowed.  The flux the caller receives is that iterate polished
+    # ONCE against the CONVERGED fission source: the splitting map
+    # ``G(ψ) = M⁻¹(q_F(φ, k) + Σ Nᵢ·ψ)`` evaluated at ψ_conv through the
+    # splitting the last inner solve DROVE (``solver._inner`` — the same
+    # record, the same forward ``M``, the same gains ``(S, N₂ₙ, B)``:
+    # moment-bound when the iterate is windowed, the coupled gain grid when
+    # carrying), so the source the reconstruction sees IS the source the
+    # iteration converged against, at every scattering order, by
+    # construction.  ``M⁻¹`` here is the UN-windowed full-angular inverse
+    # (``inner.implicit`` is the un-wrapped forward ``M``), which is what
+    # turns a moment iterate back into per-ordinate ψ — the fixed-source
+    # windowed arm's spelling (:func:`_solve_fixed_source_si`), now the one
+    # body :func:`~orpheus.numerics.iteration.fixed_point_step`.
+    #
+    # ⛔ Until #448 this block hand-built the source as fission + P0
+    # scattering + P0 (n,2n) and lifted it isotropically — the ℓ ≥ 1 half of
+    # BOTH channels silently dropped at every ``scattering_order ≥ 1``, so
+    # the returned ψ solved a different equation from the one the power
+    # iteration converged and did not reduce to the ``scalar_flux`` shipped
+    # beside it.  `[M]` on the Be-reflected U slab (421 g, GL-8, P2) the
+    # returned ψ missed the converged iterate by 8.8e-2 and its own moments
+    # missed the reported φ by 3.4e-2; this step reproduces the iterate to
+    # 1.2e-10 and its moments reproduce φ to 3.2e-10
+    # (``tests/sn/solve/test_eigenvalue_finalize_reconstruction.py``;
+    # error-catalogue entry ERR-083).  The reflective coupling arrives as
+    # the ``B`` gain, exactly as in every inner solve; the hand reflect of
+    # the converged trace this block used to perform first was `[M]` INERT
+    # on a converged exit (2.0e-13 / 2.3e-15 / bit-identical on a vacuum
+    # arm — the pre-carve battery's M5), so its removal moves nothing a
+    # value gate can witness; the trace's correctness is pinned by the
+    # wrong-``B`` arm (M5b) instead.
+    from orpheus.numerics.iteration import fixed_point_step
+
+    inner = solver._inner
+    if inner is None:
+        # Reachable: ``max_outer=0`` runs the power loop zero times (`[M]`
+        # the review round fired it), so this is a live refusal of a legal
+        # call, not decoration.
+        raise RuntimeError(
+            "solve_sn finalize: the power iteration returned without a "
+            "within-group solve to reconstruct from — the finalize is one "
+            "step of the iteration, not a cold solve (max_outer must be ≥ 1)."
         )
-    # Step 6 (R-6.1): the reconstruction rides the SAME within-group
-    # implicit operator M every driver consumes (build_within_group_system — the
-    # single construction site); the fused ``transport_sweep`` joint
-    # channel retired with the walk's ray legs.  M excludes B by
-    # construction (B_a / B_b are gains), exactly as the bare sweep did
-    # — the −B coupling arrives as GIVEN data through the reflect below.
-    q_final_per_ord = AngularSourceSink.from_isotropic(Q_final, sn_mesh)
-    # The SYSTEM is kept, not just its implicit operator: the #340 N6b exit
-    # balance defect needs the LOSS arm (``L+C−S−B``) of this same system,
-    # and it was already being built and thrown away one attribute deep.
-    final_system = build_within_group_system(
-        sn_mesh, solver.mat_xs, scattering_op=solver.scattering_op,
-        n2n_op=solver.n2n_op,
-    )
-    final_implicit = final_system.implicit_operator
-    converged_ray = (
-        _system_b_member(converged) if converged is not None else None
-    )
-    # #282 route (a): on a carrying mesh the corner carrier pre-loads the
-    # converged ψ½ state so the corner reflect below can seed the inflow
-    # corner (vacuum ⇒ 0; zeros on a cold finalize).
-    corner_state = None
-    if isinstance(final_implicit, CoupledOperator):
-        corner_state = RadialCharacteristicField.flux_zeros(sn_mesh.radial_characteristic_field_space)
-        if converged_ray is not None:
-            corner_state.interior.values[...] = converged_ray.interior.values
-            corner_state.boundary.values[...] = converged_ray.boundary.values
-    # Wave O #208 O.4b Phase E2 — the reconstruction reads the given inflow
-    # (no in-solve bc.apply), so the reflective coupling is the external -B.
-    # _reflect_outflow_into_inflow is geometry-agnostic (iterates
-    # boundary_flux.layout.faces via the canonical SNBoundaryOperator) and
-    # idempotent here (the converged inflow already equals B·ψ.outflow);
-    # vacuum stays a no-op (B = 0).  Each system reflects through its OWN
-    # boundary (RULING P1): the trace via B_a, the ψ½ corner via B_b.
-    _reflect_outflow_into_inflow(
-        final_boundary, sn_mesh, radial_characteristic=corner_state,
-    )
-    # The rhs: the total final source with the reflected trace as the
-    # prescribed-inflow boundary member (the affine-BC ``q`` — the SAME
-    # composite shape the drivers consume), moment-lifted through the ONE
-    # external-source policy (Q̂ = 0 — exact for the isotropic
-    # reconstruction source; DD/Step passes byte-identical).
-    from orpheus.transport.source_sinks import AngularBoundarySourceSink
-    final_bulk, _ = _lift_external_source_to_moments(
-        np.asarray(q_final_per_ord.values), sn_mesh,
-    )
-    # ERR-071 role conversion: ``final_boundary`` is a converged FLUX
-    # trace — its outflow rows are iterate state, NOT rhs data.  The
-    # exact inverse honours ``rhs.boundary`` outflow rows as the defect
-    # rhs (``ψ_out = streamed − rhs_out``), so casting the raw trace
-    # would subtract the converged outflow from the reconstruction's
-    # own march.  ``prescribed_inflow`` is the named projection: inflow
-    # slots (holding ``B·ψ.outflow`` from the reflect above) become the
-    # given data; outflow rows are unrepresentable by construction.
-    final_rhs_a = TimedFullField(
-        interior=AngularSourceSink(
-            values=final_bulk, space=sn_mesh.angular_trial_space,
-        ),
-        boundary=AngularBoundarySourceSink.prescribed_inflow(
-            sn_mesh,
-            {
-                face: final_boundary.face_view(face)
-                for face in final_boundary.layout.faces
-            },
-        ),
-        _history=(),
-        history_depth=2,
-    )
-    if isinstance(final_implicit, CoupledOperator):
-        # q½ = the ℓ = 0 fold of the final total source; the corner datum
-        # is GIVEN data for the march: thread it into the q½ source's
-        # corner slot (A_BB.solve reads the SOURCE corner as the inward
-        # march's entry — the trace's seeded-inflow discipline).
-        final_seed_src = _radial_characteristic_source_from_per_ordinate(
-            q_final_per_ord.values, sn_mesh,
-        )
-        if final_seed_src is not None and corner_state is not None:
-            for _p in final_seed_src.boundary.space.levels:
-                final_seed_src.boundary.corner(_p, -1)[...] = (
-                    corner_state.boundary.corner(_p, -1)
-                )
-        final_state = final_implicit.solve(_coupled_source_state(
-            final_rhs_a, final_seed_src, sn_mesh,
+    # The SYSTEM is kept, not just its splitting: the #340 N6b exit balance
+    # below needs its LOSS arm (``L+C−S−N₂ₙ−B``).
+    final_system = inner.system
+    # The inverse's static type is the UNION of the three resolvent classes
+    # while the iterate's is the union of the two state carriers, and the
+    # correlation between them (coupled ↔ coupled) is not expressible
+    # without a seeded-inverse Protocol (#453) — the cast states that the
+    # record pairs them by construction (both written at one site).
+    final_state = fixed_point_step(
+        cast("SupportsSeededApply[Any]", inner.implicit.inverse()), inner.gains,
+        _eigenvalue_driver_source(
+            solver.compute_fission_source(scalar_flux, keff), sn_mesh,
             context="solve_sn finalize",
-        ))
-        final_psi_a = _system_a_member(final_state)
-        final_ray = _system_b_member(final_state)
-    else:
-        final_psi_a = final_implicit.solve(final_rhs_a)
-        final_ray = None
+        ),
+        inner.iterate,
+    )
+    final_psi_a = _system_a_member(final_state)
+    # ``None`` on a bare seedless composite by construction — the reader
+    # spells the partition, not a flag beside it.
+    final_ray = _system_b_member(final_state)
     elapsed = time.perf_counter() - t_start
 
     # The shared packaging tail (:func:`_package_solution`) owns the
@@ -2707,20 +2543,21 @@ def solve_sn(
     # it is a physics output, not a stopping criterion.
     # #340 N6b — the exit balance defect of the iterate the user RECEIVES.
     #
-    # The rhs is REBUILT from the returned ψ (``Fφ(ψ)/k``), not snapshotted
-    # from ``Q_final`` above, and the distinction is not cosmetic: the two
-    # answer different questions.  ``Q_final`` came from the power
-    # iteration's converged scalar, so it measures how well the RECONSTRUCTED
-    # angular flux solves the equation the reconstruction was GIVEN;
-    # recomputing from ``final_psi_a`` asks the closed question — does the
-    # object I was handed satisfy its own equation?  The second is what
-    # `scratch/n5_outer_cert_lib.py` measured the 4.64× against, and taking
-    # the first would silently substitute its ``defect_pi`` variant.
-    # `[M]` the rebuild costs 0.05 ms.
+    # The rhs is REBUILT from the returned ψ (``Fφ(ψ)/k``), not taken from
+    # the fission source the reconstruction step consumed, and the
+    # distinction is not cosmetic: the two answer different questions.  That
+    # source came from the power iteration's converged scalar, so it would
+    # measure how well the RECONSTRUCTED angular flux solves the equation the
+    # reconstruction was GIVEN; recomputing from ``final_psi_a`` asks the
+    # closed question — does the object I was handed satisfy its own
+    # equation?  The second is what `scratch/n5_outer_cert_lib.py` measured
+    # the 4.64× against, and taking the first would silently substitute its
+    # ``defect_pi`` variant.  `[M]` the rebuild costs 0.05 ms.
     #
-    # ⛔ NOT ``q_final_per_ord``: that is the TOTAL reconstruction source
-    # (fission + P0 scatter + (n,2n)), `[M]` 13.7× larger than the fission
-    # source alone, and against ``A = L+C−S−B`` it double-counts scattering.
+    # ⛔ NOT the step's full lagged source ``q_F + Σ Nᵢ·ψ``: that is the
+    # TOTAL reconstruction source (fission + scattering + (n,2n) + B),
+    # `[M]` 13.7× larger than the fission source alone, and against
+    # ``A = L+C−S−B`` it double-counts scattering.
     # ⛔ CARRYING MESHES ARE EXEMPT HERE, and the reason is a real refusal
     # rather than a missing feature on our side.  What this site assembles
     # IS bare (a System-A ψ against a System-A fission rhs), which on a
@@ -2747,6 +2584,11 @@ def solve_sn(
     # `record.converged` and returns early on exactly the truncated solves
     # this runs on.  The complement of a guard reaches the states its
     # partner never visits.
+    from orpheus.transport.source_sinks import (
+        AngularBoundarySourceSink,
+        AngularSourceSink,
+    )
+
     balance_defect = None
     if sn_mesh.radial_characteristic_field_space is None:
         exit_rhs = FullField(
@@ -3880,25 +3722,29 @@ def _solve_fixed_source_si(
     .. math::
 
         A \;=\; L + C\,, \quad
-        S \;=\; \text{full multi-group scatter} + B\,, \quad
+        N \;=\; S + N_{2n} + B\,, \quad
         F \;=\; 0_{\rm wg}
 
     differing ONLY in ``q_ext`` (the EXTERNAL source here vs the fission
     source in the eigenvalue inner) and the returned contract (a full typed
     :class:`Solution` here vs an angular-integrated scalar flux there).
 
-    Scattering and the reflective boundary enter as the primitive's coupling
-    gains ``S.apply(ψ_n) + B.apply(ψ_n)``:
-    :meth:`ScatteringOperator.apply` (the ``TimedFullField`` branch)
-    recomputes the ``(P0 in-scatter + (n,2n))/W + Pℓ`` bulk source, and the
+    Scattering, the (n,2n) gain and the reflective boundary enter as the
+    primitive's coupling gains ``S.apply(ψ_n) + N₂ₙ.apply(ψ_n) + B.apply(ψ_n)``
+    (§14.1): :meth:`ScatteringOperator.apply` / :meth:`N2NOperator.apply` each
+    recompute their channel's ``P0/W + Pℓ`` bulk emission, and the
     boundary gain ``B``
     (:class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`, a first-class
     coupling in the within-group system record) delivers the reflective
     ``B·ψ.outflow`` through ``rhs.boundary`` which the bare ``(L + C).solve``
     sweep reads as the inflow seed (single source of truth — Cardinal Rule 2).
-    The whole-trace :func:`_reflect_outflow_into_inflow` route is NOT needed
-    on this path; it survives for the eigenvalue reconstruction sweep +
-    Phase 3's octant-restricted Gauss-Seidel variant.
+    No production path sets inflow slots by hand any more: since #448 the
+    eigenvalue finalize is one :func:`~orpheus.numerics.iteration.fixed_point_step`
+    of this same map (``B`` a gain there too); the octant-restricted
+    Gauss-Seidel resolvent completes its lagged rows additively through
+    :meth:`~orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace`,
+    and the whole-trace assignment is the sweep-tier gates' helper
+    (``tests/sn/_test_helpers.py::reflect_outflow_into_inflow``).
 
     Geometry-agnostic (slab / sphere / cylinder / 2-D Cartesian): the
     within-group solve carries no geometry dependence, exactly as the
@@ -3951,7 +3797,7 @@ def _solve_fixed_source_si(
 
     # Cold-start iterate (x0 = zeros).  Fixed-source is a single solve — no
     # eigenvalue outer to warm-start from (cf. the eigenvalue inner's
-    # ``self._psi_typed``).  Windowed → zero moments (single-sourced in
+    # ``self._inner.iterate``).  Windowed → zero moments (single-sourced in
     # :func:`_windowed_cold_start`); else a zero AngularFlux — paired
     # NATIVE with a zero ψ_B on a carrying mesh (B.2d).
     q_a_ext = _system_a_member(q_ext_composite)
@@ -4007,9 +3853,10 @@ def _solve_fixed_source_si(
     # fixed-source Krylov path does; the boundary trace lives on
     # ``psi_typed.boundary`` — no legacy ``solver._boundary_flux`` writeback).
     # Windowed: ``psi_typed.interior`` is the moment iterate, so reconstruct the
-    # full angular with ONE final full-angular solve of the converged source
-    # ``q + Σ gains·ψ`` through the UN-wrapped base resolvent (mirrors the
-    # eigenvalue reconstruction sweep).  Bit-identical to the un-windowed
+    # full angular with ONE application of the splitting map — the converged
+    # source ``q + Σ gains·ψ`` through the UN-wrapped base resolvent, the one
+    # body :func:`~orpheus.numerics.iteration.fixed_point_step` the eigenvalue
+    # finalize evaluates too (#448).  Bit-identical to the un-windowed
     # converged ψ: S/B consume the moments == the full angular's moments
     # (de-risk proven), so the source is the same, and one sweep of the
     # converged source reproduces the converged iterate by the fixed point.
@@ -4024,11 +3871,10 @@ def _solve_fixed_source_si(
                 "structurally unreachable (windowing is 2-D Cartesian, "
                 "seedless; the coupled arm never windows)."
             )
-        rhs_final = q_a_ext
-        for gain in gains:
-            rhs_final = rhs_final + gain.apply(psi_full)
-        angular_out = base_implicit.inverse().apply(
-            rhs_final, initial_guess=psi_full,
+        from orpheus.numerics.iteration import fixed_point_step
+
+        angular_out = fixed_point_step(
+            base_implicit.inverse(), gains, q_a_ext, psi_full,
         )
     else:
         # Un-windowed: the (re-fused) converged iterate IS the full

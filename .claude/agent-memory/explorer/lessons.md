@@ -1495,3 +1495,17 @@ prints its depth-1 list then dies with a traceback — use the MCP tool, the
 CLI `callers` is fine; (c) `__all__` vs the AST public set is a one-line diff
 worth printing — it surfaced 3 production-consumed names missing from
 `__all__` and 1 alias with zero references tree-wide.
+
+## L-039 -- Nexus `callers` on a METHOD returns empty + an `unresolved` block; only module-level functions resolve — read the unresolved COUNT as the census, and cross-check it against an AST call count
+
+`[M]` 2026-09-05 (#448 census). `callers` on four `SNSolver.*` methods returned `nodes: []`
+each, with `unresolved.count` = 6 / 2 / 4 / 9 (receiver-spelled phantoms `solver._x`,
+`op.add_iso_source`). The module-level `_reflect_outflow_into_inflow` resolved to 8 callers
+exactly. An AST call census over orpheus+tests gave 6 / 2 / 4 / **10** — the unresolved counts
+matched to within one (a duck-typed `apply` body dropped). ⟹ for a METHOD, the `unresolved`
+count IS the graph's answer; treat `nodes: []` as "not resolvable", never as "uncalled", and
+always pair it with an AST `Attribute.attr` call count. Also from the same census: an
+"entry-result consumer" question (`.angular_flux` off `solve_sn(`) needs a TWO-LEVEL resolver —
+direct Assign-from-call catches 7 of 62 reads; helper-return and fixture-param resolution
+catches the rest — and the L ≥ 1 population turned out to have ZERO ψ readers, i.e. the fix's
+witness had to be named as a deliverable (§6c) rather than found.

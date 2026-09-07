@@ -2824,8 +2824,11 @@ The scattering factoring — :math:`S_{\rm aniso} = \tfrac{1}{W}\,R\,\Lambda\,M`
 Phase 5a's commit 1 (``93807aa``) makes the factoring *structural* so
 that the windowed and full-angular paths share one source of truth. The
 anisotropic in-scatter is the §9 operator composition (the §15.2
-sum-of-tensor-products form,
-:meth:`~orpheus.transport.operators.scattering.ScatteringOperator.build_aniso_source`)
+sum-of-tensor-products form; the production body is
+``TransferOperator._redistribute_ordinates``, selected at construction
+behind :meth:`TransferOperator.apply
+<orpheus.transport.operators.transfer.TransferOperator.apply>` — it was the
+public ``ScatteringOperator.build_aniso_source`` verb until #448)
 
 .. (vv-status rationale) The R·Λ·M anisotropic-scattering factoring.
    A structural identity (associativity of the three-operator
@@ -3114,8 +3117,11 @@ Honest scope — a persistent-iterate + typed-state win, NOT yet a peak win
    reduction. State this carefully — the 18.3× number describes the
    *held* iterate, not the *peak*.
 
-   * **What 5a wins.** The held + warm-started ``_psi_typed`` carried
-     across the entire eigenvalue solve (and the convergence-test copy)
+   * **What 5a wins.** The held + warm-started iterate carried
+     across the entire eigenvalue solve (``_psi_typed`` then; since #448
+     the ``iterate`` member of the
+     :class:`~orpheus.sn.solver.InnerSolve` record) and the
+     convergence-test copy
      shrinks by :math:`N / (L{+}1)(2L{+}1)` — measured **18.3×** at
      :math:`N = 110`, :math:`L = 1`. The iterate **type** also becomes
      honest: the SI state *is* the moments
@@ -3591,10 +3597,24 @@ Honest scope — what 5c does and does NOT do
      full-angular sweep — the within-group resolvent ``solve``
      (:func:`~orpheus.sn.coupled_system.build_within_group_system`,
      applying its ``.implicit_operator``) — to return the user-facing
-     :math:`(N, n_g, n_x, n_y)` field. They are **untouched** — the
-     user-facing angular flux is bit-identical (the
+     :math:`(N, n_g, n_x, n_y)` field. They are **untouched** by 5c — the
+     user-facing angular flux is bit-identical across *this* carve (the
      :math:`\Sigma w\psi = \phi` self-consistency gate and the step-3
      ``np.array_equal`` reconstruction pin both hold).
+
+     ⛔ **"Separate" was the defect, and it was corrected on 2026-09-06
+     (#448,** :doc:`ERR-083 </theory/verification/error_catalog>`\ **).**
+     The two reconstructions were twins, and only the fixed-source one
+     re-evaluated the converged source ``q + Σ gains·ψ``; the eigenvalue
+     one built a :math:`P_0`-only source by hand, so at every
+     ``scattering_order ≥ 1`` it was **not** bit-identical to the fixed
+     point — ``[M]`` 8.776e-02 from the converged iterate on a 421-group
+     fixture at :math:`L = 2`, and the self-consistency gate this bullet
+     cites did not exist on the eigenvalue path.  Both entries now
+     evaluate the ONE body
+     :func:`~orpheus.numerics.iteration.fixed_point_step`
+     (:ref:`sn-finalize-one-step`), so the sentence is true of both for
+     the first time.
    * **Krylov, 1-D, and curvilinear stay full-angular.** Krylov iterates
      the full bulk vector (no moment sub-iterate); the curvilinear
      Morel–Montry Carlson coupled-pole seed reads the per-ordinate
@@ -4054,11 +4074,26 @@ splitting :math:`\psi_{k+1}=M^{-1}(q+B_{\rm upper}\psi_k)` says they carry
    reflective inflow row's seed is zero there — but O(1)-wrong as a
    general inverse, which is precisely the round-trip defect the old
    pairing masked.  The whole-face assignment verb is **retained** (single
-   source of truth via ``_reflect_trace``) for the two callers whose
-   inflow is *wholly recomputed* each sweep and is not a solved unknown of
-   a linear row: the direct fixed-source SI loop and the eigenvalue
-   reconstruction sweep (:func:`~orpheus.sn.solver._reflect_outflow_into_inflow`
-   delegates to it).
+   source of truth via ``_reflect_trace``) for callers whose inflow is
+   *wholly recomputed* each sweep and is not a solved unknown of a linear
+   row.
+
+   ⛔ **Both of the production callers it was retained for are gone**, and
+   the last one went at #448 (2026-09-06): the direct fixed-source SI loop
+   routes through the variadic driver (Wave O O.2a), and the eigenvalue
+   finalize is now one step of that same driven map, in which :math:`B` is
+   a gain (:ref:`sn-finalize-one-step`).  ``[M]`` by AST,
+   :meth:`SNBoundaryOperator.reflect_inflow_inplace
+   <orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_inflow_inplace>`
+   has **zero** call sites in ``orpheus/`` (its ψ½ sibling
+   ``reflect_corner_inplace`` retired outright at #448 — no consumer
+   anywhere); the surviving consumer is the sweep-tier gates'
+   inter-sweep helper (``tests/sn/_test_helpers.py::reflect_outflow_into_inflow``),
+   which is where the module-level ``_reflect_outflow_into_inflow`` moved.
+   The verb stays because the argument above is about what a whole-face
+   assignment *means*, not about who happens to call it — and because a
+   sweep-tier gate that reflects between sweeps needs exactly this
+   semantics.
 
 The source-subspace domain honesty note
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

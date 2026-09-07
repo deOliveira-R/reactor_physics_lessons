@@ -377,7 +377,7 @@ class TestFullScatterKernel:
 
     def test_S_euclidean_reciprocity(self, solver_p1_het):
         r"""**[LOAD-BEARING]** ``⟨S ψ, χ⟩ = ⟨ψ, Sᵀ χ⟩`` — the production FORWARD
-        (scalar fast-path: ``isotropic_kernel`` + ``build_aniso_source``) vs the
+        (scalar fast-path: ``isotropic_kernel`` + the ℓ ≥ 1 redistribution route) vs the
         production ADJOINT (frame form: ``full_transfer_kernelᵀ``).
 
         Two structurally-DIFFERENT representations of the same operator (spec R4),

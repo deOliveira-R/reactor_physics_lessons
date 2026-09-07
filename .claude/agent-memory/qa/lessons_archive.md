@@ -5158,3 +5158,94 @@ isotopes (U-235, U-238, Pu-239, …)" is not an accurate scoping sentence.
 
 Both belong in `vv-principles` §Anti-patterns; drop-in text is digest **E7** and
 **A17** above. Neither rationale is currently in the skill (`[M]` grepped).
+
+---
+
+## L-080 — #448: the SN eigenvalue finalize as ONE `fixed_point_step`
+
+**2026-09-06, branch `fix/sn-eigenvalue-finalize-448`, UNCOMMITTED working-tree
+review. READ-ONLY on `orpheus/` + `tests/` (proof: `git status --porcelain`
+md5 `d4c6fb10…` identical at mid- and end-session).**
+
+### The change
+The finalize hand-built `Fφ/k + S₀ᵀφ + 2Σ₂ₙ,₀ᵀφ`, lifted it isotropically, and
+swept — so at every `scattering_order ≥ 1` the ℓ≥1 half of BOTH channels was
+missing from the returned ψ. Replaced by
+`fixed_point_step(driven.implicit.inverse(), driven.gains, _eigenvalue_driver_source(...), ψ_conv)`
+— one application of `G(ψ) = M⁻¹(q_F + Σ Nᵢψ)` through the splitting the LAST
+inner solve DROVE, recorded as a new `DrivenSplitting(system, implicit, gains)`
+NamedTuple beside `_psi_typed`.
+
+### What I measured (probes `scratch/_448_qa/probe{1,2,3,4}*.py`)
+
+**All four finalize arms are structurally right** (probe1, 20 solves):
+
+| arm | `driven.implicit` | `driven.gains` | iterate bulk | returned bulk | G1 |
+|---|---|---|---|---|---|
+| 1-D SI | `StreamingCollisionOperator` | S, N2N, `SNBoundaryOperator` | AngularFlux | AngularFlux | 1.4e-11…6.2e-11 |
+| 2-D windowed SI | `StreamingCollisionOperator` | S, N2N (**moment-bound**: domain interior == `spherical_harmonic_space ⊗ …`, probe4), B angular | **HarmonicMomentFlux** | **AngularFlux** | 2.0e-11 / 6.6e-11 |
+| coupled sph/cyl | `CoupledOperator` | ONE coupled gain grid | AngularFlux | AngularFlux | 5.2e-11…6.5e-11 |
+| Krylov | `system.implicit_operator` | `system.explicit_gains` | AngularFlux | AngularFlux | 1.0e-11…5.5e-11 |
+| **G-S (opt-in)** | **`ScheduledInvertibleOperator`** | S, N2N, **`SNMaskedBoundaryOperator`** | HarmonicMomentFlux | AngularFlux | 1.9e-11 / 6.5e-11 |
+
+Coupled ψ½ (declared blind): returned vs converged ray `2.5e-11` interior /
+`1.6e-12` boundary, `min ψ½ > 0` — the "fold FISSION only into q½" design is
+measured correct on both coupled arms, both orders.
+
+Returned trace (declared blind): `inflow == B·outflow` to `≤ 2.0e-11`
+(exactly `0.0` on vacuum), and `== converged trace` to `≤ 1.8e-11` on all 5 arms.
+
+### The mutation battery (in-process plugin `scratch/_448_qa/_mut448.py`)
+Finalize-SCOPED by construction: it rewrites `self._driven` AFTER the inner
+solve returns, so the SI driver keeps its own real gains and only the
+reconstruction is mutated — the `vv#18` over-power problem solved structurally
+rather than by a phase flag.
+
+* `dropB` (drop the boundary gain from `_driven`): **8 of 14** G1 rows red
+  (`slab_refl`, `sphere_refl`, `cylinder_vac`, `cart2d` × both orders); the
+  3 vacuum-slab arms + `slab_krylov` correctly stay green. Positive control OK.
+* Census under `dropB`: **161 inner solves, 0 `ScheduledInvertibleOperator`
+  splittings** ⟹ the gate module never reaches the G-S arm.
+* `wrongM_gs` (record the UN-split `L+C` while keeping the re-split gains —
+  `M − N ≠ A`, the ERR-056 incoherent-splitting shape, and exactly what the
+  Krylov arm records): **15/15 G-S splittings mutated**, red set =
+  `test_the_repair_is_AUDIBLE_and_names_the_root_fix` +
+  `test_it_is_SILENT_when_the_answer_was_already_canonical` — the GAUGE pair,
+  on a fully-reflective singular box. Real detection, wrong subject
+  (`vv#18`: by what mechanism does THIS gate see THIS property? — it sees the
+  trace's kernel content moving, not the reconstruction).
+
+### The band's stated MECHANISM was wrong (the novel lesson → skill #13)
+The memo's §1.2 table read *"four decades of `flux_tol` move it not at all;
+the empirical driver is `inner_tol` alone"* — `[M]` `1e-6/1e-7/1e-8/1e-9` all
+give `n_outer = 10`. Extending the sweep to `flux_tol = 1e-11` takes
+`n_outer → 12` and the polish falls `3.43e-11 → 6.96e-13` (**49×**); same for
+`keff_tol 1e-10 → 1e-12`. So at the gate's own `inner_tol = 1e-11` the OUTER
+term dominates. A tolerance is a **discrete** knob — it acts only through the
+iteration count — so a sweep whose count never moves has not tested it.
+Landed in `vv-principles` #13 as the fourth disguise.
+
+### Findings the tree still owes
+1. **G-S finalize arm has no self-consistency witness** (measured above).
+2. **The trace-provenance gate the module DECLARES it needs** was not written
+   (option B was taken).
+3. **ERR-083 does not exist** — 4 gates carry `catches("ERR-083")`; `[M]`
+   `merge.py:641-660` `adopted=True` on ORPHEUS ⟹ a per-marker
+   `logger.warning`, so `sphinx -W` fails. (My first hypothesis — that the
+   `not adopted` guard silences it — was REFUTED by reading the code before
+   publishing; the skill's sentence is right.)
+4. **34 doc sites across 12 pages** still name the 6 retired/moved symbols,
+   including a DECLARED `.. implements:: :by:` edge at
+   `operator_algebra.rst:4043` pointing at `TransferOperator.build_aniso_source`.
+   2 of the 34 (`error_catalog.rst:59,:1058`) are past-tense ERR-002 history
+   and STAY.
+5. **13 duplicate/mangled import lines in 5 test files** from the automated
+   rewrite (`test_keff_curvilinear.py:527-533` has three imports of one name,
+   one with column-0 continuation lines inside a function body — parses, ugly).
+6. `fixed_point_step` / `lagged_source` are in `iteration.__all__` with **no
+   direct test** — only exercised through `solve_sn`'s finalize and
+   `SourceIteration.solve`.
+7. The retired `build_aniso_source` guard is SUPERSEDED, not lost:
+   `admit_composite` (`lift.py:182-202`) checks interior space **and** trace
+   space **and** carrier class — strictly stronger. Production reaches
+   `_redistribute_ordinates` only through `apply`. No refutation.

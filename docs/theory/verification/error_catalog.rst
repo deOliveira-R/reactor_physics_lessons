@@ -1055,7 +1055,10 @@ older entries classify against.
        b = 2·Δx·(Q/W) / (2μ + Δx·Σ_t)
 
    where ``W = Σ w_n`` is the quadrature weight sum. The ``1/W`` factor is
-   needed because ``SNSolver._add_scattering_source`` produces ``Q`` in
+   needed because the P0 scattering emission (then
+   ``SNSolver._add_scattering_source``; today the collision gain's
+   :math:`\ell = 0` energy binding, over
+   ``TransferMaterialField.add_p0_source``) produces ``Q`` in
    scalar-flux units while the per-ordinate transport equation sees
    ``Q/W`` on the right-hand side — the same normalization
    ``_sweep_2d_wavefront`` already applied via its ``weight_norm = 1/W``
@@ -5379,10 +5382,16 @@ older entries classify against.
    reciprocity gates red its absence). (3) *Call-site role conversions*:
    every caller that passed an ITERATE trace (stale outflow rows) as
    ``rhs.boundary`` — the ``solve_sn`` eigenvalue-finalize reconstruction and
-   the ``sweep_once`` test helper — now routes through the EXISTING
+   the ``sweep_once`` test helper — was routed through the EXISTING
    ``AngularBoundarySourceSink.prescribed_inflow`` factory (inflow slots
    only; outflow rows unrepresentable by construction — the Pattern-4
    projection already in the tree, bypassed by raw ``from_mesh`` casts).
+   ⛔ The finalize's own call site is MOOT since #448 (2026-09-06): the
+   finalize passes no trace at all — its external boundary source is zero
+   and ``B`` arrives as a gain — so the role confusion this defect names is
+   now unspellable there rather than projected away (ERR-083). The factory,
+   the solve/transpose halves of this fix and the test helper's use are
+   untouched.
    The finalize conflation was invisible to every keff gate (interior
    marches off inflow slots only) and caught ONLY by the 2-D reflective
    trace-balance gate (defect 8.8e-2 at exact keff — a Mode-12 lesson:
@@ -7341,3 +7350,357 @@ older entries classify against.
    that is a strict truncation of its sibling is not a well-factored
    special case — it is the truncation, and the repair is to make them
    one object with the datum that actually differs.
+
+.. error-entry:: ERR-083
+   :title: The SN eigenvalue finalize reconstructed Solution.angular_flux from a P0-only source it built by hand, so at every scattering_order >= 1 the returned angular flux solved a different equation from the one the power iteration converged and did not reduce to the scalar_flux shipped beside it — 8.8e-2 on a 421-group production fixture, with the shipped exit diagnostic structurally silent exactly where the defect lived
+
+
+   **Status:** ✅ **FIXED 2026-09-06 — #448** (the finalize is ONE
+   source-iteration step).  :func:`~orpheus.sn.solver.solve_sn` now
+   reconstructs the returned flux by evaluating the splitting iteration's
+   own map once, at the converged iterate, with the converged fission
+   source — :func:`~orpheus.numerics.iteration.fixed_point_step` through
+   the :class:`~orpheus.sn.solver.InnerSolve` record the last within-group
+   solve left behind — so the source the reconstruction sees IS the source
+   the iteration converged against, by construction rather than by
+   agreement.
+
+   **Failure mode:** **#3 (missing factor)** at the *assembly* tier: the
+   :math:`\ell \ge 1` half of BOTH collision channels was absent from one
+   right-hand side.  Its hiding mechanism is **Mode 11**
+   (gate-never-executes-the-rewired-path) read on the *existing* gates:
+   every :math:`P_\ell` gate in the tree is real, fires, and reddens for a
+   genuine :math:`\ell \ge 1` defect — and not one of them is on the
+   finalize's call graph, because they all exercise the DRIVER's source
+   assembly.  The correct code and the correct gates were both present;
+   the finalize simply did not call either.
+
+   **Module:** ``orpheus/sn/solver.py`` (:func:`~orpheus.sn.solver.solve_sn`,
+   the reconstruction block) and the three retired P0 delegators it drove
+   (``SNSolver._add_scattering_source``, ``SNSolver._build_aniso_scattering``,
+   ``SNSolver._add_n2n_source``, over
+   ``TransferOperator.add_iso_source`` / ``TransferOperator.build_aniso_source``).
+
+   **Mechanism.**  ``solve_sn`` returns two members of one object:
+   :attr:`Solution.scalar_flux <orpheus.sn.solution.Solution.scalar_flux>`,
+   which is the power iteration's converged :math:`\phi`, and
+   :attr:`Solution.angular_flux <orpheus.sn.solution.Solution.angular_flux>`,
+   which is *reconstructed* by one final within-group solve.  The
+   reconstruction needs a right-hand side, and until #448 it built one by
+   hand:
+
+   .. code-block:: python
+
+      Q_final = solver.compute_fission_source(scalar_flux, keff)
+      solver._add_scattering_source(Q_final, scalar_flux)   # P0 only
+      solver._add_n2n_source(Q_final, scalar_flux)          # P0 only
+      # ... then lifted ISOTROPICALLY through AngularSourceSink.from_isotropic
+
+   Every line was correct for what it said.  ``_add_scattering_source``
+   delegated to the P0 in-transfer fast path, which is exactly the
+   :math:`\ell = 0` row of :eq:`pn-scatter`; ``_add_n2n_source`` did the
+   same for :eq:`n2n-source`.  What was missing had no line at all: the
+   :math:`\ell \ge 1` redistribution :math:`\tfrac{1}{W}R\,\Lambda\,M\,\psi`
+   (:eq:`pn-scatter-rlm`), which the within-group drivers deliver as the
+   :math:`S` and :math:`N_{2n}` *gains* and which no hand-built scalar
+   source can carry, because it is not a function of :math:`\phi` at all —
+   it is a function of the angular flux.
+
+   So the iteration converged against
+   :math:`A\psi = (L+C-S-N_{2n}-B)\psi = F\phi/k`
+   (:eq:`sn-within-group-with-n2n`) and the reconstruction then solved
+   :math:`(L+C)\psi = F\phi/k + S_0\phi + N_{2n,0}\phi` — the same equation
+   only when :math:`L = 0`, which is the default and was therefore the case
+   every reader had in mind.
+
+   **How it hid.  Four ways, all measured.**
+
+   1. ⭐ **The two affected members are not the two reported ones.**
+      :math:`k` and :math:`\phi` come from the power iteration and are
+      untouched — ``[M]`` bit-identical across the fix on every arm (below).
+      Every eigenvalue-value gate, every frozen :math:`k` anchor and every
+      :math:`\phi` snapshot in the tree is therefore *structurally* blind:
+      not under-tolerance, not sub-floor — measuring a different object.
+   2. **The eigenvalue path had no self-consistency gate on** ``angular_flux``.
+      Its fixed-source twin exists and passes
+      (``tests/sn/solve/test_2d_anisotropic_windowing.py`` →
+      ``test_2d_windowed_si_full_angular_flux_self_consistent``) precisely because *that* entry's
+      windowed reconstruction already re-evaluated ``q + Σ gains·ψ``.  The
+      two entries' reconstructions were twin paths, and only one of them
+      had drifted.
+   3. **The shipped exit diagnostic is silent on exactly the exits that
+      matter.** :attr:`IterationHistory.balance_defect
+      <orpheus.sn.solution.IterationHistory.balance_defect>` — the one
+      quantity in the tree that evaluates the object the caller RECEIVES —
+      returns ``None`` on any converged solve by design (it is the
+      complement of the within-group certificate,
+      :ref:`sn-exit-balance-projection`),
+      and its partner, the certificate, fires on the converged ITERATE
+      inside the inner solves.  ``[M]`` on the 2-group slab below, at
+      ``keff_tol = flux_tol = 1e-12``: ``balance_defect = None`` and **zero**
+      warnings at :math:`L = 0` and :math:`L = 1` alike, on the defective
+      tree and on the fixed one.  **Between the two guards, nothing ever
+      evaluated the returned flux** — which is the hole this defect lived
+      in for its whole life.
+   4. **At** :math:`L = 0` **the reconstruction is correct, and** :math:`L = 0`
+      **is the default.**  When ``scattering_order = 0`` the hand-built
+      source and the driven one are the same quantity, so the defect is
+      unspellable at the setting most fixtures use.
+
+   **Symptom, measured — before and after, same probe, same fixtures.**
+
+   ``[M]`` 2026-09-06.  **The probe, so the tables regenerate from this
+   page:** build the fixture below, call
+   :func:`~orpheus.sn.solver.solve_sn`, capture the ``SNSolver`` instance
+   (a wrapped ``__init__``), and compare three fields in the max-norm,
+   relative to the second — the returned ``sol.angular_flux``, the
+   converged iterate (``solver._inner.iterate``, System A's member,
+   cell-averaged), and an independently assembled one-step
+   reconstruction ``M⁻¹(q_F(φ, k) + Σ gains·ψ)`` built from a freshly
+   posed ``build_within_group_system`` — plus ``∫ψ dΩ`` against
+   ``sol.scalar_flux``.  The *before* column is the same script run
+   against a detached worktree at the pre-fix commit, with
+   ``orpheus.__file__`` printed as proof the import resolved there (the
+   venv's editable install hooks ``sys.meta_path`` and outranks
+   ``sys.path``, so the finder must be stripped first).
+
+   *Production data* — the ERR-082 fixture: 1-D slab, Be 3 cm | U-235 metal
+   4 cm (:math:`N = 0.04894`) | Be 3 cm, 12/16/12 cells, vacuum both sides,
+   ``gauss_legendre(8)``, **421 groups**, ``keff_tol = 1e-9``,
+   ``flux_tol = 1e-8``, ``inner_tol = 1e-10``, every arm
+   ``fully_converged``.
+
+   .. list-table:: ERR-083 — the returned angular flux, before and after
+      :header-rows: 1
+      :widths: 30 18 18 18 16
+
+      * - quantity (relative, max-norm)
+        - :math:`L = 0` before
+        - :math:`L = 0` after
+        - :math:`L = 2` before
+        - :math:`L = 2` after
+      * - returned :math:`\psi` vs the converged iterate
+        - 3.329e-10
+        - 1.679e-10
+        - **8.776e-02**
+        - **1.236e-10**
+      * - :math:`\int\psi_{\rm returned}\,d\Omega` vs the reported :math:`\phi`
+        - 1.558e-10
+        - 3.532e-10
+        - **3.405e-02**
+        - **3.170e-10**
+      * - reported :math:`k`
+        - ``1.158712037137``
+        - ``1.158712037137``
+        - ``1.091199656654``
+        - ``1.091199656654``
+
+   The :math:`L = 2` error is not uniform and not small anywhere it
+   matters: ``[M]`` per group it reaches **1.76e-01** in the fast groups,
+   and per ordinate the deviation is **4–9 %** of the field's own maximum
+   (``[0.09, 0.07, 0.05, 0.04, 0.04, 0.05, 0.07, 0.09]`` across the eight
+   :math:`\mu_n` — even in :math:`\mu`, which this symmetric Be|U|Be slab
+   requires and is therefore a fixture check rather than a finding).  The
+   :math:`L = 0` row is the **control**:
+   both readings sit at the inner-tolerance floor, and they are not
+   bit-identical because the fix changes the reduction order of a source
+   whose *content* is unchanged there.
+
+   ⚠ **After the fix the returned flux is bit-identical to an independently
+   assembled one-step reconstruction** (``0.000e+00`` on both orders) — and
+   that number is evidence of *single-sourcing*, not of independence: the
+   two spellings are now one float program.  The independence claim is
+   carried by the **cross-route** row instead: the *fixed-source* entry's
+   own reconstruction, re-solving the converged fission source, read
+   ``[M]`` **1.4728e-01** against the pre-fix eigenvalue flux at
+   :math:`L = 1` and ``2.59e-12`` at :math:`L = 0` — with its scalar
+   companion green in both (``1.7e-12`` / ``1.67e-11``), which is the
+   control proving the two entries agree on :math:`\phi` and disagreed
+   only on :math:`\psi`.
+
+   The gate module's own pre/post table generalises the single fixture
+   above: pre-carve every :math:`L \ge 1` row was red by
+   :math:`1.6\times10^{6}\ldots3.6\times10^{6}` times its ``1e-8`` band
+   while every :math:`L = 0` row was green with :math:`\ge 316\times`
+   headroom (the control that proves the band and the identity sound);
+   post-carve all eight arms read ``1.4e-11 … 6.5e-11`` at BOTH orders.
+
+   **Second consequence — the truncated-exit diagnostic was pinned at a
+   #448 floor.**  ``[M]`` same script, 2-group A|B|A slab
+   (``get_mixture("A"/"B", "2g")``, 2/6/2 cm, 6/8/6 cells, vacuum,
+   ``gauss_legendre(8)``, ``keff_tol = flux_tol = 1e-12``,
+   ``inner_tol = 1e-11``), sweeping the outer budget:
+
+   .. list-table:: ERR-083 — ``history.balance_defect`` on a TRUNCATED exit
+      :header-rows: 1
+      :widths: 8 12 20 20 20 20
+
+      * - :math:`L`
+        - ``max_outer``
+        - defect, before
+        - defect, after
+        - :math:`\lvert\int\psi d\Omega-\phi\rvert/\lvert\phi\rvert`, before
+        - … after
+      * - 0
+        - 3
+        - 1.2497e-05
+        - 1.7108e-04
+        - 1.372e-04
+        - 4.848e-04
+      * - 0
+        - 6
+        - 1.3151e-08
+        - 1.7887e-07
+        - 1.450e-07
+        - 5.081e-07
+      * - 0
+        - 12
+        - 8.5933e-12
+        - 1.1977e-11
+        - 3.002e-12
+        - 1.038e-11
+      * - **1**
+        - 3
+        - **7.48654e-02**
+        - 4.0250e-04
+        - **2.817e-02**
+        - 1.094e-03
+      * - **1**
+        - 6
+        - **7.48474e-02**
+        - 4.7622e-07
+        - **2.815e-02**
+        - 1.298e-06
+      * - **1**
+        - 12
+        - **7.48474e-02**
+        - 1.1622e-11
+        - **2.815e-02**
+        - 1.065e-11
+
+   ⚠ **Read the RATIO down each column, not the value in any one row** —
+   the two trees compute the returned flux by different constructions, so
+   their absolute defects at a given budget are not comparable, while their
+   *response to the budget* is exactly the property the diagnostic
+   advertises.  Before: :math:`L = 0` falls by **1.45 × 10⁶** over
+   ``max_outer`` 3 → 12 and :math:`L = 1` by **1.0002 ×** — the number a
+   user is shown as *"how truncated was I"* was reading the reconstruction
+   instead of the truncation, and no budget could move it.  After: **1.43 ×
+   10⁷** and **3.46 × 10⁷** — the response is order-independent, which is
+   what a truncation diagnostic must be.  ``[M]`` :math:`k` is bit-identical
+   row for row across the two trees (``1.1267055851836145`` /
+   ``0.9560822632303554`` at ``max_outer = 3``, and so on), which is the
+   control: the carve does not touch the power iteration.
+
+   **The fix, and why it is** ``coding-elegance`` **Pattern 2 (single
+   source of truth) followed by Pattern 4 (make illegal states
+   unrepresentable).**  The finalize now
+   evaluates the map the drivers iterate:
+
+   .. math::
+
+      \psi_{\rm returned}
+      \;=\; G(\psi_{\rm conv})
+      \;=\; M^{-1}\Bigl(q_F(\phi_{\rm conv}, k_{\rm conv})
+            + \sum_i N_i\,\psi_{\rm conv}\Bigr) ,
+
+   with :math:`M`, :math:`\{N_i\}` and :math:`\psi_{\rm conv}` all read off
+   the :class:`~orpheus.sn.solver.InnerSolve` record the last within-group
+   solve wrote — not re-selected, not rebuilt.  At a fixed point
+   :math:`G(\psi^*) = \psi^*`, so one application reconstructs the iterate;
+   what the caller gains is that the reconstruction now solves the equation
+   the *reported* :math:`(k, \phi)` pose, which is the exit balance's own
+   question.  Two single-sourcings make the drift **unspellable** rather
+   than merely fixed: :func:`~orpheus.numerics.iteration.lagged_source` is
+   the one assembly of :math:`q + \sum N_i\psi` (shared with
+   :meth:`SourceIteration.solve <orpheus.numerics.iteration.SourceIteration.solve>`),
+   and :func:`~orpheus.sn.solver._eigenvalue_driver_source` is the one
+   construction of the eigenvalue right-hand side — ``[M]`` **3** call
+   sites, the SI inner, the Krylov inner and the finalize.  A future
+   scattering order cannot be dropped from the reconstruction without being
+   dropped from the iteration too.
+
+   **Which tests catch it.**
+   ``tests/sn/solve/test_eigenvalue_finalize_reconstruction.py``, four
+   rows carrying ``@pytest.mark.catches("ERR-083")``:
+
+   * ``TestTheReturnedFluxIsSelfConsistent`` →
+     ``test_returned_angular_flux_integrates_to_the_reported_scalar_flux``
+     (``l1``) — the load-bearing
+     row, over every arm of the module's registry ×
+     :math:`\{L = 0\text{ control}, L \ge 1\}` (``[M]`` **8** arms on
+     2026-09-06: slab vacuum and reflective, a slab with a live
+     :math:`\ell \ge 1` :math:`(n,2n)` moment, a reflective sphere and a
+     vacuum cylinder — both coupled — 2-D Cartesian windowed under Jacobi
+     and under boundary Gauss-Seidel, and a Krylov slab).  It
+     needs no external reference: :math:`\phi = \int\psi\,d\Omega` is the
+     *definition* of the scalar flux, and ``Solution`` ships both members,
+     so if the angular one does not reduce to the scalar one at least one
+     of the two is wrong whatever any reference says.  The claim layer is
+     **flux-shape**, not eigenvalue — which is what lets this be an L1 gate
+     on a 421-group heterogeneous eigenproblem for which no
+     structurally-independent reference exists.
+   * ``TestAgainstAnIndependentRoute`` →
+     ``test_returned_flux_equals_an_independent_fixed_source_resolve``
+     (``l1``) — the cross-route row:
+     the *fixed-source* entry's own reconstruction, a different production
+     entry point, resolving the converged fission source.
+   * ``TestTheShippedDiagnostic`` →
+     ``test_the_balance_defect_responds_to_the_outer_budget``
+     (``l1``) — the second-consequence row, asserting the
+     RATE above rather than any threshold (the diagnostic's docstring
+     forbids branching on its magnitude, and this row does not).
+   * ``TestOnProductionData`` →
+     ``test_be_reflected_returned_flux_integrates_to_its_scalar_flux``
+     (``l2``) — the same identity on the 421-group
+     Be-reflected fixture, i.e. on data rather than on a manufactured
+     mixture.
+
+   Companion rows in the same module pin what the fix must NOT move:
+   ``TestKAndPhiAreNotAffected`` (the pre-carve :math:`k`/:math:`\phi`
+   capture), ``TestTheReturnedTrace`` (the reflective law on the returned
+   trace, and that the trace IS the converged iterate's),
+   ``TestTheLGe1TermIsLive`` (the activation leg — the operator really is
+   anisotropic on the arms that claim to be), and
+   ``TestTheGaussSeidelArmPosesItsOwnSplitting``.
+
+   ⛔ **None of the four carries** ``@pytest.mark.slow``, and that is
+   deliberate: ``vv-principles`` #36 — a catcher the canonical
+   ``-m "not slow"`` invocation deselects is a gate that cannot RUN, and
+   ERR-023 is the measured precedent in this catalogue.
+
+   **Related entries.**  **ERR-082** is the same anisotropy one tier down —
+   the :math:`(n,2n)` channel's Legendre stack truncated at the OPERATOR
+   tier — and it is this entry's prerequisite in a precise sense: until it
+   landed, the :math:`(n,2n)` gain had no :math:`\ell \ge 1` part for the
+   finalize to drop, so ERR-083's :math:`(n,2n)` half became reachable
+   only on 2026-09-04.  **ERR-071** is the finalize's *other* role-confusion
+   defect (an iterate trace passed as ``rhs.boundary``); its call-site half
+   is now moot, because the finalize passes no trace at all — the
+   reflective coupling arrives as the :math:`B` gain, exactly as in every
+   inner solve.  **ERR-052** is why the returned flux and the reported
+   :math:`\phi` can be at different scales at a truncated exit at all: the
+   power iteration renormalises :math:`\phi` to unit production *between*
+   the inner solve and the :math:`k`-update.  ``[R]`` that, together with
+   the fact that the post-fix reconstruction steps the map from an
+   unconverged ITERATE where the pre-fix one re-solved a source built from
+   :math:`\phi`, is the plausible reason the :math:`L = 0` truncated rows
+   above are LARGER after the fix; it is stated as a hypothesis because
+   nothing here measured the decomposition — what is measured is the
+   ratio down each column, and it improves at both orders.
+
+   **Lesson.**  ⭐ **A solver's RETURN is a claim, and a claim needs a
+   guard whose complement is covered.**  This tree had two honest
+   instruments pointed at within-group convergence — a certificate that
+   fires when a solve *claims* to have converged, and a defect reporter
+   that fires when it *admits* it did not — and their complements did not
+   cover the exit: the certificate reads the ITERATE, the reporter returns
+   ``None`` on the converged path, and the object the caller is actually
+   handed was evaluated by neither.  ⟹ when a routine reports a value it
+   did not iterate on — a reconstruction, a post-processing step, a
+   projection — ask what evaluates *that object*, and if the answer is
+   "the guard that runs when things went wrong", the answer is nothing.
+   ⭐ And the structural half: a reconstruction that **re-derives** its
+   own source is a twin of the iteration's, with no gate on the seam; a
+   reconstruction that **re-evaluates the iteration's own map** cannot
+   drift, because there is one source assembly and one map.

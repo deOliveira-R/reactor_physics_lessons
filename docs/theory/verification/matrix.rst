@@ -9,7 +9,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **11494**
+Total tests collected: **11593**
 
 V&V level distribution
 ----------------------
@@ -18,11 +18,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 1304, 11.3%
-   L1, 1662, 14.5%
-   L2, 69, 0.6%
+   L0, 1304, 11.2%
+   L1, 1755, 15.1%
+   L2, 71, 0.6%
    L3, 0, 0.0%
-   foundation, 8433, 73.4%
+   foundation, 8437, 72.8%
    unmarked, 26, 0.2%
 
 Tagging source
@@ -34,7 +34,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 11389
+   explicit, 11488
    class-name, 46
    func-name, 0
    case, 33
@@ -356,6 +356,7 @@ Module × level grid
    numerics/test_factored_adjoint_identity, 13, 0, 0, 0, 0, 0
    numerics/test_family_convergence_contract, 0, 0, 0, 0, 41, 0
    numerics/test_field, 0, 0, 0, 0, 31, 0
+   numerics/test_fixed_point_step, 0, 0, 0, 0, 8, 0
    numerics/test_flux_vector_algebra, 0, 0, 0, 0, 26, 0
    numerics/test_frame, 0, 15, 0, 0, 45, 5
    numerics/test_full_field_space, 0, 0, 0, 0, 7, 0
@@ -450,7 +451,7 @@ Module × level grid
    operators/test_removal_form_matvec_sweep, 0, 0, 0, 0, 21, 0
    operators/test_scattering_adjoint, 0, 0, 0, 0, 18, 0
    operators/test_scattering_kernel_crosscheck, 0, 0, 0, 0, 6, 0
-   operators/test_scattering_operator, 1, 0, 0, 0, 66, 0
+   operators/test_scattering_operator, 1, 0, 0, 0, 62, 0
    operators/test_sn_boundary_operator, 0, 0, 0, 0, 55, 0
    operators/test_sn_boundary_realizer, 10, 45, 0, 0, 0, 5
    operators/test_snmesh_realizer_wiring, 0, 11, 0, 0, 0, 0
@@ -498,6 +499,7 @@ Module × level grid
    solve/test_d3_admission, 0, 5, 0, 0, 2, 0
    solve/test_declared_inflow_reaches_the_rhs, 0, 14, 0, 0, 0, 0
    solve/test_declared_law_survives_the_public_entry, 0, 6, 0, 0, 0, 0
+   solve/test_eigenvalue_finalize_reconstruction, 0, 93, 2, 0, 0, 0
    solve/test_every_entry_gauges_its_trace, 0, 0, 0, 0, 12, 0
    solve/test_fixed_source_2d_equivalence, 0, 2, 0, 0, 0, 0
    solve/test_fixed_source_g1, 0, 5, 0, 0, 0, 0
@@ -567,12 +569,12 @@ Every Sphinx ``.. math:: :label:`` block declared under ``docs/theory/**/*.rst``
    :widths: 50, 10
 
    ``matrix-eigenvalue``, 240
-   ``mg-balance``, 182
+   ``mg-balance``, 184
    ``peierls-unified``, 158
    ``one-group-kinf``, 146
+   ``reflective-bc``, 145
    ``peierls-rank-n-bc-closure``, 124
    ``alpha-recursion``, 115
-   ``reflective-bc``, 113
    ``wdd-closure``, 103
    ``wdd-face``, 103
    ``alpha-cylindrical``, 95
@@ -581,16 +583,16 @@ Every Sphinx ``.. math:: :label:`` block declared under ``docs/theory/**/*.rst``
    ``fission-matrix``, 76
    ``removal-matrix``, 76
    ``mm-weights``, 75
+   ``flux-moments``, 70
    ``ki3-def``, 64
+   ``transport-cartesian``, 62
    ``e3-def``, 61
-   ``transport-cartesian``, 60
    ``blelloch-1990-eq-1-5``, 57
    ``self-slab``, 55
    ``hebert-3-432``, 54
    ``self-cyl``, 54
    ``balance-general``, 53
    ``p-inf``, 53
-   ``flux-moments``, 52
    ``self-sph``, 52
    ``chord-length``, 51
    ``quadrature-ordinate-permutation``, 50
@@ -599,6 +601,7 @@ Every Sphinx ``.. math:: :label:`` block declared under ``docs/theory/**/*.rst``
    ``attenuation``, 48
    ``optical-thickness``, 48
    ``scalar-flux-integral``, 48
+   ``pn-scatter``, 47
    ``azimuthal-angles``, 44
    ``cp-kernel-differential-identities``, 36
    ``sn-curvilinear-homogeneous-kinf-recovery``, 36
@@ -633,7 +636,6 @@ Every Sphinx ``.. math:: :label:`` block declared under ``docs/theory/**/*.rst``
    ``cp-flat-source-double-integral``, 27
    ``cp-unified-outer-integration``, 27
    ``loss-rep-resolution-a``, 25
-   ``pn-scatter``, 25
    ``dc-slab``, 24
    ``peierls-specular-bc-defn``, 24
    ``second-diff-cyl``, 24
@@ -648,6 +650,7 @@ Every Sphinx ``.. math:: :label:`` block declared under ``docs/theory/**/*.rst``
    ``pitch-recovery``, 22
    ``ray-circle``, 22
    ``region-areas-pin-cell``, 22
+   ``n2n-source``, 21
    ``singular-eigenfunction-eq46``, 21
    ``en-kernel-derivative``, 20
    ``kin-kernel-derivative``, 20
@@ -697,6 +700,7 @@ Every Sphinx ``.. math:: :label:`` block declared under ``docs/theory/**/*.rst``
    ``singular-eigenfunction-eq42``, 10
    ``sn-direct-seed-r12a-predicate``, 10
    ``dd-recurrence``, 9
+   ``dd-solve``, 9
    ``energy-condensation-scattering-collapse``, 9
    ``p-transpose-flux-balance``, 9
    ``pole-mm-recurrence``, 9
@@ -713,7 +717,6 @@ Every Sphinx ``.. math:: :label:`` block declared under ``docs/theory/**/*.rst``
    ``bare-slab-eigenfunction``, 7
    ``bare-slab-keff``, 7
    ``dd-null-sawtooth``, 7
-   ``dd-solve``, 7
    ``diffusion-M-matrix``, 7
    ``diffusion-back-substitution``, 7
    ``diffusion-exponential-branch``, 7
@@ -745,6 +748,7 @@ Every Sphinx ``.. math:: :label:`` block declared under ``docs/theory/**/*.rst``
    ``peierls-greens-cylinder-mr-homogeneous-reduction``, 5
    ``real-sh-discrete-orthogonality``, 5
    ``singular-eigenfunction-eq40``, 5
+   ``sn-direct-seed-augmented-composite``, 5
    ``sn-keff-update``, 5
    ``sn-mms-nonvacuum-psi``, 5
    ``streaming-equilibrium``, 5
@@ -856,7 +860,6 @@ Every Sphinx ``.. math:: :label:`` block declared under ``docs/theory/**/*.rst``
    ``mc-lethargy-width-sign``, 1
    ``mg-inscatter-source``, 1
    ``moment-projection-transpose-T``, 1
-   ``n2n-source``, 1
    ``nm1980-eq15-critical-condition``, 1
    ``normalisation``, 1
    ``normalization-dd-source-coefficient``, 1
@@ -924,7 +927,7 @@ Equations with zero tests carrying ``@pytest.mark.verifies("label")``, excluding
 Documented-only equations
 -------------------------
 
-Theory labels marked ``.. vv-status: <label> documented`` in their RST source. These are excluded from the orphan-equation gate because they are either definitional (no single implementing function — e.g. ``boltzmann``), describe a module whose Python port does not yet exist (e.g. the thermal-hydraulics / fuel-behaviour / reactor-kinetics equations), or have a deliberately deferred test paired with a tracking issue. **597** labels carry the sentinel. See :ref:`vv-status-documented` for the full taxonomy.
+Theory labels marked ``.. vv-status: <label> documented`` in their RST source. These are excluded from the orphan-equation gate because they are either definitional (no single implementing function — e.g. ``boltzmann``), describe a module whose Python port does not yet exist (e.g. the thermal-hydraulics / fuel-behaviour / reactor-kinetics equations), or have a deliberately deferred test paired with a tracking issue. **598** labels carry the sentinel. See :ref:`vv-status-documented` for the full taxonomy.
 
 - ``affine-bc-form``
 - ``affine-typed-residual-eq``
@@ -1403,6 +1406,7 @@ Theory labels marked ``.. vv-status: <label> documented`` in their RST source. T
 - ``sn-err-058-coupled-pole-continuity``
 - ``sn-err-058-edge-extrapolation``
 - ``sn-err-058-proxy-source``
+- ``sn-finalize-map``
 - ``sn-fixed-source-direct-sum``
 - ``sn-gain-channels-one-shape``
 - ``sn-gain-transposes-one-shape``

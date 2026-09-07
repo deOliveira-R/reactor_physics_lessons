@@ -49,6 +49,26 @@ gate never RUNS — a new class beside Mode 8's nine, all of which are about a
 gate that cannot FAIL) and **A17** (a two-stage census filter needs a positive
 control per STAGE). Drop-in text is in the digest rules and L-079 §findings 2/4.
 
+**#448 SN eigenvalue finalize — UNCOMMITTED-DIFF REVIEW, 2026-09-06.** ⏹
+**DELIVERED** (branch `fix/sn-eigenvalue-finalize-448`; READ-ONLY — `git
+status --porcelain -- orpheus/ tests/` md5 identical mid- and end-session).
+Probes `scratch/_448_qa/probe{1..4}*.py`, mutation plugin
+`scratch/_448_qa/_mut448.py`. **Verdict: the algebra is COMPLETE and correct
+on all five arms** (1-D SI, 2-D windowed SI, coupled sph/cyl, Krylov, and the
+opt-in boundary-G-S); gate module 45/45 green; every arm's returned bulk is an
+`AngularFlux`; the coupled ψ½ and the returned trace (both DECLARED blind)
+measure right at ~1e-11. **Six findings, none a numerical defect**: the G-S arm
+has no self-consistency witness (`[M]` 161 solves / 0 G-S splittings in the
+gate module; the only catcher is the GAUGE pair, wrong subject per vv#18); the
+trace-provenance gate the module itself declares owed was not written; ERR-083
+is unminted while 4 gates claim it (`sphinx -W` will fail — verified against
+`merge.py:641-660`, `adopted=True`); 34 doc sites + one DECLARED `:by:` edge
+are dead; 13 duplicate/mangled imports; the two new `__all__` functions have no
+direct test. ⭐ The BAND's stated mechanism was wrong (a tolerance sweep whose
+`n_outer` never moved) — landed in `vv-principles` #13 as the fourth disguise.
+Lesson **L-080**, digest **A18** (phase-scoped mutation by RECORD rewrite) /
+**A19**.
+
 **#429 symmetry/quotient carve — TERM-LEVEL REVIEW, 2026-09-02.** ⏹
 **DELIVERED** (HEAD `c1fca8bd`, branch `fix/angular-phantom-support`;
 READ-ONLY — no tracked file edited, revert proven by `diff -q` vs pristine

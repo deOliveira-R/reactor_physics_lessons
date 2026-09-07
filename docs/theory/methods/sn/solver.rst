@@ -26,9 +26,10 @@ therefore survive a rebind untouched:
   production-like — is context-dependent and must not be decided at
   the operator level (:ref:`n2n-reactions`, :ref:`sn-n2n-adjoint`).
   Both within-group builds are threaded the pair, and every
-  ``(n,2n)`` verb on the solver (the group-rate accumulations, the
-  legacy ``_add_n2n_source`` delegator) routes through its energy
-  binding's field.
+  ``(n,2n)`` verb on the solver — since #448 that is the group-rate
+  accumulations alone; the ``_add_n2n_source`` delegator retired with
+  the hand-built finalize source that was its only caller — routes
+  through its energy binding's field.
 * :attr:`SNSolver.fission_op` —
   :class:`~orpheus.transport.operators.isotropic_transfer.IsotropicFission`
   carrying the rank-1-in-energy fission emission (Wave D Issue 13).
@@ -142,7 +143,10 @@ plumbing — :meth:`ScatteringOperator.apply` on the timeless
 :class:`~orpheus.transport.full_field.FullField` operator carrier (the
 driver's :class:`~orpheus.transport.timed_full_field.TimedFullField` iterate
 reaches it via MRO) reads the angular moments off the composite and builds
-the anisotropic source via :meth:`ScatteringOperator.build_aniso_source`,
+the anisotropic source inside :meth:`ScatteringOperator.apply
+<orpheus.transport.operators.transfer.TransferOperator.apply>` — the
+:math:`\ell \ge 1` half being the redistribution body the binding's ends
+select (``TransferOperator._redistribute_ordinates`` on the angular end) —
 all inside the primitive's normal RHS path.  There is **no scalar-flux
 limitation** and **no pending "Approach A" cleanup**: the earlier
 framing — that :class:`SourceIteration` carried only :term:`scalar flux` and SN
@@ -415,7 +419,9 @@ The scale bridge: trace of the last inner solve
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The leakage term reads the **typed** boundary trace of the last inner
-solve (``self._psi_typed.boundary``), whereas the numerator/denominator
+solve (``self._inner.iterate.boundary`` — the
+:class:`~orpheus.sn.solver.InnerSolve` record each inner leaves behind),
+whereas the numerator/denominator
 reaction rates consume the bare-array flux :math:`\phi` the estimator is
 handed.  These two representations can be at **different scales**:
 :func:`~orpheus.numerics.eigenvalue.power_iteration` renormalises
@@ -629,6 +635,176 @@ they carried different spatial closures — and disagreed on coarse-mesh
    sentence is true again of what a caller receives.  Derivation:
    :ref:`sn-loss-kernel-gauge`; exit behaviour: :ref:`sn-exit-gauge`.
 
+.. _sn-finalize-one-step:
+
+The returned angular flux — one step of the map the iteration drove
+-------------------------------------------------------------------
+
+:class:`~orpheus.sn.solution.Solution` ships **two** flux members, and only
+one of them is what the power iteration converged.
+:attr:`~orpheus.sn.solution.Solution.scalar_flux` *is* the converged
+:math:`\phi`; :attr:`~orpheus.sn.solution.Solution.angular_flux` has to be
+*reconstructed*, for two independent reasons:
+
+* the outer iteration's contract is scalar — ``[M]`` all **five** members
+  of :class:`~orpheus.numerics.eigenvalue.EigenvalueSolver` exchange only
+  the method's ``Carrier``, which for S\ :sub:`N` is the bare
+  ``(n_g, *spatial)`` scalar flux, so no per-ordinate field crosses the
+  boundary at all; and
+* on the 2-D Cartesian windowed arm the within-group iterate is not
+  per-ordinate at all — it is the harmonic-moment composite
+  (:ref:`sn-angular-windowing-honest-scope`), and the user-facing
+  :math:`(N, n_g, n_x, n_y)` field has to be built from it.
+
+**The reconstruction is one application of the splitting map — not a
+solve.**  A within-group splitting writes the loss operator as
+:math:`A = M - N` and iterates
+
+.. math::
+   :label: sn-finalize-map
+
+   \psi^{(j+1)} \;=\; G\bigl(\psi^{(j)}\bigr)
+   \;=\; M^{-1}\Bigl(q + \sum_i N_i\,\psi^{(j)}\Bigr) ,
+
+.. (vv-status rationale) The governing iteration of the within-group
+   splitting, stated so the finalize can be derived from it.  Not a solver
+   claim: the map is the DEFINITION of what the SI driver does, and the
+   verifiable content — that ONE application at the converged iterate
+   reproduces that iterate, and that its angular integral reproduces the
+   reported scalar flux — is pinned by
+   ``tests/sn/solve/test_eigenvalue_finalize_reconstruction.py``
+   (``@pytest.mark.catches("ERR-083")``, seven arms × two orders).
+.. vv-status: sn-finalize-map documented
+
+which is the source-iteration bullet above written once.  At a fixed point
+:math:`G(\psi^\star) = \psi^\star`, so applying :math:`G` **once** to a
+converged iterate returns that iterate — and that is the whole
+reconstruction.  Nothing is re-solved, nothing is re-selected: the
+finalize reads :math:`M`, :math:`\{N_i\}` and :math:`\psi_{\rm conv}` off
+the :class:`~orpheus.sn.solver.InnerSolve` record the last within-group
+solve left behind, and evaluates
+:func:`~orpheus.numerics.iteration.fixed_point_step` on them.
+
+Two things the identity :math:`G(\psi^\star) = \psi^\star` buys are worth
+spelling out, because they are what makes ONE step enough rather than a
+convenience:
+
+* :math:`M^{-1}` need not be the *representative* the iteration ran.  On
+  the windowed arm the driver's step is :math:`P\,M^{-1}` (project to
+  moments after the sweep); the record keeps the **un-wrapped** forward
+  :math:`M`, so one step through :math:`M^{-1}` alone comes back
+  per-ordinate.  A moment iterate is un-windowed by the reconstruction
+  *for free*, because the fixed-point identity does not care which
+  right-inverse of :math:`M` you use.
+* The right-hand side may legitimately differ from the one the iteration
+  last saw — which is exactly what the finalize exploits, below.
+
+**The source is the CONVERGED fission source, and that choice is the exit
+balance's question.**  The last inner solve ran with
+:math:`q = F\phi_{N-1}/k_{N-1}` — the *penultimate* outer's fission source,
+because :func:`~orpheus.numerics.eigenvalue.power_iteration` builds
+:math:`q` from the iterate it *enters* the outer with and only then
+renormalises :math:`\phi` and updates :math:`k`.  The
+finalize re-poses with :math:`q_F(\phi_{\rm conv}, k_{\rm conv})`, the
+fission source built from the values the caller is actually handed.  The
+reason is not tidiness: a caller who checks the returned object is asking
+*does this* :math:`\psi` *solve the equation with this* :math:`k` *and this*
+:math:`\phi`?, and only the converged source makes the answer yes.  The
+shipped exit-balance diagnostic asks exactly that question
+(:ref:`sn-exit-balance-projection`), and it would be measuring a
+discrepancy of the finalize's own making if the finalize had used the
+last inner's source.  At convergence the two sources agree to the outer
+tolerance, so the choice costs nothing; at a truncated exit it is the
+difference between a diagnostic that tracks the truncation and one that
+does not.
+
+**Everything else in the composite arrives as a gain, not as hand-staged
+data.**  The lagged couplings are the record's own —
+:math:`(S, N_{2n}, B)` on the Jacobi arm, :math:`(S, N_{2n}, B_{\rm upper})`
+when the inner ran under the boundary Gauss-Seidel schedule, and the
+coupled gain grid on a carrying (curvilinear) mesh.  Three consequences:
+
+* **The reflective boundary is** :math:`B\,\psi_{\rm conv}`, delivered
+  through ``rhs.boundary`` exactly as in every inner iterate.  The
+  finalize does **not** reflect the converged trace into its own inflow
+  slots by hand; the inflow is a solved unknown carried on
+  ``ψ.boundary`` (Wave O #208 O.4a.2), and the reconstruction re-derives
+  it from the same operator the iteration used.
+* **The** :math:`\ell \ge 1` **emission is present because it is the
+  gain's**, not because the finalize remembered it.  This is the whole
+  content of the #448 repair — see the retirement note below.
+* **The schedule the inner chose is the schedule the finalize inherits.**
+  A boundary-G-S inner reconstructs through :math:`(L+C-B_{\rm lower})^{-1}`
+  with :math:`B_{\rm upper}` lagged, which is a *different* splitting of
+  the same :math:`A`; the converged answer must not depend on it, and that
+  is a pinned row
+  (``TestTheGaussSeidelArmPosesItsOwnSplitting`` →
+  ``test_the_schedule_does_not_move_the_converged_answer``).
+
+**On a carrying mesh the pair is reconstructed as a pair.**  The
+eigenvalue right-hand side is built once, by
+:func:`~orpheus.sn.solver._eigenvalue_driver_source` (``[M]`` **3** call
+sites — the SI inner, the Krylov inner, and this finalize).  Its System-A
+member is the fission source lifted per-ordinate through
+:meth:`AngularSourceSink.from_isotropic
+<orpheus.transport.source_sinks.AngularSourceSink.from_isotropic>` with a
+**zero** external boundary; its System-B member is the :math:`\ell = 0`
+fold of the **fission source alone** as the :math:`\psi_{1/2}` march's
+entry (#282 route (a)).  The seed folds fission alone because the coupled
+gain grid carries the rest — the ``Emission`` and :math:`B_b` blocks — so
+folding the total source there would double-count it.  That is not a
+finalize-specific rule: it is what the two inner drivers pass, and the
+finalize passes it because it calls the same constructor.
+
+.. note::
+
+   ⛔ ``max_outer = 0`` is a legal call that runs the power loop zero
+   times, so there is no within-group solve to reconstruct from and
+   :func:`~orpheus.sn.solver.solve_sn` **raises**.  This is a live refusal
+   of a reachable state, not decoration: the finalize is one step of the
+   iteration, and there is no cold-solve fallback by design — a fallback
+   would be a second reconstruction path, which is the twin this section
+   exists to have retired.
+
+.. warning::
+
+   ⛔ **Until 2026-09-06 this block built its own source, and it was P0
+   only** (:doc:`ERR-083 </theory/verification/error_catalog>`).  It
+   assembled :math:`F\phi/k + \Sigma_{s,0}^{\mathsf T}\phi +
+   \nu_{2n}\Sigma_{2,0}^{\mathsf T}\phi` through three now-retired
+   solver-side delegators and lifted it **isotropically**, so at every
+   ``scattering_order ≥ 1`` the :math:`\ell \ge 1` half of *both*
+   collision channels was absent from the reconstruction's right-hand
+   side while the loss arm the iterate converged against carried it.  The
+   returned :math:`\psi` therefore solved a different equation from the one
+   the solve converged, and its own angular moment did not reproduce the
+   :math:`\phi` shipped beside it: ``[M]`` on the 421-group Be-reflected
+   slab at :math:`L = 2`, the returned flux missed the converged iterate by
+   **8.776e-02** and missed its own reported :math:`\phi` by **3.405e-02**;
+   the one-step reconstruction reads **1.236e-10** and **3.170e-10** on the
+   same solve.  :math:`k` and :math:`\phi` were never affected — they are
+   the power iteration's — which is precisely why every eigenvalue-value
+   gate in the tree was structurally blind to it.
+
+   Two things the repair also removed, both worth recording because their
+   absence looks like a regression until you check:
+
+   * the **hand reflect** of the converged trace into its own inflow slots
+     (``ψ.inflow ← B·ψ.outflow`` before the sweep).  ``[M]`` on a converged
+     exit it was INERT — skipping it moved the answer by 2.0e-13 / 2.3e-15
+     and bit-identically on a vacuum arm — because the converged inflow
+     already equals :math:`B\,\psi_{\rm outflow}`.  No value gate in this
+     tree could witness its removal, so the honest artefact is the
+     measurement plus a *wrong*-:math:`B` mutation arm, not a gate.  The
+     whole-trace verb itself survives as the sweep-tier gates' inter-sweep
+     helper (``tests/sn/_test_helpers.py::reflect_outflow_into_inflow``);
+     it has **no production caller** any more.
+   * the ``AngularBoundarySourceSink.prescribed_inflow`` cast the finalize
+     used to perform on that reflected trace (the ERR-071 role conversion).
+     The finalize passes no trace at all now — its external boundary source
+     is zero and :math:`B` is a gain — so that call site is moot.  The
+     factory and the rest of the ERR-071 fix are untouched.
+
 .. _sn-convergence-contract:
 
 The convergence contract — a best-effort answer says so
@@ -812,6 +988,8 @@ in-test, 10 are audible on purpose and tracked with measured budgets in
      defect N6a retired, a fact asserted by the call site and free to drift
      from the object it describes.
 
+.. _sn-exit-balance-projection:
+
 The balance projection
 ----------------------
 
@@ -859,6 +1037,44 @@ raises.  One equation, two verbs, complementary guards, so no solve pays for
 both forward applies and the converged path costs what it always did.  `[M]`
 one residual evaluation is ≈ 3 inner iterations, i.e. **0.72 %** of a
 400-iteration truncated solve.
+
+.. warning::
+
+   ⛔ **The complement of a guard is not the same as coverage, and this
+   pair left the exit uncovered until 2026-09-06** (#448 /
+   :doc:`ERR-083 </theory/verification/error_catalog>`).  The two verbs
+   above are complementary *in when they fire* — certificate on the
+   converged exit, defect on the truncated one — and they are NOT
+   complementary in *what they read*.  The certificate reads the within-group
+   **iterate**, inside the inner solves; this projection reads the returned
+   flux, but only when the solve did not converge.  So the object a caller
+   receives from a **converged** eigenvalue solve was evaluated by neither,
+   and the hand-built P0-only reconstruction that produced it drifted
+   undetected for the whole life of the anisotropic solve.
+
+   Both halves are now repaired.  The finalize is one step of the
+   iteration's own map (:ref:`sn-finalize-one-step`), so the returned flux
+   solves the equation the reported :math:`(k, \phi)` pose; and the
+   projection's budget response is the property a regression gate asserts
+   (``tests/sn/solve/test_eigenvalue_finalize_reconstruction.py`` →
+   ``TestTheShippedDiagnostic``).  ``[M]`` 2026-09-06, 2-group A|B|A slab, ``keff_tol =
+   flux_tol = 1e-12``, ``inner_tol = 1e-11``, ``max_outer`` 3 → 12: the
+   defect falls by :math:`1.43\times10^{7}` at :math:`L = 0` and
+   :math:`3.46\times10^{7}` at :math:`L = 1`.  Before the fix the
+   :math:`L = 1` column fell by **1.0002 ×** — pinned at a floor set by the
+   reconstruction rather than by the truncation, i.e. a diagnostic that
+   could not move is a diagnostic that carried no information
+   (``vv-principles`` #19).  The full before/after table is in the ERR-083
+   entry.
+
+   ⚠ Reading note for anyone comparing the two trees: the absolute defect
+   at a given budget is **not** comparable across the fix, because the two
+   finalizes construct the returned flux differently — the pre-fix one
+   re-solved a source built from :math:`\phi`, the post-fix one steps the
+   map from the iterate, and at a truncated exit those differ by the
+   truncation itself (compounded by the ERR-052 between-solve
+   renormalisation).  What is comparable, and what the diagnostic
+   advertises, is the RATIO down the budget.
 
 Two entries report ``None`` rather than a number, and the omission is silent
 by design — an empty clause cannot be misread as a measurement:

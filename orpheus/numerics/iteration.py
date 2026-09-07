@@ -140,6 +140,7 @@ Forward references
 from __future__ import annotations
 
 import warnings
+from collections.abc import Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -180,6 +181,8 @@ __all__ = [
     "SupportsSeededApply",
     "KrylovAcceleration",
     "KEigenvalue",
+    "fixed_point_step",
+    "lagged_source",
     "seeded_inverse",
 ]
 
@@ -405,6 +408,63 @@ def _l2_norm(x) -> float:
 # ``l2``, not the whole-composite flat norm) lives with its chooser,
 # ``Composite.principal_bulk_leaf``, and is pinned by
 # :mod:`tests.numerics.test_si_diagnostic_trajectory`.
+
+
+# ───────────────────────────────────────────────────────────────────────
+# The splitting iteration's MAP, named once — ``G(ψ) = M⁻¹(q + N·ψ)``
+# ───────────────────────────────────────────────────────────────────────
+
+
+def lagged_source(
+    q_ext: V, gains: "Sequence[LinearOperator]", psi: V,
+) -> V:
+    r"""The right-hand side of one fixed-point step — :math:`q + \sum_i N_i\,\psi`.
+
+    The external source plus every lagged coupling evaluated on the given
+    iterate: the ONE spelling of *the source the splitting iteration sees*
+    (Hackbusch 2016 §11 — ``A = M − N``, the drivers iterate
+    ``ψ ← M⁻¹(q + N·ψ)``).  :meth:`SourceIteration.solve` composes it to
+    convergence and reads the increment ``rhs_{n−1} − rhs_n`` as its free
+    equation residual — which is WHY the assembly is a separate body from
+    the inverse apply: the stop inspects the rhs BEFORE the sweep it would
+    trigger, so on a break no sweep is wasted.  :func:`fixed_point_step` is
+    this assembly followed by the inverse — the map evaluated once.
+    """
+    rhs = q_ext
+    for g in gains:
+        rhs = rhs + g.apply(psi)
+    return rhs
+
+
+def fixed_point_step(
+    inverse: "SupportsSeededApply[V]",
+    gains: "Sequence[LinearOperator]",
+    q_ext: V,
+    psi: V,
+) -> V:
+    r"""One application of the splitting iteration's map
+    :math:`G(\psi) = M^{-1}\,(q + N\,\psi)` — the ``M⁻¹`` apply seeded by the
+    iterate it is evaluated at (the canonical seeded-apply signature; the
+    curvilinear ψ½ seed and the reflective partner trace travel through
+    ``initial_guess``).
+
+    At a fixed point :math:`G(\psi^*) = \psi^*`, so applied ONCE to a
+    converged iterate it RECONSTRUCTS that iterate through whatever
+    representative of ``M⁻¹`` it is handed — which need not be the one the
+    iteration ran.  The SN finalizes use exactly that freedom: after a
+    moment-windowed inner solve they hand it the UN-windowed full-angular
+    sweep, so a moment iterate comes back as per-ordinate ψ; after a power
+    iteration they hand it the CONVERGED eigenvalue's fission source, so
+    the returned flux solves the equation the caller is told about (k, φ)
+    to the inverse's own residual.  This is the ONE spelling of
+    *reconstruct from a converged iterate*.  A finalize that hand-rolls the
+    source instead is a twin path, and the twin drifts: until #448 the
+    eigenvalue finalize rebuilt fission + P0 scattering + P0 (n,2n) by hand
+    — `[M]` at ``scattering_order = 2`` on a 421-group slab the returned ψ
+    missed the converged iterate by 8.8e-2 and its own moments missed the
+    reported φ by 3.4e-2, while this step reproduces the iterate to 1.2e-10.
+    """
+    return inverse.apply(lagged_source(q_ext, gains, psi), initial_guess=psi)
 
 
 # ───────────────────────────────────────────────────────────────────────
@@ -690,13 +750,14 @@ class SourceIteration(Generic[V]):
             psi_prev = psi
             iterations_run += 1
 
-            # Build the RHS of the fixed-point step: the external source
-            # plus every lagged coupling ``g·ψ_n``.  The gains are
-            # LinearOperators; their .apply contracts are the only thing
-            # this loop touches (for SN within-group: ``S·ψ + B·ψ``).
-            rhs = q_ext
-            for g in self.gains:
-                rhs = rhs + g.apply(psi)
+            # The RHS of the fixed-point step: the external source plus
+            # every lagged coupling ``g·ψ_n`` (for SN within-group:
+            # ``S·ψ + N₂ₙ·ψ + B·ψ``) — the ONE body :func:`lagged_source`,
+            # shared with :func:`fixed_point_step` (the map the SN finalizes
+            # evaluate once to reconstruct from a converged iterate).  The
+            # gains are LinearOperators; their ``.apply`` contracts are the
+            # only thing this loop touches.
+            rhs = lagged_source(q_ext, self.gains, psi)
 
             # ── the ρ-honest STOP (step 5): the equation residual of the
             # PREVIOUS iterate via the free identity r_n = rhs_{n−1} − rhs_n

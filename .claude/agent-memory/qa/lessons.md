@@ -180,6 +180,30 @@ passes stage 2 and is only reachable through a stage-1 token you did **not**
 think of — i.e. name the fixture with the spelling you are least sure about.
 → L-079
 
+**A18. Scope a mutation to ONE PHASE by rewriting the RECORD that phase reads,
+never by flagging the shared verb.** [companion to A12/A14; solves vv#18's
+over-power problem structurally] When a finalize/reconstruction re-uses verbs
+the driver also calls, a global mutation moves the CONVERGED answer instead of
+the reconstruction and reports false coverage. If the phase reads a recorded
+object (`SNSolver._driven`, a system record, a cached splitting), wrap the
+producer and rewrite the RECORD after it returns: the driver already holds its
+own real operators, so only the later consumer is mutated — no phase flag, no
+call-stack sniffing, no production edit. `[M]` #448: rewriting `_driven.gains`
+to drop the boundary gain reddened **8 of 14** G1 rows (exactly the 4 arms with
+a live `B`) while every inner solve stayed honest.
+⭐ And the same wrapper is a free CENSUS: `[M]` 161 inner solves / **0**
+`ScheduledInvertibleOperator` splittings said, in one number, that the new gate
+module never reaches the boundary-Gauss-Seidel arm — a `-k`-free denominator no
+grep could produce. → L-080
+
+**A19. A TOLERANCE sweep needs its ITERATION COUNT beside every row.** [skill:
+`vv-principles` #13, fourth disguise — landed 2026-09-06] A tolerance is a
+discrete knob: rows with equal counts are one measurement, and "this tolerance
+does not move the error" usually means "none of my values changed the count".
+`[M]` #448: `flux_tol 1e-6…1e-9` all `n_outer = 10`; at `1e-11` (`n_outer = 12`)
+the deviation falls 49×, so the term the memo called non-binding dominates at
+the shipped config. → L-080
+
 ---
 
 ## B. Where a gate is structurally blind (ORPHEUS shapes)

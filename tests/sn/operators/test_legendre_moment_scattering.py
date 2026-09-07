@@ -11,7 +11,7 @@ moment space. The contract verified here:
   scattered with ``sig_s[mid]``; cells of other materials are zero.
 * **Energy contraction direction**: the operator contracts ``g_from``
   (matching the existing ``moment @ sig_s_l[l]`` convention used by
-  :meth:`ScatteringOperator.build_aniso_source`).
+  :meth:`TransferOperator._redistribute_ordinates`).
 * **Bit-identical against the legacy inlined math** for the case the
   legacy code computed (ℓ ≥ 1 only).
 * **Predicates**: ``is_adjointable`` True (the per-ℓ group-transpose Λᵀ,
@@ -225,7 +225,7 @@ class TestEnergyContractionDirection:
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Bit-identical to legacy build_aniso_source per-ℓ math
+# Bit-identical to the legacy per-ℓ redistribution math
 # ─────────────────────────────────────────────────────────────────────
 
 

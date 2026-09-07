@@ -540,8 +540,12 @@ within-group scattering source is
 
 (In the multigroup extension the coefficient becomes the in-scatter
 sum :math:`\sum_{g'} \Sigs{g'\to g}^{(0)}\, \phi_{g'}` — next chapter;
-the production hook is :meth:`SNSolver._add_scattering_source`, which
-performs ``phi @ SigS[0]`` per material.)
+the production hook is the array verb
+:meth:`~orpheus.transport.material_field.TransferMaterialField.add_p0_source`,
+which performs ``phi @ SigS[0]`` per material — reached through the
+:math:`\ell = 0` energy binding the collision gain lifts.  A thin
+``SNSolver._add_scattering_source`` delegator stood in front of it until
+#448.)
 
 As an operator this is :math:`S = \Sigma_{s,0}\, P_{\rm iso}` with
 :math:`P_{\rm iso}\,\psi = \phi / \sum_n w_n` — a **rank-1-in-angle

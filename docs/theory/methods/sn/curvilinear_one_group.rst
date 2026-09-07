@@ -5031,14 +5031,20 @@ path:
   seeds its boundary buffer from :math:`\text{rhs.boundary}`, **not**
   from the iterate ``initial_guess.boundary`` (the retired
   partner-flux carrier).
-* **Direct loops** (direct fixed-source SI, final eigenvalue
-  reconstruction sweep): the helper
-  :func:`~orpheus.sn.solver._reflect_outflow_into_inflow` fills the
-  inflow slots with :math:`B\,\psi.\text{outflow}` in place before the
-  sweep, via the canonical
-  :class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`.
+* **Direct loops** — ⛔ **there are none left in production.**  This
+  bullet named two (the direct fixed-source SI loop and the final
+  eigenvalue reconstruction sweep), each of which filled the inflow slots
+  with :math:`B\,\psi.\text{outflow}` in place before the sweep via the
+  canonical :class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`.
+  The first moved onto the variadic driver at Wave O O.2a; the second
+  became one step of that same driven map at #448 (2026-09-06,
+  :ref:`sn-finalize-one-step`), in which :math:`B` is a gain like every
+  other.  The whole-trace helper survives as the sweep-tier gates'
+  inter-sweep reflect (``tests/sn/_test_helpers.py``), and the
+  face-restricted reflect the scheduled sweep uses is a different verb
+  (:meth:`~orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace`).
 
-Both routes call the **identical**
+Both routes called the **identical**
 :class:`~orpheus.sn.operators.boundary.SNBoundaryOperator` — :math:`B`
 is single-sourced. For vacuum :math:`B = 0`, so the bare sweep reads a
 zero inflow seed and the result is **bit-identical** to the

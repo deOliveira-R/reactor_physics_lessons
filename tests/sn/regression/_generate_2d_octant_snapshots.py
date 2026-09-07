@@ -24,7 +24,7 @@ Snapshot grounding (Wave O #208 O.4b Phase E migration)
 =======================================================
 
 This script generates from the CURRENT (bare) ``_sweep_jacobi``
-with the external ``_reflect_outflow_into_inflow`` injected before each
+with the external ``reflect_outflow_into_inflow`` injected before each
 sweep — exactly the production iteration shape, and exactly what the
 companion test at
 :file:`tests/sn/sweep/cartesian_2d/test_2d_octant_sweep_equivalence.py`

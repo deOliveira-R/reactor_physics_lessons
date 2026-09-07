@@ -702,8 +702,15 @@ retired dead-slot arithmetic — the closure reads zeros), and the transpose
 **discards** the thread cotangent (a fixed zero input's cotangent
 propagates nowhere; the :math:`\text{Seeding}^{\mathsf T}` pullback is the
 explicit grid block). The eigenvalue finalize re-routes through the SAME
-:func:`~orpheus.sn.coupled_system.build_within_group_system` ``.implicit_operator``
-every driver consumes. The mesh remains the single authority on presence;
+:func:`~orpheus.sn.coupled_system.build_within_group_system` posing every
+driver consumes — and since #448 it does not even rebuild it: it reads the
+:class:`~orpheus.sn.solver.InnerSolve` record the last inner solve left
+behind, so it holds the driver's own operator instance and the driver's own
+gains (:ref:`sn-finalize-one-step`).  ⚠ On the SI arm that operator is the
+**un-windowed** forward :math:`M`, which is not always
+``.implicit_operator`` — the boundary-Gauss-Seidel schedule splits it — so
+the precise statement is *the splitting the inner solve drove*, not a named
+attribute. The mesh remains the single authority on presence;
 what changed is that nothing *checks* against it anymore — the type system
 carries the biconditional. The narrative of the walk's own view of this
 collapse lives in :doc:`/theory/methods/sn/loss_representation`.
@@ -745,6 +752,21 @@ seedless geometries stay bit-identical (the strongest leak tripwire).
    * - finalize equivalence — sphere bulk + trace movers
      - rel-max :math:`8.4\text{e-}16`
      - the M-substitution vs fused-interleave re-association only
+
+.. note::
+
+   ⚠ **The three "finalize equivalence" rows are step-6-relative and are
+   not a live property of the finalize.**  They measure the fused →
+   block-sum re-association *of a reconstruction that no longer exists*:
+   #448 (2026-09-06) replaced the finalize's body outright — it is now
+   one step of the driven map rather than a fresh solve of a hand-built
+   source (:ref:`sn-finalize-one-step`,
+   :doc:`ERR-083 </theory/verification/error_catalog>`).  Re-running these
+   checks today would compare a different object, and at
+   ``scattering_order ≥ 1`` the pre-#448 finalize was ``[M]`` 8.776e-02
+   from the fixed point, so "bitwise" here means *bitwise across the
+   step-6 carve*, never *correct*.  The numbers stay because they are the
+   evidence step 6 was leak-free; the caption is what needed the date.
 
 The outer spectral radius :math:`\rho(M^{-1}N) = 0.371` and the measured
 block algebra (:math:`A_{bs} = 7.5`, :math:`A_{ss} = 5.0`, :math:`S_{sb} =

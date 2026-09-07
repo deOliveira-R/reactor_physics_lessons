@@ -151,6 +151,29 @@ any other review work.
     while the tree served `S_18`.) This is the dual of the ladder rule above —
     that one says *break the pattern of your own steps*; this one says *do not
     let the claim choose your steps for you*.
+    ⭐ **And the FOURTH disguise, where the sample looks continuous and is
+    not: a TOLERANCE sweep on an iterative solver.** A tolerance is a knob
+    with a *discrete* effect — it acts ONLY through the iteration count it
+    induces — so four decades of it can land in ONE equivalence class, and
+    the honest reading *"this tolerance does not move the error"* is really
+    *"none of my values changed the iteration count."* The failure is
+    flattering in the specific way that matters when a BAND is being
+    derived: it attributes the whole error floor to the one tolerance that
+    happened to bite, and the band then omits a term that is real and
+    binding at the shipped configuration. ⟹ **report the iteration count
+    beside every row of a tolerance sweep; two rows with the same count are
+    one measurement, not two**, and a sweep whose count never moves has not
+    tested that tolerance at all. (`[M]` 2026-09-06, ORPHEUS #448: a
+    pre-carve memo derived the finalize band from a sweep reading *"four
+    decades of `flux_tol` move it not at all; the empirical driver is
+    `inner_tol` alone"* — `1e-6/1e-7/1e-8/1e-9` all gave `n_outer = 10`. At
+    `flux_tol = 1e-11` the count goes to 12 and the reconstruction's
+    deviation from the converged iterate falls `3.43e-11 → 6.96e-13`, **49×**
+    — so the outer term is not merely bounded but *dominant* at the gate's
+    own `inner_tol = 1e-11`, which is the opposite of what the sweep was
+    read to say. The band itself was correct; its stated mechanism was not,
+    and a later session tightening `inner_tol` alone would have found the
+    floor immovable and gone looking for a bug.)
 14. **NEVER** read "every element found a matching partner" as "the map
     is a bijection" — **instead** assert the structure the docstring
     names. A nearest-neighbour / lookup loop that finds, for each `i`,

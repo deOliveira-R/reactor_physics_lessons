@@ -616,7 +616,7 @@ def test_keigenvalue_matches_solve_sn_2g_slab():
         from orpheus.numerics.quadrature import Quadrature
         from orpheus.transport.operators.scattering import ScatteringOperator
         from orpheus.sn.solver import SNSolver, solve_sn
-        from tests.sn._test_helpers import sweep_once
+        from tests.sn._test_helpers import reflect_outflow_into_inflow, sweep_once
 
     # 2-group homogeneous 1-D slab — the same canonical fixture
     # ``test_solver_components.py`` uses for component checks.
@@ -700,15 +700,14 @@ def test_keigenvalue_matches_solve_sn_2g_slab():
             # ``rhs`` is bare ndarray (ng, nx, ny) — wrap via the
             # canonical iso → per-ord factory at the adapter boundary.
             from orpheus.transport.source_sinks import AngularSourceSink
-            from orpheus.sn.solver import _reflect_outflow_into_inflow
             source = AngularSourceSink.from_isotropic(rhs, sn_mesh)
             # Wave O (#208) O.4a.2 — the bare ``transport_sweep`` no longer
             # re-applies the reflective BC at entry; drive the −B coupling
             # explicitly (reflect the persisted outflow — ``boundary_flux``
             # is the closure-scoped partner-flux carrier — into the inflow
-            # slots) before each sweep, exactly as ``_solve_fixed_source_si``
-            # does in production.
-            _reflect_outflow_into_inflow(boundary_flux, sn_mesh)
+            # slots) before each sweep — the sweep-tier gates' inter-sweep −B
+            # (the drivers deliver it as the ``B`` gain; #448).
+            reflect_outflow_into_inflow(boundary_flux, sn_mesh)
             _angular, scalar = sweep_once(
                 source, solver.mat_xs.total_cross_section, sn_mesh,
                 boundary_flux,
@@ -728,7 +727,7 @@ def test_keigenvalue_matches_solve_sn_2g_slab():
 
         def apply(self, phi):
             Q = np.zeros_like(phi)
-            S.add_iso_source(Q, phi)
+            S.transfer.add_p0_source(Q, phi)
             # §14.1: the (n,2n) verb lives on the solver-held N2N binding.
             solver.n2n_op.isotropic_energy.transfer.add_p0_source(Q, phi)
             return Q

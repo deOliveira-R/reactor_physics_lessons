@@ -11143,3 +11143,154 @@ counts ROSE (`N2NMomentOperator` 8 → 11, `add_emission` 3 → 4, `moment_emiss
 which is **correct**: a retirement that is narrated costs more words than one deleted.
 ⟹ the acceptance evidence is a regex classifying every survivor **role-vs-literal**:
 `[M]` 45 survivors, **0 roles**, all ``literal`` in dated past-tense prose.
+
+---
+
+## L-095 — #448: the finalize's twin path, and the pre-carve worktree that was FREE
+
+**Task.** Docs pass for the SN eigenvalue-finalize carve (#448): mint ERR-083, re-point 30
+retired-symbol sites, write the finalize's own theory section, add the SN changelog row.
+Branch `fix/sn-eigenvalue-finalize-448`, production carve **UNCOMMITTED**, a
+`test-architect` editing `tests/` concurrently.
+
+**Exit.** `sphinx-build -E -W -q` **EXIT=0, 102-byte log (0 diagnostics)** from a baseline of
+**EXIT=1, 1 WARNING + 4 nexus `catches` messages**. `dead_references` **0/67**. My own
+dotted-role probe **0 dead / 7056**; `:ref:`/`:eq:`/`:doc:` **0 dangling**; `:by:` **0 dead /
+416**; stock gate **0/14 968**; HTML backtick gate **0 runs** in all 8 new slices. 16 docs
+files, +956/−128.
+
+### (a) ⭐⭐ THE PRE-CARVE WORKTREE IS FREE WHEN THE CARVE IS UNCOMMITTED — **HEAD IS the
+before-tree**
+
+L-050 says a pinned pre-carve worktree turns one number into a before/after table, and reads
+as expensive. It is not, in the normal case: while a carve is uncommitted,
+`git worktree add /tmp/x HEAD --detach` **is** the pre-carve tree, in ~20 s. I ran the SAME
+probe on both and got a genuine before/after for ERR-083's two tables — the half nobody could
+have relayed me honestly.
+
+⚠ L-050's venv trap is real and I hit the guard: the editable install hooks `sys.meta_path`
+and OUTRANKS `sys.path`, so strip the finder and **print `orpheus.__file__` as proof**:
+
+```python
+sys.meta_path = [f for f in sys.meta_path if "editable" not in type(f).__module__.lower()]
+sys.path.insert(0, "/tmp/orph448_pre")
+import orpheus; assert orpheus.__file__.startswith("/tmp/orph448_pre")
+```
+
+⟹ **when the brief hands you a pre-carve `[M]` table, ask whether HEAD is that tree.** If it
+is, measuring it yourself costs less than deciding whether to trust the relay.
+
+### (b) ⭐⭐ A BEFORE/AFTER TABLE NEEDS ITS **COMPARABLE STATISTIC** NAMED — the absolute row
+can move the "wrong" way while the claim holds
+
+`[M]` the post-fix `balance_defect` at `L = 0, max_outer = 3` is **13.7× LARGER** than the
+pre-fix one (1.2497e-05 → 1.7108e-04), and `|∫ψdΩ−φ|/|φ|` is 3.5× larger — on the arm the
+fix was supposed to leave alone. Both readings are correct: the two finalizes CONSTRUCT the
+returned flux differently, so at a truncated exit their defects are not comparable at all.
+What is comparable is the **ratio down the budget** — before 1.45e6 (L=0) / **1.0002×** (L=1),
+after 1.43e7 / 3.46e7.
+
+⟹ publishing the table without that sentence would have shipped a regression narrative inside
+a repair entry. **Any cross-carve table owes a line saying WHICH statistic is comparable and
+why the others are not.** The tell that you need one: the control column moved.
+
+### (c) ⭐⭐ A CARVE'S OWN DOCSTRING EDITS ARE UNVERIFIED CLAIMS — census the verb it says
+SURVIVES
+
+The carve rewrote `SNBoundaryOperator.reflect_inflow_inplace`'s docstring to *"Its production
+consumer is the octant-group Gauss-Seidel resolvent's face-restricted inter-group reflect"*.
+`[M]` by AST over `orpheus/`: **0 Call sites, 0 attribute references** — for it AND for its
+ψ½ sibling. The scheduled sweep binds `SNMaskedBoundaryOperator.reflect_rows_inplace`
+(`scheduled_invertible.py:274`), which the SAME docstring's ⚠ paragraph says correctly four
+lines below, and which also records that `_GaussSeidelResolvent` was **dissolved**.
+
+⭐ The shape: a retirement asks *"who called the thing I am removing?"* and answers it well;
+nobody asks *"and does the thing I say still has a caller actually have one?"* ⟹ **when a
+carve retires a caller, AST-census the CALLEE it claims survives** — and read the rest of
+that callee's own docstring, because the contradiction is usually already in it.
+
+### (d) ⭐⭐ THE HTML GATE CAUGHT WHAT `-W` **AND** MY SOURCE REGEX BOTH MISSED — a role
+several lines INSIDE an open `**bold**` run
+
+I ran L-074's source scan for `**``` and `**:role:` **adjacency**: 19 hits, all pre-existing
+(verified per-line against `git show HEAD:<file>`). The build read **EXIT=0**. The HTML slice
+then found a real one:
+
+```rst
+⛔ **The complement of a guard … until 2026-09-06 (#448 /
+:doc:`ERR-083 </theory/verification/error_catalog>`).**  The two verbs
+```
+
+— the role is three lines inside a bold run that OPENED earlier, so no adjacency pattern sees
+it, and it renders as literal `:doc:\`…\`` text on a zero-warning build.
+
+⟹ the source-side check must **pair `**…**` spans across newlines and look for a role or
+literal INSIDE** (`re.compile(r"\*\*(.+?)\*\*", re.S)` over the added lines, then
+`:[a-z:]+:\`` on the inner). And the HTML slice stays the authority. Cheap and decisive:
+strip tags, unescape, slice by section title, `re.findall(r"`+")` — **0 is the gate**.
+
+### (e) ⭐⭐ A MODULE UNDER CONCURRENT EDIT: publish NOTHING you count in it
+
+The gate module grew **45 → 86 rows** and its arm registry **7 → 8** (`cart2d_gs`, added at
+R2) while I wrote. I had already drafted "45 rows over seven arms" from the brief. Caught by
+re-censusing `_ARMS` **by AST at write time** (`ast.AnnAssign` → dict keys) rather than
+trusting the module's own §6c table, which still listed 7.
+
+⟹ two moves, both cheap: (1) point at the artefact that RE-MEASURES it (`matrix.rst`
+regenerates the row count) instead of quoting a number — `plan-authoring` §9 applied to a
+sibling agent's file; (2) for a count you must state, **date it and name the census**
+(*"`[M]` 8 arms on 2026-09-06"*), and check whether the pre-carve claim used a different
+denominator (the "ten rows RED before" is right *for the 7-arm registry it then had*, and
+saying so is what keeps it true).
+
+### (f) ⭐ `catches("ERR-NNN")` markers make `-W` FAIL, and `grep WARNING` UNDER-counts them
+
+Baseline was EXIT=1. `grep -cE "WARNING:|ERROR:|CRITICAL:"` read **1**; the log had **5**
+lines. The four nexus `catches` messages carry **no `WARNING:` prefix** — they are the merge's
+own per-marker diagnostics. ⟹ on an error-catalogue task, read the whole log, never the grep
+count; and the gate is **EXIT=0**, because both classes are the carve's own red (L-094).
+
+### (g) ⭐ My dotted-role probe needed a THIRD fallback: the **MRO**
+
+L-093 added "construct the object" for `SNMesh.axes`. Cheaper and sufficient: search
+`self.<attr>\s*[:=]` over **every class in `cur.__mro__`**, not just the named class —
+`SNMesh.axes` / `.axis_widths` are set by `MaterialMesh._init_data` on the BASE. That took my
+probe from 8 false dead to **0**. The four fallbacks in order: `hasattr` → `dataclasses.fields`
+→ `self.x=` **across the MRO** → construct.
+
+⚠ And two probe-hygiene notes that cost me a cycle each: strip the `py:method:` / `py:func:`
+/ `py:data:` **prefix form** of `:by:` (8 false dead), and treat a leading `!` as a
+deliberately-SUPPRESSED xref (6 false dead — `docs/theory/references/peierls_nystrom.rst`
+uses `:py:func:`!old.name`` for a "Retired symbols" table, which is the right idiom and
+worth copying).
+
+### (h) ⭐⭐ A DELEGATOR LIST'S STATED **REASON** can be false while its membership is right
+
+`slab_multigroup.rst` said four delegators *"remain as thin wrappers … for the EigenvalueSolver
+Protocol surface"*. `[M]` the Protocol declares **five** members
+(`initial_flux_distribution`, `compute_fission_source`, `solve_fixed_source`, `compute_keff`,
+`measure_stopping_criteria`) and **only one** of the four is among them. The real reason three
+of them survived is that the finalize called them — i.e. **the sentence's own false
+justification is where the defect lived**. ⟹ when a doc explains why dead-looking code is
+kept, check the explanation against the named surface; a wrong reason is a stronger finding
+than a stale name, and it belongs in the ERR entry.
+
+⚠ The brief said the Protocol declares **three**. A relayed member list is a SAMPLE
+(`plan-authoring` §2) — `sorted(Proto.__protocol_attrs__)` settles it in one line.
+
+### (i) ⭐ The ERR entry's independence claim: `0.000e+00` is the WEAKEST number on the page
+
+Post-carve the returned flux is bit-identical to my independently-assembled one-step
+reconstruction. That is L-050 exactly: **the two spellings are one float program now**, so
+`0.0` measures single-sourcing, not agreement. The entry says so and carries the *cross-route*
+row (the fixed-source entry's own reconstruction) as the independence claim instead — with
+its own control (the two entries' **φ** agreed at 1.67e-11 while their **ψ** differed by
+1.4728e-01, which is what proves the disagreement was ψ-only).
+
+### (j) The site inventory — 30, not the briefed 26
+
+`_add_scattering_source` **8** (briefed 7) · `_build_aniso_scattering` 4 · `_add_n2n_source`
+**5** (4) · `add_iso_source` 3 · `build_aniso_source` **10** (8). Plus `_psi_typed` 4 (3 live)
+and `_reflect_outflow_into_inflow` 5. `SNSolver._boundary_flux`: **0** doc sites — a narrowed
+grep, because the bare token matches 32 lines of `ScalarBoundaryFlux` / `angular_boundary_flux`.
+Post-edit: **36 surviving mentions, 0 xref roles**, every one a dated literal.

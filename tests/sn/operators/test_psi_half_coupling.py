@@ -3463,7 +3463,8 @@ class TestWithinGroupSystem:
                             f"machinery is bypassed.")
         # The pair rider: the iterate is the coupled pair; ψ_A is the honest
         # 2-block System-A member (Pattern 4 — no ray slot to double-count).
-        psi = solver._psi_typed
+        assert solver._inner is not None
+        psi = solver._inner.iterate
         if not isinstance(psi, CoupledField):
             pytest.fail(f"[{inner}] the carrying iterate is "
                         f"{type(psi).__name__}, not the coupled pair")

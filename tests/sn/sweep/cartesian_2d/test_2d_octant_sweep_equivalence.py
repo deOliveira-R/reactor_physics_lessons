@@ -24,11 +24,11 @@ sweep now:
   in-sweep reflection).
 
 The reflective coupling ``ψ.inflow = B·ψ.outflow`` is delivered
-EXTERNALLY by :func:`orpheus.sn.solver._reflect_outflow_into_inflow`
+EXTERNALLY by :func:`tests.sn._test_helpers.reflect_outflow_into_inflow`
 — a module-level, geometry-agnostic helper that uses the canonical
 ``SNBoundaryOperator`` — called ONCE per source iteration BEFORE each
 sweep.  This harness mirrors production: it injects
-``_reflect_outflow_into_inflow`` before every ``_sweep_jacobi``
+``reflect_outflow_into_inflow`` before every ``_sweep_jacobi``
 (see :func:`run_sweeps`).  For vacuum ``B = 0`` so the inject is a
 no-op (the vacuum cases stay bit-identical to the legacy snapshots).
 
@@ -164,12 +164,12 @@ from orpheus.geometry import BC, Mesh2D
 from orpheus.transport.fields.angular_boundary_flux import AngularBoundaryFlux
 from orpheus.sn.mesh.augmented_mesh import SNMesh
 from orpheus.numerics.quadrature import Quadrature
-from orpheus.sn.solver import (
-    _reflect_outflow_into_inflow,
-    solve_sn_fixed_source,
-)
+from orpheus.sn.solver import solve_sn_fixed_source
 from orpheus.sn.loss_representation import MovingFrontierWindow
-from tests.sn._test_helpers import placeholder_materials
+from tests.sn._test_helpers import (
+    placeholder_materials,
+    reflect_outflow_into_inflow,
+)
 
 
 # File-level marker: every case is an L1 equation-equivalence claim
@@ -369,7 +369,7 @@ def run_sweeps(
     it seeds boundary edges from the given inflow trace and persists the
     raw outflow; it applies NO in-sweep ``bc``.  The reflective coupling
     ``ψ.inflow = B·ψ.outflow`` is the EXTERNAL
-    :func:`orpheus.sn.solver._reflect_outflow_into_inflow`, applied ONCE
+    :func:`tests.sn._test_helpers.reflect_outflow_into_inflow`, applied ONCE
     per source iteration BEFORE each sweep (inter-sweep, Jacobi-like).
     Production (``_solve_fixed_source_si`` and the ``solve_sn``
     reconstruction sweep) calls it identically.
@@ -387,7 +387,7 @@ def run_sweeps(
     window = MovingFrontierWindow.pose(inputs.sn_mesh)
     angular_flux = scalar_flux = None
     for _ in range(n_sweeps):
-        _reflect_outflow_into_inflow(inputs.boundary_flux, inputs.sn_mesh)
+        reflect_outflow_into_inflow(inputs.boundary_flux, inputs.sn_mesh)
         angular_flux, scalar_flux = window.sweep(
             Q_combined, inputs.sig_t, inputs.boundary_flux,
         )
@@ -424,7 +424,7 @@ class OctantEquivalenceCase:
     Reflective cases (2, 3, 5) use ``n_sweeps=2`` to exercise the
     INTER-SWEEP external-reflect iteration (Wave O #208 O.4b Phase E).
     The first sweep persists a raw outflow trace; the second sweep's
-    pre-sweep ``_reflect_outflow_into_inflow`` reads that persisted
+    pre-sweep ``reflect_outflow_into_inflow`` reads that persisted
     outflow and seeds the reflected inflow, so the second sweep is the
     one that actually consumes the reflective coupling.  A single sweep
     on a fresh zero boundary would null the reflective path (the
@@ -499,7 +499,7 @@ def _case_2_reflective() -> OctantEquivalenceInputs:
     #6).  The all-reflective configuration does NOT reach a fixed point
     in two sweeps — the second sweep's ``scalar_flux`` is measurably
     different from the first because every face is reflective and the
-    inter-sweep ``_reflect_outflow_into_inflow`` accumulates flux
+    inter-sweep ``reflect_outflow_into_inflow`` accumulates flux
     globally.  This makes BOTH ``scalar_flux`` AND the four persisted
     boundary face views sensitive to a dropped/mis-coupled external
     reflect or a broken bare seed-from-inflow / persist-raw-outflow
@@ -541,7 +541,7 @@ def _case_3_mixed_bc_het() -> OctantEquivalenceInputs:
     Bare-sweep semantics (Wave O #208 O.4b Phase E): the sweep seeds
     its reflective edges (xmin/ymin) from the GIVEN inflow trace and
     persists the raw outflow; the reflective coupling is the EXTERNAL
-    ``_reflect_outflow_into_inflow`` applied before each sweep.  The
+    ``reflect_outflow_into_inflow`` applied before each sweep.  The
     persisted boundary face views are therefore the cross-iteration
     state — a refactor that breaks the seed-from-inflow /
     persist-raw-outflow contract, or that drops the external reflect,
@@ -650,7 +650,7 @@ def _case_5_q_aniso() -> OctantEquivalenceInputs:
     bare-sweep + external-reflect inter-sweep contract (failure mode
     #6) on the anisotropic-source code path: the reflective edges are
     seeded from the previous sweep's persisted outflow via the external
-    ``_reflect_outflow_into_inflow``, not a stale in-sweep buffer.
+    ``reflect_outflow_into_inflow``, not a stale in-sweep buffer.
     """
     sn_mesh = _build_sn_mesh(
         nx=3, ny=3,
@@ -762,7 +762,7 @@ def _case_7_closed_form_anchor() -> _ClosedFormAnchorInputs:
     (reflective-BC inflow must equilibrate via the inter-sweep external
     reflect); we therefore drive convergence via
     :func:`solve_sn_fixed_source` (the iteration that calls the bare
-    ``_sweep_jacobi`` + ``_reflect_outflow_into_inflow``
+    ``_sweep_jacobi`` + ``reflect_outflow_into_inflow``
     repeatedly) and assert the converged scalar flux matches the 2×2
     balance solution.  This makes case 7 an L1 verification (analytical
     reference, structurally independent) rather than a regression-
@@ -958,7 +958,7 @@ def test_2d_octant_sweep_equivalence(case: OctantEquivalenceCase) -> None:
     inputs = case.builder()
 
     # Drive the BARE sweep ``n_sweeps`` times, sharing boundary_flux,
-    # with the external ``_reflect_outflow_into_inflow`` injected before
+    # with the external ``reflect_outflow_into_inflow`` injected before
     # each sweep — identically to production and to the snapshot
     # generator (both go through :func:`run_sweeps`, the single source of
     # truth; coding-elegance Pattern 2).  The final post-sweep boundary
@@ -1049,7 +1049,7 @@ def test_2d_octant_sweep_closed_form_anchor() -> None:
         scattering_order=0,
         boundary_condition="reflective",
         # Wave O #208 O.4b E1/E2: the 2-D sweep is now BARE — the reflective
-        # coupling is the EXTERNAL _reflect_outflow_into_inflow applied once per
+        # coupling is the EXTERNAL reflect_outflow_into_inflow applied once per
         # source iteration (inter-sweep, Jacobi-like on the boundary), replacing
         # the legacy bc-in-sweep intra-sweep (Gauss-Seidel) reflection.  Same
         # converged fixed point, slower rate: this 3×3 all-reflective case
