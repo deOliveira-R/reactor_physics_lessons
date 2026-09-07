@@ -80,6 +80,27 @@ matters**, and the code ships accepting exactly the input the assert was written
 > precisely why the contract could live on one arm only. Cardinal Rule 2 first, then the
 > guard.
 
+## A guard is elegance debt — tag it, and name what retires it
+
+A runtime guard (`require_member`, `admit_composite`, a typed refusal on an alien
+carrier) is a **signal that the architecture failed the elegance standard** of making
+the mistake unspellable (`coding-elegance` Pattern 4). It is a legitimate protection
+*today*; it is not the target state. **The ultimate state is to not need the guard.**
+(`[R]` user, 2026-09-07, ruling the R6 carrier guard: *"we're creating a protection, but
+the ultimate state is to 'not need a guard'"*.)
+
+- **Every guard that lands carries a greppable marker in its docstring:** the token
+  **`ELEGANCE-DEBT[guard]`**, the issue number, and ONE sentence naming the structural
+  change that makes the guarded mistake unspellable (e.g. *"retires when B is bound on
+  its own trace end — R18"*). `grep -rn "ELEGANCE-DEBT" orpheus/` is then the debt ledger.
+- The issue is filed **with the carve that lands the guard**, never before (a guard
+  without its retirement plan is an unpriced debt; a plan without its guard is a
+  promise). A step that lands the structural change deletes the guard AND the tag in
+  the same commit (the retirement rule below), and the mutation battery must show the
+  mistake is now unspellable — not merely refused.
+- ⚠ The tell that a guard is being mistaken for architecture: its docstring justifies
+  the *check* rather than naming the *shape that would make the check unnecessary*.
+
 ## Retire as you go (aggressive retirement)
 
 Superseded code is **noise that obscures signal** — it makes the codebase harder to read,
