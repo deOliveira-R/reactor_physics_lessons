@@ -41,7 +41,8 @@ you where its theory lives.
        that is wrong by a constant factor.
    * - :ref:`theory-foundations`
      - The math every method shares: the operator algebra
-       :math:`A = L + C - S - B`, frames and projection, the boundary law,
+       :math:`A = L + C - S - N_{2n} - B`, frames and projection, the
+       boundary law,
        cross-section data, measures, geometry, and the infinite-medium
        baseline.
      - Touching any solver. The operator algebra is the spine — the

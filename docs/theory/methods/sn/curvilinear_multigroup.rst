@@ -33,8 +33,8 @@ cross-reference:
    exactly as :doc:`slab_multigroup` derived, unchanged by curvature;
    :math:`L+C` stays group-diagonal, now *including* the
    redistribution cascade;
-3. **the eigenvalue posing** — :math:`(L+C-S-B)\,\psi =
-   \tfrac{1}{k}\,F\,\psi`, verbatim;
+3. **the eigenvalue posing** — :math:`(L+C-S-N_{2n}-B)\,\psi =
+   \tfrac{1}{k}\,F\,\psi` (:eq:`sn-within-group-with-n2n`), verbatim;
 4. **the strategy encodings** — the same monolithic within-group
    iteration; no new loop, no new operator, no new closure.
 
@@ -67,9 +67,12 @@ cross-reference:
    * **No group loop exists on the iterative path.**  The within-group
      system is monolithic over all groups — the *full* multigroup
      :math:`S` (every :math:`g' \to g` transfer) sits inside
-     :math:`A = L+C-S-B`, and fission enters externally as
+     :math:`A = L+C-S-N_{2n}-B` (:eq:`sn-within-group-with-n2n`),
+     together with the :math:`(n,2n)` gain :math:`N_{2n}`, which is a
+     group transfer at a collision event exactly as :math:`S` is; and
+     fission enters externally as
      :math:`q = F\psi/k`.  Source iteration lags the entire
-     :math:`S`; Krylov iterates the full state
+     :math:`S + N_{2n}`; Krylov iterates the full state
      (:math:`n_{\rm dof} = N \cdot n_g \cdot n_x`).  The sweep
      :math:`(L+C)^{-1}` *factors* per group — a mathematical fact
      about group-diagonality — realized as one vectorised sweep with
@@ -116,21 +119,42 @@ like :math:`\mu\,\partial_x`: the cascade coefficients
 :math:`\alpha_{n\pm 1/2}` multiply :math:`\psi_{g,n\pm 1/2}` at the
 *same* :math:`g`.  Energy changes at collision events only —
 scattering transfer (:math:`S`) and fission emission (:math:`F`) —
-and the boundary-reflection gain :math:`B` preserves energy just as
+the :math:`(n,2n)` gain :math:`N_{2n}` is a group transfer at a
+collision event on exactly the same footing, and the
+boundary-reflection gain :math:`B` preserves energy just as
 it did in the slab.  So the honest within-group operator keeps its
 shape,
 
 .. math::
 
-   (L + C - S - B)\,\psi \;=\; q
+   (L + C - S - N_{2n} - B)\,\psi \;=\; q
    \qquad\text{and}\qquad
-   (L + C - S - B)\,\psi \;=\; \tfrac{1}{k}\,F\,\psi ,
+   (L + C - S - N_{2n} - B)\,\psi \;=\; \tfrac{1}{k}\,F\,\psi ,
 
 with :math:`L` now carrying the curvilinear streaming (cascade
-included), :math:`C` the collision diagonal, and :math:`S`, :math:`B`,
+included), :math:`C` the collision diagonal, and :math:`S`,
+:math:`N_{2n}`, :math:`B`,
 :math:`F` **unchanged** — the same operators :doc:`slab_multigroup`
 derived, consumed by composition
-(:ref:`sn-scattering-fission-operators`).  :math:`L+C` is
+(:ref:`sn-scattering-fission-operators`).
+
+.. note::
+
+   **Once, for this whole chapter:** since #426 step 2 (2026-09-04)
+   :math:`S` and :math:`N_{2n}` are two *instances of one binding* —
+   the same
+   :class:`~orpheus.transport.operators.transfer.TransferOperator`
+   with the same faces, arms and transposes — differing only in the
+   yield :math:`y` inside :math:`\Lambda_c` (:math:`y = 1` for
+   :math:`S`, :math:`y = \nu_{2n} = 2` for :math:`N_{2n}`) and in the
+   channel's own Legendre stack.  So every statement this chapter
+   makes about :math:`S` — group structure, anisotropy, the
+   collision-event argument, the lagging in source iteration — holds
+   for :math:`N_{2n}` verbatim with :math:`y = 2`, and the two terms
+   are named separately below only where the member list itself is the
+   point.
+
+:math:`L+C` is
 group-diagonal; its inverse — the sequential sweep of
 :doc:`curvilinear_one_group` — acts group by group.  No curvilinear
 term crosses the line.
@@ -321,9 +345,10 @@ force per-group orchestration.  It doesn't; the design is monolithic:
 
 * :func:`~orpheus.sn.coupled_system.build_within_group_system`
   constructs **one** system over the full :math:`(N, n_g, n_x)`
-  state: :math:`A = L+C - S - B` with the *full* multigroup
+  state: :math:`A = L+C - S - N_{2n} - B` with the *full* multigroup
   :math:`S` — every :math:`g' \to g` transfer, anisotropy included —
-  inside the operator.  "Within-group" in this codebase means
+  and the :math:`(n,2n)` gain beside it, inside the operator.
+  "Within-group" in this codebase means
   *fission-external* (fission enters as :math:`q_{\rm ext} =
   F\psi/k`), **not** per-group.
 * **Source iteration** lags the whole :math:`S` as one Jacobi-style

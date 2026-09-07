@@ -77,7 +77,7 @@ law (:doc:`diffusion_1d`, the P\ :sub:`1` limit's own chapter).
 
 Discretized on a deterministic angular–spatial grid, the equation
 becomes the honest operator algebra
-:math:`A = L + C - S - B` posed as
+:math:`A = L + C - S - N_{2n} - B` posed as
 :math:`A\psi = \tfrac{1}{k}F\psi`
 (:doc:`/theory/foundations/operator_algebra`,
 :ref:`eigenvalue-posing`).  *How* each method realizes the swept /

@@ -144,7 +144,10 @@ the two approaches.
    within-group loss operator EXACTLY SINGULAR** (#344).  A specular
    face is a *closed* boundary for the diamond closure's undamped face
    sawtooth, so with :math:`\ge 2` axes reflective at both ends
-   :math:`A = L+C-S-B` has a non-trivial kernel — ``[M]``
+   :math:`A = L+C-S-N_{2n}-B` (:eq:`sn-within-group-with-n2n`) has a
+   non-trivial kernel — the kernel is a *pure-trace* object, so the two
+   bulk gains :math:`S` and :math:`N_{2n}` annihilate it and neither
+   enters the count — ``[M]``
    :math:`\dim\ker A = 12` on a 2-D ``level_symmetric`` :math:`S_4`
    2-group box, :math:`138` at :math:`d=3` :math:`(3,4,5)` — and the
    returned boundary trace is one member of a solution manifold.  This

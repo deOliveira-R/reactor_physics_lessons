@@ -294,7 +294,7 @@ per-ordinate, per-group, per-cell equations assemble into a finite linear system
 
 .. vv-status: discretization-fully-discrete documented
 .. (vv-status rationale) the fully-discrete algebraic system; the operator
-   A = L + C − S − B and its posing are the subject of
+   A = L + C − S − N_2n − B and its posing are the subject of
    :ref:`operator-algebra`. Structural, not a solver claim.
 
 where :math:`\mathbf A` is the discretized loss operator and
@@ -302,7 +302,8 @@ where :math:`\mathbf A` is the discretized loss operator and
 ordinate, per group). The invariant :eq:`discretization-invariant-eq` is now a
 row of :eq:`discretization-fully-discrete`: sinks equal sources for each cell.
 The bridge from :eq:`discretization-fully-discrete` back to the operator algebra
-:math:`\mathbf A = L + C - S - B` is :ref:`discretization-operator-bridge`.
+:math:`\mathbf A = L + C - S - N_{2n} - B` is
+:ref:`discretization-operator-bridge`.
 
 .. note:: **The pipeline is method-invariant; the ordering is a method choice.**
    :math:`S_N` discretizes angle into ordinates and space into cells;
@@ -1740,13 +1741,17 @@ acting on the flux vector :math:`\boldsymbol\psi`:
   acting pointwise as :math:`\Sigma_t\cdot` (its intrinsic type is
   :ref:`multiplication-operator-promotion`).
 
-Their sum :math:`L+C` is the **within-group loss operator**; with the scattering
-gain :math:`S` (a projection / integral coupling), the boundary law :math:`B`,
+Their sum :math:`L+C` is the **within-group loss operator**; with the two
+collision gains :math:`S` (scattering) and :math:`N_{2n}` (the :math:`(n,2n)`
+emission — the same binding in a different role, :ref:`the two collision gains
+<operator-algebra-two-gains>`), both projections / integral couplings, the
+boundary law :math:`B`,
 and the fission dyad :math:`F` (an :ref:`integral-kernel-category`), the full
-operator is :math:`A = L + C - S - B`, posed :math:`A\psi=\tfrac1k F\psi`
+operator is :math:`A = L + C - S - N_{2n} - B`, posed
+:math:`A\psi=\tfrac1k F\psi`
 (eigenvalue) or :math:`A\psi=q` (fixed source) — the algebra of
 :ref:`operator-algebra`. The discretization of this chapter is what turns the
-*continuous* operators :math:`L,C,S,B,F` into the *finite matrices*
+*continuous* operators :math:`L,C,S,N_{2n},B,F` into the *finite matrices*
 :math:`\mathbf A,\mathbf F` of :eq:`discretization-fully-discrete`.
 
 The closure sets the matrix structure
@@ -1831,7 +1836,8 @@ load-bearing detail).
 .. seealso::
 
    - :doc:`/theory/foundations/operator_algebra` — the operator algebra
-     :math:`A = L + C - S - B` this chapter's cell balance assembles into.
+     :math:`A = L + C - S - N_{2n} - B` this chapter's cell balance
+     assembles into.
    - :doc:`/theory/foundations/infinite_medium` — the 0-D multigroup balance
      (:eq:`discretization-semidiscrete-energy` with all streaming dropped).
    - :doc:`/theory/foundations/cross_section_data` — the multigroup

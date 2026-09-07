@@ -1052,7 +1052,9 @@ forward-substitution discharge, DSA's :math:`R\,A\,P` moment reduction
 for #2 / #200) poses the problem at zero inflow, so the bulk block is
 exactly what they need; the boundary law :math:`B` is the sibling
 operator that supplies the trace coupling in the full
-:math:`(L+C-S-F-B)` algebra (:doc:`/theory/foundations/operator_algebra`).
+:math:`(L+C-S-N_{2n}-F-B)` algebra
+(:doc:`/theory/foundations/operator_algebra`; the within-group member
+list without the fission term is :eq:`sn-within-group-with-n2n`).
 
 .. _loss-rep-assembly-cartesian-scope:
 

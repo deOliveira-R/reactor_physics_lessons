@@ -10,17 +10,19 @@ each with a **distinct intrinsic mathematical type**:
 
 - **collision** :math:`C = M[\sigma_t]` — a *multiplication operator*
   (diagonal; pointwise multiplication by the total cross section);
-- **scattering** :math:`S = R\circ\Lambda\circ M` and **fission**
+- the two **collision gains** :math:`S = R\circ\Lambda_S\circ M`
+  (scattering) and :math:`N_{2n} = R\circ\Lambda_{2n}\circ M` (the
+  :math:`(n,2n)` emission), and **fission**
   :math:`F = |\chi\rangle\langle\nu\Sigma_f|` — *integral kernels*
-  (nonlocal: scattering redistributes in angle, fission is the rank-1
-  emission dyad);
+  (nonlocal: a collision gain redistributes in angle, fission is the
+  rank-1 emission dyad);
 - **streaming** :math:`L = \hat\Omega\cdot\nabla` and the **boundary
   law** :math:`B` — the leakage and its trace closure.
 
 They compose into the **within-group transport operator**
 
 .. (vv-status rationale) The governing within-group composition
-   A = L+C−S−B — the loss operator. Definitional identity; the
+   A = L+C−S−N_2n−B — the loss operator. Definitional identity; the
    assembled composite is exercised by build_within_group_system and
    the fixed-source / eigenvalue suites, matching the sentineled
    operator-fixed-source / operator-eigenvalue siblings.
@@ -29,7 +31,7 @@ They compose into the **within-group transport operator**
 .. math::
    :label: operator-within-group-composition
 
-   A \;=\; L + C - S - B ,
+   A \;=\; L + C - S - N_{2n} - B ,
 
 posed either as an eigenvalue problem :math:`A\psi = \tfrac{1}{k}F\psi`
 or a fixed-source problem :math:`A\psi = q`. Here :math:`A` is the
@@ -38,16 +40,53 @@ against the fission **gain** :math:`F`. The boundary law :math:`B` is a
 **first-class sibling** (not folded into :math:`L`), and :math:`F` sits
 on the **right-hand side** — never inside :math:`A`. The invertible
 sub-composite :math:`L+C` — streaming leakage plus total collision — has
-the transport **sweep** as its exact inverse; :math:`S` and :math:`B`
-are the within-group gains the outer iteration lags.
+the transport **sweep** as its exact inverse; :math:`S`, :math:`N_{2n}`
+and :math:`B` are the within-group gains the outer iteration lags.
+
+.. _operator-algebra-two-gains:
+
+**Two collision gains, and where a method may fuse them.** Since #426
+step 2 (2026-09-04) :math:`S` and :math:`N_{2n}` are two **instances of
+one binding** — the same faces, the same arms, the same transposes —
+differing in the yield inside the middle factor
+(:math:`\Lambda_c = y_c \sum_\ell P_\ell \otimes \Sigma_{c,\ell}` with
+:math:`y_S = 1`, :math:`y_{2n} = 2`) and in the channel's own Legendre
+stack, and in nothing else (:ref:`scattering-binding-cs4c`). **So every
+statement this page derives for** :math:`S` **holds for** :math:`N_{2n}`
+**with** :math:`y = 2`, and the pages below do not re-derive it. What is
+*not* shared is the **grouping**, which each method chooses at its own
+composition site, because the channel's bundling is context-dependent
+(with :math:`S` when scattering anisotropy is the interesting axis, with
+:math:`F` when production accounting is) and a context-dependent
+bundling must not be decided at the operator level:
+
+- the S\ :sub:`N` solver keeps the two terms **separate** —
+  ``A_AA = LC - S - N2N - B_a`` in
+  :func:`~orpheus.sn.coupled_system.build_within_group_system`, i.e.
+  :eq:`operator-within-group-composition` verbatim;
+- the 1-D **diffusion** solver **sums** the two isotropic energy leaves
+  into one :math:`S` before composing
+  (``IsotropicScattering.from_material_xs(...) + IsotropicN2N.from_material_xs(...)``
+  in :class:`~orpheus.diffusion.solver.DiffusionSolver`), so its loss
+  genuinely *is* :math:`A_{\rm diff} = L + C - S - B` with no separate
+  :math:`N_{2n}` term — a solver-side
+  :class:`~orpheus.numerics.operator.OperatorSum` grouping of the same
+  two members, not a different member list.
+
+A four-term :math:`A = L + C - S - B` elsewhere in the corpus is
+therefore one of exactly two things: a **fused** composition like
+diffusion's, or a page whose fixtures carry
+:math:`\Sigma_{2n} \equiv 0`. Where it is neither, it is a bug.
 
 .. implements:: operator-within-group-composition
    :by: orpheus.sn.coupled_system.build_within_group_system
 
    **Implemented by** the one production spelling of the composition.
-   The assembled System-A diagonal block is ``A_AA = LC - S - B_a`` over
+   The assembled System-A diagonal block is
+   ``A_AA = LC - S - N2N - B_a`` over
    ``LC = build_streaming_collision(sn_mesh, mat_xs)`` — i.e. :math:`A =
-   L+C-S-B` written as operator arithmetic, with :math:`B` a first-class
+   L+C-S-N_{2n}-B` written as operator arithmetic, with :math:`B` a
+   first-class
    sibling rather than something folded into :math:`L`. The same function
    returns the :class:`~orpheus.sn.coupled_system.WithinGroupSystem` record
    carrying the named splitting :math:`A = M - N`
@@ -74,7 +113,7 @@ Key Facts
 
 - **The realized boundary law** :math:`B` **is a first-class sibling
   operator** (Issue #208): the within-group transport
-  operator is :math:`A = L + C - S - B` on the **two-block** transport
+  operator is :math:`A = L + C - S - N_{2n} - B` on the **two-block** transport
   state :math:`V = V_{\rm bulk} \oplus V_{\rm boundary}` (the bulk
   :term:`angular flux` :math:`\oplus` a single boundary trace — inflow and
   outflow fold into one :class:`~orpheus.transport.fields.angular_boundary_flux.AngularBoundaryFlux`),
@@ -128,7 +167,7 @@ Key Facts
   (:attr:`IterationRecord.increment_norms
   <orpheus.numerics.convergence.IterationRecord.increment_norms>`, from
   which :math:`\rho` and the :math:`c\to1` true-error estimate derive).
-  The equation residual :math:`r = (L+C-S-B)\psi - q` is typed via
+  The equation residual :math:`r = (L+C-S-N_{2n}-B)\psi - q` is typed via
   :func:`~orpheus.sn.solver.evaluate_residual` (the box-7 consumer of
   the previously-unconsumed ``from_balance`` mint). See
   :ref:`cone-typed-field-algebra`.
@@ -218,8 +257,9 @@ Key Facts
   (:meth:`SNSolver._solve_krylov <orpheus.sn.solver.SNSolver._solve_krylov>`).
   The SI inner is the **geometry-agnostic structural twin** of Krylov:
   identical composite RHS, identical loss decomposition (the invertible
-  resolvent :math:`L + C` plus the two lagged coupling gains — the bulk
-  scattering :math:`S` and the trace boundary reflection :math:`B` —
+  resolvent :math:`L + C` plus the three lagged coupling gains — the two
+  bulk collision gains :math:`S` and :math:`N_{2n}` and the trace
+  boundary reflection :math:`B` —
   delivered to the **variadic** driver per :ref:`bc-extraction-variadic-driver`;
   zero within-group fission), identical angular reduction — differing
   **only** in the iteration driver. The reflective coupling rides the **bare** 2-D
@@ -232,10 +272,10 @@ Key Facts
 
 - The transport eigenvalue and fixed-source problems share **one**
   operator algebra: they differ only in what sits on the right of the
-  within-group transport operator :math:`A = L + C - S - B`.
+  within-group transport operator :math:`A = L + C - S - N_{2n} - B`.
 
   .. (vv-status rationale) The within-group fixed-source form
-     A ψ = q, A = L+C-S-B. Verified by the operator-algebra assembly
+     A ψ = q, A = L+C-S-N_2n-B. Verified by the operator-algebra assembly
      (build_within_group_system) and the fixed-source solver suites.
   .. vv-status: operator-fixed-source documented
 
@@ -273,7 +313,7 @@ Key Facts
      problem directly, which is exactly the test for an implementer.
 
   .. (vv-status rationale) The k-eigenvalue form A ψ = (1/k) F ψ,
-     A = L+C-S-B, with F the right-hand-side fission gain. Verified by
+     A = L+C-S-N_2n-B, with F the right-hand-side fission gain. Verified by
      the eigenvalue engines (power iteration and K = A⁻¹F) against the
      closed-form k∞ oracle.
   .. vv-status: operator-eigenvalue documented
@@ -314,7 +354,7 @@ Key Facts
   eigenproblem :math:`A_{\rm loss}\,\psi = \lambda\,M\,\psi`, whose
   power-method realization is the dominant eigenpair of the
   **resolvent** :math:`A_{\rm loss}^{-1} M`. The **k-eigenvalue** row
-  is :math:`A_{\rm loss} = L+C-S-B`, :math:`M = F`, :math:`k = \mu`;
+  is :math:`A_{\rm loss} = L+C-S-N_{2n}-B`, :math:`M = F`, :math:`k = \mu`;
   the :math:`\alpha`-eigenvalue, adjoint, and transient rows are
   **documented future seams**.
   :func:`~orpheus.numerics.eigenvalue.power_iteration` is the
@@ -1607,11 +1647,17 @@ The full within-group-plus-scattering problem
 where the **sweep** :math:`(L+C)^{-1}` is the per-term inverter and the
 outer source iteration sums the series. This is the Peierls
 collision-number expansion (each term :math:`k` is the flux of neutrons
-that have scattered exactly :math:`k` times). The series converges with
+that have scattered exactly :math:`k` times).  The series carries **one**
+gain in the exponent only because it needs no more than one: the
+identity holds verbatim for any lagged gain, so the :math:`(n,2n)` gain
+enters it as :math:`S \mapsto S + N_{2n}` — which is what the shipped
+variadic driver lags (:ref:`the two collision gains
+<operator-algebra-two-gains>`) — and the
+single symbol is kept here for legibility. The series converges with
 spectral radius :math:`\rho\bigl[(L+C)^{-1}S\bigr] \le \max_g
 \Sigma_{s,g}/\Sigma_{t,g} = c` (the :term:`scattering ratio`;
 :ref:`cone-iterate-diagnostics` documents the matching contraction
-:math:`M = (L+C)^{-1}(S+B)`, whose measured factor :math:`\rho` is
+:math:`M = (L+C)^{-1}(S+N_{2n}+B)`, whose measured factor :math:`\rho` is
 carried as a derived diagnostic on the SI iteration record). The sweep :math:`(L+C)^{-1}` being a *single bundled* inverse —
 not :math:`L^{-1} + C^{-1}` — is exactly the point: it is the WDD
 forward-substitution on :eq:`apply-solve-cell-resolvent`, dividing by the
@@ -2216,9 +2262,10 @@ S7; the per-operator ``build_transport_linear_operator`` scipy wrappers
 it replaced are retired). The system matvec is the named carrier-space
 closure ``loss_minus_gains`` — the invertible resolvent minus the lagged
 coupling gains, :math:`(L{+}C)\,\psi - \sum_{\rm gains} g\,\psi`, i.e.
-the honest full within-group operator :math:`A = L + C - S - B` applied
-(the gains are the scattering :math:`S` and the boundary reflection
-:math:`B`) — which reads like the operator rather than ravel plumbing.
+the honest full within-group operator :math:`A = L + C - S - N_{2n} - B`
+applied (the gains are the two collision gains :math:`S` and
+:math:`N_{2n}` and the boundary reflection :math:`B`) — which reads like
+the operator rather than ravel plumbing.
 Because it is expressed purely through the operator algebra, it is the
 discretisation-agnostic form a unified cross-solver iteration driver
 (SN / MoC / CP / diffusion, Issue #14) consumes without knowing which
@@ -4699,7 +4746,8 @@ Two cells are deliberately empty, and both absences are designed.
   A residual is born only from a balance equation
   (:meth:`~orpheus.numerics.field.Field._from_balance`), and **moment space
   is never the subject of a balance**. The transport balances are the
-  bulk-angular :math:`(L + C - S - F)\psi - q` and the boundary consistency
+  bulk-angular :math:`(L + C - S - N_{2n} - F)\psi - q` and the boundary
+  consistency
   :math:`\psi.\text{inflow} - B\,\psi.\text{outflow} - q.\text{inflow}`
   (:ref:`bc-extraction`); neither is posed in moment coordinates, so there
   is no ``from_balance`` consumer that would produce a moment residual.
@@ -5558,8 +5606,8 @@ Every *realised* boundary condition IS a Wave-0
 :class:`~orpheus.numerics.operator.LinearOperator`, composable with the
 streaming / collision / scattering / fission operators through the same
 algebra dunders — which is why the boundary law :math:`B` enters
-:math:`A = L + C - S - B` as a first-class sibling rather than being
-folded into streaming. A boundary *law* is a pure descriptor with **no**
+:math:`A = L + C - S - N_{2n} - B` as a first-class sibling rather than
+being folded into streaming. A boundary *law* is a pure descriptor with **no**
 ``apply``; only its *realisation* through
 :class:`~orpheus.sn.boundary.realizer.SNBoundaryRealizer` is a Wave-0
 operator.
@@ -5597,7 +5645,7 @@ property of the realization — is developed in full on its own page,
 :doc:`/theory/foundations/field_algebra`. That page types the **fields**
 (flux / source / residual) that the operators of this page act on; it
 also wires the typed equation residual
-:math:`r = (L + C - S - B)\,\psi - q` to its ``from_balance`` consumer,
+:math:`r = (L + C - S - N_{2n} - B)\,\psi - q` to its ``from_balance`` consumer,
 and it carries the six-argument adjudication that overturned the 2026-06
 affine ontology (⛔ until 2026-08-19 this paragraph read *"flux* **states**
 *form an affine space* :math:`\mathbb{A}` *(points, no origin) over a
@@ -5608,7 +5656,7 @@ The composite metric adjoint
 ============================
 
 The **metric-correct Hilbert adjoint** ``op.H`` of the composed loss
-operator :math:`A = L + C - S - B` — the **G-adjoint**
+operator :math:`A = L + C - S - N_{2n} - B` — the **G-adjoint**
 :math:`A^{\dagger} = G^{-1} A^{\mathsf T} G` over the block-diagonal
 :class:`~orpheus.numerics.spaces.full_field_space.FullFieldSpace` metric,
 with the singular trace block inverted by a Moore–Penrose pseudo-inverse
@@ -5812,7 +5860,7 @@ realized in commits ``650032e`` / ``7603c8e`` (2026-06-05).
      non-negative eigenvector and the dominant eigenvalue is real and
      positive — the only physically meaningful steady state. All
      higher harmonics change sign in space.
-   - **k-eigenvalue (LIVE):** :math:`A_{\rm loss} = L+C-S-B`,
+   - **k-eigenvalue (LIVE):** :math:`A_{\rm loss} = L+C-S-N_{2n}-B`,
      :math:`M = F`, :math:`k = \mu`. The dominant eigenvalue of
      :math:`A_{\rm loss}^{-1} F` is :math:`k_{\rm eff}`.
    - **Four layers:** operator leaves (method-specific) → problem
@@ -5967,9 +6015,11 @@ treated posing as wholly method-agnostic — "just arrange the leaves."
 That is false: the *role assignment* is agnostic, but the *loss-operator
 realization* is method-specific. SN realises its loss operator as the
 invertible resolvent :math:`L + C` (the WDD sweep) plus the lagged
-coupling gains :math:`S` (bulk scattering) and :math:`B` (boundary
+coupling gains :math:`S` (bulk scattering), :math:`N_{2n}` (the bulk
+:math:`(n,2n)` emission) and :math:`B` (boundary
 reflection), handed to the **variadic** within-group driver as
-:math:`(L+C,\,S,\,B)` (:ref:`bc-extraction-variadic-driver`). CP has
+:math:`(L+C,\,S,\,N_{2n},\,B)` (:ref:`bc-extraction-variadic-driver`).
+CP has
 **no** :math:`(A, S, F)` split at all — its
 :meth:`solve_fixed_source <orpheus.numerics.eigenvalue.EigenvalueSolver.solve_fixed_source>`
 is one BiCGSTAB on a *monolithic* collision-probability matrix; the
@@ -6033,12 +6083,12 @@ session lands them as pure additions.
      - :math:`\mu \to` physical map
      - Status
    * - **k-eigenvalue**
-     - :math:`L + C - S - B`
+     - :math:`L + C - S - N_{2n} - B`
      - :math:`F`
      - :math:`k = \mu`
      - **LIVE**
    * - :math:`\alpha`-eigenvalue
-     - :math:`L + C - S - F - B`
+     - :math:`L + C - S - N_{2n} - F - B`
      - :math:`T = 1/v`
      - :math:`\alpha = -1/\mu`
      - future seam
@@ -6058,27 +6108,31 @@ production is the eigen-operator and *everything else* is loss. The
 resolvent's dominant eigenvalue is :math:`k_{\rm eff}` directly
 (:math:`k = \mu`):
 
-.. (vv-status rationale) The k-row posing (L+C−S−B)ψ = (1/k)Fψ ⟺
-   [(L+C−S−B)⁻¹F]ψ = kψ — eigen-standard-form specialized to the LIVE
-   k-row. Definitional / posing identity; k_eff is anchored by the
+.. (vv-status rationale) The k-row posing (L+C−S−N_2n−B)ψ = (1/k)Fψ ⟺
+   [(L+C−S−N_2n−B)⁻¹F]ψ = kψ — eigen-standard-form specialized to the
+   LIVE k-row. Definitional / posing identity; k_eff is anchored by the
    homogeneous closed-form oracle (kinf_and_spectrum_homogeneous).
 .. vv-status: eigen-k-posing documented
 
 .. math::
    :label: eigen-k-posing
 
-   (L + C - S - B)\,\psi \;=\; \tfrac{1}{k}\,F\,\psi
+   (L + C - S - N_{2n} - B)\,\psi \;=\; \tfrac{1}{k}\,F\,\psi
    \qquad\Longleftrightarrow\qquad
-   \bigl[(L+C-S-B)^{-1} F\bigr]\,\psi \;=\; k\,\psi .
+   \bigl[(L+C-S-N_{2n}-B)^{-1} F\bigr]\,\psi \;=\; k\,\psi .
 
 This is exactly :eq:`operator-eigenvalue` with the boundary in-scatter
 :math:`B` made explicit (Wave O step O.4a.2 promoted :math:`B` to a
 first-class sibling leaf; see :ref:`bc-extraction`). In production the
-within-group loss :math:`L+C-S-B` is realised honestly: :math:`S` and
-:math:`B` are two separate coupling gains handed to the variadic driver
-(Wave O step O.2a — :ref:`bc-extraction-variadic-driver`), so the
-matvec is :math:`(L+C).\text{apply} - S.\text{apply} - B.\text{apply}`.
-The transitional :math:`S + B` driver fold is retired.
+within-group loss :math:`L+C-S-N_{2n}-B` is realised honestly:
+:math:`S`, :math:`N_{2n}` and :math:`B` are three separate coupling
+gains handed to the variadic driver (Wave O step O.2a —
+:ref:`bc-extraction-variadic-driver`; the third joined them at CS4c
+step 3, :ref:`the two collision gains <operator-algebra-two-gains>`), so
+the matvec is
+:math:`(L+C).\text{apply} - S.\text{apply} - N_{2n}.\text{apply} -
+B.\text{apply}`.  The transitional :math:`S + B` driver fold is
+retired.
 
 **The α-row (future seam).** The :math:`\alpha`-eigenvalue (the
 time-eigenvalue, governing the asymptotic exponential time behaviour)
@@ -6089,7 +6143,7 @@ time-dependent transport equation, the time derivative
 so the steady balance reads
 
 .. (vv-status rationale) The α-eigenvalue derivation (the e^{αt} ansatz
-   → (L+C−S−F−B)ψ = −α T ψ). Definitional derivation of a documented
+   → (L+C−S−N_2n−F−B)ψ = −α T ψ). Definitional derivation of a documented
    future seam — the α-row is Not built (only the k-row exists;
    unify-after-two).
 .. vv-status: eigen-alpha-derivation documented
@@ -6097,18 +6151,18 @@ so the steady balance reads
 .. math::
    :label: eigen-alpha-derivation
 
-   \tfrac{\alpha}{v}\,\psi + (L + C - S - F)\,\psi \;=\; 0
+   \tfrac{\alpha}{v}\,\psi + (L + C - S - N_{2n} - F)\,\psi \;=\; 0
    \qquad\Longleftrightarrow\qquad
-   (L + C - S - F - B)\,\psi \;=\; -\alpha\,T\,\psi ,
+   (L + C - S - N_{2n} - F - B)\,\psi \;=\; -\alpha\,T\,\psi ,
    \quad T \equiv \tfrac1v .
 
 Matching to the standard form :eq:`eigen-standard-form` gives
-:math:`A_{\rm loss} = L+C-S-F-B` (fission now joins the *loss* side,
-because it is no longer the eigen-operator), :math:`M = T = 1/v`, and
-:math:`\mu = -1/\alpha`, i.e. :math:`\alpha = -1/\mu`. The only new
-machinery the :math:`\alpha`-row needs is a sixth leaf — a
+:math:`A_{\rm loss} = L+C-S-N_{2n}-F-B` (fission now joins the *loss*
+side, because it is no longer the eigen-operator), :math:`M = T = 1/v`,
+and :math:`\mu = -1/\alpha`, i.e. :math:`\alpha = -1/\mu`. The only new
+machinery the :math:`\alpha`-row needs is a seventh leaf — a
 :class:`~orpheus.numerics.operator.DiagonalOperator` realizing
-:math:`T = 1/v` — joining :math:`L, C, S, F, B`. The posing, resolvent,
+:math:`T = 1/v` — joining :math:`L, C, S, N_{2n}, F, B`. The posing, resolvent,
 and algorithm layers are unchanged; this is the cleanest possible fit
 and is why the layering was designed this way. **Not built** (only K
 exists; *unify-after-two*).
@@ -6117,7 +6171,7 @@ exists; *unify-after-two*).
 :math:`A_{\rm loss}^{\dagger}\,\psi^{\dagger} = \lambda\,M^{\dagger}\,
 \psi^{\dagger}` is **just another posing row** whose role-operators are
 the daggers of the forward leaves — and it now RUNS in production:
-``KEigenvalue((L+C).H, (S+B).H, F.H)`` through the unchanged
+``KEigenvalue((L+C).H, (S+N2N+B).H, F.H)`` through the unchanged
 :func:`~orpheus.numerics.eigenvalue.power_iteration`
 (:func:`~orpheus.sn.solver.solve_sn_adjoint`; the full chapter is
 :ref:`sn-adjoint`). The dagger is *free* from the
@@ -6184,8 +6238,12 @@ it *does* now carry an in-algebra :math:`(L, C, S, F)` family (#290;
 camp, because it has **no sweep** — its resolvent is the explicit
 :class:`~orpheus.numerics.matrix_inverse_operator.MatrixInverseOperator`
 of the *fused* :math:`A = L + C - S - B` (the scattering already
-subtracted in), not an :math:`(A-S)^{-1}` iterated over a within-group
-solve. Forcing CP or diffusion into the narrow layer would mean
+subtracted in — and the four-term spelling is exact here, because
+diffusion sums its two isotropic energy leaves into that one :math:`S`
+at its own composition site, so there is no separate :math:`N_{2n}`
+term; :ref:`the two collision gains <operator-algebra-two-gains>`), not
+an :math:`(A-S)^{-1}`
+iterated over a within-group solve. Forcing CP or diffusion into the narrow layer would mean
 manufacturing a fictitious sweep they do not have. Therefore the
 **Protocol layer is canonical** and the **triple layer is a
 specialization that adapts into it**.

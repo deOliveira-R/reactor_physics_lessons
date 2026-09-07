@@ -95,8 +95,8 @@ Direct Transport Operator
 -------------------------
 
 The :mod:`~orpheus.sn.operators.streaming` module carries the streaming
-leaves of the four-operator within-group algebra
-:math:`A_{\rm wg} = L + C - S_{\rm foldable}`:
+leaves of the within-group algebra
+:math:`A = L + C - S - N_{2n} - B` (:eq:`sn-within-group-with-n2n`):
 :class:`~orpheus.sn.operators.streaming.StreamingOperator` is the pure
 :math:`\sigma`-free :math:`L = \Omega\cdot\nabla` (plus the curvilinear
 angular redistribution), and
@@ -170,7 +170,7 @@ The Loss-Kernel Gauge (``Pi``)
 
 The :mod:`~orpheus.sn.operators.loss_kernel_gauge` module is not a leaf of
 :math:`A` but a statement *about* :math:`A`: on an all-reflective Cartesian box
-closed by diamond differencing, :math:`A = L + C - S - B` is **exactly
+closed by diamond differencing, :math:`A = L + C - S - N_{2n} - B` is **exactly
 singular**, so the boundary trace a solve returns is a function of the cold
 start rather than of the problem (#344 — ``[M]`` up to 27.3 % apart, with both
 convergence functionals blind to the difference).

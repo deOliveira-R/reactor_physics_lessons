@@ -43,8 +43,8 @@ this page, this page is correct.
   ``xs.sig_t.T.reshape(ng, nx, ny)[g, i, j] ==
   xs.sig_t.reshape(nx, ny, ng)[i, j, g]``.  Asserted in ``__debug__``
   at :class:`~orpheus.sn.solver.SNSolver` construction.
-- **The five-operator algebra** — the within-group loss composite
-  :math:`A = L + C - S - B`, posed as
+- **The six-operator algebra** — the within-group loss composite
+  :math:`A = L + C - S - N_{2n} - B`, posed as
   :math:`A\,\psi = \tfrac{1}{k}\,F\,\psi` (eigenvalue) or
   :math:`A\,\psi = q` (fixed source) — consumes and returns :math:`\psi`
   shaped as ``(N, ng, nx, ny)`` at
@@ -52,6 +52,8 @@ this page, this page is correct.
   the collision multiplier :math:`C = M[\sigma_t]`
   (:class:`~orpheus.transport.operators.multiplication_operator.MultiplicationOperator`),
   :class:`~orpheus.transport.operators.scattering.ScatteringOperator`,
+  the :math:`(n,2n)` emission
+  :class:`~orpheus.transport.operators.n2n.N2NOperator`,
   the boundary law :class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`
   — a first-class **sibling**, *not* folded into :math:`L` —
   :class:`~orpheus.transport.operators.fission.FissionOperator`).
@@ -145,8 +147,8 @@ the discrete ordinates equation is
 .. math::
    :label: sn-within-group-system
 
-   (L_g + C_g)\,\psi_g \;=\; S_g\,\phi + \frac{1}{k}\,\chi_g\,F\,\phi
-   + q_g\,,
+   (L_g + C_g)\,\psi_g \;=\; S_g\,\phi + N_{2n,g}\,\phi
+   + \frac{1}{k}\,\chi_g\,F\,\phi + q_g\,,
 
 .. (vv-status rationale) definition: the governing within-group system stated
 .. here to motivate the ``(N, ng, nx, ny)`` storage layout (the block-diagonal
@@ -157,8 +159,11 @@ the discrete ordinates equation is
 
 where :math:`L_g` is the streaming operator on group :math:`g`,
 :math:`C_g = \Sigma_{t,g}\,\mathbb{I}` is the diagonal collision
-operator, :math:`S_g` accumulates the in-scatter contribution, and
-the right-hand side carries the fission source and external source.
+operator, :math:`S_g` accumulates the in-scatter contribution,
+:math:`N_{2n,g}` the :math:`(n,2n)` in-transfer — the same binding as
+:math:`S_g` with the yield :math:`\nu_{2n} = 2`, first-class since CS4c
+step 3 (:ref:`the two collision gains <operator-algebra-two-gains>`) —
+and the right-hand side carries the fission source and external source.
 The *within-group* system is the per-:math:`g` problem when the
 scattering source is held fixed at the current outer iterate ---
 exactly what each inner source iteration solves.
@@ -825,7 +830,7 @@ type lands as the typed-field-contract resume).
 Source / RHS vocabulary
 -----------------------
 
-The five-operator algebra — :math:`A\,\psi = q` for a fixed source, with
+The six-operator algebra — :math:`A\,\psi = q` for a fixed source, with
 the loss composite :math:`A = L + C - S - N_{2n} - B` — has a
 typed RHS.  The "source" :math:`q` is a deliberate split into
 direction-independent (``ScalarSourceSink``) and per-ordinate
@@ -1044,14 +1049,14 @@ The Solution evolution is the SN-specific specialisation of the
 For a fixed-source problem ``keff`` is ``None`` and the iteration
 history records only the relative flux-residual trajectory.
 
-Operator vocabulary --- the five leaves of the algebra
--------------------------------------------------------
+Operator vocabulary --- the six leaves of the algebra
+------------------------------------------------------
 
-The five-operator algebra — the within-group loss composite
-:math:`A = L + C - S - B`, posed as
+The six-operator algebra — the within-group loss composite
+:math:`A = L + C - S - N_{2n} - B`, posed as
 :math:`A\,\psi = \tfrac{1}{k}\,F\,\psi` (eigenvalue) or
 :math:`A\,\psi = q` (fixed source) — is
-implemented by five leaf operators, each conforming to
+implemented by six leaf operators, each conforming to
 :class:`~orpheus.numerics.operator.LinearOperator` with
 ``apply(psi: AngularFlux) -> AngularFlux`` under the typed contract.
 The algebra closes because every operand agrees on the
@@ -1083,13 +1088,25 @@ scale through the same algebra.
        P_\ell\,\phi_{\ell m}`; foldable P₀ within-group part
        :meth:`~orpheus.transport.operators.scattering.ScatteringOperator.foldable_part`
        absorbs into :math:`\Sigma_r`
+   * - :math:`N_{2n}`
+     - :class:`~orpheus.transport.operators.n2n.N2NOperator`
+     - The :math:`(n,2n)` emission :math:`N_{2n} = R\,\Lambda_{2n}\,M / W`
+       — the **same** binding as :math:`S` in a different role, over the
+       mixture's ``Sig2`` Legendre stack and with the yield
+       :math:`\nu_{2n} = 2` inside :math:`\Lambda`.  First-class since
+       CS4c step 3 because the channel's bundling is context-dependent
+       (with :math:`S` for anisotropy, with :math:`F` for production
+       accounting) and must not be decided at the operator level; see
+       :ref:`the two collision gains <operator-algebra-two-gains>`
    * - :math:`B`
      - :class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`
      - The realized boundary law — a first-class **sibling** operator, *not*
        folded into :math:`L`.  Reports the same
        :class:`~orpheus.numerics.spaces.full_field_space.FullFieldSpace` as
-       :math:`L`/:math:`C`/:math:`S`/:math:`F`, so the ``OperatorSum``
-       composition guard accepts :math:`(L + C - S - B - F/k)`.  Acts as the
+       :math:`L`/:math:`C`/:math:`S`/:math:`N_{2n}`/:math:`F`, so the
+       ``OperatorSum``
+       composition guard accepts :math:`(L + C - S - N_{2n} - B - F/k)`.
+       Acts as the
        :math:`A_{ss}` block: zero on the bulk, non-zero only on the trace,
        where the cosine-weighted :math:`|\Omega\cdot n|\,w` partial-current
        metric lives
@@ -1114,6 +1131,12 @@ Two derived combinations carry their own names:
   own ``solve`` override runs the sweep on its selected representation
   rather than the unfused Krylov outer-iteration — the generic
   ``OperatorSum`` carries no ``solve`` at all since carve P4).
+  :meth:`foldable_part
+  <orpheus.transport.operators.transfer.TransferOperator.foldable_part>`
+  is defined on the **shared** transfer core, so the :math:`(n,2n)` gain
+  has one too and enters this target the same way; the single symbol is
+  written here because the fold's algebra does not distinguish the two
+  gains (:ref:`the two collision gains <operator-algebra-two-gains>`).
 - The multiplication operator :math:`K = A_{\text{loss}}^{-1} F`
   carries the k-eigenvalue iteration; it lives implicitly in the outer
   :func:`~orpheus.numerics.eigenvalue.power_iteration` loop, which
@@ -1346,8 +1369,9 @@ fail at construction time (Pattern 4 — illegal states unrepresentable).
 
    The full rich-narrative version of this section — derivation of each
    type's domain semantics, units, the dunder algebra and its
-   correspondence to the operator-equation form ``(L + C − S − F/k) ψ
-   = q``, and a worked walk-through of the within-group sweep's
+   correspondence to the operator-equation form
+   ``(L + C − S − N_2n − F/k) ψ = q``, and a worked walk-through of the
+   within-group sweep's
    AngularBoundaryFlux contract —
    should be authored by the **archivist** sub-agent.  This section
    is the stub written by the method-implementer per
@@ -1659,8 +1683,9 @@ Cross-references
 
 * :ref:`scattering-matrix-convention` for the ``SigS[g_from, g_to]``
   convention these types' arithmetic respects.
-* :doc:`/theory/foundations/operator_algebra` for the five-operator algebra
-  ``A ψ = (1/k) F ψ``, ``A = L + C − S − B``, that the typed fields read as.
+* :doc:`/theory/foundations/operator_algebra` for the six-operator algebra
+  ``A ψ = (1/k) F ψ``, ``A = L + C − S − N_2n − B``, that the typed fields
+  read as.
 
 
 .. _theory-sn-typed-sources:
@@ -1670,7 +1695,8 @@ Typed source types
 
 Issue #197 PR-TYPED-3 introduces two typed source-density carriers
 that wrap the right-hand side of the transport equation
-:math:`A\,\psi = q`, with the loss composite :math:`A = L + C - S - B`:
+:math:`A\,\psi = q`, with the loss composite
+:math:`A = L + C - S - N_{2n} - B`:
 
 * :class:`~orpheus.transport.source_sinks.ScalarSourceSink` — the isotropic
   volumetric source :math:`Q(\vec r, g)`, shape ``(ng, nx, ny)``.
@@ -1971,9 +1997,10 @@ PR-INDEX-5; the principled-layout :ref:`sn-field-vocabulary`
 section names every flux / source / rate / trace type the resume
 will eventually surface as a typed field.  Every operator-leaf's
 ``apply`` signature becomes
-``apply(psi: AngularFlux) -> AngularFlux``, with the five-operator
-algebra :math:`(L + C - S - B - F/k).\texttt{apply}(\psi)` distributing
-through :class:`~orpheus.numerics.operator.OperatorSum` unchanged.
+``apply(psi: AngularFlux) -> AngularFlux``, with the six-operator
+algebra :math:`(L + C - S - N_{2n} - B - F/k).\texttt{apply}(\psi)`
+distributing through :class:`~orpheus.numerics.operator.OperatorSum`
+unchanged.
 This closes the Issue #197 Wave 1 partial as documented in the memo's
 §6.
 
@@ -2004,7 +2031,7 @@ Cross-references
 
 - :ref:`theory-discrete-ordinates` --- SN method theory page; the
   Key Facts header references this convention.
-- :ref:`operator-algebra` --- the five-operator algebra; every leaf's
+- :ref:`operator-algebra` --- the six-operator algebra; every leaf's
   ``apply`` consumes / returns arrays in the convention defined
   here.
 - :ref:`scattering-matrix-convention` --- the cross-section matrix

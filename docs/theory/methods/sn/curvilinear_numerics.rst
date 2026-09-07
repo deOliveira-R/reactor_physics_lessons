@@ -2672,7 +2672,13 @@ which is why the curvilinear default returned to source iteration.
 
 The decisive *structural* gate is the **per-ordinate, volume-weighted**
 operator-admission residual of :math:`\psi_{\rm ref}` (the scalar
-residual is blind, per the telescoping above):
+residual is blind, per the telescoping above).  The four-term operator
+below is exact for this fixture: every MMS mixture is built with
+:math:`\Sigma_{2n} \equiv 0`
+(:mod:`orpheus.derivations.continuous.mms.sn` mints
+``Sig2 = csr_matrix(zeros((ng, ng)))``), so the shipped fifth member
+:math:`N_{2n}` of :eq:`sn-within-group-with-n2n` contributes exactly
+nothing to the residuals tabulated here:
 
 .. list-table:: Per-ordinate volume-weighted residual of ψ_ref under (L+C−S−B), post-fix
    :header-rows: 1

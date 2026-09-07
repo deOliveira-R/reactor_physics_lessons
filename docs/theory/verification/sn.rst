@@ -1800,8 +1800,8 @@ Issue #9 is about the *second*; everything above (#229, the
   until #448),
   geometry-**agnostic**, wired identically for all geometries through
   :func:`~orpheus.sn.coupled_system.build_within_group_system` (the
-  :math:`S` gain of the :math:`(L+C),\,S,\,B` decomposition carries
-  :math:`P_1` when
+  :math:`S` gain of the :math:`(L+C),\,S,\,N_{2n},\,B` decomposition
+  carries :math:`P_1` when
   ``scattering_order = 1``).  No curvilinear test exercised Path-(II)
   before #9 — it is NEW coverage of an existing capability (NO
   ``orpheus/`` change; Path-(II) works as-is).
@@ -3508,7 +3508,7 @@ A fixed-source SN problem solves the affine within-group system
 
 .. math::
 
-   (L + C - S - B)\,\psi = q,
+   (L + C - S - N_{2n} - B)\,\psi = q,
 
 and the right-hand side :math:`q` is **not** a bulk volumetric source
 alone. It has two pieces, one per phase-space locus:
@@ -3542,8 +3542,9 @@ exactly this carrier: the
 :class:`~orpheus.transport.timed_full_field.TimedFullField`, the typed
 bulk⊕boundary(⊕history) direct sum that the within-group SI and Krylov
 inner paths *already* pass around (the matvec
-:math:`(L+C)\psi - (S+B)\psi - F\psi` and the SI rhs
-:math:`F\psi + (S+B)\psi + q_{\text{ext}}` are CLOSED ``TimedFullField``
+:math:`(L+C)\psi - (S+N_{2n}+B)\psi - F\psi` and the SI rhs
+:math:`F\psi + (S+N_{2n}+B)\psi + q_{\text{ext}}` are CLOSED
+``TimedFullField``
 sums). The field-role-typing work did **not** introduce a new source
 type — it surfaced the carrier we already had and added the ergonomics
 to *generate* it (Cardinal Rule 2: we have the right object, we just
@@ -4244,7 +4245,7 @@ face per group. The within-group fixed point is the **affine** system
 
 .. math::
 
-   (L + C - S - B)\,\psi = q,
+   (L + C - S - N_{2n} - B)\,\psi = q,
    \qquad q = q_{\text{ext}}
             + (\text{prescribed inflow in } q.\text{boundary}),
 
@@ -4495,12 +4496,17 @@ T4 (vv Mode 9) — splitting invariance of the prescribed inflow
 The consistency floor the convergence rows trust is that a non-zero
 prescribed inflow is honoured **identically** by the three operator
 splittings of the affine within-group system: SI-Jacobi (the resolvent
-:math:`L+C` with lagged gains :math:`S, B`), SI-Gauss–Seidel (the
+:math:`L+C` with lagged gains :math:`S, B` — the shipped splitting also
+lags :math:`N_{2n}`, exactly zero on these
+:math:`\Sigma_{2n} \equiv 0` fixtures), SI-Gauss–Seidel (the
 :math:`B_{\rm lower}`-folding reified :math:`M`,
 :class:`~orpheus.sn.operators.scheduled_invertible.ScheduledInvertibleOperator`,
 with lagged gains :math:`S, B_{\rm upper}`), and Krylov (the matvec
 :math:`L+C-S-B`). All three are different reduction trees of the *same*
-affine fixed point :math:`(L+C-S-B)\psi = q`, so they MUST reach the
+affine fixed point :math:`(L+C-S-B)\psi = q` — the four-term spelling is
+this gate's, its fixtures carrying :math:`\Sigma_{2n} \equiv 0`; the
+general composite is :eq:`sn-within-group-with-n2n` — so they MUST reach
+the
 same :math:`\psi` (``vv-principles`` Mode 9 — verify splittings reach
 the same fixed point under anisotropic / :math:`B\neq 0` stressing).
 ⚠ *"the same* :math:`\psi`\ *"* is legitimate here because both T4

@@ -11,7 +11,8 @@ does *not* change is the algebra: Cartesian geometry keeps a neutron's
 direction constant in flight, so there is still no angular coupling
 outside the sources, the group axis of :doc:`slab_multigroup` rides
 along untouched, and the within-group operator keeps its honest shape
-:math:`A = L + C - S - B` with :math:`L+C` invertible in one pass.
+:math:`A = L + C - S - N_{2n} - B` (:eq:`sn-within-group-with-n2n`) with
+:math:`L+C` invertible in one pass.
 The chain of the book repeats on the new axis:
 
 1. **the invariant** — sinks = sources, now on a rectangular cell with
@@ -225,7 +226,7 @@ space decomposes as a **direct sum over angular octants** — the block
 structure is streaming-induced, since each octant sweeps in a fixed
 direction (in this section's equations :math:`A` abbreviates the loss
 composite :math:`L+C`, the invertible sub-composite of the chapter's
-:math:`A = L+C-S-B`):
+:math:`A = L+C-S-N_{2n}-B`):
 
 .. math::
    :label: streaming-inverse-direct-sum
@@ -1835,7 +1836,14 @@ and the three checks that separate it from a genuine splitting bug, are at
 :ref:`sn-loss-kernel-gauge`.)
 
 The :math:`\Sigma_s \otimes I_{\rm spatial}` slope source is **not** that
-kind of change.  S2 and S3 solve DIFFERENT operators:
+kind of change.  S2 and S3 solve DIFFERENT operators — the displays below
+compare two *representations of the scattering gain* on the LD moment
+space, so they carry neither the boundary law :math:`B` nor the
+:math:`(n,2n)` gain :math:`N_{2n}`; the shipped within-group member list
+is :eq:`sn-within-group-with-n2n`, and :math:`N_{2n}` lifts to the
+moment space exactly as :math:`S` does (it is the same
+:class:`~orpheus.transport.operators.transfer.TransferOperator` binding
+with yield :math:`y = 2`):
 
 .. math::
    :label: ld-ubld-s2-s3-operators
@@ -2337,6 +2345,12 @@ genuine global degree of freedom in **every** dimension.
    M^{-1} matvec/sweep moment-source consistency). Verified by the
    matvec == sweep round-trip (foundation), not an isolated solver claim.
 .. vv-status: ld-ubld-unified-moment-residual documented
+
+Here :math:`S` is this section's moment-lifted in-scatter gain
+:math:`S_{\rm full}` and the display is bulk-only — it carries neither
+:math:`B` nor the :math:`(n,2n)` gain :math:`N_{2n}`.  The identity is
+linear in the gain, so it holds verbatim with every member of the
+shipped list :eq:`sn-within-group-with-n2n` substituted for :math:`S`.
 
 A matvec is a forward APPLY: applying the per-cell
 :math:`2^d \times 2^d` UBLD operator to the moment vector is intrinsically
@@ -3757,7 +3771,7 @@ where :math:`A^{-1}` is the swept loss inverse — this section's
 (:class:`~orpheus.sn.operators.sweep_operator.SweepOperator` on
 :math:`L+C`, or on the reified splitting matrix :math:`M` —
 :ref:`si-gauss-seidel-reification`), the **inner kernel** of the
-honest within-group :math:`(L+C-S-B)^{-1}`, never the full solve —
+honest within-group :math:`(L+C-S-N_{2n}-B)^{-1}`, never the full solve —
 and :math:`M_{\rm frame}` is the
 scattering frame's :attr:`~orpheus.numerics.frame.FrameBase.analysis`
 face, the angular→moment reduction :math:`\phi_\ell^m = \sum_n w_n
@@ -4254,8 +4268,8 @@ face-to-face transmission
 
    **Two symbol overloads, local to this section.**  :math:`A_a` is the
    *area* of the cell face normal to axis :math:`a` — it always carries
-   its axis subscript, and it is not the loss operator :math:`A = L+C-S-B`
-   that :math:`A = M - N` splits.  :math:`\Sigma` (no :math:`t`/:math:`s`
+   its axis subscript, and it is not the loss operator
+   :math:`A = L+C-S-N_{2n}-B` that :math:`A = M - N` splits.  :math:`\Sigma` (no :math:`t`/:math:`s`
    subscript, always with the face indices :math:`a \leftarrow b` or in
    bare matrix form) is the **face-to-face transmission matrix**, not a
    cross section.  Both spellings are kept because they are the ones the
@@ -4692,12 +4706,21 @@ to itself, its round-trip gain is exactly :math:`+1`, and the slow mode
 of :ref:`sn-boundary-gs-rate-regime` becomes an **exact null vector**.
 On any :math:`d \ge 2` Cartesian diamond-difference mesh with
 :math:`\ge 2` reflective axis pairs the within-group loss operator
+(:eq:`sn-within-group-with-n2n`)
 
 .. math::
 
-   A \;=\; L + C - S - B
+   A \;=\; L + C - S - N_{2n} - B
 
-is **exactly singular**.  ``Aψ = q`` then has a solution *manifold*, not
+is **exactly singular**.  The kernel is a *pure-trace* object (the bulk
+share of the null projector is :math:`1.1\times10^{-28}`, measured
+below), so both bulk gains — :math:`S` and :math:`N_{2n}` — annihilate
+it: each is an interior-only body lifted to the composite by
+**extension-by-zero on the trace**
+(:func:`~orpheus.transport.operators.lift.lift_bulk_action`), so it reads
+a bulk-zero mode as zero and writes nothing to the trace.  The closed
+form derived here is therefore a property of the diamond closure and the
+reflective faces alone.  ``Aψ = q`` then has a solution *manifold*, not
 a solution, and a converged solve returns whichever member the iteration
 happened to freeze — a function of the cold start and of the schedule,
 not of the problem.  That is not a corner case: :func:`~orpheus.sn.solver.solve_sn`

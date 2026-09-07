@@ -40,7 +40,8 @@ in :doc:`/theory/foundations/operator_algebra`.
 .. important::
 
    This is the **operator's** composite adjoint — the Hilbert adjoint
-   ``op.H`` of a whole loss composite :math:`A = L + C - S - B`, taken
+   ``op.H`` of a whole loss composite
+   :math:`A = L + C - S - N_{2n} - B`, taken
    over the *physical* phase-space inner product. It is **distinct** from
    the **frame's** ``R.H`` / Petrov–Galerkin **test-space** adjoint
    developed in :doc:`/theory/foundations/frame`: the frame adjoint
@@ -361,8 +362,9 @@ domain-agnostic. The identity is the inherited ``(name, shape)`` tuple
 block spaces as ``compare=False`` leaf metadata — so two composites over
 meshes of the same total dimension compare equal and the
 :class:`~orpheus.numerics.operator.OperatorSum` composition guard
-accepts the full within-group loss ``L + C - S - B`` (every operand —
-:math:`L`, :math:`C`, :math:`S`, and :math:`B` — reports the same
+accepts the full within-group loss ``L + C - S - N_2n - B`` (every
+operand — :math:`L`, :math:`C`, :math:`S`, :math:`N_{2n}` and :math:`B`
+— reports the same
 composite domain; P4.5 W-D gave the previously ``None``-spaced
 :math:`C`/:math:`S`/:math:`F` real spaces and de-SN-ified the name from
 ``"sn_full_field"``).
@@ -405,11 +407,13 @@ The G-adjoint applies the metric once at the op level — the adjoint-axis predi
 
 The subtle architectural point of R5 is **where** the metric lives in
 the adjoint, and it survives the P4.5 W-D change to the bulk leaves'
-domains. Since W-D, all five operators — :math:`L`
+domains. Since W-D, all six operators — :math:`L`
 (:class:`~orpheus.sn.operators.streaming.StreamingOperator`), the collision
 multiplier :math:`C = M[\sigma_t]`
 (:class:`~orpheus.transport.operators.multiplication_operator.MultiplicationOperator`),
 :class:`~orpheus.transport.operators.scattering.ScatteringOperator` (``S``),
+:class:`~orpheus.transport.operators.n2n.N2NOperator` (:math:`N_{2n}`,
+which joined at CS4c step 3 — see the note below),
 :class:`~orpheus.transport.operators.fission.FissionOperator` (``F``), and
 :math:`B` (:class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`) —
 carry the **same** composite ``full_field_space`` (threaded through
@@ -508,7 +512,8 @@ the *forward* composition guard).
 
 .. note:: **Supersession — the S/F adjointability update.** An earlier
    version of this section made the full prompt-loss adjoint
-   :math:`(L + C - S - F - B)^{\dagger}` *intentionally unreachable* by
+   :math:`(L + C - S - N_{2n} - F - B)^{\dagger}` *intentionally
+   unreachable* by
    having ``S`` and ``F`` carry **no** ``apply_transpose`` — a
    non-adjointable operand blocked the composite. **That mechanism is
    retired.** The #112 fission dyad-swap :math:`F^{\mathsf T}` and the
@@ -524,10 +529,11 @@ the *forward* composition guard).
    moot regardless, for two reasons: **(a)** every leaf carries the
    composite ``full_field_space`` metric (above); and **(b)** the
    within-group loss is never fused into a single
-   :math:`(L + C - S - F - B)` operator —
+   :math:`(L + C - S - N_{2n} - F - B)` operator —
    :func:`~orpheus.sn.coupled_system.build_within_group_system` returns the
    :class:`~orpheus.sn.coupled_system.WithinGroupSystem` record whose
-   ``implicit_operator`` ``(L+C)`` and ``explicit_gains`` ``(S, B_a)`` keep ``S`` /
+   ``implicit_operator`` ``(L+C)`` and ``explicit_gains`` ``(S, N2N, B_a)``
+   keep ``S`` / :math:`N_{2n}` /
    ``B`` as **lagged gains** and
    ``F`` handled at the eigenvalue / DSA **outer** layer (where the
    adjoint posing row daggers :math:`M = F` as :math:`M^{\dagger}`; see

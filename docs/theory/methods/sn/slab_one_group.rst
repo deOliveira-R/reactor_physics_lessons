@@ -12,7 +12,8 @@ appears here once, in its simplest honest form, following the chain the
 whole book repeats:
 
 1. **the invariant** (sinks = sources on the cell) → *pose* the balance;
-2. **the within-group operator** :math:`A = L + C - S - B`, and *why*
+2. **the within-group operator** :math:`A = L + C - S - N_{2n} - B`
+   (:eq:`sn-within-group-with-n2n`), and *why*
    its streaming-collision part :math:`L+C` is invertible — the
    lower-triangular structure in :term:`sweep` order;
 3. **the matrix representation** — the rawest form of the invertible
@@ -35,10 +36,15 @@ re-derived**. This chapter instantiates it on the slab.
      redistribution, no :math:`\Delta A` factor, because slab geometry
      has no curvature.
    * The within-group operator equation is
-     :math:`(L + C - S - B)\,\psi = q`
+     :math:`(L + C - S - N_{2n} - B)\,\psi = q`
      (:eq:`si-within-group-operator-eq`). The sweep is
      :math:`(L+C)^{-1}` — the inner kernel of the full inverse, never
-     the full inverse itself.
+     the full inverse itself.  ``[M]`` the mixtures this chapter's
+     numbers are built from carry a :math:`\Sigma_{2n}` with zero
+     non-zeros (the census is at the :math:`N_{2n}` bullet below), so
+     :math:`N_{2n}` contributes nothing to any number here; it is
+     spelled out because the member list is the shipped one, not a
+     simplification.
    * :math:`L+C` is invertible in one pass because it is
      **lower-triangular in sweep order**; the DD recurrence
      :eq:`dd-recurrence` unrolls to a vectorised cumulative product.
@@ -156,17 +162,19 @@ The within-group operator
 =========================
 
 The one-group transport problem, posed as operators on the angular
-flux, is the four-operator equation derived below
+flux, is the equation derived below
 (:eq:`si-within-group-operator-eq`):
 
 .. math::
 
-   (L + C - S - B)\,\psi \;=\; q ,
+   (L + C - S - N_{2n} - B)\,\psi \;=\; q ,
 
 with :math:`L` the streaming operator, :math:`C` the collision
-multiplier, :math:`S` the within-group scattering gain, and :math:`B`
+multiplier, :math:`S` the within-group scattering gain, :math:`N_{2n}`
+the :math:`(n,2n)` gain, and :math:`B`
 the boundary-reflection gain. This is the slab instance of the honest
-operator algebra :math:`A = L + C - S - B` of
+operator algebra :math:`A = L + C - S - N_{2n} - B`
+(:eq:`sn-within-group-with-n2n`) of
 :doc:`/theory/foundations/operator_algebra`; with energy and fission
 (next chapter) the same operator poses the eigenvalue problem
 :math:`A\,\psi = \tfrac{1}{k} F\,\psi`. In ORPHEUS the equation is a
@@ -583,9 +591,13 @@ multi-D machinery in :doc:`cartesian_multid`; the reified splitting matrix is
    :class: tip
 
    * The within-group SI iteration matrix is
-     :math:`(L+C)^{-1}(S+B)`; its spectral radius is the scattering
+     :math:`(L+C)^{-1}(S+N_{2n}+B)` — the builder's ``explicit_gains``
+     triple; its spectral radius is the scattering
      ratio :math:`\rho_J = c = \max_g \Sigma_{s,g}/\Sigma_{t,g}`
-     (:eq:`si-spectral-rate`).  Iterations to relative tolerance
+     (:eq:`si-spectral-rate`) **on a medium with**
+     :math:`\Sigma_{2n} \equiv 0` — the SI-rate anchor's mixtures pass
+     no ``Sig2`` at all, so that is the medium it is measured on.
+     Iterations to relative tolerance
      :math:`\varepsilon`: :math:`n_{\rm Jacobi} \approx
      \log\varepsilon / \log c`.
    * **Boundary Gauss-Seidel** (Phase 3, ``inner_schedule=
@@ -614,7 +626,8 @@ multi-D machinery in :doc:`cartesian_multid`; the reified splitting matrix is
      into the directional sweep (the σ\ :sub:`r`-fold trap, issue
      #215).
    * The converged fixed point is **invariant** under the schedule
-     (any consistent splitting of :math:`(L+C-S-B)\psi=q` shares
+     (any consistent splitting of
+     :math:`(L+C-S-N_{2n}-B)\psi=q` shares
      :math:`\psi^\ast`); only the SI spectral rate changes.  Krylov
      ignores the schedule entirely.  ⚠ That holds here because a slab
      is **kernel-free** — ``[M]`` :math:`\dim\ker A = 0` at
@@ -626,19 +639,21 @@ multi-D machinery in :doc:`cartesian_multid`; the reified splitting matrix is
      wavefront; the regime is scattering-dominated — boundary G-S is
      a no-op).
 
-The four-operator within-group equation
----------------------------------------
+The within-group operator equation
+-----------------------------------
 
 Within a single energy group, the steady transport equation factors
-into four operators acting on the angular flux :math:`\psi`:
+into five operators acting on the angular flux :math:`\psi`:
 
 .. math::
    :label: si-within-group-operator-eq
 
-   (L + C - S - B)\,\psi \;=\; q,
+   (L + C - S - N_{2n} - B)\,\psi \;=\; q,
 
-.. (vv-status rationale) Governing equation: the honest four-operator posing of
-   the within-group problem, A = L+C−S−B.  Definitional — it names the operator
+.. (vv-status rationale) Governing equation: the honest posing of
+   the within-group problem, A = L+C−S−N_2n−B — the member list the
+   shipped builder ``build_within_group_system`` composes (CS4c §14.1).
+   Definitional — it names the operator
    algebra, with no single implementing function distinct from the solver
    itself.  Its constituents are individually verified (streaming decomposition
    gate, the ``ScatteringOperator`` / ``SNBoundaryOperator`` tests) and the SI
@@ -658,6 +673,21 @@ where
   in angle) operator (the convention used by
   :class:`~orpheus.transport.operators.scattering.ScatteringOperator`; higher
   Legendre orders add the :math:`P_\ell` blocks);
+* :math:`N_{2n}` is the :math:`(n,2n)` **secondary-emission** gain —
+  the SAME
+  :class:`~orpheus.transport.operators.transfer.TransferOperator`
+  binding as :math:`S` over the channel's own Legendre stack, at the
+  same order and through the same frame, differing only in the yield
+  :math:`y` inside :math:`\Lambda_c` (:math:`y = 1` for :math:`S`,
+  :math:`y = \nu_{2n} = 2` for :math:`N_{2n}`).  So everything this
+  chapter proves about :math:`S` holds for :math:`N_{2n}` with
+  :math:`y = 2`.  It contributes exactly nothing wherever
+  :math:`\Sigma_{2n} \equiv 0`, which is how this chapter's fixtures are
+  built — ``[M]`` 2026-09-07 all 12 ``xs_library`` mixtures carry a
+  :math:`\Sigma_{2n}` with zero non-zeros, and the MMS mixtures are
+  minted ``Sig2 = csr_matrix(zeros((ng, ng)))``
+  (:mod:`orpheus.derivations.continuous.mms.sn`) — so writing it out
+  moves no number below;
 * :math:`B` is the **boundary reflection** gain — trace-only,
   realised by :class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`,
   delivering :math:`\psi.\text{inflow} = B\,\psi.\text{outflow}` on
@@ -670,24 +700,28 @@ Source iteration is a **splitting** of :eq:`si-within-group-operator-eq`:
 the **streaming-collision** part :math:`(L+C)` is kept on the LHS
 (inverted exactly by **one WDD sweep** — a triangular
 forward-substitution, since the sweep visits cells in causal order),
-while the **scattering** :math:`S` and the **boundary reflection**
+while the **scattering** :math:`S`, the :math:`(n,2n)` gain
+:math:`N_{2n}` and the **boundary reflection**
 :math:`B` are *lagged* on the RHS, evaluated from the previous
 iterate :math:`\psi_n`:
 
 .. math::
    :label: si-jacobi-fixed-point
 
-   \psi_{n+1} \;=\; (L+C)^{-1}\bigl(S\,\psi_n
+   \psi_{n+1} \;=\; (L+C)^{-1}\bigl(S\,\psi_n \;+\; N_{2n}\,\psi_n
                     \;+\; B\,\psi_n \;+\; q\bigr).
 
 .. (vv-status rationale) Governing iteration: the source-iteration splitting of
-   the within-group operator (lag S and B, invert L+C exactly).  A definitional
+   the within-group operator (lag S, N_2n and B, invert L+C exactly) — the
+   ``explicit_gains`` triple ``(S, N2N, B_a)`` the shipped
+   ``build_within_group_system`` returns.  A definitional
    iteration, not a per-term solver claim.  Its convergence to the correct
    fixed point and rate ρ_J=c are pinned by the L1 closed-form anchor
    ``tests/sn/verification/analytical/test_si_convergence_rate.py``.
 .. vv-status: si-jacobi-fixed-point documented
 
-The iteration matrix is therefore :math:`M = (L+C)^{-1}(S+B)`, and
+The iteration matrix is therefore
+:math:`M = (L+C)^{-1}(S+N_{2n}+B)`, and
 the asymptotic convergence rate is :math:`\rho(M)`. The convergence
 test is the relative L2 residual on the iterate — the same metric
 :meth:`SNSolver._solve_source_iteration` uses, since that
@@ -713,7 +747,13 @@ with the iteration breaking when :math:`{\rm res}_n < {\rm tol}`.
 Spectral radius :math:`\rho_J = c`
 ----------------------------------
 
-For an infinite homogeneous medium with isotropic scattering, the
+For an infinite homogeneous medium with isotropic scattering **and no**
+:math:`(n,2n)` **channel** (:math:`\Sigma_{2n} \equiv 0`, so
+:math:`N_{2n} = 0`; the shipped
+:attr:`~orpheus.data.macro_xs.mixture.Mixture.scattering_ratio` is
+:math:`(\Sigma_s + \nu\Sigma_f)/\Sigma_t` and carries no
+:math:`(n,2n)` term, so the closed form below is *stated at that
+medium*, not in general), the
 boundary term vanishes (:math:`B=0`) and the streaming derivative
 :math:`L` drops in the flat-flux Fourier mode :math:`k\to0`.  The
 spatial operator :math:`(L+C)^{-1}` then reduces to multiplication by

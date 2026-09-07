@@ -783,8 +783,9 @@ diffusion-synthetic-acceleration step poses the SN transport system and a
 low-order diffusion correction as a **coupled system** — an N-system
 :class:`CoupledOperator` whose diagonal blocks are the transport loss and
 the diffusion loss operator :math:`A_{\rm diff} = L + C - S - B` (which
-already exists, :mod:`orpheus.diffusion.operators`, #290 P4 — note that
-diffusion's :math:`S` is itself the ``OperatorSum``
+already exists, :mod:`orpheus.diffusion.operators`, #290 P4 — four
+terms, carrying no separate :math:`N_{2n}`, because diffusion's
+:math:`S` is itself the ``OperatorSum``
 ``IsotropicScattering + IsotropicN2N``, i.e. the SAME two energy leaves
 the S\ :sub:`N` grid keeps apart, bundled at the *composition* site
 where a bundling is a legitimate local choice; see the note at

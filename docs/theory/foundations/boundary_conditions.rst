@@ -2840,8 +2840,9 @@ is the :math:`A_{ss}` leaf — a bespoke
 The block matrix
 ----------------
 
-On :math:`V = V_{\rm bulk} \oplus V_{\rm boundary}` the four operator
-families occupy disjoint blocks of the :math:`2\times 2` block matrix
+On :math:`V = V_{\rm bulk} \oplus V_{\rm boundary}` the operator families
+occupy disjoint blocks of the :math:`2\times 2` block matrix, grouped by
+the three :class:`~orpheus.numerics.operator.BlockRole` values
 (:math:`b` = bulk row/column, :math:`s` = surface/trace row/column):
 
 .. math::
@@ -2849,7 +2850,7 @@ families occupy disjoint blocks of the :math:`2\times 2` block matrix
 
    \underbrace{
    \begin{bmatrix} A_{bb} & 0 \\ 0 & 0 \end{bmatrix}
-   }_{C,\,S,\,F\;(\text{BULK})}
+   }_{C,\,S,\,N_{2n},\,F\;(\text{BULK})}
    \;+\;
    \underbrace{
    \begin{bmatrix} A_{bb} & A_{bs} \\ A_{sb} & A_{ss} \end{bmatrix}
@@ -3123,8 +3124,8 @@ only the boundary seed moved.
 
 .. _bc-extraction-variadic-driver:
 
-The honest :math:`L+C-S-B` driver via variadic couplings
---------------------------------------------------------
+The honest :math:`L+C-S-N_{2n}-B` driver via variadic couplings
+---------------------------------------------------------------
 
 The within-group inner solve no longer hands the drivers a fixed
 :math:`(A, S, F)` operator *triple*. Wave O step O.2a generalised both
@@ -3166,12 +3167,13 @@ loss decomposition is the honest
 .. math::
    :label: bc-extraction-within-group-decomposition
 
-   (L+C,\; S,\; B)
+   (L+C,\; S,\; N_{2n},\; B)
    \quad\Longrightarrow\quad
-   \underbrace{(L+C).\text{apply} - S.\text{apply}
-               - B.\text{apply}}_{\equiv\,(L+C-S-B)\,\psi}
+   \underbrace{(L+C).\text{apply} - S.\text{apply} - N_{2n}.\text{apply}
+               - B.\text{apply}}_{\equiv\,(L+C-S-N_{2n}-B)\,\psi}
    \,,\qquad
-   \text{rhs} = q_{\rm ext} + S.\text{apply}(\psi) + B.\text{apply}(\psi)
+   \text{rhs} = q_{\rm ext} + S.\text{apply}(\psi)
+              + N_{2n}.\text{apply}(\psi) + B.\text{apply}(\psi)
 
 .. vv-status: bc-extraction-within-group-decomposition documented
 
@@ -3187,10 +3189,15 @@ against Jacobi's — :ref:`sn-boundary-gs-not-regular`). On a seedless
 Cartesian) mesh the record degrades to exactly this triple: its ``implicit_operator``
 is :math:`M = (L+C)` — the invertible resolvent
 (:class:`~orpheus.sn.operators.streaming.StreamingCollisionOperator`, ``.solve`` = the WDD
-sweep) — and its ``explicit_gains`` are :math:`N = (S,\ B_a)`, the two lagged
+sweep) — and its ``explicit_gains`` are :math:`N = (S,\ N_{2n},\ B_a)`,
+the three lagged
 couplings the driver applies: the bulk scattering gain
 (:class:`~orpheus.transport.operators.scattering.ScatteringOperator`,
-:attr:`block_role <orpheus.numerics.operator.BlockRole>` ``BULK``) and the
+:attr:`block_role <orpheus.numerics.operator.BlockRole>` ``BULK``), the
+bulk :math:`(n,2n)` emission gain
+(:class:`~orpheus.transport.operators.n2n.N2NOperator`, ``block_role``
+``BULK`` — a third member since CS4c step 3;
+:ref:`the two collision gains <operator-algebra-two-gains>`) and the
 boundary reflection gain
 (:class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`,
 ``block_role`` ``BOUNDARY``). On a *carrying* sphere the record poses the
@@ -3274,7 +3281,8 @@ landed.
    The drivers' :class:`~orpheus.numerics.iteration.KrylovAcceleration`
    matvec :eq:`bc-extraction-variadic-matvec` and the
    :class:`~orpheus.numerics.iteration.SourceIteration` rhs are now the
-   *honest* :math:`(L+C-S-B)\,\psi` and :math:`q_{\rm ext}+S\psi+B\psi`
+   *honest* :math:`(L+C-S-N_{2n}-B)\,\psi` and
+   :math:`q_{\rm ext}+S\psi+N_{2n}\psi+B\psi`
    — the reassociation :math:`A-(S+B)\to(A-S)-B` is documented as a
    **principled-equivalence** change in
    :ref:`bc-extraction-numerical-evidence` (criterion 3 of the
@@ -3490,7 +3498,8 @@ for direct callers.
 The 2-D Cartesian eigenvalue SI inner is the geometry-agnostic twin of Krylov
 -----------------------------------------------------------------------------
 
-Because the variadic :math:`-S - B` gains ride the **bare** sweep for
+Because the variadic :math:`-S - N_{2n} - B` gains ride the **bare** sweep
+for
 every geometry (above), the two within-group eigenvalue inner solvers
 are **structural twins** — they share every operator and every
 reduction, differing only in the iteration driver. This holds for 2-D
@@ -3604,7 +3613,12 @@ vs principled-equivalence gate).
 contributes nothing (:math:`B.\text{apply} \equiv 0`), so the variadic
 matvec :math:`(L+C).\text{apply} - S.\text{apply} - B.\text{apply}`
 reduces exactly to :math:`(L+C).\text{apply} - S.\text{apply}` and the
-vacuum path is **bit-identical** to the pre-extraction matvec. Verified
+vacuum path is **bit-identical** to the pre-extraction matvec.  (The
+two-gain spelling here is Wave O's, which is what the cited captures
+were taken against; the :math:`(n,2n)` gain :math:`N_{2n}` joined the
+tuple at CS4c step 3 and rides this argument unchanged, contributing
+exactly zero on the :math:`\Sigma_{2n} \equiv 0` fixtures the captures
+use.) Verified
 by:
 
 - the matvec 18-baseline snapshot
@@ -3668,8 +3682,9 @@ the snapshot tolerance.
 
 **The O.2a variadic reassociation is a second principled-equivalence
 instance.** Splitting the matvec from :math:`(L+C) - (S+B)` (the
-retired fold) to :math:`(L+C) - S - B` (the two separate gains of
-:ref:`bc-extraction-variadic-driver`), and the rhs symmetrically,
+retired fold) to :math:`(L+C) - S - B` (the two separate gains
+:ref:`bc-extraction-variadic-driver` had at the time — :math:`N_{2n}`
+became a third at CS4c step 3), and the rhs symmetrically,
 re-associates the same additions into a different IEEE-754 order. The
 regression snapshots drift at FP-noise level — reflective cylinder
 :math:`4.2\times 10^{-13}` on :math:`k_{\rm eff}` and :math:`6.8\times
@@ -3745,11 +3760,11 @@ of the affine boundary balance
 vector** (via :meth:`TimedFullField.to_flat <orpheus.transport.timed_full_field.TimedFullField.to_flat>`)
 and is **never typed as a field** — so at B.5.2
 :class:`AngularBoundaryResidual` had no operator-output consumer; its first
-consumer is the honest :math:`L+C-S-F-B` driver of Wave O step
+consumer is the honest :math:`L+C-S-N_{2n}-F-B` driver of Wave O step
 **O.2** (see :ref:`bc-extraction-operator-output-o2`). That consumer
 has since landed:
 :func:`~orpheus.sn.solver.evaluate_residual` types the balance defect
-:math:`(L+C-S-B)\psi - q` via ``from_balance`` (Wave O step O.2
+:math:`(L+C-S-N_{2n}-B)\psi - q` via ``from_balance`` (Wave O step O.2
 close-out, :ref:`affine-typed-residual`), so
 :class:`AngularBoundaryResidual` and its bulk sibling
 :class:`~orpheus.transport.residuals.angular_residual.AngularResidual`
@@ -3784,10 +3799,12 @@ matvec output boundary as :class:`AngularBoundaryResidual`. That choice was
         - Composition
         - The hat :math:`B\,\psi.\text{outflow}` would wear
       * - Krylov matvec
-        - :math:`(L+C).\text{apply} - S.\text{apply} - B.\text{apply}`
+        - :math:`(L+C).\text{apply} - S.\text{apply} -
+          N_{2n}.\text{apply} - B.\text{apply}`
         - a **residual** term (subtracted from the diagonal)
       * - SI rhs
-        - :math:`q_{\rm ext} + S.\text{apply} + B.\text{apply}`
+        - :math:`q_{\rm ext} + S.\text{apply} + N_{2n}.\text{apply} +
+          B.\text{apply}`
         - a **source** term (the inflow seed the bare sweep reads)
 
    One operator cannot emit :class:`AngularBoundaryResidual` for the matvec
@@ -3943,7 +3960,7 @@ in the O.2 close-out** (:ref:`affine-typed-residual`):
   :meth:`AngularBoundaryResidual.from_balance <orpheus.transport.residuals.angular_boundary_residual.AngularBoundaryResidual.from_balance>`
   now have their first production-reachable consumer:
   :func:`~orpheus.sn.solver.evaluate_residual` types the within-group
-  balance defect :math:`r = (L+C-S-B)\psi - q` as the composite
+  balance defect :math:`r = (L+C-S-N_{2n}-B)\psi - q` as the composite
   ``FullField(bulk=AngularResidual, boundary=AngularBoundaryResidual)`` — the
   **timeless** carrier, because a residual is a one-shot balance defect
   carrying no iteration history (the ``history_depth = 0`` degenerate;
@@ -7767,7 +7784,8 @@ operative: never gate a splitting's FP-invariance on a degenerate box.
    and this gate does not need re-scoping — but its measurands do need
    naming.**  The C5.5 box is x-reflective / y-vacuum / z-reflective,
    i.e. it closes **two** reflective axis pairs, and ``[M]`` that makes
-   :math:`A = L+C-S-B` **exactly singular** there: :math:`\dim\ker A =
+   :math:`A = L+C-S-N_{2n}-B` **exactly singular** there:
+   :math:`\dim\ker A =
    36` at cells :math:`(5,3,4)`, ``level_symmetric`` :math:`S_4`,
    :math:`n_g = 2` (:math:`= n_g (N/4)\, n_y`).  So G-S and Jacobi do
    **not** return the same boundary trace on it.  The gate is sound

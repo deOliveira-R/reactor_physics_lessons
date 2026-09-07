@@ -38,7 +38,7 @@ represented — not what collision, scattering, and fission *are*.
        eigenvalue posing every method inherits. The parent of
        :doc:`/theory/methods/index`.
    * - :doc:`/theory/foundations/operator_algebra`
-     - The operator algebra itself: :math:`A = L + C - S - B`, posed
+     - The operator algebra itself: :math:`A = L + C - S - N_{2n} - B`, posed
        :math:`A\psi = \tfrac{1}{k}F\psi` (eigenvalue) or :math:`A\psi = q`
        (fixed source). :math:`B` is a first-class **sibling**, not folded
        into :math:`L`; :math:`(L+C)` is the sub-composite whose inverse

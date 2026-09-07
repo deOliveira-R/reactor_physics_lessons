@@ -311,7 +311,8 @@ does **not** cascade across the spectrum.
 
    ⛔ *"Converged fixed point is identical"* until 2026-08-15 (#344).
    The **bulk** claim is right and is what every gate measures; the
-   **trace** claim is not, whenever :math:`A = L+C-S-B` is singular —
+   **trace** claim is not, whenever :math:`A = L+C-S-N_{2n}-B` is
+   singular —
    which it exactly is on a diamond-difference mesh closing
    :math:`\ge 2` reflective axis pairs.  There the two schedules
    legitimately return different **members** of a solution manifold

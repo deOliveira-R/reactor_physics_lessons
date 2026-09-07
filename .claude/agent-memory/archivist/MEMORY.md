@@ -38,8 +38,45 @@ grep must `test -f` the SOURCE). Active track = **#231** (§3); main agent commi
 stage + gate.
 
 **In flight — ONE line each. The STATE is in git (`git status --porcelain -- docs/`), never in
-this list; the evidence is in the lesson.** Branch `fix/sn-eigenvalue-finalize-448`, docs
+this list; the evidence is in the lesson.** Branch `docs/425-within-group-algebra`, docs
 UNCOMMITTED (I stage + gate; the main agent commits).
+
+- **#425 — the SN chapter states the algebra the tree COMPOSES, not the one it taught**
+  (2026-09-07; 13 of 15 `docs/theory/methods/sn/*.rst`, 0 `orpheus/`/`tests/`, 0 new eq-labels).
+  Concurrent with a second archivist on the rest of `docs/theory/` — we converged independently
+  on `verification/sn.rst` and `diffusion_1d.rst`, which is the check worth running. ⭐⭐ **A
+  spelling census is a POPULATION FLOOR**: the SPLITTING (`(L+C)^{-1}(S+B)`), two section
+  HEADINGS and a `(vv-status rationale)` comment carry no matched substring and were each
+  load-bearing. ⛔ I published *"every fixture in this chapter is Σ₂ₙ ≡ 0"* three times and
+  retracted all three — the honest form is `[M]` **12 of 12** `xs_library` mixtures + the 5 MMS
+  `Sig2 = zeros` mints, and a claim about the PASS ("changed no measured value") not the chapter.
+  ⭐ With Sphinx unavailable (one build at a time), a permissive standalone `docutils` parse
+  caught a real `-W` failure (a `.. note::` that swallowed the next paragraph) and a
+  label-set membership test caught a `:ref:` I had invented → [[425-sn-chapter-within-group-algebra]]
+
+- **#425 — the corpus OUTSIDE the SN chapter states the algebra the tree COMPOSES**
+  (2026-09-07; 17 of 66 `docs/theory/**` pages excluding `methods/sn/`, 0 `orpheus/`/`tests/`,
+  **0 new eq-labels**, +352/−157). Concurrent with the SN-chapter instance; no file collision
+  (`git status` disjoint). Gate: residual **81 → 2**, both HISTORY (a 2026-06-05 changelog row,
+  a Wave-O close-out line); 5-term **9 → 80**; docutils 0, backtick parity 0, dead `:ref:`/`:eq:`
+  0, dead python-xref 0/12. ⭐⭐ **A standalone permissive `docutils` parse IS a usable `-W`
+  substitute and found 2 real breakages of mine NOTHING else saw** (a comment abutting prose =
+  `ERROR/3`; a col-0 continuation inside a bullet) — the SN instance converged on the same
+  instrument independently. ⛔ **A continuation line starting with `-`/`+` inside a list-table
+  cell is a BULLET**: break AFTER the operator. ⭐⭐ **A term-count in PROSE is the member-list
+  claim the census cannot see** (9 sites: "five-operator algebra", "all five operators", "a sixth
+  leaf") — and *"the four operator families"* counted nothing on its page, so re-derive, never
+  bump. ⭐ Three stale CODE QUOTES (`A_AA = LC - S - B_a`, `explicit_gains (S, B_a)`,
+  `KEigenvalue((L+C).H, (S+B).H, F.H)`) — all `-W`-silent, all found only against the live def.
+  ⛔ The brief's *"ZERO mentions of N_{2n}"* on `operator_algebra.rst` was `[M]` **5** — the page
+  contradicted ITSELF, which re-shaped the repair. ⛔ `diffusion_1d.rst`'s *"S_N poses (n,2n)
+  production-side instead"* was present-tense-FALSE, retired by **ERR-065** two months earlier
+  → [[425-outside-chapter]]
+
+⏹ **#448 MERGED `6379e9ab` (2026-09-06), branch `fix/sn-eigenvalue-finalize-448` is gone —
+`[M]` `git merge-base --is-ancestor 6379e9ab HEAD` passes.** Kept one line below for its lesson
+only; it is landed work, not in flight (the EIGHTH time this list froze on merged work — reconcile
+with git BEFORE reading it).
 
 - **#448 — a solver's RETURN is a claim, and the two guards' complements did not cover the exit**
   (2026-09-06; 16 `.rst`, 0 `orpheus/`/`tests/`). The eigenvalue finalize hand-built a **P0-only**

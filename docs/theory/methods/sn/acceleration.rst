@@ -754,7 +754,8 @@ catchers:
      - Converged fixed point
      - Convergence rate
      - Caught by
-   * - the within-group **transport** operator :math:`A = L+C-S-B`
+   * - the within-group **transport** operator
+       :math:`A = L+C-S-N_{2n}-B` (:eq:`sn-within-group-with-n2n`)
        (the :math:`\sigma_r`-fold; a sweep sign flip; a wrong closure
        fed to *both* sweep and low-order)
      - **CHANGES** (value-wrong)

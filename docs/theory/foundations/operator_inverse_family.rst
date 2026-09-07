@@ -29,7 +29,8 @@ The Operator Inverse Family
 This page is the **inverse family** of the operator algebra: the four
 realizations of "apply :math:`A^{-1}` / materialize :math:`A`" that the #226
 operator taxonomy separates. The operators being inverted — the loss
-composite :math:`A = L + C - S - B`, and its invertible sub-composite
+composite :math:`A = L + C - S - N_{2n} - B`, and its invertible
+sub-composite
 :math:`L + C` whose inverse **is** the transport :term:`sweep` — are developed in
 :doc:`/theory/foundations/operator_algebra`. This page picks up at the
 inverse itself and follows it through four distinct realizations:

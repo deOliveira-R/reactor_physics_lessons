@@ -31,7 +31,7 @@ Discrete Ordinates Method (S\ :sub:`N`)
         N2n: (n,2n) emission — first-class since CS4c step 3 (not a passenger inside S), and ANISOTROPIC since #426 step 2 (2026-09-04): the SAME TransferOperator binding as S over the channel's own Legendre stack at the solve's scattering_order, yield y = 2. Until then its ℓ=0-only kernel was a MODEL imposed at the operator tier and never a property of the reaction — a defect worth −413.55 Δk·1e5 on a Be-reflected fast slab, catalogued as ERR-082
         F: fission production (χ ⊗ νΣ_f, rank-1 dyad); TWO bindings of one datum since CS4c step 4 — IsotropicFission (energy, the k-outer's) and FissionOperator (angular, the eigen-M posing's)
       composites:
-        A: "L + C - S - N2n - B — the within-group loss operator; the Krylov driver applies it. Most pages of this chapter still spell the pedagogical A = L+C-S-B (Σ_2n ≡ 0 on their fixtures); the shipped member list is eq sn-within-group-with-n2n"
+        A: "L + C - S - N2n - B — the within-group loss operator; the Krylov driver applies it. Every page of this chapter states this member list (issue #425, 2026-09-07); the four-term A = L+C-S-B survives only where it is DECLARED at the site — the 1-D diffusion solver's own composition (its S IS S+N2n), the dated rows of history.rst, and one measured MMS residual table whose fixture is (n,2n)-free by construction. Canonical: eq sn-within-group-with-n2n"
         (L+C): "lower-triangular under the upwind cell ordering; (L+C)⁻¹ IS the transport sweep"
       key_types: [AngularFlux, SNMesh, HarmonicMomentFlux, SweepDependencyGraph]
       entry_points:                    # qualnames; Nexus links via implements edges
@@ -78,19 +78,21 @@ angular-closure weight — unique exact-on-linear-in-:math:`\mu`),
 the general framework :cite:`LewisMiller1984`, and the angular discretisation
 :cite:`CaseZweifel1967` / :cite:`Hebert2009` (§3.9.4).
 
-The solver is posed as an **operator algebra** over five operators: streaming
+The solver is posed as an **operator algebra** over six operators: streaming
 :math:`L` (bulk :math:`\hat{\Omega}\cdot\nabla`), collision / removal
-:math:`C`, the scattering gain :math:`S`, the boundary law :math:`B` — a
+:math:`C`, the scattering gain :math:`S`, the :math:`(n,2n)` gain
+:math:`N_{2n}`, the boundary law :math:`B` — a
 first-class **sibling** operator, *not* folded into :math:`L` — and the rank-1
 fission dyad :math:`F`.  They compose the within-group loss operator
-:math:`A = L + C - S - B`, so the eigenvalue problem is
+:math:`A = L + C - S - N_{2n} - B` (:eq:`sn-within-group-with-n2n`), so the
+eigenvalue problem is
 :math:`A\,\psi = \tfrac{1}{k}\,F\,\psi` (fixed source: :math:`A\,\psi = q`).
 
 .. note::
 
-   **Five operators, six terms — the** :math:`(n,2n)` **caveat for this
-   whole chapter.**  Since CS4c step 3 (2026-08-30) the
-   :math:`(n,2n)` emission is a **sixth** first-class operator
+   **Six operators — where the** :math:`(n,2n)` **term is spelled, and
+   the three places it is not.**  Since CS4c step 3 (2026-08-30) the
+   :math:`(n,2n)` emission is a **first-class** operator
    :math:`N_{2n}` rather than an unnamed passenger inside :math:`S`, so
    the composite the S\ :sub:`N` builder actually composes is
    :math:`A = L + C - S - N_{2n} - B`
@@ -99,17 +101,48 @@ fission dyad :math:`F`.  They compose the within-group loss operator
    binding** — same faces, same arms, same transposes, differing in the
    yield :math:`y` inside :math:`\Lambda_c` alone — so anything this
    chapter derives for :math:`S` holds for :math:`N_{2n}` with
-   :math:`y = 2` and the channel's own stack.  The five-operator spelling above
-   is kept throughout this chapter because :math:`\Sigma_{2n} \equiv 0`
-   on every fixture the chapter derives against, and the extra term
-   would obscure the pedagogy; it is a **deliberate simplification, not
-   the shipped member list**.  Where the distinction bites — the
-   adjoint chain, the DSA posing, any multiplying medium with an
-   :math:`(n,2n)` channel — the pages say so explicitly
-   (:ref:`sn-n2n-adjoint`).  The 1-D diffusion solver's :math:`A`
-   genuinely *is* :math:`L + C - S - B`, because it sums the two
-   isotropic energy leaves into one :math:`S` at its own composition
-   site.
+   :math:`y = 2` and the channel's own stack.
+
+   Until issue #425 (2026-09-07) most pages of this chapter *still spelled*
+   the four-term :math:`A = L + C - S - B`, on the argument that
+   :math:`\Sigma_{2n} \equiv 0` on every fixture the chapter derives
+   against.  That simplification is **retired**: a page that states the
+   general within-group algebra now states the shipped member list, and
+   the four-term form survives only where it is **exact and declared at
+   the site** —
+
+   * the **1-D diffusion solver's** :math:`A`, which genuinely *is*
+     :math:`L + C - S - B` because it sums the two isotropic energy
+     leaves into one :math:`S` at its own composition site; that
+     :math:`S` **is** :math:`S + N_{2n}`, so the spelling is a statement
+     about the *composition*, not about the member list
+     (:ref:`sn-n2n-adjoint`, :ref:`n2n-reactions`);
+   * the **dated changelog rows** of :doc:`history`, which keep the
+     spelling that was current on their date;
+   * one **measured MMS residual table** in
+     :doc:`curvilinear_numerics`, whose fixture is built with
+     :math:`\Sigma_{2n} \equiv 0` by construction
+     (:mod:`orpheus.derivations.continuous.mms.sn`), so the four-term
+     operator is exactly the one that produced the tabulated numbers.
+
+   The pass changed **no measured value** — every edit is an algebra
+   spelling — and it could not have: ``[M]`` 2026-09-07, all **12**
+   ``xs_library`` mixtures (regions A–D :math:`\times` 1/2/4 groups)
+   carry a :math:`\Sigma_{2n}` with **zero** non-zeros, and every MMS
+   mixture is minted ``Sig2 = csr_matrix(zeros((ng, ng)))``
+   (:mod:`orpheus.derivations.continuous.mms.sn`), so the chapter's
+   convergence ladders, :math:`\kinf` anchors and SI-rate anchors are
+   :math:`(n,2n)`-free by construction.  What changed is that the algebra
+   the pages *state* is the algebra the tree *composes*.
+
+   Where the channel **is** live the fixture is *injected* deliberately,
+   and there the pages already spelled :math:`N_{2n}` out: the shipped
+   anisotropy ladder on a Be-reflected fast slab
+   (:ref:`the measured P0-truncation ladder <sn-n2n-p0-truncation-measured>`), the :math:`k`-estimator
+   convention leg, and the eigenvalue-finalize reconstruction.  The other
+   places the distinction bites — the adjoint chain, the DSA posing, any
+   multiplying medium with an :math:`(n,2n)` channel — say so explicitly
+   (:ref:`sn-n2n-adjoint`).
 
 The sub-composite :math:`(L+C)` is lower-triangular under the upwind cell
 ordering, which is exactly why :math:`(L+C)^{-1}` **is** the transport :term:`sweep`

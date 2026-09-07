@@ -157,8 +157,8 @@ that the typed composite retired.  The
 operator algebra" discipline is satisfied: SN is the discretized
 Branch-2 consumer of the shared primitive, not a parallel loop.
 
-The (L + C − S − B)·ψ = (1/k)·F·ψ framing at the solver level
--------------------------------------------------------------
+The (L + C − S − N₂ₙ − B)·ψ = (1/k)·F·ψ framing at the solver level
+-------------------------------------------------------------------
 
 Beyond driving the within-group inner solve, the :math:`(L+C,\ S,\ F)`
 framing organises the solver's outer API surface:
@@ -167,7 +167,8 @@ framing organises the solver's outer API surface:
   :math:`F\,\phi/k` — a thin delegator to ``F.apply`` with the
   :math:`1/k` outer-loop scaling applied at the solver level.
 * :meth:`SNSolver.solve_fixed_source` solves
-  :math:`(L+C-S-B)\,\psi = q_{\rm ext}` (with :math:`q_{\rm ext}` the
+  :math:`(L+C-S-N_{2n}-B)\,\psi = q_{\rm ext}`
+  (:eq:`sn-within-group-with-n2n`; with :math:`q_{\rm ext}` the
   fission source built by ``compute_fission_source``).  Two paths:
 
   * ``inner_solver="source_iteration"`` — sweep-driven fixed-point
@@ -586,21 +587,24 @@ Two Inner Solvers
 - Operator: :math:`(L+C)^{-1}` (the one-walk WDD sweep)
 - Iterate: the typed field composite (angular bulk + boundary trace)
 - Fixed-point: :math:`\psi^{(k+1)} = (L+C)^{-1}(S\,\psi^{(k)} +
-  B\,\psi^{(k)} + q_{\rm ext})`
-- Convergence rate: spectral radius of :math:`(L+C)^{-1}(S+B)` — the
+  N_{2n}\,\psi^{(k)} + B\,\psi^{(k)} + q_{\rm ext})` — the
+  ``explicit_gains`` triple ``(S, N2N, B_a)``
+- Convergence rate: spectral radius of
+  :math:`(L+C)^{-1}(S+N_{2n}+B)` — the
   :term:`scattering ratio` :math:`c` (:doc:`slab_one_group`)
 - Cost per iteration: one transport sweep
 - Works for all geometries
 
 **Krylov (direct operator):**
 
-- Operator: the honest :math:`(L+C-S-B)` applied matrix-free (its
+- Operator: the honest :math:`(L+C-S-N_{2n}-B)` applied matrix-free (its
   :math:`(L+C)` piece via :meth:`StreamingCollisionOperator.apply` — the same
   one-walk discretization the sweep realises; L21 matvec ≡ sweep)
 - Iterate: the same typed composite; GMRES additionally stores its
   Krylov basis (``restart`` × the composite's ``n_dof`` — the ERR-053
   sizing family)
-- System: :math:`(L+C-S-B)\,\psi = q_{\rm ext}` — scattering and the
+- System: :math:`(L+C-S-N_{2n}-B)\,\psi = q_{\rm ext}` — scattering,
+  the :math:`(n,2n)` gain and the
   boundary gain live in the operator, not the lagged source;
   :math:`q_{\rm ext}` is the :math:`1/k`-scaled fission source
 - Convergence: GMRES with sweep preconditioner, typically ~100
@@ -622,7 +626,7 @@ they carried different spatial closures — and disagreed on coarse-mesh
 
    ⛔ **That read "the same fixed point" until 2026-08-15 (#344), and a
    set is not a point.**  On a closed reflective diamond box
-   :math:`A = L+C-S-B` is **exactly singular**, so the two arms
+   :math:`A = L+C-S-N_{2n}-B` is **exactly singular**, so the two arms
    legitimately return different members of a solution manifold:
    ``[M]`` on an all-reflective 2-D absorber box with a uniform
    isotropic source, source iteration under boundary Gauss-Seidel
@@ -1160,7 +1164,8 @@ The convergence contract answers *"did the iteration finish?"*.  There
 is a second, structurally different way for a returned field to be
 unsatisfying, and no convergence certificate can see it: the **equation**
 may not have a unique answer.  On a closed reflective Cartesian box under
-diamond differencing :math:`A = L+C-S-B` is **exactly singular**, so
+diamond differencing :math:`A = L+C-S-N_{2n}-B` is **exactly
+singular**, so
 :math:`A\psi = q` has a solution *manifold* and the iteration freezes an
 arbitrary member of it.  The derivation, the counting laws, the evidence
 and the remedy hierarchy are at :ref:`sn-loss-kernel-gauge`; what belongs

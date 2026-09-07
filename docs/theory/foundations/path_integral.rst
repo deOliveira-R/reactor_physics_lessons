@@ -1058,7 +1058,7 @@ table.
 The deterministic-grid form is not the universal form
 -----------------------------------------------------
 
-The operator algebra :math:`A = L + C - S - B`
+The operator algebra :math:`A = L + C - S - N_{2n} - B`
 (:doc:`/theory/foundations/operator_algebra`) is the shape this frame
 takes **on a deterministic angular–spatial grid**. Two families refuse
 it, and their refusals are instructive rather than embarrassing:
@@ -1216,7 +1216,8 @@ Where the path reading ends
 This section is also where the path reading of Section
 :ref:`1 <path-integral-one-object>` **meets its honest limit and yields
 to a spectral statement**. Group the histories by *fission generation*:
-let :math:`A = L + C - S - B` be the loss operator and :math:`F` the
+let :math:`A = L + C - S - N_{2n} - B` be the loss operator and :math:`F`
+the
 fission operator, so :math:`A^{-1} F` — the **mean-offspring operator**,
 ORPHEUS's multiplication operator :math:`K` — maps one generation's
 fission source to the next generation's. The all-generations flux is the
@@ -1284,7 +1285,7 @@ power iteration on the resolvent :math:`A_{\mathrm{loss}}^{-1} M`, whose
 dominant eigenvalue :math:`\mu = 1/\lambda` is what the iteration
 delivers; a *posing* is a row of assignments:
 
-- **k-eigenvalue**: :math:`A_{\mathrm{loss}} = L + C - S - B`,
+- **k-eigenvalue**: :math:`A_{\mathrm{loss}} = L + C - S - N_{2n} - B`,
   :math:`M = F`, :math:`k = \mu` — the multiplication factor *is* the
   resolvent's dominant eigenvalue, :math:`\rho(A^{-1}F)`, consistent
   with :eq:`path-integral-generation-series` (the pencil eigenvalue is
@@ -1293,7 +1294,7 @@ delivers; a *posing* is a row of assignments:
   eigenvalue: fission is rescaled, time never appears. :math:`k` answers
   a bookkeeping question — *by what factor must fission be diluted for a
   steady state to exist?*
-- **α-eigenvalue**: :math:`A_{\mathrm{loss}} = L + C - S - F - B`,
+- **α-eigenvalue**: :math:`A_{\mathrm{loss}} = L + C - S - N_{2n} - F - B`,
   :math:`M = 1/v`, :math:`\alpha = -1/\mu`. The **dynamic** eigenvalue:
   the full prompt operator is kept and the spectrum of the *free
   evolution* is asked for — :math:`\alpha` is the growth rate of the

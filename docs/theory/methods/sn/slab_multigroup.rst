@@ -19,11 +19,17 @@ new axis:
 
 1. **the invariant** — sinks = sources, now per (cell × :term:`ordinate` ×
    group) → *pose* the multigroup balance;
-2. **the operators** — scattering becomes a group-coupling kernel,
-   fission a rank-1-in-energy emitter; the within-group operator
-   :math:`A = L + C - S - B` keeps its shape (the shipped composite
-   carries a sixth term :math:`-N_{2n}`, zero on this chapter's
-   fixtures — :eq:`sn-within-group-with-n2n`), and its
+2. **the operators** — scattering becomes a group-coupling kernel, the
+   :math:`(n,2n)` emission the *same* kernel with yield :math:`y = 2`
+   over its own channel (:ref:`n2n-reactions`), fission a
+   rank-1-in-energy emitter; the within-group operator
+   :math:`A = L + C - S - N_{2n} - B`
+   (:eq:`sn-within-group-with-n2n`) keeps its shape — the
+   :math:`(n,2n)` term contributes nothing to this chapter's *derivation*
+   fixtures (``[M]`` 2026-09-07, all 12 ``xs_library`` mixtures carry a
+   :math:`\Sigma_{2n}` with zero non-zeros), so writing it out moves no
+   number here; the numbers that *do* need a live channel are injected
+   deliberately and live at :ref:`n2n-reactions` — and its
    streaming-collision part :math:`L+C` stays group-diagonal —
    invertible per group by the same one-pass sweep;
 3. **the eigenvalue posing** — criticality as the generalized
@@ -57,7 +63,8 @@ new axis:
      outer product of spectrum and rate with no useful inverse; the
      operator is ``apply``-only by construction.
    * The eigenvalue posing is
-     :math:`(L + C - S - B)\,\psi = \tfrac{1}{k}\,F\,\psi`; the
+     :math:`(L + C - S - N_{2n} - B)\,\psi = \tfrac{1}{k}\,F\,\psi`
+     (:eq:`sn-within-group-with-n2n`); the
      power method iterates the resolvent action
      :math:`K = A^{-1}F` and converges at the dominance ratio
      :math:`|k_1/k_0|` (:ref:`eigenvalue-posing`).
@@ -177,10 +184,12 @@ right-hand side, inside the sources. Consequently:
 
   .. math::
 
-     (L + C - S - B)\,\psi \;=\; q ,
+     (L + C - S - N_{2n} - B)\,\psi \;=\; q ,
 
   with :math:`S` now carrying the full group-to-group (and, below,
-  angular-moment) transfer, and :math:`B` the boundary-reflection
+  angular-moment) transfer, :math:`N_{2n}` the :math:`(n,2n)` gain
+  carrying that same transfer structure with yield :math:`y = 2`
+  (:ref:`n2n-reactions`), and :math:`B` the boundary-reflection
   gain exactly as before — the energy axis does not touch the
   boundary algebra.
 
@@ -653,7 +662,10 @@ S\ :sub:`N` within-group builder keeps the two terms apart, while the
 :class:`~orpheus.transport.operators.isotropic_transfer.IsotropicScattering`
 with
 :class:`~orpheus.transport.operators.isotropic_transfer.IsotropicN2N`
-into the single :math:`S` its :math:`A = L + C - S - B` expects.  Under
+into the single :math:`S` its :math:`A = L + C - S - B` expects — that
+:math:`S` **is** :math:`S + N_{2n}`, so the four-term spelling is exact
+there and is a statement about the *composition*, not about the member
+list.  Under
 the old design that disagreement was unrepresentable; under the new one
 it is two lines at two composition sites.
 
@@ -1001,7 +1013,7 @@ production by :math:`1/k` and demand balance:
 .. math::
    :label: sn-mg-eigenvalue-posing-eq
 
-   (L + C - S - B)\,\psi \;=\; \frac{1}{k}\,F\,\psi .
+   (L + C - S - N_{2n} - B)\,\psi \;=\; \frac{1}{k}\,F\,\psi .
 
 .. (vv-status rationale) Governing equation: the criticality posing (scale
    production by 1/k and demand balance).  Definitional — it states the
@@ -1013,8 +1025,8 @@ production by :math:`1/k` and demand balance:
 
 This is the slab-multigroup instance of the generalized eigenproblem
 :eq:`eigen-standard-form` — :math:`A_{\rm loss}\,\psi = \lambda M \psi`
-with :math:`A_{\rm loss} = L+C-S-B`, :math:`M = F`, :math:`\lambda =
-1/k` — whose full four-layer architecture (posing, resolvent,
+with :math:`A_{\rm loss} = L+C-S-N_{2n}-B`, :math:`M = F`,
+:math:`\lambda = 1/k` — whose full four-layer architecture (posing, resolvent,
 algorithm, and the :math:`\alpha`/adjoint seams) lives at
 :ref:`eigenvalue-posing`.  Inverting the loss operator turns it into a
 standard eigenproblem for the **multiplication operator**
@@ -1307,7 +1319,8 @@ records only the SN-specific consumption:
   ``preconditioner`` parameter (renamed from ``inverter`` — a GMRES
   *left preconditioner* :math:`M \approx \bigl(A - \sum_i g_i\bigr)^{-1}`
   approximates the FULL within-group system inverse over the variadic
-  gains — for the SN within-group system, :math:`(L+C-S-B)^{-1}` — a
+  gains — for the SN within-group system,
+  :math:`(L+C-S-N_{2n}-B)^{-1}` — a
   different object from the iteration's step inverse; the old name was
   a category mistake) defaults to ``A.inverse().apply`` — the sweep —
   when ``A`` is invertible.

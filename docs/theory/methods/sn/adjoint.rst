@@ -834,7 +834,10 @@ exactly what the 1-D diffusion solver does, summing
 :class:`~orpheus.transport.operators.isotropic_transfer.IsotropicScattering`
 with
 :class:`~orpheus.transport.operators.isotropic_transfer.IsotropicN2N`
-into the one :math:`S` its :math:`A = L + C - S - B` needs.  The two
+into the one :math:`S` its :math:`A = L + C - S - B` needs.  That
+four-term spelling is **exact** there and is a statement about the
+*composition*: the diffusion solver's :math:`S` **is**
+:math:`S + N_{2n}`, not an :math:`S` with the channel dropped.  The two
 solvers now disagree about the grouping *in the composition*, where a
 disagreement is legible, instead of agreeing inside an operator that had
 chosen for both.

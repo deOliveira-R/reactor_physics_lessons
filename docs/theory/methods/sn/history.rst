@@ -4,11 +4,19 @@ Development history
 ===================
 
 S\ :sub:`N` is ORPHEUS's **architectural prototype**: the typed-field
-algebra and the composable loss composite :math:`A = L + C - S - B`
-(posed :math:`A\,\psi = \tfrac{1}{k}\,F\,\psi`)
+algebra and the composable loss composite
+:math:`A = L + C - S - N_{2n} - B` (:eq:`sn-within-group-with-n2n`;
+posed :math:`A\,\psi = \tfrac{1}{k}\,F\,\psi`)
 were developed here *first*, and are the standard the other solvers (CP,
 MoC, MC, diffusion) inherit as they are built — which is why this page
 carries far more development history than any other theory chapter.
+
+Every row below is a **dated** milestone and keeps the spelling that was
+current on its date — several predate the CS4c §14.1 extraction
+(2026-08-30) that made the :math:`(n,2n)` gain :math:`N_{2n}` a
+first-class member, so they read :math:`A = L + C - S - B`.  That is
+history, not the shipped member list; the member list is
+:eq:`sn-within-group-with-n2n`.
 
 This is a reverse-chronological (latest first) changelog of the major
 **architectural** milestones. Iteration-rate work, gate counts, and

@@ -26,7 +26,8 @@ The chain of the book repeats on the new axis:
    ordinate* → pose the conservative balance :eq:`conservative-form`
    and force the geometry factor :math:`\Delta A/w` from that
    invariant;
-2. **the operator** — :math:`A = L + C - S - B` keeps its honest shape
+2. **the operator** — :math:`A = L + C - S - N_{2n} - B`
+   (:eq:`sn-within-group-with-n2n`) keeps its honest shape
    and :math:`L+C` stays **lower-triangular**: :term:`sweep` order now threads
    the angular cascade (:math:`\alpha_{1/2} = 0` **seeds** the recursion at
    each level's :term:`starting direction`; :math:`\alpha_{M+1/2} = 0`
@@ -2406,7 +2407,7 @@ settling the question that actually turns out to be dangerous.
      :math:`r = R` and never bare.
    * :math:`A_{\rm angular}` (always subscripted) is the **angular factor**
      of :eq:`sn-redistribution-tensor-product-eq`.  It is neither the loss
-     operator :math:`A = L + C - S - B` nor a face area; face areas keep
+     operator :math:`A = L + C - S - N_{2n} - B` nor a face area; face areas keep
      their own subscripts, :math:`A_{i\pm1/2}`, abbreviated
      :math:`A_{\pm}` inside a single cell.
    * :math:`P` is the **spatial moment projection** in
@@ -5661,7 +5662,7 @@ The direct starting-direction ψ½ solve
    :math:`\lVert A\cdot\mathrm{solve}(b) - b\rVert_\infty / \lVert b\rVert_\infty`
    (:math:`A` here and throughout this section: the **augmented loss**
    :math:`L+C` on the System A :math:`\oplus` System B composite — the
-   swept sub-composite of the honest :math:`A = L+C-S-B`)
+   swept sub-composite of the honest :math:`A = L+C-S-N_{2n}-B`)
    collapses from :math:`5.18\times10^{5}` to
    :math:`2.5\times10^{-16}`, and the seed-insensitivity
    :math:`\Delta` from :math:`4.57\times10^{-2}` to :math:`0` **bitwise**.

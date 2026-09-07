@@ -35,7 +35,8 @@ type, and that cone **preservation** is a property of the *realization*
 that produced the field. It is the field-algebra companion to the
 operator algebra developed in
 :doc:`/theory/foundations/operator_algebra`: that page types the
-**operators** — the within-group loss composite :math:`A = L + C - S - B`
+**operators** — the within-group loss composite
+:math:`A = L + C - S - N_{2n} - B`
 and its invertible sub-composite :math:`L + C`, whose inverse
 :math:`(L+C)^{-1}` is the transport :term:`sweep` — while this page types
 the **fields** those operators act on.
@@ -67,8 +68,10 @@ the **fields** those operators act on.
      *not* the collision-probability kernel matrix :math:`\mathbf{K}` of
      :doc:`/theory/methods/collision_probability`, and it is not the
      multiplication factor :math:`k`.
-   - :math:`A = L + C - S - B` (italic) is the **within-group loss
-     operator**. The **sweep** is the inverse of its invertible
+   - :math:`A = L + C - S - N_{2n} - B` (italic) is the **within-group
+     loss operator** (the two collision gains :math:`S` and
+     :math:`N_{2n}` are two instances of one binding;
+     :ref:`the two collision gains <operator-algebra-two-gains>`). The **sweep** is the inverse of its invertible
      sub-composite, :math:`(L+C)^{-1}` — the *inner kernel* of the full
      within-group solve :math:`A^{-1}`, never :math:`A^{-1}` itself.
 
@@ -164,7 +167,7 @@ decision, Issues #205 / #207: units live on the field, not the
 :class:`~orpheus.numerics.space.FunctionSpace`; see
 :class:`~orpheus.numerics.field.Field`). The transport solve moves
 between exactly two dimensional universes, connected by the loss
-operator :math:`A = L + C - S - B`:
+operator :math:`A = L + C - S - N_{2n} - B`:
 
 .. list-table:: The two universes connected by :math:`A` / :math:`A^{-1}`
    :header-rows: 1
@@ -403,7 +406,7 @@ supports, and together they close every escape.
      - **Superposition is physics, and the transport operator is
        linear.**
      - For fixed cross sections the within-group operator
-       :math:`A = L + C - S - B` is linear in :math:`\psi`, so if
+       :math:`A = L + C - S - N_{2n} - B` is linear in :math:`\psi`, so if
        :math:`A\psi_1 = q_1` and :math:`A\psi_2 = q_2` in the *same
        medium* then :math:`A(\psi_1 + \psi_2) = q_1 + q_2`. The sum of
        two fluxes from independent sources in one medium is the flux of
@@ -1272,7 +1275,7 @@ consumer**. It evaluates the within-group balance defect
 .. math::
    :label: affine-typed-residual-eq
 
-   r \;=\; (L + C - S - B)\,\psi \;-\; q
+   r \;=\; (L + C - S - N_{2n} - B)\,\psi \;-\; q
 
 .. vv-status: affine-typed-residual-eq documented
 
@@ -1292,7 +1295,7 @@ minted via the named composition
 /
 :meth:`AngularBoundaryResidual.from_balance <orpheus.transport.residuals.angular_boundary_residual.AngularBoundaryResidual.from_balance>`
 — **NOT** a bare cross-class ``-`` (which would mis-type the defect as a
-source). The operator output :math:`(L+C-S-B)\psi` is a source/sink
+source). The operator output :math:`(L+C-S-N_{2n}-B)\psi` is a source/sink
 composite (the B.5.2 typing); subtracting the source :math:`q` is a
 **role** transition (source operands → residual result), so it must go
 through ``from_balance``.
@@ -1449,7 +1452,7 @@ original, with the CS3 verdict added as a fourth column.
        singular system's solution manifold (argument 6).
    * - **Banach fixed-point / contraction**
      - :math:`\Delta\psi^{(i+1)} = M\,\Delta\psi^{(i)}`,
-       :math:`M = (L+C)^{-1}(S+B)` — an exact linear recurrence on the
+       :math:`M = (L+C)^{-1}(S+N_{2n}+B)` — an exact linear recurrence on the
        increments
      - the increment is the natural carrier of the contraction factor
        :math:`\rho`, the a-posteriori bound, the Aitken extrapolation —

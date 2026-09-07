@@ -604,7 +604,9 @@ what actually happened, is:
        low-order operator is the **derived edge-centered SN-side
        consistent system** (the R4 ruling — the standalone in-algebra
        :math:`A_{\rm diff} = L + C - S - B` of
-       :doc:`/theory/methods/diffusion_1d` remains the right
+       :doc:`/theory/methods/diffusion_1d` — four terms because that
+       solver sums its two collision gains into one :math:`S`, so it
+       carries no separate :math:`N_{2n}` — remains the right
        *standalone* discretization but was MEASURED divergent as a
        correction operator at :math:`\sigma_t h \gtrsim 2`; two
        defining laws, two operators). Correctness-safe by construction
@@ -697,7 +699,9 @@ and verified end-to-end by the anisotropic curvilinear MMS
    coupling itself is the object being preconditioned (e.g. the
    in-algebra diffusion operator for DSA — now built as
    :math:`A_{\rm diff} = L + C - S - B`, #290 P4,
-   :doc:`/theory/methods/diffusion_1d` — per the architecture decided on
+   :doc:`/theory/methods/diffusion_1d`; four terms because diffusion
+   fuses its two collision gains into one :math:`S` and so has no
+   separate :math:`N_{2n}` — per the architecture decided on
    Issue #2), not a re-split of the sweep into directions that secretly
    share state.
    The fused

@@ -115,7 +115,7 @@ All on :class:`~orpheus.data.macro_xs.mixture.Mixture`:
 Operators
 ---------
 
-The five leaves and their composites
+The six leaves and their composites
 (:doc:`/theory/methods/sn/solver`,
 :doc:`/theory/foundations/operator_algebra`):
 
@@ -136,15 +136,26 @@ The five leaves and their composites
        :math:`S = R \circ \Lambda \circ M` — not a projection. The
        in-scatter contraction uses the **transpose** of the stored
        matrix (crosswalk row 1).
+   * - :math:`N_{2n}`
+     - The :math:`(n,2n)` emission gain — the **same** binding as
+       :math:`S` in a different role, over the mixture's ``Sig2``
+       Legendre stack and with the yield :math:`\nu_{2n} = 2` inside
+       :math:`\Lambda`.  First-class since CS4c step 3; anything stated
+       for :math:`S` holds for it with :math:`y = 2`
+       (:ref:`the two collision gains <operator-algebra-two-gains>`).
    * - :math:`B`
      - The boundary law as a first-class sibling operator
        (reflective / vacuum / white), every geometry.
    * - :math:`F`
      - Fission production — rank-1 in energy,
        :math:`|\chi\rangle\langle\nu\Sigma_{\mathrm{f}}|`.
-   * - :math:`A = L + C - S - B`
+   * - :math:`A = L + C - S - N_{2n} - B`
      - **The honest within-group operator.** Page-wide, the bare
        letter :math:`A` means exactly this composite;
+       the four-term :math:`L+C-S-B` is legitimate only where a method
+       **fuses** the two collision gains at its composition site (the
+       1-D diffusion solver) or where the fixture has
+       :math:`\Sigma_{2n} \equiv 0`;
        :math:`(L+C)^{-1}` is the transport :term:`sweep` — the inner kernel
        of :math:`A^{-1}`, never "the sweep is :math:`A^{-1}`". Any
        local rebinding of :math:`A` must be declared where it is
@@ -270,8 +281,8 @@ from each other, or from itself.
        :math:`\Delta A` folded inside). The full crosswalk table is
        tabulated at :ref:`normalization-alpha-crosswalk`.
    * - 6 — the operator letters
-     - :math:`L` = bulk streaming **only**; :math:`A = L+C-S-B`
-       is the honest within-group operator.
+     - :math:`L` = bulk streaming **only**;
+       :math:`A = L+C-S-N_{2n}-B` is the honest within-group operator.
      - Adams & Larsen :cite:`AdamsLarsen2002` define
        :math:`A \equiv I - L^{-1}S` (their Eq. (1.27)) — a
        **sweep-preconditioned fixed-point map** (ORPHEUS's *Krylov
@@ -304,8 +315,9 @@ from each other, or from itself.
        it pre-inverted (``A_inv``, then the variadic ``*gains``).
      - Not a canon row — the one place ORPHEUS itself carries two
        bindings of :math:`A`, by design. The S\ :sub:`N` binding
-       hands :math:`A = L + C` with gains :math:`(S, B)`, composing
-       to the same honest :math:`L+C-S-B`; the bridge is stated at
+       hands :math:`A = L + C` with gains :math:`(S, N_{2n}, B)`,
+       composing to the same honest :math:`L+C-S-N_{2n}-B`; the bridge
+       is stated at
        both ends (the module heads of
        :mod:`orpheus.numerics.iteration` and
        :mod:`orpheus.numerics.operator`, and the solver page).

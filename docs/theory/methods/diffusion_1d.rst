@@ -15,7 +15,11 @@ This page documents the ORPHEUS diffusion module on two levels. It
 carries the **production operator-family architecture** (#290 — how
 the solver poses and inverts the multigroup diffusion criticality
 problem in the shared operator algebra
-:math:`(L + C - S - B)\psi = \tfrac1k F\psi`) *and* the **continuous
+:math:`(L + C - S - B)\psi = \tfrac1k F\psi`; the four-term spelling is
+this solver's own, because it sums its two isotropic energy leaves into
+one :math:`S` at its composition site and so has no separate
+:math:`N_{2n}` term — :ref:`the two collision gains
+<operator-algebra-two-gains>`) *and* the **continuous
 reference solutions** with the equation labels the verification tests
 point at. The operators are 1-D but coordinate-general (slab /
 cylinder / sphere through the mesh's own face areas and cell volumes);
@@ -59,18 +63,18 @@ Key Facts
 - **Operator-family form (production, #290).** ORPHEUS does *not*
   discretise :eq:`diffusion-operator` term-by-term. It poses the
   criticality problem in the shared operator algebra — the same
-  loss composite :math:`A = L + C - S - B` the S\ :sub:`N` solver
-  introduced — as
+  loss composite the S\ :sub:`N` solver introduced — as
 
   .. math::
      :label: diffusion-operator-family
 
      \underbrace{(L + C - S - B)}_{A}\,\psi \;=\; \frac{1}{k}\,F\,\psi ,
 
-  acting on the scalar composite field :math:`\psi`. Here :math:`L` is
+  acting on the scalar composite field :math:`\psi`, with **no separate**
+  :math:`N_{2n}` **term** — see the grouping note below. Here :math:`L` is
   the elliptic **leakage** leaf :math:`-\nabla\!\cdot D\nabla`,
   :math:`C` the **collision** multiplication by :math:`\Sigma_t`,
-  :math:`S` the **scattering** kernels, :math:`B` the realized
+  :math:`S` the **collision-gain** kernels, :math:`B` the realized
   **boundary** :term:`albedo` block, and :math:`F` the rank-1 fission
   production :math:`\chi\otimes\nu\Sigma_f`. The removal cross section
 
@@ -82,6 +86,25 @@ Key Facts
   is then a **theorem** — the in-group cancellation between :math:`C`
   and :math:`S`, :math:`\mathbf 1^{\mathsf T}(C - S) = \Sigma_a` — never
   an assembled input. See :ref:`diffusion-operator-family-section`.
+
+- **Why four terms and not five — the grouping, not the member list.**
+  The *general* within-group composite carries **two** collision gains,
+  :math:`A = L + C - S - N_{2n} - B` (:eq:`sn-within-group-with-n2n`),
+  because the :math:`(n,2n)` channel's bundling is context-dependent and
+  is not decided at the operator level
+  (:ref:`the two collision gains <operator-algebra-two-gains>`). This
+  solver decides it **at its own composition site**, summing the two
+  isotropic energy leaves
+  :class:`~orpheus.transport.operators.isotropic_transfer.IsotropicScattering`
+  ``+``
+  :class:`~orpheus.transport.operators.isotropic_transfer.IsotropicN2N`
+  into the single :math:`S` of :eq:`diffusion-operator-family` before
+  composing the loss. So diffusion's :math:`S` *is* scattering **and**
+  the :math:`(n,2n)` emission, its four-term spelling is **exact**
+  rather than a :math:`\Sigma_{2n} \equiv 0` simplification, and the
+  difference from S\ :sub:`N` is a
+  :class:`~orpheus.numerics.operator.OperatorSum` grouping of the same
+  two members — not a different member list.
 
 - **Diffusion coefficient.** In each region :math:`D` is built from the
   transport cross section:
@@ -187,7 +210,9 @@ Operator-family architecture (production)
 =========================================
 
 The production solver (#290) does not carry a diffusion-specific matvec.
-It composes the loss :math:`A = L + C - S - B` and the gain :math:`F`
+It composes the loss :math:`A = L + C - S - B` — the general
+:math:`L + C - S - N_{2n} - B` with this solver's two isotropic energy
+leaves summed into the one :math:`S` — and the gain :math:`F`
 from the shared operator algebra of :doc:`/theory/foundations/operator_algebra`,
 inverts :math:`A` exactly, and drives the outer power iteration through
 the *same* :class:`~orpheus.numerics.eigenvalue.EigenvalueSolver`
@@ -328,9 +353,33 @@ gated directly (:ref:`diffusion-operator-family-verification`). The
 :math:`(n,2n)` channel is **loss-side** — :math:`S` carries the full
 K_iso pair :math:`\Sigma_{s0}^{\mathsf T} + 2\Sigma_2^{\mathsf T}` while
 :math:`F` and the production rate are :math:`\nu\Sigma_f` only, mirroring
-the homogeneous solver (:doc:`/theory/foundations/infinite_medium`); S\ :sub:`N` poses
-:math:`(n,2n)` production-side instead — both are consistent posings of
-the same balance. Because the group coupling lives entirely in the
+the homogeneous solver (:doc:`/theory/foundations/infinite_medium`).
+
+.. note::
+
+   **The two solvers agree on the SIDE and differ only in the
+   GROUPING.** ⛔ Until 2026-09-07 this paragraph continued *"S*\
+   :sub:`N` *poses* :math:`(n,2n)` *production-side instead — both are
+   consistent posings of the same balance"*. That was true when written
+   and was retired by **ERR-065** (R7, 2026-07-03), which ruled the
+   estimator and the posed problem may not disagree: S\ :sub:`N`'s
+   :meth:`~orpheus.sn.solver.SNSolver.compute_keff` now carries a
+   :math:`\nu\Sigma_f`-only numerator and subtracts the emission
+   :math:`E_{2n}` from the denominator
+   (:math:`R_{\nu\Sigma_f}/k = R_{\Sigma_a} + L - E_{2n}`), i.e.
+   **loss-side, exactly as here**. Since CS4c step 3 (2026-08-30) the
+   operator tier says the same thing structurally — S\ :sub:`N`'s
+   composite is :math:`A = L + C - S - N_{2n} - B`
+   (:eq:`sn-within-group-with-n2n`), with the channel subtracted into
+   the loss. What still differs is only *how the two members are
+   grouped*: S\ :sub:`N` keeps them as two operators, diffusion sums
+   them into one :math:`S`
+   (:ref:`the two collision gains <operator-algebra-two-gains>`).
+   :meth:`~orpheus.sn.solver.SNSolver.compute_production_rate`
+   deliberately keeps fission **plus** emission — it is the ERR-052
+   renormalisation scale anchor, a different role from the k numerator.
+
+Because the group coupling lives entirely in the
 shared kernels, the solver is **ng-generic by construction**: the
 island's hardcoded 2-group ``sig_s[::-1]`` down-scatter flip is
 structurally dead, which unblocks arbitrary-group diffusion (#33 / #34).
@@ -1339,7 +1388,8 @@ on both faces (:math:`\phi_g` vanishes there by construction). The
 in-group scatter cancels against the collision term by the column-sum
 theorem, so the forcing carries removal = absorption + out-scatter —
 the same cancellation the assembled :math:`A = L + C - S - B`
-realizes. The forcing is SymPy-differentiated from the same symbolic
+realizes (this fixture is :math:`\Sigma_{2n} \equiv 0`, so the summed
+:math:`S` carries the scattering leaf alone). The forcing is SymPy-differentiated from the same symbolic
 :math:`(D_g, \phi_g)` (structurally independent of the
 finite-difference assembly under test), sampled at cell centres, and
 pushed through the solver's exact resolvent as a fixed-source solve
