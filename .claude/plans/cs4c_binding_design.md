@@ -2467,6 +2467,8 @@ Everything in §20.3, plus: **one Sphinx build at a time** (L63 — two builds o
 
 ### 22.1 ▶ NEXT ACT — #448: the eigenvalue finalize returns a flux reconstructed from a P0-only source at every `scattering_order`
 
+**✅ LANDED `6379e9ab` (2026-09-07, `main` = `origin/main`; #448 CLOSED; branch deleted).** Exit on the final tree: 13 of 13 trees rc=0 — **11 281 passed / 19 sk / 66 xf / 0 failed** (= step 5's 11 182 + 103 new rows − 4 retired API-smoke tests); the gate module 95 + 8 primitive rows green (10 red → 0 on the pre-carve rows); battery 12 of 12 arms bite (honest 0; positive control 60; `scratch/_448/battery_r2*.status`); pyright 0 on `orpheus/`; `sphinx -E -W` rc=0; `dead_references` 0 / 68. Log copied aside as `scratch/_448/_448_full_gate_FINAL.log`. The record of the act is the rest of this section (ground facts → refutations → rulings → the landed state → the review round); **the next act is §22.2 (#425)**.
+
 **Goal (domain terms):** the angular flux `solve_sn` returns is the converged solve's OWN flux — reconstructed from the source the converged iteration actually used, at every scattering order — never from a weaker source than the one the eigenvalue was computed with.
 
 **Ground facts `[M]` 2026-09-05 at `950f7c9b`:**
