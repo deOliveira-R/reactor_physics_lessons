@@ -30,11 +30,17 @@ A :class:`~orpheus.numerics.space.FunctionSpace` resolves its metric
 *source* (the ``metric`` field, the legacy ``inner_product_weights`` array,
 or nothing) into one of these realizations exactly once and delegates its
 three metric verbs — ``apply_metric`` / ``apply_inverse_metric`` /
-``inner_product`` — to it. Axis-built spaces keep their per-axis path
-(``_apply_axes_weights``): the axes ARE the metric source there, and a
-measure is diagonal by nature — a Gram is a *form*, a different concept,
-which is why :class:`~orpheus.numerics.axis.Axis` never grows a matrix slot
-(the P7 design ruling: the generator induces, the space holds).
+``inner_product`` — to it. An axis-built space DERIVES its realization from
+its axes — one :class:`FactoredMetric` with a :class:`DiagonalMetric` block
+per weighted axis (CS4c step 6 item 6.2c-i; until then an inline per-axis
+loop duplicated :meth:`DiagonalMetric.apply_block`): the axes ARE the
+metric source there, and a measure is diagonal by nature — a Gram is a
+*form*, a different concept, which is why
+:class:`~orpheus.numerics.axis.Axis` never grows a matrix slot (the P7
+design ruling: the generator induces, the space holds). Where a form is
+needed on an axis-built space — a dense Gram on a moment head — it is a
+:class:`DenseMetric` POSITIONED on that axis's block of the space's own
+object (ruling R-6.2c-2, 2026-09-08), never on the axis.
 
 The inverse face is Moore–Penrose, everywhere, by doctrine
 ==========================================================
@@ -310,11 +316,13 @@ class DiagonalMetric(HilbertMetric):
     ) -> NDArray:
         r"""Apply to ONE interior index block of ``x`` (``start`` leading
         ranks precede it) — the positioned form
-        :class:`FactoredMetric` composes. Operation-for-operation the
-        per-axis arithmetic of ``FunctionSpace._apply_axes_weights``
-        (explicit reshape: leading 1s, the block shape, trailing 1s), so
-        a factored diagonal block and an axis-borne measure are the same
-        arithmetic by construction."""
+        :class:`FactoredMetric` composes. THE per-axis arithmetic (explicit
+        reshape: leading 1s, the block shape, trailing 1s) — since CS4c
+        step 6 item 6.2c-i the only spelling of it: an axis-built space
+        derives its metric as a ``FactoredMetric`` over its axes and
+        applies it through this method (the inline
+        ``FunctionSpace._apply_axes_weights`` loop it duplicated retired,
+        `[M]` bit-identical)."""
         out = np.asarray(x)
         rank = len(block_shape)
         w = np.ascontiguousarray(

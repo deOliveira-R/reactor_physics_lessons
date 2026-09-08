@@ -125,9 +125,12 @@ _HEADS: dict[str, Callable[[], Head]] = {
 def test_the_head_metric_is_bit_identical_on_the_axis_route(label: str) -> None:
     r"""Moving the head's measure from the dense slot onto ONE axis changes no bit.
 
-    ``_apply_axes_weights`` reshapes the axis's weights to the head's own
-    leading block and multiplies — the SAME single elementwise product the
-    dense-slot :class:`~orpheus.numerics.metric.DiagonalMetric` performs, so
+    The axes-derived :class:`~orpheus.numerics.metric.FactoredMetric`'s
+    ``DiagonalMetric.apply_block`` (since CS4c step 6 item 6.2c-i; the
+    inline ``_apply_axes_weights`` loop before it) reshapes the axis's
+    weights to the head's own leading block and multiplies — the SAME
+    single elementwise product the dense-slot
+    :class:`~orpheus.numerics.metric.DiagonalMetric` performs, so
     there is no re-association and ``array_equal`` is the honest assertion
     (``vv-principles`` §bit-identity criterion 3: zero reductions reordered).
 
@@ -362,28 +365,44 @@ def test_truncated_re_mints_through_from_L_and_LOSES_the_axes(label: str) -> Non
     assert lower != _axis_built(lower)
 
 
-def test_one_metric_source_refuses_axes_beside_a_dense_gram() -> None:
-    r"""⛔ RE-POSED BY 6.2c — the construction guard an axis-built head collides with.
+def test_a_dense_gram_lives_positioned_on_the_axis_built_heads_own_object() -> None:
+    r"""RE-POSED at CS4c step 6 item 6.2c-i (ruling R-6.2c-2, 2026-09-08) —
+    the construction guard an axis-built head used to collide with.
 
-    ``FunctionSpace.__post_init__`` refuses ``axes`` + ``metric`` together.  On
-    a DENSE-Gram frame the Parseval-dressed head is exactly
-    ``inner_product_weights=None`` + a :class:`DenseMetric`, so there is no
-    diagonal measure to put on an axis and the axis-built head is
-    UNCONSTRUCTIBLE for that row today (`[M]` 17 of 75 shipped (rule, L) rows
-    are DENSE, 2 of them at ``L ≤ 2``).
+    Until 6.2c-i ``FunctionSpace.__post_init__`` refused ``axes`` + ``metric``
+    together ("one metric source only"), and on a DENSE-Gram frame the
+    Parseval-dressed head is exactly ``inner_product_weights=None`` + a
+    :class:`DenseMetric` — no diagonal measure to put on an axis, so the
+    axis-built head was UNCONSTRUCTIBLE for that row (`[M]` 17 of 75 shipped
+    (rule, L) rows are DENSE, 2 of them at ``L ≤ 2``). Now the space's
+    metric is a DERIVED object over its axes and the dense form is a block
+    POSITIONED on it: admitted, and APPLIED.
 
-    The gate also pins WHY the obvious workaround is a value bug: with the
-    object dropped and a counting axis installed, ``apply_metric`` reads the
-    axes and the dense form is silently ignored.
+    The control the old record carried survives with its teeth: dropping
+    the object for a counting axis silently changes the value.
     """
+    from orpheus.numerics.metric import FactoredMetric
+
     G = np.eye(3) + 0.25
     dense = DenseMetric.inverse_of(G)
     axis = Axis(_HARMONIC_AXIS_LABEL, (3,), None, kind=BasisKind.MODAL)
-    with pytest.raises(ValueError, match="one metric source only"):
+    with pytest.raises(ValueError, match="positioned over them"):
         FunctionSpace(name="probe", shape=(3,), axes=(axis,), metric=dense)
+    head = FunctionSpace(
+        name="probe", shape=(3,), axes=(axis,),
+        metric=FactoredMetric((((3,), dense),)),
+    )
+    x = np.array([1.0, 2.0, 3.0])
+    # The positioned block applies through DenseMetric.apply_block (a
+    # reshape-and-matmul on the block) while the standalone object applies
+    # through DenseMetric.apply (the leading matmul): the SAME form, two
+    # associations — [M] 1 ULP apart on this probe, so the honest tier is
+    # a nulp band, not bit-equality (vv-principles §bit-identity criterion 3).
+    np.testing.assert_array_almost_equal_nulp(
+        head.apply_metric(x), np.asarray(dense.apply(x)), nulp=4,
+    )
 
     counting = FunctionSpace(name="probe", shape=(3,), axes=(axis,))
-    x = np.array([1.0, 2.0, 3.0])
     np.testing.assert_array_equal(counting.apply_metric(x), x)
     assert not np.allclose(np.asarray(dense.apply(x)), x), (
         "the control must MOVE, or dropping the object would be inert"
@@ -431,9 +450,10 @@ def test_the_production_head_of_every_family_is_axis_buildable(label: str, L: in
     Scope note, stated so the green is not read wider than it is: this row
     covers the **continuum** head (``frame.basis.space``), which is dense-slot
     on every rule and every ``L``.  The frame's **dressed** head is a different
-    object and is NOT axis-buildable on a DENSE-Gram row — that is hazard H-1,
-    pinned separately by
-    ``test_one_metric_source_refuses_axes_beside_a_dense_gram``.
+    object; on a DENSE-Gram row it is axis-buildable only with its dense
+    form POSITIONED on the space's own metric object (hazard H-1, resolved
+    by ruling R-6.2c-2 and pinned separately by
+    ``test_a_dense_gram_lives_positioned_on_the_axis_built_heads_own_object``).
     """
     from orpheus.transport.frames import HarmonicFrame
 

@@ -1787,18 +1787,33 @@ metric can come from, and **exactly one of them may be occupied**:
      - Realization
      - When it is the right one
    * - ``axes``
-     - the per-axis path
-       (``FunctionSpace._apply_axes_weights``) — each factor's weight
-       vector broadcast into its own index block
+     - the axes-DERIVED object — one
+       :class:`~orpheus.numerics.metric.FactoredMetric` with a
+       :class:`~orpheus.numerics.metric.DiagonalMetric` per weighted axis,
+       each factor's weight vector applied on its own index block (CS4c
+       step 6 item 6.2c-i, 2026-09-08; until then an inline per-axis loop,
+       ``FunctionSpace._apply_axes_weights``, spelled the same arithmetic a
+       second time)
      - An axis-built space (:eq:`spaces-axis-product`). The axes **are**
-       the metric source; the space never consults the other two.
+       the metric source; the space never consults the weights slot, and
+       consults ``metric`` only as the positioned OVERLAY of forms
+       described in the next row.
    * - ``metric``
      - the object itself —
        :class:`~orpheus.numerics.metric.DiagonalMetric`,
        :class:`~orpheus.numerics.metric.DenseMetric`, or a
-       :class:`~orpheus.numerics.metric.FactoredMetric` product of them
+       :class:`~orpheus.numerics.metric.FactoredMetric` product of them.
+       Beside ``axes`` (item 6.2c-i, ruling R-6.2c-2) it is admitted only
+       as the positioned OVERLAY of forms — a ``FactoredMetric`` with one
+       entry per axis, a form only on a block whose axis carries no
+       measure, never a ``DiagonalMetric`` (a diagonal measure is the
+       axis's own to carry) — and is MERGED into the axes-derived object,
+       never substituted for it: every other axis keeps supplying its
+       own block, and a product of axis-built factors carries its
+       factors' overlays concatenated beside its axes.
      - A form no weight array can spell. Today's founding occupant is
-       the frame's matrix Parseval metric.
+       the frame's matrix Parseval metric; the dense-Gram moment head of
+       item 6.2c-ii is the axis-built one.
    * - ``inner_product_weights``
      - resolved to a
        :class:`~orpheus.numerics.metric.DiagonalMetric`, whose

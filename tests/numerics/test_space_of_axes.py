@@ -661,17 +661,29 @@ class TestThreeSourceExclusivity:
         )
 
     def test_axes_and_a_metric_object_are_refused(self) -> None:
-        """B2 — the (axes, metric) arm (battery arm M10b)."""
-        from orpheus.numerics.metric import DenseMetric
+        """B2 — the (axes, metric) arm (battery arm M10b), re-posed at CS4c
+        step 6 item 6.2c-i (ruling R-6.2c-2, 2026-09-08): an axis-built
+        space's metric is DERIVED from its axes, so a bare object beside
+        them is still two sources and is refused by name — while an object
+        POSITIONED over the axes (a FactoredMetric with one entry per axis,
+        a form only on an axis that carries NO measure) is ADMITTED,
+        because that is where a dense Gram lives on an axis-built head; a
+        form beside an axis that also carries a measure is two sources on
+        one block and stays refused. Until then ANY object beside axes was
+        refused ("one metric source only")."""
+        from orpheus.numerics.metric import DenseMetric, FactoredMetric
 
         ax = Axis("a", (2,), weights=np.array([2.0, 4.0]), kind=BasisKind.NODAL)
-        with pytest.raises(ValueError, match="one metric source"):
-            FunctionSpace(
-                "bad",
-                (2,),
-                axes=(ax,),
-                metric=DenseMetric(np.array([[1.0, 0.0], [0.0, 1.0]])),
-            )
+        dense = DenseMetric(np.array([[1.0, 0.0], [0.0, 1.0]]))
+        with pytest.raises(ValueError, match="positioned over them"):
+            FunctionSpace("bad", (2,), axes=(ax,), metric=dense)
+        with pytest.raises(ValueError, match="two metric sources on one block"):
+            FunctionSpace("bad", (2,), axes=(ax,), metric=FactoredMetric((((2,), dense),)))
+        counting = Axis("a", (2,), kind=BasisKind.NODAL)
+        admitted = FunctionSpace(
+            "good", (2,), axes=(counting,), metric=FactoredMetric((((2,), dense),)),
+        )
+        _require(admitted.metric is not None, "the positioned object was dropped")
 
     def test_dense_weights_and_a_metric_object_are_refused(self) -> None:
         """B3 — the (dense, metric) arm: the one the pre-P7 structure

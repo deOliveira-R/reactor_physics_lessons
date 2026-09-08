@@ -152,10 +152,18 @@ class FunctionSpace(Generic[Carrier]):
         :class:`~orpheus.numerics.metric.HilbertMetric` realization for
         forms no diagonal array can spell (a
         :class:`~orpheus.numerics.metric.DenseMetric` Gram inverse being
-        the founding occupant). Resolution order:
-        ``metric`` > ``inner_product_weights`` > Euclidean; axis-built
-        spaces route through their axes instead. Validated at
-        construction via :meth:`HilbertMetric.validate_for`.
+        the founding occupant). On an AXIS-BUILT space it is the
+        positioned OVERLAY of forms (CS4c step 6 item 6.2c-i, ruling
+        R-6.2c-2): a :class:`~orpheus.numerics.metric.FactoredMetric` with
+        one entry per axis, a form only on a block whose axis carries NO
+        measure (a dense-Gram head), ``None`` elsewhere — the space's
+        metric is DERIVED from its axes with that overlay merged in, so
+        every axis keeps supplying its own diagonal block. Resolution
+        order: the axes-derived object (overlay merged) > an explicit
+        object on an axes-less space > ``inner_product_weights`` >
+        Euclidean. Validated at construction via
+        :meth:`HilbertMetric.validate_for` and, beside axes, by the
+        positioning guard.
     axes : tuple[Axis, ...] | None, default None
         The generator record of an axis-composed space (campaign 1,
         CS1): the ordered tensor factors this space is the product of.
@@ -163,8 +171,9 @@ class FunctionSpace(Generic[Carrier]):
         construction path. Populated by :meth:`of_axes` (and threaded
         through ``*``); when present, the factor measures live PER AXIS
         (``inner_product_weights`` stays ``None`` — never both, enforced
-        at construction) and the metric machinery routes through the
-        per-axis path. Since the identity flip (CS4c step 6,
+        at construction) and the metric is DERIVED from them as one
+        :class:`~orpheus.numerics.metric.FactoredMetric` (item 6.2c-i).
+        Since the identity flip (CS4c step 6,
         2026-09-07) it IS the identity of an axis-built space —
         ``__eq__``/``__hash__`` read it directly; the dataclass field
         stays ``compare=False`` only so a subclass's generated ``__eq__``
@@ -248,15 +257,19 @@ class FunctionSpace(Generic[Carrier]):
     # keeps a subclass's generated ``__eq__`` from re-deriving equality
     # over every field, same rationale as the weights above) — and
     # LOAD-BEARING for the metric: when present, the factor measures live
-    # per axis and the metric machinery routes through the per-axis path
-    # (never densified).
+    # per axis and the metric is DERIVED from them as one FactoredMetric
+    # (never densified; item 6.2c-i retired the inline per-axis loop).
     axes: Optional[tuple[Axis, ...]] = field(
         default=None, repr=False, compare=False,
     )
     # The metric OBJECT (campaign 1, P7): the third metric source — a
     # first-class HilbertMetric realization (today: DenseMetric, the
     # non-Hadamard case no array-or-axes source can spell). Resolution
-    # order in _resolved_metric: metric object > dense weights > None.
+    # order in _resolved_metric: axes-derived (with this object merged in
+    # as the positioned OVERLAY of forms) > an object on an axes-less
+    # space > dense weights > None; beside axes the object must be
+    # POSITIONED over them (one entry per axis, a form only where the
+    # axis carries no measure) — the guard checks it.
     # ``compare=False`` is structurally MANDATORY, not taste: [M] a
     # compared metric field makes the dataclass-generated ``__eq__`` of
     # subclasses return an ndarray and ``hash()`` raise — the same
@@ -285,11 +298,13 @@ class FunctionSpace(Generic[Carrier]):
                 f"(the axes own the measure on an axis-built space)"
             )
         if self.axes is not None and self.metric is not None:
-            raise ValueError(
-                f"space {self.name!r} carries BOTH per-axis measures and "
-                f"a metric object — one metric source only "
-                f"(the axes own the measure on an axis-built space)"
-            )
+            # CS4c step 6 item 6.2c-i: an axis-built space's metric is a
+            # DERIVED object over its axes; an explicit object is admitted
+            # only as the positioned OVERLAY of forms (one entry per axis,
+            # in order, a form only on a measure-less axis's block) — the
+            # home of a dense Gram on an axis-built head (ruling
+            # R-6.2c-2). Anything else is two metric sources.
+            _require_positioned_over(self.metric, self.axes, name=self.name)
         if self.inner_product_weights is not None and self.metric is not None:
             raise ValueError(
                 f"space {self.name!r} carries BOTH dense "
@@ -648,12 +663,6 @@ class FunctionSpace(Generic[Carrier]):
         pads ``w`` with trailing 1s, which is a no-op when ``w`` already
         spans every axis.
         """
-        if self.axes is not None:
-            # Axis-built space: single-source through the per-axis metric
-            # (⟨x, y⟩ = Σ (G⊙x)·y BY DEFINITION — one spelling of the
-            # weighted pairing, so the leading-vs-trailing divergence
-            # recorded below is unspellable on this path).
-            return float(np.sum(self._apply_axes_weights(x, inverse=False) * y))
         m = self._resolved_metric
         if m is None:
             return float(np.sum(x * y))
@@ -694,8 +703,6 @@ class FunctionSpace(Generic[Carrier]):
 
     def _diagonal_apply_metric(self, x: Any) -> Any:
         r"""The bare-array realization of :meth:`apply_metric`."""
-        if self.axes is not None:
-            return self._apply_axes_weights(x, inverse=False)
         m = self._resolved_metric
         if m is None:
             return x
@@ -721,8 +728,6 @@ class FunctionSpace(Generic[Carrier]):
 
     def _diagonal_apply_inverse_metric(self, x: Any) -> Any:
         r"""The bare-array realization of :meth:`apply_inverse_metric`."""
-        if self.axes is not None:
-            return self._apply_axes_weights(x, inverse=True)
         m = self._resolved_metric
         if m is None:
             return x
@@ -732,15 +737,25 @@ class FunctionSpace(Generic[Carrier]):
     def _resolved_metric(self) -> Optional[HilbertMetric]:
         r"""The metric SOURCE resolved to its realization, PER CALL.
 
-        Resolution order: the ``metric`` object wins; a legacy
-        ``inner_product_weights`` array resolves to a
-        :class:`~orpheus.numerics.metric.DiagonalMetric` (whose arithmetic
-        is operation-for-operation the arms that used to live inline in
-        the three ``_diagonal_*`` realizations — the reroute is
-        bit-identical by construction); ``None`` means Euclidean and the
-        verbs short-circuit without an object. Axis-built spaces never
-        reach this — their metric source IS the axes, and the per-axis
-        path handles it (``_apply_axes_weights``).
+        Resolution order (CS4c step 6 item 6.2c-i, ruling R-6.2c-2): an
+        axis-built space's metric is DERIVED from its axes as a
+        :class:`~orpheus.numerics.metric.FactoredMetric` — one
+        :class:`~orpheus.numerics.metric.DiagonalMetric` per weighted axis
+        on that axis's block, ``None`` on a counting-measure axis — with
+        the space's positioned OVERLAY of forms merged in (a dense Gram's
+        :class:`~orpheus.numerics.metric.DenseMetric` on the block of an
+        axis that carries no measure; the guard admitted it), no object at
+        all when every block is Euclidean (:func:`_axes_metric`); else an
+        explicit ``metric`` object on an axes-less space; else a legacy
+        ``inner_product_weights`` array resolves to a ``DiagonalMetric``;
+        ``None`` means Euclidean and the verbs short-circuit without an
+        object. ONE realization for every source:
+        :meth:`DiagonalMetric.apply_block` is operation-for-operation the
+        per-axis reshape-and-multiply the retired ``_apply_axes_weights``
+        performed inline (`[M]` bit-identical on every axis-built space —
+        gated in ``tests/numerics/test_axis_metric_is_a_derived_object.py``),
+        and the legacy diagonal arm is operation-for-operation the arms
+        that used to live inline in the three ``_diagonal_*`` realizations.
 
         ⛔ Deliberately NOT a ``cached_property``, and the reason is a
         measured red: the mutation-battery idiom mutates a frozen
@@ -754,52 +769,13 @@ class FunctionSpace(Generic[Carrier]):
         the field per call, and every such battery relies on it. The
         wrapper is a tiny frozen object; the numpy work dominates.
         """
+        if self.axes is not None:
+            return _axes_metric(self.axes, self.metric)
         if self.metric is not None:
             return self.metric
         if self.inner_product_weights is not None:
             return DiagonalMetric(self.inner_product_weights)
         return None
-
-    def _apply_axes_weights(self, x: Any, *, inverse: bool) -> Any:
-        r"""The per-axis metric realization (axis-built spaces only).
-
-        Each axis's factor measure multiplies (or pseudo-inverse-divides)
-        its OWN index block of ``x``, placed by an explicit reshape:
-        leading 1s for the preceding axes' ranks, the axis shape, trailing
-        1s for the remaining ranks (plus any extra trailing element axes,
-        matching the tree's leading-aligned metric convention). Exact for
-        interior axes — a position the prefix-only leading broadcast of a
-        dense-slot space cannot even express — and never materializes the
-        outer product (the ERR-067-family divergence is unspellable on
-        this path; the dense twin ``*`` once carried retired at CS4c step
-        6 item 6.2a, and the factored arm positions the same per-axis
-        arithmetic through
-        :meth:`~orpheus.numerics.metric.DiagonalMetric.apply_block`). Counting-
-        measure axes (``weights is None``, the canonical spelling) are
-        skipped; an all-counting space returns ``x`` unchanged.
-
-        The inverse is the same Moore–Penrose pseudo-inverse the dense
-        path uses (zero-weight components map to zero), applied per axis.
-        """
-        axes = self.axes
-        assert axes is not None  # caller-gated; narrowing only
-        if all(ax.weights is None for ax in axes):
-            return x
-        out = np.asarray(x)
-        ndim = out.ndim
-        start = 0
-        for ax in axes:
-            rank = len(ax.shape)
-            w = ax.weights
-            if w is not None:
-                wb = w.reshape((1,) * start + ax.shape + (1,) * (ndim - start - rank))
-                if inverse:
-                    nonzero = wb != 0.0
-                    out = np.where(nonzero, out / np.where(nonzero, wb, 1.0), 0.0)
-                else:
-                    out = out * wb
-            start += rank
-        return out
 
     # ------------------------------------------------------------------
     # Space algebra (Depth B step D-B)
@@ -900,6 +876,149 @@ class FunctionSpace(Generic[Carrier]):
 # ---------------------------------------------------------------------------
 
 
+def _axis_entries(
+    axes: tuple[Axis, ...],
+    positioned: Optional[HilbertMetric] = None,
+) -> list[tuple[tuple[int, ...], DiagonalMetric | DenseMetric | None]]:
+    r"""One positioned metric entry per AXIS — the block form of the axis
+    doctrine's "the measure lives per axis" — with the space's positioned
+    OVERLAY of forms merged in.
+
+    A weighted axis contributes a
+    :class:`~orpheus.numerics.metric.DiagonalMetric` carrying its measure on
+    its own index block; a counting-measure axis (``weights is None``, the
+    canonical spelling) contributes ``None`` — no pass over that block —
+    unless ``positioned`` (the space's admitted overlay: one entry per
+    axis, a form only where the axis carries no measure) places a FORM on
+    that block, which then IS the entry: the dense Gram no diagonal
+    measure can spell (ruling R-6.2c-2, 2026-09-08 — *each axis supplies
+    its diagonal block from its measure; a dense-Gram head supplies a
+    positioned DenseMetric on its block*). The guard makes shadowing
+    unspellable, so the merge never has to choose.
+    :meth:`DiagonalMetric.apply_block` performs exactly the explicit
+    reshape-and-multiply (leading 1s for the preceding axes' ranks, the
+    axis shape, trailing 1s for the rest — exact for interior axes, never
+    materializing the outer product; the ERR-067-family divergence is
+    unspellable here) that ``FunctionSpace._apply_axes_weights`` performed
+    inline until CS4c step 6 item 6.2c-i retired it into this one
+    realization.
+    """
+    forms: tuple[DiagonalMetric | DenseMetric | None, ...] = (
+        (None,) * len(axes)
+        if not isinstance(positioned, FactoredMetric)
+        else tuple(form for _, form in positioned.entries)
+    )
+    return [
+        (
+            ax.shape,
+            form if form is not None
+            else (None if ax.weights is None else DiagonalMetric(ax.weights)),
+        )
+        for ax, form in zip(axes, forms)
+    ]
+
+
+def _axes_metric(
+    axes: tuple[Axis, ...], positioned: Optional[HilbertMetric] = None,
+) -> Optional[FactoredMetric]:
+    r"""The metric an axis-built space DERIVES from its axes (CS4c step 6
+    item 6.2c-i): a lazy :class:`~orpheus.numerics.metric.FactoredMetric`
+    over :func:`_axis_entries` (the positioned overlay merged in), or
+    ``None`` when every block is Euclidean (the default — no object, no
+    allocation).
+    Rebuilt per resolution (a handful of frozen wrappers around the axes'
+    own arrays; nothing is copied), so an in-place weight mutation reaches
+    the metric surface at the next read exactly as the dense-slot arm's
+    does.
+    """
+    entries = _axis_entries(axes, positioned)
+    if all(entry is None for _, entry in entries):
+        return None
+    return FactoredMetric(tuple(entries))
+
+
+def _require_positioned_over(
+    metric: HilbertMetric, axes: tuple[Axis, ...], *, name: str,
+) -> None:
+    r"""Admit an explicit metric object on an AXIS-BUILT space only as the
+    positioned OVERLAY of forms — a
+    :class:`~orpheus.numerics.metric.FactoredMetric` with exactly one entry
+    per axis, in order, each on that axis's block, a form ONLY on a block
+    whose axis carries no measure, and never a diagonal one.
+
+    That is the one shape in which a form no diagonal measure can spell —
+    a dense Gram's :class:`~orpheus.numerics.metric.DenseMetric` on a
+    moment head's block — lives beside per-axis measures without becoming
+    a second metric source (ruling R-6.2c-2, 2026-09-08: *a Gram is a FORM,
+    never on* ``Axis.weights``; the space's metric is the derived object
+    and a dense block is positioned ON it). Everything else is refused by
+    name, each a second spelling of one measure: a diagonal array spanning
+    the whole shape or a factored object whose blocks do not follow the
+    axes (the derived object would silently disagree with it — `[M]` a
+    relaxed guard alone left the per-axis short-circuit reading the axes
+    and ignoring the object by ``max|Δ| = 14.6`` on a dense-Gram head); a
+    positioned :class:`~orpheus.numerics.metric.DiagonalMetric` (a diagonal
+    measure is the axis's own to carry); a form on an axis that ALSO
+    carries a measure (two sources on one block — the overlay merge would
+    have to pick one and the loser would be dead data).
+    """
+    if not isinstance(metric, FactoredMetric):
+        raise ValueError(
+            f"space {name!r} carries per-axis measures and a "
+            f"{type(metric).__name__} — an axis-built space's metric is "
+            f"DERIVED from its axes; an explicit object must be a "
+            f"FactoredMetric positioned over them (one entry per axis)."
+        )
+    blocks = tuple(block for block, _ in metric.entries)
+    axis_blocks = tuple(ax.shape for ax in axes)
+    if blocks != axis_blocks:
+        raise ValueError(
+            f"space {name!r}: the metric object's blocks {blocks} do not "
+            f"follow the axes' blocks {axis_blocks} — a positioned object "
+            f"carries exactly one entry per axis, in order."
+        )
+    for k, ((_, form), ax) in enumerate(zip(metric.entries, axes)):
+        if form is None:
+            continue
+        if isinstance(form, DiagonalMetric):
+            raise ValueError(
+                f"space {name!r}: entry {k} (axis {ax.label!r}) positions a "
+                f"DiagonalMetric — a diagonal measure is the axis's own to "
+                f"carry (Axis.weights); only a FORM no measure can spell (a "
+                f"dense Gram) is positioned on the derived object."
+            )
+        if ax.weights is not None:
+            raise ValueError(
+                f"space {name!r}: axis {ax.label!r} carries a measure AND "
+                f"entry {k} positions a {type(form).__name__} on its block — "
+                f"two metric sources on one block; a form REPLACES the "
+                f"measure (mint that axis with weights=None)."
+            )
+
+
+def _positioned_forms(
+    factors: tuple["FunctionSpace", ...],
+) -> Optional[FactoredMetric]:
+    r"""The positioned OVERLAY an all-axis-built product carries beside its
+    concatenated axes: each factor's admitted overlay (one entry per axis)
+    in order, ``None`` on every axis of a factor that carries none — or no
+    object at all when no factor carries a form. The product then derives
+    exactly the entries its factors derive (item 6.2c-i).
+    """
+    entries: list[
+        tuple[tuple[int, ...], DiagonalMetric | DenseMetric | None]
+    ] = []
+    for f in factors:
+        assert f.axes is not None  # narrowing only: the caller's arm
+        if isinstance(f.metric, FactoredMetric):
+            entries.extend(f.metric.entries)
+        else:
+            entries.extend((ax.shape, None) for ax in f.axes)
+    if all(form is None for _, form in entries):
+        return None
+    return FactoredMetric(tuple(entries))
+
+
 def _tensor_product_factored_metric(
     factors: tuple["FunctionSpace", ...],
 ) -> Optional[FactoredMetric]:
@@ -948,7 +1067,13 @@ def _tensor_product_factored_metric(
     ] = []
     for f in factors:
         m = f.metric
-        if m is not None:
+        if f.axes is not None:
+            # Per AXIS, never per factor: an axis-built factor's measure
+            # stays exactly where the axis doctrine put it, its positioned
+            # overlay of forms merged in (the same entries the factor
+            # DERIVES for itself — one spelling).
+            entries.extend(_axis_entries(f.axes, m))
+        elif m is not None:
             if isinstance(m, FactoredMetric):
                 entries.extend(m.entries)
             elif isinstance(m, (DiagonalMetric, DenseMetric)):
@@ -960,16 +1085,6 @@ def _tensor_product_factored_metric(
                 raise TypeError(
                     f"a tensor product can position only diagonal/dense "
                     f"factor metrics, got {type(m).__name__}"
-                )
-        elif f.axes is not None:
-            # Per AXIS, never per factor: an axis-built factor's measure
-            # stays exactly where the axis doctrine put it.
-            for ax in f.axes:
-                entries.append(
-                    (
-                        ax.shape,
-                        None if ax.weights is None else DiagonalMetric(ax.weights),
-                    )
                 )
         elif f.inner_product_weights is not None:
             entries.append(
@@ -1127,8 +1242,10 @@ class TensorProductSpace(FunctionSpace):
         # 6 item 6.2a retired the dense arm and its densifier bridge):
         # * axis threading (CS1, gate B7) — when EVERY factor carries an
         #   axes record, the product's record is the concatenation and
-        #   the measure rides the per-axis path (a factor carrying axes
-        #   never carries a metric object — the construction guard);
+        #   the measure rides the per-axis path; a factor's positioned
+        #   OVERLAY of forms (a dense-Gram head, 6.2c-i) rides beside it,
+        #   concatenated per axis, so the product derives the same
+        #   entries its factors do;
         # * the factored arm — an axes-less factor on either side leaves
         #   ``axes=None`` (never fabricate an axis for a space that did
         #   not declare one) and the product carries a lazy
@@ -1144,6 +1261,7 @@ class TensorProductSpace(FunctionSpace):
             axes: Optional[tuple[Axis, ...]] = tuple(
                 ax for fa in factor_axes if fa is not None for ax in fa
             )
+            metric = _positioned_forms(factors)
         else:
             axes = None
             metric = _tensor_product_factored_metric(factors)

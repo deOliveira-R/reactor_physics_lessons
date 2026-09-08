@@ -9,7 +9,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **11664**
+Total tests collected: **11860**
 
 V&V level distribution
 ----------------------
@@ -18,11 +18,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 1304, 11.2%
-   L1, 1755, 15.0%
+   L0, 1304, 11.0%
+   L1, 1755, 14.8%
    L2, 71, 0.6%
    L3, 0, 0.0%
-   foundation, 8508, 72.9%
+   foundation, 8704, 73.4%
    unmarked, 26, 0.2%
 
 Tagging source
@@ -34,7 +34,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 11559
+   explicit, 11755
    class-name, 46
    func-name, 0
    case, 33
@@ -277,6 +277,7 @@ Module × level grid
    fields/test_scalar_boundary_flux, 0, 0, 0, 0, 15, 0
    frames/test_binding_tightness, 0, 0, 0, 0, 20, 0
    frames/test_harmonic_frame, 0, 0, 0, 0, 29, 0
+   frames/test_moment_metric_fork_premise, 0, 0, 0, 0, 101, 0
    frames/test_moment_space_is_read_off_the_frame, 0, 0, 0, 0, 36, 0
    geometry/test_bc_equivalence_snapshot, 0, 0, 0, 0, 44, 0
    geometry/test_bc_errors, 0, 0, 0, 0, 11, 0
@@ -342,6 +343,7 @@ Module × level grid
    numerics/test_axis, 0, 0, 0, 0, 15, 0
    numerics/test_axis_generator, 0, 0, 0, 0, 50, 0
    numerics/test_axis_marginal, 0, 0, 0, 0, 23, 0
+   numerics/test_axis_metric_is_a_derived_object, 0, 0, 0, 0, 11, 0
    numerics/test_basis_domain, 0, 0, 0, 0, 24, 0
    numerics/test_coupled_operator, 0, 0, 0, 0, 65, 0
    numerics/test_default_iteration_budget, 0, 0, 0, 0, 34, 0
@@ -377,6 +379,7 @@ Module × level grid
    numerics/test_measure, 0, 17, 0, 0, 48, 0
    numerics/test_measure_partition, 12, 0, 0, 0, 0, 0
    numerics/test_measure_phase, 0, 0, 0, 0, 12, 0
+   numerics/test_moment_head_axis_built_premise, 0, 0, 0, 0, 78, 0
    numerics/test_operator, 0, 0, 0, 0, 59, 0
    numerics/test_operator_capability_predicates, 0, 0, 0, 0, 26, 0
    numerics/test_operator_protocols, 0, 0, 0, 0, 16, 0
@@ -519,6 +522,7 @@ Module × level grid
    solve/test_si_single_primitive_contract, 0, 0, 0, 0, 2, 0
    solve/test_sn_adjoint_certification, 0, 13, 0, 0, 2, 0
    solve/test_sn_adjoint_entries, 0, 6, 0, 0, 0, 0
+   solve/test_windowed_si_diagnostic_trajectory, 0, 0, 0, 0, 6, 0
    spatial/test_affine_closure, 0, 0, 0, 0, 5, 0
    spatial/test_face_transmission_damping, 0, 0, 0, 0, 9, 0
    spatial/test_ld_slope_frame, 0, 1, 0, 0, 1, 0
