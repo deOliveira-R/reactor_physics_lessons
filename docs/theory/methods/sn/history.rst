@@ -132,7 +132,7 @@ them.  Trust ``git``, not this column.
        :ref:`spaces-moment-head-axis-built` and
        :ref:`frame-the-one-moment-space`.
      - —
-     - landing hash pending, on ``main``
+     - ``336b6394``, on ``main``
    * - 2026-09-08
      - **The moment carrier's norm is the field's energy — ONE moment
        space, Parseval-dressed** (campaign 1 residue, CS4c step 6 item
