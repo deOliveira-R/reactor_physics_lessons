@@ -1495,8 +1495,9 @@ The moment-ordering crosswalk
 
 The cell moment vector is the tensor (Kronecker) product of the per-axis 1-D
 Legendre basis, ordered **x-outer / y-inner** so the all-:math:`P_0` cell
-average is always slot 0 (the same convention the :ref:`spatial-moment-space`
-factor surfaces, :eq:`spatial-moment-kronecker-order`).  The Kronecker layout in
+average is always slot 0 (the same convention the
+:ref:`within-cell moment factor <spatial-moment-space>` carries,
+:eq:`spatial-moment-kronecker-order`).  The Kronecker layout in
 2-D is :math:`[\bar\psi,\ \hat\psi_y,\ \hat\psi_x,\ \hat\psi_{xy}]` (indexing
 :math:`[o_x, o_y]` with :math:`o_x` outer); each downstream face carries its
 :math:`2^{d-1}` transverse moments in the matching per-axis order.  The
@@ -1635,10 +1636,13 @@ the four within-cell coefficients of the bilinear (UBLD) basis
 :math:`\{1, x, y, xy\}` of :eq:`ld-ubld-cell-system`.  Unlike the angular
 moment, the spatial moment is an **additional axis** that rides on whatever
 angular representation is in play — it does NOT replace anything.  Its typed
-home is the :ref:`spatial-moment-space`
-(:class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`),
-a tensor factor of length :math:`(\text{per\_axis})^d` that composes onto a
-field's space alongside the cell/group/angular factors.
+home is the discretization scheme's own
+:meth:`moment_axis
+<orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis>`
+(:ref:`the account below <spatial-moment-space>`), a ``MODAL``
+:class:`~orpheus.numerics.axis.Axis` of length
+:math:`(\text{per\_axis})^d` carrying the scheme's own cell mass, which
+composes onto a field's space alongside the cell/group/angular factors.
 
 The two notions are summarised in the contrast table:
 
@@ -1666,10 +1670,15 @@ The two notions are summarised in the contrast table:
      - :math:`(L{+}1)(2L{+}1)`
      - :math:`(\text{per\_axis})^d`
      - —
-   * - Typed space
-     - :class:`SphericalHarmonicSpace`
-     - :class:`SpatialMomentSpace`
-     - both :class:`FunctionSpace` factors
+   * - Typed home
+     - the head space's ``MODAL``
+       :class:`~orpheus.numerics.axis.HarmonicAxis` (on a folded / 1-D
+       rule, :class:`~orpheus.numerics.axis.LegendreAxis`)
+     - the scheme's ``MODAL`` ``spatial_moment``
+       :class:`~orpheus.numerics.axis.Axis`
+     - both ``MODAL`` axes of one axis-built space (both were
+       ``FunctionSpace`` subclasses until 2026-09-08 — items 6.2c-ii
+       and 6.2c-iii)
    * - Role on the flux
      - **replacement** (hold :math:`\psi` OR :math:`\phi_\ell^m`)
      - **additional** (rides on either)
@@ -1706,10 +1715,11 @@ cell/group space,
    \;\otimes\;
    \mathrm{CellGroupSpace}(ng, *\text{spatial})
    \;\otimes\;
-   \mathrm{SpatialMomentSpace}(\text{per\_axis}, d),
+   \mathrm{SpatialMomentAxis}(\text{per\_axis}, d),
 
 .. (vv-status rationale) Named-field-typing identity (the carrier-space
-   tensor product). Foundation-gated by test_spatial_moment_field_space.
+   tensor product). Foundation-gated by test_spatial_moment_field_space
+   and, for the tail factor, test_spatial_moment_tail_is_the_schemes_axis.
 .. vv-status: two-moment-carrier-space documented
 
 .. note::
@@ -1807,7 +1817,8 @@ multi-moment closure activates the slope rows.
    LANDED half of S3-A.  The :math:`\hat\phi` spatial-moment **iterate
    carrier** that FILLS the slope rows the lift now accepts is OWED (it was
    blocked on the typed-field space widening — the
-   :ref:`spatial-moment-space` subsection, the prerequisite that was minted
+   :ref:`within-cell moment factor <spatial-moment-space>` subsection, the
+   prerequisite that was minted
    next).  The lift therefore scatters a slope source that, in the production
    path, is still zero (no field carries :math:`\hat\phi` yet); the converged
    fixed point does not change UNTIL the iterate carrier lands.  This page
@@ -1990,7 +2001,8 @@ PRODUCES one.  Filling the slope rows requires (all S3-A proper, owed):
   the typed-field spaces validate ``shape == (ng, *spatial)`` with no slot for
   a trailing :math:`(\text{per\_axis})^d` axis, so a slope-carrying field was
   an *illegal state* (Pattern 4 firing correctly).  The resolution — minting
-  the first-class :ref:`spatial-moment-space` factor — is the subject of the
+  the :ref:`first-class within-cell moment factor <spatial-moment-space>` —
+  is the subject of the
   next subsection.
 
 * The **cell-emit moment accumulation** — the wavefront cell solve already
@@ -2025,25 +2037,78 @@ the campaign-time boundary record.
 
 .. _spatial-moment-space:
 
-The SpatialMomentSpace: a first-class within-cell DG moment carrier (S3-A0)
--------------------------------------------------------------------------------
+The within-cell spatial-moment factor: a first-class DG moment carrier (S3-A0)
+------------------------------------------------------------------------------
+
+.. important::
+
+   **This question has been answered twice, and only the REALIZATION
+   changed.** The design ruling — *the within-cell moment is a
+   first-class typed factor, never a bare trailing integer axis* — was
+   taken at **#240 D5b-S3-A0** and has never been overturned; the
+   argument for it is preserved verbatim below and is still the reason
+   the factor is typed. What changed is what carries the type:
+
+   * **#240 D5b-S3-A0** (the account below, in its original tense) minted
+     the factor as its own :class:`~orpheus.numerics.space.FunctionSpace`
+     subclass, ``SpatialMomentSpace``, composed on with the tensor
+     product ``*`` and recovered by ``find_factor``.
+   * **CS4c step 6 item 6.2c-iii** (2026-09-08) retired that class. The
+     factor is now the discretization scheme's OWN ``MODAL``
+     :class:`~orpheus.numerics.axis.Axis`, minted by
+     :meth:`DiscretizationSchemeBase.moment_axis
+     <orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis>`
+     — label ``"spatial_moment"``, shape :math:`(2^d,)`, and
+     ``weights`` the scheme's own :meth:`moment_mass_diagonal
+     <orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_mass_diagonal>`
+     — composed on by :meth:`BulkField.compose_spatial_moments
+     <orpheus.transport.fields._bases.BulkField.compose_spatial_moments>`.
+
+   ⛔ **Why the class had to go: it was a SECOND spelling of a factor
+   that already existed.** Since CS4b the widened *angular* and *scalar*
+   spaces carried the scheme's mass-weighted axis, while the widened
+   harmonic-*moment* product appended the Euclidean class beside it —
+   one factor, two spellings, with four consequences the corpus records:
+   a widened moment product was **axes-less** (an axes-less factor takes
+   ``*``'s non-axis arm), its tail carried **no mass** (so the moment
+   field's norm was not its energy on that factor), the frame's
+   derivation had to **drop** the angular space's own tail axis and
+   re-append the class to stay ``(name, shape)``-equal to the hub's, and
+   the widened :meth:`HarmonicMomentFlux.scalar_flux
+   <orpheus.transport.fields.harmonic_moment_flux.HarmonicMomentFlux.scalar_flux>`
+   self-derive was **refused by contract** because the product's own
+   cell-group factor lacked the axis the target needed. All four are
+   closed; the closing evidence is the changelog entry in
+   :ref:`sn-development-history` and the "What the retirement moved"
+   note at the end of this section, with the space-layer and frame-layer
+   statements at :ref:`spaces-moment-head-axis-built` and
+   :ref:`frame-the-one-moment-space`.
+
+   **What is unchanged and still normative:** the Kronecker ordering and
+   the slot-0 cell-average convention, the ``(per_axis)^d`` count law,
+   and the "append iff > 1" byte-identity policy. That doctrine was
+   never the class's — it lives in
+   :mod:`orpheus.numerics.moment_layout`, and it did not move.
 
 The typed-field-space half of S3-A (the half the scattering-lift TODO above
 flagged as a hard prerequisite).  The within-cell tensor-Legendre DG moment
-axis — how :math:`\psi` varies in space WITHIN a cell — is minted as a
-first-class function space,
-:class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`,
-the **spatial** sibling of the **angular**
-:class:`~orpheus.numerics.spaces.spherical_harmonic_space.SphericalHarmonicSpace`.
+axis — how :math:`\psi` varies in space WITHIN a cell — is a
+first-class typed factor, the **spatial** sibling of the **angular**
+head (:class:`~orpheus.numerics.spaces.spherical_harmonic_space.SphericalHarmonicSpace`
+on a full-sphere rule).
 The two "moment" notions are ORTHOGONAL axes (angular harmonics over
 direction :math:`\Omega` vs spatial Legendre over within-cell position
 :math:`x`); naming each as its own typed factor keeps the distinction
-type-visible and dispels the collision.
+type-visible and dispels the collision.  That argument was written for
+the S3-A0 mint, when both factors were ``FunctionSpace`` subclasses;
+since 2026-09-08 (items 6.2c-ii and 6.2c-iii) both are ``MODAL`` axes of
+one axis-built space, which makes the sentence more literally true, not
+less — they are two axes, side by side, of the same product.
 
 .. math::
    :label: spatial-moment-space-size
 
-   \dim(\text{SpatialMomentSpace}) \;=\; (\text{per\_axis})^{d},
+   \dim(\text{SpatialMomentAxis}) \;=\; (\text{per\_axis})^{d},
    \qquad
    \text{per\_axis} =
    \begin{cases}
@@ -2052,12 +2117,36 @@ type-visible and dispels the collision.
    \end{cases}
 
 .. (vv-status rationale) Named-field-typing dimension identity
-   dim = per_axis^d. Foundation-gated by test_spatial_moment_field_space.
+   dim = per_axis^d. Foundation-gated by test_spatial_moment_field_space
+   and test_spatial_moment_tail_is_the_schemes_axis (the tail axis's shape
+   against cell_moment_count).
 .. vv-status: spatial-moment-space-size documented
 
-The factor composes via the tensor product ``*`` into the bulk-field spaces
-EXACTLY as the angular factor does, and is recovered by type via
-``space.find_factor(SpatialMomentSpace).per_axis`` (#207).  The
+The factor composes into the bulk-field spaces EXACTLY as the angular
+factor does.
+
+.. note::
+
+   **How the width is recovered — then and now.** At S3-A0 the factor
+   composed with the tensor product ``*`` and was recovered by TYPE,
+   ``space.find_factor(SpatialMomentSpace).per_axis``, which is what
+   closed #207 (see the note below). Since item 6.2c-iii it is an
+   :class:`~orpheus.numerics.axis.Axis` of an axis-built space and is
+   recovered by LABEL —
+   :data:`~orpheus.numerics.moment_layout.SPATIAL_MOMENT_AXIS_LABEL` —
+   which is what
+   :meth:`BulkField.spatial_moments_per_axis_of
+   <orpheus.transport.fields._bases.BulkField.spatial_moments_per_axis_of>`
+   reads off the space.
+   :meth:`~orpheus.numerics.space.TensorProductSpace.find_factor` itself
+   stays, still minted by this step, still the typed bridge from a
+   composed space back to a factor's metadata; its surviving queries are
+   the harmonic head's :math:`L` and the Legendre head's spent axis.
+   Both spellings answer the same question — *what is the moment width?*
+   — off the SPACE, never off a threaded integer, which is the ruling
+   this section exists to record.
+
+The
 field-space factories of the day (``AngularField.from_mesh``,
 ``ScalarField.from_mesh``, and
 :meth:`~orpheus.transport.fields.harmonic_moment_flux.HarmonicMomentFlux.from_mesh_and_L`
@@ -2066,7 +2155,7 @@ factory did not)
 gained an OPTIONAL ``spatial_moments`` parameter (default ``1``) that
 appends the factor **iff the within-cell count exceeds 1** — the
 "append iff > 1" gate single-sourced from
-:func:`~orpheus.numerics.spaces.spatial_moment_space.spatial_moment_tail`
+:func:`~orpheus.numerics.moment_layout.spatial_moment_tail`
 (the cell analogue that delegates to
 :func:`orpheus.numerics.moment_layout.face_moment_tail`, so the cell-moment tail
 and the per-face cochain tail can never disagree).  At the default the
@@ -2080,9 +2169,10 @@ Why a first-class typed factor, not a bare int axis
 The slope-carrying flux could, in principle, be stored as a plain ndarray
 with a trailing :math:`(\text{per\_axis})^d` axis and an integer remembered
 somewhere for its width.  That was rejected (the user's design choice
-"option b") in favour of a first-class typed
-:class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-factor, for the `coding-elegance` Pattern-4 reason
+"option b") in favour of a first-class typed factor — the
+``SpatialMomentSpace`` class at S3-A0, the scheme's own ``MODAL``
+:class:`~orpheus.numerics.axis.Axis` since item 6.2c-iii — for the
+`coding-elegance` Pattern-4 reason
 (*make illegal states unrepresentable*).
 
 The typed-field layer validates ``values.shape == space.shape`` at
@@ -2101,7 +2191,7 @@ field legal:
 
    * - Aspect
      - Bare ``int`` trailing axis
-     - Typed :class:`SpatialMomentSpace` factor
+     - First-class typed factor
    * - Field validity
      - widen the shape gate to accept *any* trailing axis (loses the
        illegal-state guard)
@@ -2110,8 +2200,9 @@ field legal:
    * - Querying the width
      - thread an ``int`` parameter through every call site, or re-derive
        it from a raw ``.shape[-1]``
-     - ``space.find_factor(SpatialMomentSpace).per_axis`` — query by
-       TYPE, position-independent (#207)
+     - ask the SPACE: ``find_factor(SpatialMomentSpace).per_axis`` at
+       S3-A0 (query by TYPE, position-independent — #207), the axis's
+       own labelled shape since item 6.2c-iii
    * - Self-description
      - the axis is anonymous; reading code cannot tell a spatial-moment
        axis from any other trailing axis
@@ -2121,6 +2212,25 @@ field legal:
      - none — a one-off convention
      - the EXACT mold of the angular
        :class:`SphericalHarmonicSpace` factor (one architecture, two axes)
+
+.. note::
+
+   **The table's right-hand column is the RULING, and it reads the same
+   at both realizations.** Row by row, at item 6.2c-iii (2026-09-08):
+   *field validity* — the space still DECLARES the axis, now as an
+   :class:`~orpheus.numerics.axis.Axis` of an axis-built space, and the
+   shape gate is still exact; *querying the width* — still asked of the
+   space, by label instead of by type; *self-description* — the axis's
+   ``label`` and ``MODAL``
+   :class:`~orpheus.numerics.axis.BasisKind` carry what the class's type
+   used to; *precedent* — the mold is unchanged and now literal, because
+   items 6.2c-ii and 6.2c-iii made the angular head an axis too. The one
+   thing the axis adds, which the class never had, is the MEASURE: the
+   axis carries the scheme's own cell mass
+   (:meth:`moment_mass_diagonal
+   <orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_mass_diagonal>`),
+   so the moment field's norm is its energy on the tail as well as on
+   the head. That is why the class could not simply be renamed.
 
 The typed factor is the same pattern the angular moment already uses: the
 harmonic factor is a :class:`SphericalHarmonicSpace` whose ``L`` is recovered
@@ -2140,8 +2250,15 @@ literally how the carrier space is built (:eq:`two-moment-carrier-space`).
    now: it returns the first tensor factor that ``isinstance(factor, T)`` and
    raises :exc:`KeyError` if absent (a structural assertion — the caller
    believes the composed space carries the factor — not a silent ``None``,
-   Pattern 4).  Both moment factors (angular and spatial) are now queryable
-   by type, and the latent broken claim in the docstrings is made true.
+   Pattern 4).  Both moment factors (angular and spatial) were then
+   queryable by type, and the latent broken claim in the docstrings was
+   made true.  ⛔ Half of that is now history: item 6.2c-iii retired the
+   spatial factor into an axis, so the SPATIAL width is read by label
+   rather than by ``find_factor``.  The method itself is untouched and
+   still live — the angular head is still a tensor factor, and
+   ``find_factor(SphericalHarmonicSpace).L`` still answers (`[M]`
+   2026-09-08, a widened 2-D LD moment product's factors are
+   ``[SphericalHarmonicSpace, FunctionSpace]``).
 
 The Kronecker moment ordering
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2168,10 +2285,25 @@ that the all-:math:`P_0` cell average is ALWAYS slot 0:
 
 The slot-0 (cell-average) convention is single-sourced from
 :data:`orpheus.numerics.moment_layout.AVERAGE_MOMENT` (the constant every moment
-consumer reduces on) — the :class:`SpatialMomentSpace` surfaces it via
-:attr:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace.average_moment_index`
-rather than re-spelling the literal ``0`` (so a layout change happens in ONE
-place, not at the scattered ``[..., 0]`` call sites).  Slot 0 is the link
+consumer reduces on) rather than re-spelling the literal ``0``, so a
+layout change happens in ONE place and not at the scattered ``[..., 0]``
+call sites.
+
+.. note::
+
+   At S3-A0 the ``SpatialMomentSpace`` class re-surfaced that constant as
+   an ``average_moment_index`` accessor.  Item 6.2c-iii retired the class
+   and the accessor with it; every consumer imports the constant
+   directly.  `[M]` 2026-09-08, by AST over ``orpheus/``: **5** modules
+   import :data:`~orpheus.numerics.moment_layout.AVERAGE_MOMENT` and
+   read it at **10** sites (``sn/loss_representation`` 5, ``sn/solver``
+   2, and one each in ``transport/spatial/linear_discontinuous``,
+   ``transport/source_sinks/angular_boundary_source_sink`` and
+   ``derivations/continuous/mms/sn``), and ``average_moment_index``
+   appears **nowhere** in the tree.  The convention did not move — only
+   the spelling of who hands it out.
+
+Slot 0 is the link
 between the two scales: the cell-average moment :math:`\bar\psi` is what the
 DD/Step closure carries in full, and it is the moment the
 :math:`\Sigma_s \otimes I_{\rm spatial}` lift scatters at every closure; the
@@ -2205,11 +2337,16 @@ and ``ndim``, breaking every byte-identity gate and every consumer that reads
 ``.ndim``.  The empty-tuple branch keeps the DD/Step field space *literally
 identical* to its pre-S3 self.  :func:`orpheus.numerics.moment_layout.face_moment_tail`
 owns the policy; the cell analogue
-:func:`~orpheus.numerics.spaces.spatial_moment_space.spatial_moment_tail`
+:func:`~orpheus.numerics.moment_layout.spatial_moment_tail`
 delegates to it (Pattern 7 — normalise the convention at one site), and
-:meth:`BulkField._compose_spatial_moments`
-(:mod:`orpheus.transport.fields._bases`) returns the space UNCHANGED when the
-tail is ``()``.
+:meth:`BulkField.compose_spatial_moments
+<orpheus.transport.fields._bases.BulkField.compose_spatial_moments>`
+returns the space UNCHANGED when the
+tail is ``()``.  The cell analogue lived beside the ``SpatialMomentSpace``
+class until item 6.2c-iii and is now homed in
+:mod:`orpheus.numerics.moment_layout` beside the face policy it delegates
+to — the two halves of one "append iff > 1" rule in one module, which is
+where the policy always belonged.
 
 Construct-general, select-narrow — what this step did and did NOT do
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2220,8 +2357,9 @@ the subsection says where each one stands today).  The discipline is
 deliberate (`coding-elegance` — construct general, select narrow,
 specialize only on measured need):
 
-* **The axis exists.**  The :class:`SpatialMomentSpace` is minted, composes
-  into every bulk-field space, and is ``find_factor``-queryable.
+* **The axis exists.**  The factor is minted, composes into every
+  bulk-field space, and the space answers for its width (by
+  ``find_factor`` at S3-A0; by the axis's label since item 6.2c-iii).
 
 * **No production field selects it** *(as of S3)*.  The ``spatial_moments``
   factory parameter defaulted to ``1`` at EVERY call site and was NOT
@@ -2236,7 +2374,9 @@ specialize only on measured need):
   producer fills is precisely the illegal state Pattern 4 forbids; turning the
   capability on before its producers exist would re-introduce it.  The gate
   had teeth on exactly this mistake: making
-  :meth:`BulkField._compose_spatial_moments` auto-read the scheme turned the
+  :meth:`BulkField.compose_spatial_moments
+  <orpheus.transport.fields._bases.BulkField.compose_spatial_moments>`
+  auto-read the scheme turned the
   LD byte-identity foundation tests RED (mutation-verified).
 
 The S3-A iterate / cell-emit / source seams that thread the scheme's
@@ -2282,14 +2422,6 @@ verified at the **foundation** level (data-structure / factory-output
 invariants, not an L0/L1/L2 solver claim — they carry no eigenvalue or flux
 assertion), in two test modules:
 
-* :mod:`tests.numerics.test_spatial_moment_space` — the space layer: the
-  :math:`(\text{per\_axis})^d` size law, the
-  :meth:`~orpheus.numerics.space.TensorProductSpace.find_factor` round-trip
-  (and the :exc:`KeyError`-when-absent assertion), the composition shape, the
-  ``per_axis == 1`` no-widening case, and
-  :attr:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace.average_moment_index`
-  :math:`==` :data:`~orpheus.numerics.moment_layout.AVERAGE_MOMENT`.
-
 * ``tests/numerics/test_spatial_moment_field_space.py`` — the factory
   widening: the **byte-identity-at-default negative control** for DD AND LD on
   all three carriers (:class:`AngularField`, :class:`ScalarField`,
@@ -2297,6 +2429,42 @@ assertion), in two test modules:
   shapes, the both-moment-factors-coexist case, and the wrong-shape rejection.
   The mutation check — auto-reading the scheme turns the LD byte-identity
   cases red — is what proves the construct-general gate has teeth.
+
+* ``tests/numerics/test_spatial_moment_tail_is_the_schemes_axis.py`` — the
+  space layer, since item 6.2c-iii: that the widened moment product is
+  axis-built with the scheme's own ``moment_axis`` as its tail (the axis
+  compared to :meth:`DiscretizationSchemeBase.moment_axis
+  <orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis>`
+  and its weights to
+  :meth:`moment_mass_diagonal
+  <orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_mass_diagonal>`),
+  that the hub and the frame agree at width 2 exactly as at width 1
+  (ruling O-5), that the tail's measure MOVES the pairing — Parseval
+  across the tail, with a Euclidean-tail negative control that must
+  differ — that width 1 appends nothing and a DD carrier REFUSES a
+  widened request, that a widened field self-derives its scalar flux and
+  truncates onto the hub's space, and that the retired class is
+  unspellable.
+
+.. note::
+
+   **What the retirement moved.**  The S3-A0 account above named a third
+   module, ``tests/numerics/test_spatial_moment_space.py``, which pinned
+   the ``SpatialMomentSpace`` class: the
+   :math:`(\text{per\_axis})^d` size law, the
+   :meth:`~orpheus.numerics.space.TensorProductSpace.find_factor`
+   round-trip, the composition shape, the ``per_axis == 1`` no-widening
+   case, and ``average_moment_index`` :math:`==`
+   :data:`~orpheus.numerics.moment_layout.AVERAGE_MOMENT`.  Item
+   6.2c-iii retired the class, so that module retired with it and its
+   surviving claims were re-keyed onto the successors: the size law and
+   the no-widening case are asserted against
+   :func:`~orpheus.numerics.moment_layout.cell_moment_count` and
+   :func:`~orpheus.numerics.moment_layout.spatial_moment_tail` in the
+   new module, the composition shape lives in both field-space modules,
+   and the slot-0 identity is now the constant itself, imported
+   directly by every consumer.  The head's ``find_factor`` round-trip
+   survives in ``tests/numerics/test_moment_head_axis_built_premise.py``.
 
 The design record (the angular-vs-spatial distinction, the FP resolution) is
 ``.claude/plans/issue_240_d5b_s3_crosswalk.md``; the closeout is

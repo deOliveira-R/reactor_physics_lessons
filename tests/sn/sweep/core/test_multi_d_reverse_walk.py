@@ -1202,11 +1202,19 @@ def test_tail_mismatch_refuses_loudly():
     # has no moment axis to mint), so the bogus carrier is built RAW on a
     # hand-composed widened space — exactly the off-scheme input the VJP
     # backstop exists to refuse.
-    from orpheus.numerics.spaces.spatial_moment_space import SpatialMomentSpace
+    from orpheus.numerics.axis import Axis, BasisKind
+    from orpheus.numerics.moment_layout import SPATIAL_MOMENT_AXIS_LABEL
+    from orpheus.numerics.space import FunctionSpace
 
+    assert sn.angular_bulk_space.axes is not None
     bad_interior = AngularFlux(
         values=np.asarray(phi.interior.values)[..., None].repeat(4, axis=-1),
-        space=sn.angular_bulk_space * SpatialMomentSpace.from_per_axis(2, 2),
+        # a hand-built OFF-SCHEME tail axis (the DD scheme mints none; since
+        # CS4c step 6 item 6.2c-iii the tail is always an axis, never a class)
+        space=FunctionSpace.of_axes(
+            *sn.angular_bulk_space.axes,
+            Axis(SPATIAL_MOMENT_AXIS_LABEL, (4,), kind=BasisKind.MODAL),
+        ),
     )
     bad = FullField(interior=bad_interior, boundary=phi.boundary)
     with pytest.raises(ValueError, match="spatial-moment tail"):

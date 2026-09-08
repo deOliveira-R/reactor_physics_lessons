@@ -419,7 +419,7 @@ def test_g1_ld_assembled_matvec_equals_apply(geometry):
         for g in range(ng):
             x = rng.random(n_cells * cm) + 0.5
             # A MOMENT-VALUED iterate (the production spelling — the
-            # spatial_moments factor selects the SpatialMomentSpace so
+            # spatial_moments factor selects the scheme's moment axis so
             # the bilinear closure's trailing 2^d axis is carried).
             state = FullField(
                 interior=AngularFlux.zeros(sn_mesh.angular_trial_space),

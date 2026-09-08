@@ -3391,11 +3391,16 @@ is a first-class FIELD TYPE, should the transverse boundary moment be one too �
 a ``BoundaryMomentField``?  The answer, tracked in **#263**, is **NO today**:
 the transverse boundary moment is a PROPERTY of the boundary field (an untyped
 trailing moment axis on the flat face buffer), exactly as the bulk carries its
-spatial moments as a property — a trailing
-:class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-factor on the bulk leaf's SPACE (minted by
+spatial moments as a property — a trailing ``MODAL``
+:class:`~orpheus.numerics.axis.Axis` on the bulk leaf's SPACE, the
+discretization scheme's own
+:meth:`moment_axis
+<orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis>`
+(minted by
 :attr:`~orpheus.sn.mesh.augmented_mesh.SNMesh.angular_trial_space` since
-CS4b S5), rather than a distinct field type.  The criterion and its trigger live in the
+CS4b S5; it was a trailing ``SpatialMomentSpace`` *factor* until CS4c step
+6 item 6.2c-iii retired that class, 2026-09-08), rather than a distinct
+field type.  The criterion and its trigger live in the
 :ref:`field-type-vs-property-criterion` section of the operator-algebra page;
 the short version, specialised to the boundary moment:
 
@@ -3414,9 +3419,9 @@ whose ``_check_partner`` adds nothing beyond class identity would be a vacuous
 naming leaf — type-theatrics by the project's own "if the type hint does not
 prevent a bug by construction it is theatrics" standard.  So the moment rides as
 a PROPERTY (the flat face buffer already holds the moment tail via
-:attr:`~orpheus.sn.mesh.augmented_mesh.SNMesh.boundary_face_layout`), and the first-class
-:class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace` field
-type is DEFERRED to the collocation trigger (nodal-DG / Lagrange-FEM, where a
+:attr:`~orpheus.sn.mesh.augmented_mesh.SNMesh.boundary_face_layout`), and the
+first-class ``SpatialMomentField`` type is DEFERRED to the collocation
+trigger (nodal-DG / Lagrange-FEM, where a
 nodal point-value basis coexists with the modal coefficients and a Vandermonde
 morphism bridges them) — the durable design invariant #263 records.
 

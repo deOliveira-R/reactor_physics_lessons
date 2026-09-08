@@ -934,7 +934,7 @@ def _unwindowed_cold_start(sn_mesh, *, history_depth):
     r"""Zero un-windowed (full-angular) SI cold-start iterate.
 
     The full-angular ``AngularFlux`` iterate the 1-D / curvilinear SI driver
-    holds.  Selects the SpatialMomentSpace factor (#240 D5b-S3) so a
+    holds.  Selects the scheme's spatial-moment axis (#240 D5b-S3) so a
     multi-moment closure (LD) carries the φ̂ axis end-to-end — composing with the
     moment-carrying ``q_ext`` + ``S.apply(ψ)`` in the SI rhs.  DD/Step
     (per_axis == 1) → no factor (byte-identical to the prior ``TimedFullField.zeros``).

@@ -241,14 +241,15 @@ class HarmonicMomentFlux(MomentField):
         Parameters
         ----------
         space : FunctionSpace, optional
-            The scalar TARGET space (CS4b S4). Width-1 derives it — the
-            product's cell-group factor IS the carrier's cached
-            ``bulk_space`` instance. A WIDENED (``spatial_moments > 1``)
-            extraction cannot self-derive (its target carries the
-            scheme's mass-bearing moment axis, which the appended
-            ``SpatialMomentSpace`` factor does not hold), so the caller
-            holding the pose supplies it (the windowed moment arm passes
-            its composite interior's marginal).
+            The scalar TARGET space (CS4b S4). Derived by default from the
+            product's cell-group factor at EVERY width since CS4c step 6
+            item 6.2c-iii: width 1 hands back the carrier's cached
+            ``bulk_space`` instance, a widened extraction the carrier's
+            widened bulk carrying the scheme's mass-weighted moment axis
+            (until then the moment product's tail was a Euclidean
+            ``SpatialMomentSpace`` and the widened self-derive was REFUSED
+            — the caller holding the pose had to pass its composite
+            interior's marginal). A caller may still pass ``space=``.
 
         Returns
         -------
@@ -258,23 +259,15 @@ class HarmonicMomentFlux(MomentField):
         from orpheus.numerics.space import TensorProductSpace
         from orpheus.transport.fields.scalar_flux import ScalarFlux
         # CS4b S4: the scalar target space IS the product's cell-group
-        # factor — the carrier's cached ``bulk_space`` instance the factory
-        # composed in (``SH.from_L(L) * mesh.bulk_space``), so the derived
-        # scalar rides the same mint every scalar leaf shares. The widened
-        # (spatial_moments > 1) self-derive stays REFUSED by CONTRACT (S4,
-        # gated): the widened target carries the scheme's mass-bearing
-        # moment axis, which this field's appended SpatialMomentSpace
-        # factor does not hold — the caller holding the pose passes space=.
+        # factor — the carrier's cached ``bulk_space`` instance the hub
+        # composed in (``frame.basis_space * mesh.bulk_space``), so the
+        # derived scalar rides the same mint every scalar leaf shares; on a
+        # widened field that factor is the carrier's widened bulk carrying
+        # the scheme's mass-weighted moment axis (item 6.2c-iii), so the
+        # widened self-derive is honest too.
         iso = self.head.isotropic_slot
         if space is not None:
             return ScalarFlux(values=self.values[iso].copy(), space=space)
-        if self.spatial_moments != 1:
-            raise TypeError(
-                "HarmonicMomentFlux.scalar_flux: a widened "
-                "(spatial_moments > 1) extraction cannot self-derive its "
-                "target (the scheme's moment axis is carrier knowledge) — "
-                "pass space= from the posed composite's interior marginal."
-            )
         assert isinstance(self.space, TensorProductSpace)  # type-narrowing
         return ScalarFlux(
             values=self.values[iso].copy(),
@@ -300,8 +293,8 @@ class HarmonicMomentFlux(MomentField):
         down (``head.truncated(L_new)`` — a spherical-harmonic head
         truncates to a spherical-harmonic head, a Legendre head to a
         Legendre head; #429 tracker 2.5, never re-minted from an integer)
-        and every remaining factor (the cell-group bulk, the optional
-        ``SpatialMomentSpace``) is kept verbatim —
+        and every remaining factor (the cell-group bulk, carrying the
+        scheme's moment axis on a widened field) is kept verbatim —
         `[M]` content-equal to the factory's own mint at
         ``(mesh, L_new, spatial_moments)`` on both widths (gated:
         ``tests/transport/fields/test_harmonic_moment_flux.py``).

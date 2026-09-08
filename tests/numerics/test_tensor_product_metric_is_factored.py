@@ -87,8 +87,8 @@ def _capture_production_factor_tuples(sn_mesh, L: int) -> "list[tuple[FunctionSp
     while minting the moment family's space on ``sn_mesh`` at order ``L``.
 
     Read off production rather than re-derived here (``coding-elegance``
-    Pattern 2): the two ``_bases.py`` mints (``head * mesh.bulk_space`` and the
-    optional ``* SpatialMomentSpace``) and the ``harmonic_frame`` mint
+    Pattern 2): the hub's mint (``head * mesh.bulk_space``, the cell group
+    widened by the scheme's moment axis when asked) and the ``harmonic_frame`` mint
     (``basis_space * of_axes(*cell_axes)``) all funnel through this one
     classmethod, so a transcription of any of them into the test could drift.
     """

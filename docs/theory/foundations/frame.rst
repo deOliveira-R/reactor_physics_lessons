@@ -4676,15 +4676,30 @@ narrow to a :class:`~orpheus.numerics.quadrature.directional.Quadrature`
 must be re-derived, not merely re-read, when the thing it inspects changes
 shape.
 
-⚠ **What is NOT closed: the spatial-moment TAIL.** A *widened* moment
-space (LD, ``spatial_moments > 1``) still appends the Euclidean, axes-less
-:class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`,
-so that product is axes-less overall even though its head is not — and the
-widened *angular* space already carries the scheme's mass-weighted
-``moment_axis``, i.e. the same factor spelled twice. Item **6.2c-iii**
-makes the hub's and the frame's tail the scheme's own axis and retires the
-class. It has NOT landed; until it does, read the tail's Euclidean metric
-as a known gap rather than a decision.
+✅ **And the spatial-moment TAIL closed the same day — item 6.2c-iii,
+2026-09-08.** This block read, until then: *"What is NOT closed: the
+spatial-moment TAIL. A widened moment space (LD,* ``spatial_moments > 1``\ *)
+still appends the Euclidean, axes-less* ``SpatialMomentSpace``\ *, so that
+product is axes-less overall even though its head is not — and the widened
+angular space already carries the scheme's mass-weighted* ``moment_axis``\ *,
+i.e. the same factor spelled twice."* The diagnosis was the fix. The hub now
+composes its cell group through the fields' own composer,
+:meth:`BulkField.compose_spatial_moments
+<orpheus.transport.fields._bases.BulkField.compose_spatial_moments>` — the
+same one the angular and scalar mints ride, which appends the discretization
+scheme's own MODAL
+:meth:`moment_axis
+<orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis>` — and
+``moment_space_on`` stopped dropping the angular space's tail axis, so it
+threads that axis object through instead of re-appending a class beside it.
+`[M]` 2026-09-08: on a widened 2-D LD carrier the frame's derived tail axis is
+the angular space's own axis (``is``-identical), and the hub's cached space and
+the frame's derivation are ``==`` with equal hashes at width 2 exactly as at
+width 1 — ruling O-5 at both widths. So the tail's metric is no longer a gap:
+it is the scheme's cell mass, the same measure the *angular* field's tail
+carries, and the moment field's norm is its energy on every factor (ruling
+R-6.2c-1's ONE-space principle, applied to the tail). Gated in
+``tests/numerics/test_spatial_moment_tail_is_the_schemes_axis.py``.
 
 Truncation is the same rule applied to a *lower* order.
 :meth:`HarmonicMomentFlux.truncate

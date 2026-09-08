@@ -152,7 +152,7 @@ def test_spatial_moment_axis_absent_on_hand_built_ld_field() -> None:
     on an LD mesh LACKS the factor (``spatial_moments_per_axis == 1``), DESPITE
     the mesh being LD.
 
-    This is INTENTIONAL: the ``SpatialMomentSpace`` factor is set by the OUTPUT
+    This is INTENTIONAL: the spatial-moment axis is set by the OUTPUT
     wrap (``spatial_moments=per_axis``), default 1 everywhere, NOT auto-read from
     ``mesh.scheme`` (``transport/fields/_bases.py:183-194``). WITHOUT this pin a
     future change that auto-reads the scheme into the field default would pass

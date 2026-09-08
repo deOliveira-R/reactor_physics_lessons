@@ -218,14 +218,14 @@ class FunctionSpace(Generic[Carrier]):
     the family-tagged heads
     (:class:`~orpheus.numerics.spaces.spherical_harmonic_space.SphericalHarmonicSpace`
     — ``'spherical_harmonic_space'`` is a tag, not a digest —
-    :class:`~orpheus.numerics.spaces.legendre_space.LegendreSpace`,
-    :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`)
+    :class:`~orpheus.numerics.spaces.legendre_space.LegendreSpace`, and the
+    retired ``SpatialMomentSpace``)
     carried only their family and, through ``shape``, their truncation
     order — deliberately metric-blind, which is what let a frame's
     Parseval-dressed head still equal the field's continuum head (the
     admission seam CS4c step 6 items 6.2b/6.2c re-posed: since 6.2c-ii the
-    two harmonic heads are axis-built and the tree binds the frame's; the
-    spatial-moment tail follows at 6.2c-iii); a hand-built legacy space carries whatever
+    two harmonic heads are axis-built and the tree binds the frame's; since
+    6.2c-iii the spatial-moment tail is the scheme's axis); a hand-built legacy space carries whatever
     its author wrote.
     Until the flip the same doctrine flowed through a BRIDGE: identity
     was ``(name, shape)`` for every space and :meth:`of_axes` derived the
@@ -338,10 +338,9 @@ class FunctionSpace(Generic[Carrier]):
         # never the same space as a hand-named one wearing its label; two
         # axes-less spaces keep the nominal ``(name, shape)`` identity —
         # content identity where the factory folds content into the name
-        # (the composites and traces, CS4b S3), family + dimension on the
-        # remaining family-tagged head (SpatialMomentSpace — metric-blind
-        # by design until it becomes axis-built, item 6.2c-iii; the two
-        # harmonic heads are axis-built since 6.2c-ii).
+        # (the composites and traces, CS4b S3). The family-tagged heads
+        # are all axis-built now (the two harmonic heads since 6.2c-ii;
+        # the spatial-moment tail is the scheme's axis since 6.2c-iii).
         if self.axes is not None or other.axes is not None:
             if self.axes is None or other.axes is None:
                 return False
@@ -1177,9 +1176,9 @@ class TensorProductSpace(FunctionSpace):
         ``space.find_factor(SphericalHarmonicSpace).L`` (on a full-sphere
         rule; the head factor's own ``L`` in general) recovers the
         angular truncation order, and
-        ``space.find_factor(SpatialMomentSpace).per_axis`` recovers the
-        spatial-moment basis size — without the consumer having to know
-        the factor's position in the product (issue #207). The factories
+        ``space.find_factor(LegendreSpace).spent_axis`` the fold's spent
+        axis — without the consumer having to know the factor's position
+        in the product (issue #207). The factories
         compose factors in a fixed order, but consumers query by TYPE, not
         index, so the layout can change without breaking the query.
 
@@ -1189,7 +1188,7 @@ class TensorProductSpace(FunctionSpace):
             The :class:`FunctionSpace` subclass to search for among
             :attr:`factors`. The return is typed AS this class (generic),
             so ``find_factor(SphericalHarmonicSpace).L`` /
-            ``find_factor(SpatialMomentSpace).per_axis`` type-resolve — the
+            ``find_factor(LegendreSpace).spent_axis`` type-resolve — the
             method's reason to exist is the typed bridge from a composed
             space back to its factor's metadata.
 

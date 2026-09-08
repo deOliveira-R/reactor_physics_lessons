@@ -373,16 +373,19 @@ _SPACE_FAMILY = (
     "orpheus/numerics/spaces/legendre_space.py",
     "orpheus/numerics/spaces/scalar_trace_space.py",
     "orpheus/numerics/spaces/radial_characteristic_space.py",
-    "orpheus/numerics/spaces/spatial_moment_space.py",
     "orpheus/numerics/spaces/angular_trace_space.py",
 )
 
 #: MEASURED 2026-09-07 at `b889089e`, by the AST census below: TEN ``__eq__``
-#: definitions over the nine files, of which NINE delegate to
-#: ``FunctionSpace.__eq__`` and one (``Axis``) is already structural.
-#: ``angular_trace_space.py`` defines none (it inherits).
-_EXPECTED_EQ_SITES = 10
-_EXPECTED_DELEGATIONS = 8       # the eight SUBCLASS one-liners (base + Axis excluded)
+#: definitions over nine files, of which NINE delegated to
+#: ``FunctionSpace.__eq__`` and one (``Axis``) was already structural.
+#: ``angular_trace_space.py`` defines none (it inherits). Re-measured at CS4c
+#: step 6 item 6.2c-iii (2026-09-08): ``spatial_moment_space.py`` and its
+#: delegating ``__eq__`` RETIRED (the tail is the scheme's axis) — NINE sites
+#: over eight files, SEVEN subclass one-liners; the two head axes
+#: (``HarmonicAxis`` / ``LegendreAxis``) inherit ``Axis.__eq__`` and add none.
+_EXPECTED_EQ_SITES = 9
+_EXPECTED_DELEGATIONS = 7       # the seven SUBCLASS one-liners (base + Axis excluded)
 
 
 def _repo_root() -> pathlib.Path:

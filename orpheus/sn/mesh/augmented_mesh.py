@@ -1269,14 +1269,15 @@ class SNMesh(MaterialMesh):
         derives a structurally EQUAL object from the angular space — two
         owners, one space, ruling O-5), the cell group IS
         :attr:`bulk_space` (the same instance the scalar family holds),
-        and the within-cell spatial-moment tail is appended iff
-        ``spatial_moments > 1`` (the "append iff > 1" predicate shared
-        with the fields' composer, :func:`~orpheus.numerics.spaces.spatial_moment_space.spatial_moment_tail`;
-        as an axes-less ``*`` factor — so the WIDENED product is axes-less
-        while the un-widened one is axis-built since item 6.2c-ii; item
-        6.2c-iii makes the tail the scheme's own mass-weighted axis, the
-        one the fields' :meth:`~orpheus.transport.fields._bases.BulkField._compose_spatial_moments`
-        already appends to the angular space, and retires the class).
+        and the within-cell spatial-moment tail is composed onto the cell
+        group iff ``spatial_moments > 1`` THROUGH the fields' own composer
+        (:meth:`~orpheus.transport.fields._bases.BulkField.compose_spatial_moments`,
+        CS4c step 6 item 6.2c-iii): the scheme's mass-weighted MODAL
+        :meth:`~orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis`,
+        the SAME factor the widened angular space carries — so the widened
+        moment product is axis-built like the un-widened one and its tail
+        has one spelling (until 6.2c-iii a separate Euclidean
+        ``SpatialMomentSpace`` class was appended here instead).
 
         **Why the hub, and why a keyed cache.** Every moment field on this
         carrier (:meth:`HarmonicMomentFlux.from_mesh_and_L
@@ -1303,19 +1304,13 @@ class SNMesh(MaterialMesh):
         cached = self._moment_spaces.get(key)
         if cached is not None:
             return cached
-        from orpheus.numerics.moment_layout import cell_moment_count
-        from orpheus.numerics.spaces.spatial_moment_space import (
-            SpatialMomentSpace,
-            spatial_moment_tail,
-        )
+        from orpheus.transport.fields._bases import BulkField
 
         head = self.quad.angular_frame(L).basis_space
-        space = head * self.bulk_space
-        n_moments = cell_moment_count(spatial_moments, self.ndim)
-        if spatial_moment_tail(n_moments) != ():
-            space = space * SpatialMomentSpace.from_per_axis(
-                spatial_moments, self.ndim,
-            )
+        bulk = BulkField.compose_spatial_moments(
+            self.bulk_space, self, spatial_moments,
+        )
+        space = head * bulk
         self._moment_spaces[key] = space
         return space
 

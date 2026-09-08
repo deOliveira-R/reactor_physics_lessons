@@ -25,7 +25,7 @@ Function Spaces: Axes, Measure, and the Collapse Doctrine
       role: "the space layer — a function space as the ordered product of its AXES (index shape, factor measure, basis kind, the generator that minted it, and the structural identity that deliberately excludes that generator), the counting-measure theorem on the energy axis, and the collapse doctrine that decides which axes survive a degeneracy and why"
       depends_on: [field_algebra, frame]
       related: [manifolds, discrete_measures, operator_algebra, operator_adjoint]
-      status: "seeded at campaign-1 CS1 (the Energy axis); the generator slot landed at CS5 (2026-08-29); the densifying half of the `*` product retired at CS4c step 6 item 6.2a (2026-09-07); the metric became a DERIVED object over the axes, with a dense form positioned on it as an overlay, at item 6.2c-i (2026-09-08); the Harmonic and Legendre axis subclasses landed at item 6.2c-ii (2026-09-08), so both moment heads are axis-built; the spatial-moment tail is item 6.2c-iii and has NOT landed; the Spatial / Quadrature subclasses stay CS2 and unscheduled"
+      status: "seeded at campaign-1 CS1 (the Energy axis); the generator slot landed at CS5 (2026-08-29); the densifying half of the `*` product retired at CS4c step 6 item 6.2a (2026-09-07); the metric became a DERIVED object over the axes, with a dense form positioned on it as an overlay, at item 6.2c-i (2026-09-08); the Harmonic and Legendre axis subclasses landed at item 6.2c-ii (2026-09-08), so both moment heads are axis-built; the spatial-moment tail became the discretization scheme's own MODAL moment axis at item 6.2c-iii (2026-09-08), so every space that carries a tail is axis-built too; the Spatial / Quadrature subclasses stay CS2 and unscheduled"
 
 
 This page develops the **space layer**: what a discrete function space
@@ -230,14 +230,23 @@ the same space" is a claim this corpus has **overturned**.
      ``(name, shape)`` identity: for the digest-named composites and
      traces (five classes, four digest-folding factories) that IS
      content identity because the factory folds content into the name
-     (CS4b S3); for a family-tagged head it is family + dimension and
-     therefore deliberately metric-BLIND — which as of item 6.2c-ii
-     (2026-09-08) describes only
-     :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`,
-     since the two harmonic heads became axis-built and now carry their
-     metric in the identity through their head axis's measure
-     (:ref:`spaces-moment-head`); a hand-built legacy space carries
-     whatever its author wrote. An axis-built space is never equal to a
+     (CS4b S3); for a family-tagged head it *was* family + dimension
+     and therefore deliberately metric-BLIND — a class that is now
+     **EMPTY**. Item 6.2c-ii (2026-09-08) made the two harmonic heads
+     axis-built, so each carries its metric in the identity through its
+     head axis's measure (:ref:`spaces-moment-head`); item 6.2c-iii the
+     same day retired the last member, the ``SpatialMomentSpace`` tail,
+     in favour of the discretization scheme's own MODAL moment axis
+     (:ref:`spaces-moment-head-axis-built`). `[M]` 2026-09-08, over the
+     eight public :class:`~orpheus.numerics.space.FunctionSpace`
+     subclasses: two are the axis-built moment heads; the other six are
+     the composites and traces, whose names fold their content (the five
+     digest-named classes above, plus
+     :class:`~orpheus.numerics.spaces.angular_trace_space.AngularFaceTraceSpace`,
+     which folds its face and role into ``angular_trace[<face>:<role>]``
+     for the same reason). **None** is a metric-blind family tag. A
+     hand-built legacy space carries whatever its author wrote. An
+     axis-built space is never equal to a
      hand-named one wearing its label. Until the flip the doctrine flowed
      through a BRIDGE — the injectively derived name
      (:ref:`spaces-identity-bridge`).
@@ -400,13 +409,12 @@ reach.
    and in the SN carrier's content-equal field-side twin
    :meth:`SNMesh.moment_space
    <orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>`, each of which
-   then appends a
-   :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-   factor for a widened angular space (that factor's inner product is
-   Euclidean, so it contributes a ``None`` entry). Item **6.2c**
-   axis-ifies the head; until then see
-   :ref:`spaces-metric-propagation`, where dropping a factor's metric is
-   measured as a value bug rather than a representation choice.
+   ALSO appended, for a widened angular space, a second ``*`` factor —
+   the Euclidean, axes-less ``SpatialMomentSpace`` (contributing a
+   ``None`` metric entry). Item **6.2c** axis-ifies the head; until then
+   see :ref:`spaces-metric-propagation`, where dropping a factor's
+   metric is measured as a value bug rather than a representation
+   choice.
 
    ⚠ **The field-side member of those four MOVED later the same day
    (2026-09-07, CS4c step 6 item 6.2b), and the count did not.** Until
@@ -415,20 +423,48 @@ reach.
    <orpheus.transport.fields._bases.MomentField._space_for_mesh_and_L>`,
    which formed the product on **every call**; the item gives the mint to
    the carrier as a cache keyed on ``(L, spatial_moments)``, and the field
-   method survives as a pure READ of it. So the census is the same four —
+   method survives as a pure READ of it. So the census was the same four —
    the hub's head-:math:`\otimes`-cell and its tail, the frame's
    head-:math:`\otimes`-cell and its tail — while the number of ``*``
    *evaluations* per windowed solve falls from `[M]`
    :math:`2\cdot\texttt{max\_inner} + 6` to a constant in the iteration
    budget (gated in
-   ``tests/sn/mesh/test_hub_owns_the_moment_space.py``). The fields' own
-   composer,
-   :meth:`BulkField._compose_spatial_moments
-   <orpheus.transport.fields._bases.BulkField._compose_spatial_moments>`,
-   is left serving the **axis-built** angular/scalar mints only — with
-   the harmonic product gone from it, its axes-less arm refuses by name
-   and points the caller at the carrier, so a ``*`` can no longer be
-   reached through it at all.
+   ``tests/sn/mesh/test_hub_owns_the_moment_space.py``).
+
+   ⛔ **The count is now TWO, not four (2026-09-08, CS4c step 6 item
+   6.2c-iii).** The two TAIL products are gone: a widened space no
+   longer appends a separate Euclidean class beside the head, it carries
+   the discretization scheme's own MODAL ``moment_axis`` as one more
+   axis of its axis-built cell group. The hub composes that tail through
+   the fields' own composer,
+   :meth:`BulkField.compose_spatial_moments
+   <orpheus.transport.fields._bases.BulkField.compose_spatial_moments>`
+   (which returns :meth:`FunctionSpace.of_axes
+   <orpheus.numerics.space.FunctionSpace.of_axes>`, not a ``*``), and
+   the frame simply keeps the angular space's own axes. `[M]` 2026-09-08,
+   the same AST census over ``orpheus/**/*.py``: **two** production
+   ``*`` sites remain — ``head * bulk`` at
+   ``sn/mesh/augmented_mesh.py:1313`` and ``self.basis_space *
+   FunctionSpace.of_axes(*axes[1:])`` at
+   ``transport/frames/harmonic_frame.py:499``.
+
+   ⭐ And with 6.2c-ii and 6.2c-iii both landed, **neither remaining
+   site is the mixed case the rule above describes any more**: the head
+   is axis-built, the cell group is axis-built, so ``*`` takes its
+   *every-factor-axis-built* arm and the product's ``axes`` are the
+   factors' concatenated. `[M]` 2026-09-08, on a 1-D LD carrier under
+   ``gauss_legendre(2)``, the moment product's axes read
+   ``[legendre, energy, spatial]`` at width 1 and
+   ``[legendre, energy, spatial, spatial_moment]`` at width 2, at
+   :math:`L = 1` (diagonal Gram) and :math:`L = 2` (DENSE Gram) alike —
+   four rows, all axis-built. So ``*`` here is no longer buying the
+   mixed-product bridge; it is spelling a concatenation ``of_axes``
+   would spell, and the two sites are a **retirement candidate** rather
+   than a live counter-example to the ``of_axes``-first rule.
+   The composer serves EVERY tailed mint now — angular, scalar and the
+   carrier's moment product alike — and its axes-less arm is a caller
+   error rather than a case, because a space that carries a tail is
+   axis-built by construction.
 
 Canonical storage: one measure, one spelling, one identity
 -----------------------------------------------------------
@@ -1895,15 +1931,20 @@ carries its own gate in ``tests/numerics/test_space_of_axes.py``.
    **The flip found a whole subclass family standing outside the
    construction contract.** All three
    :class:`~orpheus.numerics.space.FunctionSpace` subclasses that
-   define their own ``__post_init__`` —
+   defined their own ``__post_init__`` at P7 —
    :class:`~orpheus.numerics.spaces.spherical_harmonic_space.SphericalHarmonicSpace`,
-   :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-   and
+   the since-retired ``SpatialMomentSpace``, and
    :class:`~orpheus.numerics.spaces.angular_trace_space.AngularFaceTraceSpace`
    — **overrode without chaining**, so *every* base construction guard
    (not only the new one) had been silently opted out of since each
-   subclass was written. All three now call ``super().__post_init__()``
-   first. It surfaced only because the first dressing attempt left the
+   subclass was written. All three were made to call
+   ``super().__post_init__()`` first, and the rule held as the family
+   changed: ``SpatialMomentSpace`` retired at item 6.2c-iii and
+   :class:`~orpheus.numerics.spaces.legendre_space.LegendreSpace`
+   arrived; `[M]` 2026-09-08 the three subclasses that define
+   ``__post_init__`` today — the two harmonic heads and
+   ``AngularFaceTraceSpace`` — all chain. It surfaced only because the
+   first dressing attempt left the
    spherical-harmonic basis's continuum weights in the field *beside*
    the new metric object and nothing refused it — the two-source illegal
    state was representable exactly where the guard was supposed to live.
@@ -2630,18 +2671,29 @@ red on ``generator is frame.basis``. Provenance must be the object that
 actually spans the head, or the generator channel answers a question about
 some other object.
 
-.. warning::
+.. note::
 
-   ⚠ **The spatial-moment TAIL is NOT axis-built.** A widened moment
-   space (LD, ``spatial_moments > 1``) still appends the Euclidean,
-   axes-less
-   :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`,
-   so such a product is axes-less overall even though its head is not, and
-   ``SpatialMomentSpace`` remains the corpus's one surviving metric-blind
-   family-tagged head. Item **6.2c-iii** makes the tail the discretization
-   scheme's own mass-weighted ``moment_axis`` — which the widened
-   *angular* space already carries, i.e. one factor spelled twice — and
-   retires the class. It has **not** landed.
+   ✅ **And the TAIL is the discretization scheme's own axis — item
+   6.2c-iii, 2026-09-08.** This block read, until then: *"The
+   spatial-moment TAIL is NOT axis-built. A widened moment space (LD,*
+   ``spatial_moments > 1``\ *) still appends the Euclidean, axes-less*
+   ``SpatialMomentSpace``\ *, so such a product is axes-less overall
+   even though its head is not, and* ``SpatialMomentSpace`` *remains the
+   corpus's one surviving metric-blind family-tagged head."* The item
+   closed it the way the diagnosis implied: the widened *angular* space
+   already carried the scheme's mass-weighted MODAL
+   :meth:`moment_axis
+   <orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis>`,
+   so the class was a **second spelling of one factor**. The carrier's
+   hub now composes its cell group through the fields' own composer and
+   the frame keeps the angular space's own axes, so a widened moment
+   product is axis-built, its tail carries the cell mass, and the class
+   is retired (:ref:`the account in the SN chapter <spatial-moment-space>`).
+   `[M]` 2026-09-08, 1-D LD
+   under ``gauss_legendre(2)``: the widened product's axes read
+   ``[legendre, energy, spatial, spatial_moment]`` at :math:`L = 1` and
+   :math:`L = 2` alike. The metric-blind family-tagged class is now
+   EMPTY.
 
 .. list-table:: What the head answers, per family
    :header-rows: 1
@@ -4169,12 +4221,17 @@ taken.
        never populates ``inner_product_weights``. What remains of the
        twin is *axes-lessness*, not densification — ✅ item **6.2c-ii**
        (2026-09-08) axis-ified both angular heads and closed that for the
-       un-widened product; a WIDENED moment product is still axes-less,
-       because its ``SpatialMomentSpace`` tail is (item 6.2c-iii, not
-       landed — :ref:`spaces-moment-head-axis-built`).
-       ⛔ This row read *"CS2. The legacy* ``*`` *path is documented
+       un-widened product, and ✅ item **6.2c-iii** (2026-09-08) closed
+       it for the WIDENED one too, by making the tail the discretization
+       scheme's own MODAL ``moment_axis`` and retiring the axes-less
+       ``SpatialMomentSpace`` (:ref:`spaces-moment-head-axis-built`).
+       ⛔ This clause read *"a WIDENED moment product is still axes-less,
+       because its* ``SpatialMomentSpace`` *tail is"* until 6.2c-iii
+       landed the same day.
+       ⛔ And this row read *"CS2. The legacy* ``*`` *path is documented
        above and kept working; its own gates live in a separate test
-       module so the retirement is a file-level move"* until then. The
+       module so the retirement is a file-level move"* until
+       **2026-09-07**. The
        first clause is now history; the **second was wrong about the
        mechanism**, and the landing says so. A gate that pins
        *behaviour* migrates with the behaviour, it does not travel with

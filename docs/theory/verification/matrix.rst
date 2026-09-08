@@ -9,7 +9,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **11914**
+Total tests collected: **11903**
 
 V&V level distribution
 ----------------------
@@ -18,11 +18,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 1304, 10.9%
+   L0, 1304, 11.0%
    L1, 1755, 14.7%
    L2, 71, 0.6%
    L3, 0, 0.0%
-   foundation, 8758, 73.5%
+   foundation, 8747, 73.5%
    unmarked, 26, 0.2%
 
 Tagging source
@@ -34,7 +34,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 11809
+   explicit, 11798
    class-name, 46
    func-name, 0
    case, 33
@@ -405,7 +405,7 @@ Module × level grid
    numerics/test_space_identity_is_structural, 0, 0, 0, 0, 15, 0
    numerics/test_space_of_axes, 0, 0, 0, 0, 26, 0
    numerics/test_spatial_moment_field_space, 0, 0, 0, 0, 12, 0
-   numerics/test_spatial_moment_space, 0, 0, 0, 0, 22, 0
+   numerics/test_spatial_moment_tail_is_the_schemes_axis, 0, 0, 0, 0, 12, 0
    numerics/test_spherical_harmonic_basis, 4, 7, 0, 0, 7, 0
    numerics/test_spherical_harmonic_space, 0, 8, 0, 0, 6, 0
    numerics/test_symmetry, 0, 0, 0, 0, 215, 2
@@ -544,7 +544,7 @@ Module × level grid
    test_docstring_xrefs, 0, 0, 0, 0, 46, 0
    test_elegance_debt_is_tagged, 0, 0, 0, 0, 2, 0
    test_error_catalogue_reconciles, 0, 0, 0, 0, 4, 0
-   test_layer_imports, 0, 0, 0, 0, 360, 0
+   test_layer_imports, 0, 0, 0, 0, 359, 0
    test_pending_ports, 5, 0, 0, 0, 0, 0
    test_pyright_ratchet, 0, 0, 0, 0, 1, 0
    test_vv_harness_audit, 16, 0, 0, 0, 0, 0

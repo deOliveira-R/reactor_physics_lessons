@@ -41,6 +41,10 @@ means merged). **No owed Sphinx pass on merged work.** Landed SN milestones live
 
 **One line per pass. The evidence is in the lesson; `git log --oneline -- docs/` is the index.**
 
+- **CS4c step 6 item 6.2c-iii** — a class retires into an AXIS (2026-09-08; 7 `.rst`, +499/−145).
+  Re-counting a neighbouring rule's census missed that the rule INVERTED; a stand-in for the retired
+  object measures the pre-carve state without a worktree, and the equal-SHAPE control is the finding
+  → [[lessons-L101]]
 - **CS4c step 6 items 6.2c-i/-ii** — a ruling OVERTURNED a landed one (2026-09-08; 7 `.rst`,
   +1144/−152). Banner the section TITLE, not just the errata; two honest `[M]` can disagree by
   STATISTIC; a `==` gate's blindness belongs to the identity relation → [[lessons-L100]]

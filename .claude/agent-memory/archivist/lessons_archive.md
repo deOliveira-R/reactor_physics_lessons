@@ -11947,3 +11947,146 @@ One `gh` call; a wrong issue link is a minted false claim (`process-discipline`)
 
 ⚠ The Parseval lower end differed from the memo's (4.07 vs 3.41) — one draw per row. I published
 the range with the draw named and the upper end as the structural value. (L-071's family.)
+
+---
+
+## L-101 — a CLASS→AXIS retirement: the neighbouring RULE inverts, and the pre-carve state is measurable without a worktree
+
+**Task.** CS4c step 6 item 6.2c-iii, docs-only, carve uncommitted on disk. The widened
+harmonic-moment product had appended a separate Euclidean axes-less `SpatialMomentSpace`
+class beside the head, while the widened ANGULAR/SCALAR spaces already carried the
+scheme's mass-weighted MODAL `moment_axis` — one factor, two spellings. The item retires
+the class; the tail becomes the scheme's axis on every side. 7 `.rst`, +499/−145.
+
+### (a) ⭐⭐ The rule NEXT DOOR inverted, and re-counting its census was not enough
+
+`spaces.rst` carried a rule with its own `[M]` census: *"`*` is for a product whose
+factors are **not** all axis-built — `[M]` four production sites."* The obvious repair
+after this item is to re-count (the two TAIL products are gone ⟹ **two**). I ran the AST
+census, got two, wrote it — and then wrote, from reasoning, *"`*` still returns an
+axes-less product, so a widened moment space is axis-built via its cell-group factor."*
+
+**`[M]` FALSE.** `FunctionSpace.__mul__` → `TensorProductSpace.from_factors` concatenates
+axes *when every factor is axis-built*; item 6.2c-ii had already axis-ified the head, so
+after 6.2c-iii **neither surviving site is the mixed case the rule describes**. Probed on
+a 1-D LD carrier under `gauss_legendre(2)`, 4 rows (width 1/2 × `L = 1` diagonal Gram /
+`L = 2` DENSE Gram): every product is axis-built, `[legendre, energy, spatial]` and
+`[legendre, energy, spatial, spatial_moment]`.
+
+⟹ **when a carve axis-ifies a factor, re-derive which ARM of the product rule each
+SURVIVING site takes — the count is the easy half and the arm is the load-bearing one.**
+The publishable sentence turned out to be stronger than a corrected count: the two `*`
+sites are now spelling a concatenation `of_axes` would spell, i.e. a **retirement
+candidate**, not a live counter-example to the `of_axes`-first rule.
+
+### (b) ⭐⭐ The pre-carve claim is measurable WITHOUT a pinned worktree — build a STAND-IN
+
+L-095 says: when the carve is uncommitted, `git worktree add /tmp/x HEAD --detach` and
+run the same probe on both sides (with the editable-`sys.meta_path` caveat, L-050). There
+is a cheaper route when what retired is an **object with a known shape**: compose the SAME
+product in the CURRENT tree against a hand-built stand-in.
+
+```python
+euclid_tail = FunctionSpace(name="spatial_moment_space", shape=(4,))   # the retired class
+old_style   = (head * sn.bulk_space) * euclid_tail
+```
+`[M]` `old_style.axes is None`; the shipped `sn.moment_space(1, spatial_moments=2).axes`
+is `[harmonic, energy, spatial, spatial_moment]` — **and `shape` is equal both ways.**
+
+⭐ That last clause is the finding, not the setup: *same shape, different axes* is exactly
+why `(name, shape)` identity could not see the difference, which is the whole reason the
+two spellings coexisted. A worktree diff would have given me the same two `axes` values
+and **not** the equal-shape control, because the control is a construction, not a diff.
+
+⟹ prefer the stand-in when the retired object is shape-characterisable; keep the worktree
+for behaviour that depends on the whole module graph.
+
+### (c) ⭐ A "N of the family" claim survives a membership CHANGE — the count is stable, the roster is not
+
+`spaces.rst`'s P7 warning: *"All three `FunctionSpace` subclasses that define their own
+`__post_init__` — `SphericalHarmonicSpace`, `SpatialMomentSpace`, `AngularFaceTraceSpace`
+— overrode without chaining … All three now call `super().__post_init__()` first."*
+
+`[M]` today there are still exactly **three** — and the third is `LegendreSpace`, because
+`SpatialMomentSpace` retired at this item and `LegendreSpace` arrived at 6.2c-ii. So a
+census that only checks the NUMBER reports "unchanged" and the ROSTER is wrong; a tense
+flip ("all three *were* made to chain") loses the live fact that the rule held as the
+family turned over. The honest shape is both: past-tense the finding, then `[M]` the
+roster today, and say the rule held across the substitution.
+
+⟹ **for any "all N of family F do X", re-derive F's MEMBERS, not just |F|.** Cheap:
+`[c for c in subclasses if "__post_init__" in c.__dict__]`. Same session, same page, the
+neighbouring claim *"the family-tagged metric-blind class describes only
+`SpatialMomentSpace`"* went to **EMPTY**, which is the same measurement one step further.
+
+### (d) ⭐ RETITLING a section rewrites every BARE `:ref:` to it — grep and explicit-text them in the same edit
+
+The section was titled with the retired class (`The SpatialMomentSpace: a first-class …`).
+Retitling onto the invariant (`The within-cell spatial-moment factor: …`) keeps the LABEL
+(4 in-page refs + 2 `orpheus/` docstring pointers key on it) — and a **bare** `:ref:`
+renders the *title*, so four sentences silently became:
+
+> "the same convention the *The within-cell spatial-moment factor: a first-class DG moment
+> carrier (S3-A0)* factor surfaces"
+
+No build of any severity complains: the ref RESOLVES. ⟹ after any retitle,
+`grep -n "<label>"` and give every bare `:ref:` explicit text
+(`:ref:`within-cell moment factor <spatial-moment-space>``). Underline is measured in CODE
+POINTS: `len(title)` in python, never `wc -c`.
+
+### (e) ⛔ A block replacement that ENDS MID-PARAGRAPH is swallowed by the directive you inserted
+
+My `.. note::` replacement ended at *"… call sites."* — but the source paragraph continued
+*"  Slot 0 is the link\nbetween the two scales: …"*, which was then **indented into the
+note's body** and produced the pass's only new docutils diagnostic:
+`(WARNING/2) Explicit markup ends without a blank line; unexpected unindent`.
+
+⟹ when the `old` string ends mid-sentence, either extend it through the sentence's tail or
+re-emit the tail at body level after the directive. And this is *why* the standalone
+docutils error-SET diff is worth running per file even when Sphinx is unavailable — it was
+the only instrument that saw it (0 → 1, localised to the line).
+
+### (f) ⚠ I rebuilt the KNOWN-USELESS bold-nesting gate; the working pair is adjacency + PARITY
+
+L-097 already records that `\*\*(.+?)\*\*` + `re.S` "role inside bold" is useless (it pairs
+one run's close with the next's open). I wrote it anyway and got **7** false positives on
+my own added lines. The gate that works, and what each half costs:
+
+| gate | result |
+|---|---|
+| adjacency: `\*\*``` / ` ``\*\* ` / `\*\*:[a-z]+:`` / `` `{3,} `` | **0** — trustworthy |
+| `**` PARITY per NEW paragraph, after stripping roles + literals | **0** |
+| `*` PARITY, same stripping | 1 hit — a **false positive**: `*\text{spatial}` inside a `.. math::` block |
+
+⟹ the parity gate must skip `.. math::` / literal blocks, and its positive control is one
+line (`"a **open\nnever closes"` must read odd). ⭐ Parity is the source-side substitute for
+L-095's HTML slice when Sphinx is unavailable: an unbalanced run is exactly the state that
+eats a role several lines later.
+
+### (g) ⭐ Retirement-migration gap the docs pass surfaced (report, don't fix)
+
+The retired gate module was the **only** witness for
+`TensorProductSpace.find_factor`'s `KeyError`-when-absent. `[M]` `grep -rn "raises(KeyError)" tests/`
+returns 3 hits, none about `find_factor`; the sibling module's own
+`with pytest.raises(KeyError): field.space.find_factor(SpatialMomentSpace)` was replaced by
+a label census in the same carve. A structural assertion the corpus documents (*"not a
+silent `None`, Pattern 4"*) is now unpinned — `coding-standards`' "retirement means test
+migration", missed on one leg.
+
+⭐ The generalisable move: when a retired gate module's docstring/prose lists its claims,
+walk that list and ask, per claim, *which live module asserts this now?* — the ones that
+answer "none" are the migration's residue, and a docs pass is where the list is in front
+of you.
+
+### (h) numbers this pass published, and how each was taken
+
+| claim | how |
+|---|---|
+| widened moment product's tail IS the scheme's axis | construct + `tail == sn.scheme.moment_axis(sn.axes)`, weights vs `moment_mass_diagonal` |
+| hub `==` frame at width 2, hashes equal, tail axis `is`-identical | direct, 2-D LD, `L = 1` |
+| Parseval across the tail | `2.5644556769900286` vs `per_slot @ weights` → `1.7e-16` rel; Euclidean `5.7369` = **2.24×** — the negative control IS the mass |
+| mass weights | `[1, 1/3, 1/3, 1/9]` (tensor-Legendre `1/(2ℓ+1)` per axis) |
+| DD widened request refused | `NotImplementedError: DiamondDifference has no moment axis (is_multi_moment is False)` |
+| `AVERAGE_MOMENT` consumers | AST: **5** modules, **10** loads; `average_moment_index` **0** in source (only stale `__pycache__`) |
+| `*` production sites | AST `BinOp(Mult)`, name-filtered: **2** (was 4), positive control = both known sites |
+| `FunctionSpace` public subclasses | **8**; 2 axis-built heads, 6 content-folded composites/traces; `__post_init__` owners = 3 |

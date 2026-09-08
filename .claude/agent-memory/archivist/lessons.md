@@ -15,6 +15,51 @@ every retired symbol leaves no present-tense-false mention · the build's WARNIN
 
 ## 1. Ground truth is the LIVE tree — every other surface lies eventually
 
+- **⭐⭐ WHEN A CARVE AXIS-IFIES A FACTOR, RE-DERIVE WHICH *ARM* OF THE PRODUCT RULE EACH
+  SURVIVING SITE TAKES — re-counting the census is the easy half and misses the
+  inversion.** `[M]` a rule read *"`*` is for a product whose factors are NOT all
+  axis-built — four sites"*; the item killed the two TAIL products, so I re-counted to
+  **two** and then asserted from reasoning that `*` still yields an axes-less product.
+  FALSE: `from_factors` concatenates when EVERY factor is axis-built, and a prior item had
+  axis-ified the head — so neither survivor is the mixed case, on 4 probed rows (width 1/2
+  × diagonal/DENSE Gram). The stronger sentence the refutation bought: the two sites are a
+  **retirement candidate**, not a counter-example. → L-101
+- **⭐⭐ THE PRE-CARVE STATE IS MEASURABLE WITHOUT A PINNED WORKTREE — build a STAND-IN for
+  the retired object, and the EQUAL-SHAPE control is the finding.** `FunctionSpace(name=…,
+  shape=(4,))` in place of the retired axes-less class: the product's `axes` is `None`
+  where the scheme's axis gives four labelled axes — **`shape` equal both ways**, which is
+  exactly why `(name, shape)` identity could not see the two spellings. A worktree diff
+  yields the two values and NOT that control, because the control is a construction.
+  Prefer the stand-in when the retired object is shape-characterisable. → L-101, L-095, L-050
+- **⭐ FOR ANY "ALL N OF FAMILY F DO X", RE-DERIVE F's MEMBERS, NOT |F| — a family can turn
+  over with its count fixed.** `[M]` *"all three subclasses defining `__post_init__`"* is
+  still three and the third member CHANGED (one retired, one arrived). A count-only check
+  reports "unchanged"; a tense flip loses that the rule held across the substitution. Write
+  both: past-tense the finding, `[M]` the roster today. Sibling, same page: *"the
+  metric-blind family-tagged class describes only X"* → **EMPTY**. → L-101
+- **⭐ RETITLING A SECTION REWRITES EVERY BARE `:ref:` TO IT — grep the label and
+  explicit-text them in the SAME edit.** A bare `:ref:` renders the TITLE, so retitling
+  from a retired class name to the invariant made four sentences read *"the same convention
+  the *<the whole new title>* factor surfaces"* — and no build at any severity complains,
+  because the ref RESOLVES. Keep the LABEL (docstrings key on it), fix the call sites.
+  → L-101, L-099
+- **⛔ A BLOCK REPLACEMENT THAT ENDS MID-PARAGRAPH IS SWALLOWED BY THE DIRECTIVE YOU
+  INSERT.** My `.. note::` absorbed the sentence's tail into its body — the pass's ONLY new
+  docutils diagnostic (`Explicit markup ends without a blank line`). Extend `old` through
+  the sentence, or re-emit the tail at body level. This is the case the standalone
+  docutils error-SET diff exists for. → L-101
+- **⚠ DO NOT REBUILD THE KNOWN-USELESS BOLD-NESTING REGEX — the working pair is ADJACENCY +
+  PARITY.** I rewrote `\*\*(.+?)\*\*` + `re.S` and got **7** false positives on my own
+  lines. Working: the four adjacency patterns (0 hits) plus `**`/`*` PARITY per NEW
+  paragraph after stripping roles and literals — and the parity gate must SKIP `.. math::`
+  blocks (its one hit was `*\text{spatial}`). Parity is the source-side substitute for the
+  HTML slice when Sphinx is unavailable. → L-101, L-097, L-095
+- **⭐ A RETIRED GATE MODULE'S CLAIM LIST IS A MIGRATION CHECKLIST — walk it and ask, per
+  claim, WHICH LIVE MODULE ASSERTS THIS NOW.** `[M]` the retired module was the only
+  witness for `find_factor`'s `KeyError`-when-absent, and the sibling's copy was replaced
+  by a label census in the same carve — a documented structural assertion now unpinned. A
+  docs pass is where that list is in front of you. Report; you do not edit `tests/`.
+  → L-101
 - **⭐⭐ WHEN A RULING OVERTURNS A LANDED ONE, BANNER THE SECTION *TITLE* — §3 guarantees the
   refuted answer is what a top-down reader meets FIRST.** A page whose sub-section is titled
   with the QUESTION (*"Which space, though — X or Y?"*) or with a VERDICT (*"Why X is the

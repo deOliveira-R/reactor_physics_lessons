@@ -15,9 +15,14 @@ These conventions describe the Kronecker ordering of a tensor-Legendre
 DG basis; they carry no transport physics (no :math:`\Sigma`, no
 :math:`\mu`). Both halves of the spatial-moment iterate need them:
 
-* the typed :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-  (the CAPABILITY half — surfaces ``average_moment_index`` and the cell
-  tail ``spatial_moment_tail``), and
+* the scheme-owned spatial-moment AXIS
+  (:meth:`~orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis`,
+  the CAPABILITY half — the typed factor every widened space composes,
+  labelled :data:`SPATIAL_MOMENT_AXIS_LABEL`, its cell tail sized by
+  :func:`spatial_moment_tail`; until CS4c step 6 item 6.2c-iii the
+  harmonic-moment product carried a separate Euclidean
+  ``SpatialMomentSpace`` class here instead — two spellings of one
+  factor, retired), and
 * the UBLD cell assembler :mod:`orpheus.transport.spatial._ubld` (the
   REALIZATION half — buffers, sweeps, the face cochain).
 
@@ -47,6 +52,7 @@ if TYPE_CHECKING:
 __all__ = [
     "AVERAGE_MOMENT",
     "SPATIAL_MOMENT_AXIS_LABEL",
+    "spatial_moment_tail",
     "cell_moment_count",
     "face_moment_count",
     "face_moment_tail",
@@ -78,8 +84,8 @@ def cell_moment_count(per_axis: int, ndim: int) -> int:
     over all ``d`` axes: ``1`` for the cell-average closures (DD/Step) and
     ``2^d`` for the bilinear UBLD Linear-Discontinuous closure (d=2: ``4`` —
     ``[ψ̄, ψ̂_y, ψ̂_x, ψ̂_xy]``).  Single source of the cell-count policy —
-    the ``d`` exponent — shared by the typed space
-    (:meth:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace.from_per_axis`),
+    the ``d`` exponent — shared by the scheme's typed moment axis
+    (:meth:`~orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis`),
     the field shape builders, the UBLD cell assembler, the SN
     solver's lift/reduce helpers, and the loss representation (#253: these
     were ~20 open-coded ``per_axis ** ndim`` spellings — a layout-policy
@@ -163,3 +169,22 @@ def is_moment_valued_by_rank(array: "np.ndarray", reference: "np.ndarray") -> bo
     cell-solve source-reframe gate (``orpheus.sn.loss_representation.sweep_graph._CellSolve``).
     """
     return is_moment_valued_by_flat_rank(array, reference.ndim + 1)
+
+
+def spatial_moment_tail(n_cell_moments: int) -> tuple[int, ...]:
+    r"""Trailing spatial-moment-axis shape suffix for a bulk-field buffer.
+
+    The CELL analogue of :func:`face_moment_tail` (which sizes the per-FACE
+    transverse cochain). A multi-moment closure (LD, ``n_cell_moments ==
+    per_axis**ndim > 1``) carries a trailing spatial-moment axis on the bulk
+    field; a cell-average closure (DD/Step, ``== 1``) leaves the field rank
+    untouched (``()`` — NO length-1 axis appended) so its buffers / spaces
+    stay byte-identical (#240 D5b — the backward-compat invariant).
+
+    Delegates to :func:`face_moment_tail` so the "append iff > 1" decision
+    lives in EXACTLY ONE place — the cell-moment tail and the face-cochain
+    tail must never disagree on the policy (``coding-elegance`` Pattern 7:
+    normalise the convention at one site). Homed here since CS4c step 6
+    item 6.2c-iii (it lived beside the retired ``SpatialMomentSpace``).
+    """
+    return face_moment_tail(n_cell_moments)

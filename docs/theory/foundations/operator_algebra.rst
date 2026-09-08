@@ -5548,22 +5548,25 @@ gate), exactly as it should be — the ordinate and modal representations must
 not silently mix.
 
 **Spatial order is correctly a PROPERTY (today).** There is ONE within-cell
-spatial basis — the tensor-Legendre DG tower
-(:class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`,
-``per_axis**ndim`` coefficients).  The only change-of-basis within it is the
-identity (and ``truncate`` / inclusion, which stay within the same family and
-return the same tower).  Clause 1 fails: no non-canonical dual coexists.  So
-the spatial moment rides as a property — a trailing
-:class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-factor on the bulk leaf's SPACE (minted by
+spatial basis — the tensor-Legendre DG tower, ``per_axis**ndim``
+coefficients, carried by the discretization scheme's own MODAL
+:meth:`moment_axis
+<orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis>`.
+The only change-of-basis within it is the identity (and ``truncate`` /
+inclusion, which stay within the same family and return the same tower).
+Clause 1 fails: no non-canonical dual coexists.  So
+the spatial moment rides as a property — a trailing AXIS on the bulk
+leaf's SPACE (minted by
 :attr:`~orpheus.sn.mesh.augmented_mesh.SNMesh.angular_trial_space`, the
 scheme-widened sibling of
 :attr:`~orpheus.sn.mesh.augmented_mesh.SNMesh.angular_bulk_space`; before
 CS4b S5 the same factor was composed on by an explicit
 ``spatial_moments=`` factory argument through
-:meth:`BulkField._compose_spatial_moments <orpheus.transport.fields._bases.BulkField._compose_spatial_moments>`,
-which survives only as the private derivation behind the admission
-re-mint), and the flat face-buffer moment tail minted by
+:meth:`BulkField.compose_spatial_moments
+<orpheus.transport.fields._bases.BulkField.compose_spatial_moments>`,
+which is the one composer every widened space rides — the angular and
+scalar mints, and, since CS4c step 6 item 6.2c-iii, the carrier's
+harmonic-moment product too), and the flat face-buffer moment tail minted by
 :attr:`~orpheus.sn.mesh.augmented_mesh.SNMesh.boundary_face_layout` on
 the boundary — rather than as its own field type.  A ``BoundaryMomentField`` leaf whose
 partner-check added nothing beyond class identity would be the vacuous naming
@@ -5577,14 +5580,21 @@ The first-class spatial ``SpatialMomentField`` type is DEFERRED, with an
 explicit trigger, under Issue #263.  The trigger is the arrival of a
 **non-canonical spatial dual**: a nodal / point-value within-cell (or
 face-current) representation enters production AND a modelled, applied
-nodal↔modal morphism is written between it and the existing
-:class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`.  Two
-concrete arrivals would supply it:
+nodal↔modal morphism is written between it and the existing modal tower
+(the scheme's :meth:`moment_axis
+<orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis>`).
+Two concrete arrivals would supply it:
 
 * **Nodal discontinuous Galerkin SN** — nodal Lagrange point-values coexist
   with the modal Legendre coefficients, bridged by the applied Vandermonde
   matrix (truncation content, adjoint, in the algebra).  The
   Hesthaven–Warburton nodal-DG construction is the canonical instance.
+  (The modal side already declares itself as such: the moment axis's
+  :class:`~orpheus.numerics.axis.BasisKind` is ``MODAL``, which is why a
+  widened space answers ``has_coordinate_cone = False`` — see
+  :ref:`spaces-nodal-modal`.  A nodal dual would arrive as a ``NODAL``
+  axis of the same width, and the two would be *different axes*, hence
+  different spaces, under the structural identity.)
 * **Nodal diffusion (NEM / SANM / ANM)** — transverse-Legendre moments coexist
   with face partial currents, bridged by the coupling coefficients (a modelled
   morphism).  This is the strongest spatial for-case, though it is not on the

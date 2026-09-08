@@ -1203,8 +1203,8 @@ class _OctantWalk:
         # closure (LD) carries a trailing 2^d spatial-moment axis on the probe
         # / accumulators so the apply returns the full moment residual.  DD/Step
         # (per_axis == 1) → ``()`` tail, every buffer byte-identical.  The tail
-        # is read OFF the probe (its space already carries the SpatialMomentSpace
-        # factor — the iterate is the single source of truth for the width).
+        # is read OFF the probe (its space already carries the scheme's
+        # spatial-moment axis — the iterate is the single source of truth for the width).
         per_axis = self.spatial_closure.spatial_basis_per_axis
         moment_tail = face_moment_tail(cell_moment_count(per_axis, ndim))
         operands = _ApplyOperands(
@@ -3165,7 +3165,7 @@ class _OneDimScanWalk:
         m_cell, m_boundary = self._apply_walk(sigma, psi)
         # The matvec output carries the trailing 2^d spatial-moment axis at a
         # multi-moment closure (the φ̂ iterate, #240 D5b-S3); the typed wrap
-        # selects the SpatialMomentSpace factor.  DD/Step → no factor, byte-id.
+        # selects the scheme's spatial-moment axis.  DD/Step → no factor, byte-id.
         return FullField(
             interior=AngularSourceSink(
                 values=m_cell, space=self.mesh.angular_trial_space,

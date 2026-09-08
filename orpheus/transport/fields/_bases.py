@@ -103,12 +103,9 @@ from orpheus.numerics.axis import EnergyAxis
 from orpheus.numerics.moment_layout import (
     SPATIAL_MOMENT_AXIS_LABEL,
     cell_moment_count,
-)
-from orpheus.numerics.space import FunctionSpace
-from orpheus.numerics.spaces.spatial_moment_space import (
-    SpatialMomentSpace,
     spatial_moment_tail,
 )
+from orpheus.numerics.space import FunctionSpace
 from orpheus.numerics.spaces.scalar_trace_space import ScalarTraceSpace
 from orpheus.numerics.spaces.angular_trace_space import AngularTraceSpace
 from orpheus.numerics.spaces.radial_characteristic_space import (
@@ -351,7 +348,7 @@ class BulkField(RolePair, Field):
     # ── Optional spatial-moment factor (#240 D5b-S3-A0) ──────────────
 
     @staticmethod
-    def _compose_spatial_moments(
+    def compose_spatial_moments(
         space: FunctionSpace, mesh: "MaterialMesh", spatial_moments_per_axis: int,
     ) -> FunctionSpace:
         r"""Append the optional within-cell spatial-moment factor to ``space``.
@@ -372,10 +369,9 @@ class BulkField(RolePair, Field):
           item 6.2b the carrier composes that product's tail itself —
           :meth:`~orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space`
           appends a
-          :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-          factor via the tensor-product ``*`` (a factored metric, never a
-          densified one, since item 6.2a) — and an axes-less input here is
-          refused by name, so the tail rule for that product has one home.
+          tail THROUGH this composer since item 6.2c-iii (the scheme's own
+          mass-weighted axis — one spelling of the factor; until then it
+          appended a separate Euclidean ``SpatialMomentSpace`` class).
 
         The factor is the Linear-Discontinuous closure's spatial-slope
         carrier that travels between source-iteration sweeps (the
@@ -390,7 +386,7 @@ class BulkField(RolePair, Field):
         BYTE-IDENTICAL to its pre-S3 shape (the backward-compat invariant,
         single-sourced from
         :func:`orpheus.numerics.moment_layout.face_moment_tail` via
-        :func:`~orpheus.numerics.spaces.spatial_moment_space.spatial_moment_tail`).
+        :func:`~orpheus.numerics.moment_layout.spatial_moment_tail`).
 
         ``spatial_moments_per_axis`` is an EXPLICIT parameter (the
         ``spatial_moments`` factory parameter, default ``1`` everywhere),
@@ -434,24 +430,24 @@ class BulkField(RolePair, Field):
                     "scheme's basis, so only its own width is mintable."
                 )
             return FunctionSpace.of_axes(*space.axes, axis)
-        # An axes-less space composes its tail where it is minted — the
-        # carrier's ``SNMesh.moment_space`` for the (still axes-less until
-        # item 6.2c) harmonic-moment product (CS4c step 6 item 6.2b); this
-        # family-side composer serves the axis-built angular/scalar mints
-        # only, so an axes-less input here is a caller error, not a case.
+        # Every bulk space that carries a tail is axis-built — the angular
+        # and scalar mints since CS4b, the harmonic-moment product since
+        # CS4c step 6 item 6.2c-ii; the carrier's ``SNMesh.moment_space``
+        # composes its tail THROUGH this composer since item 6.2c-iii (one
+        # spelling of the tail: the scheme's axis) — so an axes-less input
+        # here is a caller error, not a case.
         raise TypeError(
             f"the within-cell moment tail is appended to an AXIS-BUILT "
-            f"space; {space!r} declares no axes — the harmonic-moment "
-            f"product composes its tail at the carrier (SNMesh.moment_space)."
+            f"space; {space!r} declares no axes."
         )
 
     @staticmethod
     def _spatial_moment_tail_of(space: FunctionSpace) -> tuple[int, ...]:
         r"""The trailing spatial-moment shape suffix carried by ``space``, or ``()``.
 
-        Reads the optional
-        :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-        factor OFF a composed space — the space is the single source of
+        Reads the optional scheme-owned spatial-moment axis (labelled
+        :data:`~orpheus.numerics.moment_layout.SPATIAL_MOMENT_AXIS_LABEL`)
+        OFF a composed space — the space is the single source of
         truth for the moment width, so the shape validation (Field's
         values-vs-space check — the pre-S4 ``_phase_space_shape``
         hook's successor) derives
@@ -463,32 +459,23 @@ class BulkField(RolePair, Field):
 
         Returns ``()`` for a non-composed / DD-default space (no factor →
         byte-identical validation prefix), and ``(per_axis ** ndim,)`` when
-        a moment factor is present — as the
+        the moment factor is present — the
         :data:`~orpheus.numerics.moment_layout.SPATIAL_MOMENT_AXIS_LABEL`
-        axis on an axis-built space (CS4b), or as a
-        :class:`SpatialMomentSpace` factor on an axes-less one.
+        axis of an axis-built space (every tailed space is one since CS4c
+        step 6 item 6.2c-iii; an axes-less space carries no tail).
         """
         if space.axes is not None:
             for ax in space.axes:
                 if ax.label == SPATIAL_MOMENT_AXIS_LABEL:
                     return ax.shape
-            return ()
-        find_factor = getattr(space, "find_factor", None)
-        if find_factor is None:
-            return ()  # a bare FunctionSpace (DD default) — no factor.
-        try:
-            factor = find_factor(SpatialMomentSpace)
-        except KeyError:
-            return ()
-        return factor.shape
+        return ()
 
     @property
     def spatial_moments_per_axis(self) -> int:
         r"""The within-cell spatial-moment count per axis carried by this field.
 
-        Reads the ``per_axis`` parameter OFF the optional
-        :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-        factor on this field's space (the single source of truth for the moment
+        Reads the width OFF the optional scheme-owned spatial-moment axis on
+        this field's space (the single source of truth for the moment
         width, #240 D5b-S3-A0).  Returns ``1`` for a non-composed / DD-default
         space.  Producers that derive a moment-carrying child field (e.g.
         :meth:`AngularFlux.integrate_angular`,
@@ -508,12 +495,10 @@ class BulkField(RolePair, Field):
         construction — reads the SAME rule the fields do (single source;
         the alternative was a second copy of the tail-inversion in the
         frame)."""
-        from orpheus.numerics.spaces.spatial_moment_space import SpatialMomentSpace
-
         tail = BulkField._spatial_moment_tail_of(space)
+        if tail == ():
+            return 1
         if space.axes is not None:
-            if tail == ():
-                return 1
             # The axis stores the CELL count (per_axis ** ndim); invert it.
             # ndim is the spatial axis's rank — the ONE "spatial" axis
             # carries the whole spatial shape (CS4b S4: the space answers
@@ -531,14 +516,7 @@ class BulkField(RolePair, Field):
                     f"not a per-axis power for ndim={ndim}"
                 )
             return per_axis
-        find_factor = getattr(space, "find_factor", None)
-        if find_factor is None:
-            return 1
-        try:
-            factor = find_factor(SpatialMomentSpace)
-        except KeyError:
-            return 1
-        return factor.per_axis
+        return 1  # unreachable in practice: a tail rides an axis-built space
 
     @classmethod
     def _space_for_mesh(
@@ -633,9 +611,9 @@ class AngularField(BulkField):
         spatial-moment basis size per axis (#240 D5b-S3-A0). At the
         default ``1`` the space IS the cached instance; at ``> 1`` the
         scheme-owned MODAL moment axis is composed on (see
-        :meth:`BulkField._compose_spatial_moments`).
+        :meth:`BulkField.compose_spatial_moments`).
         """
-        return cls._compose_spatial_moments(
+        return cls.compose_spatial_moments(
             mesh.angular_bulk_space, mesh, spatial_moments,
         )
 
@@ -714,12 +692,12 @@ class ScalarField(BulkField):
         ``spatial_moments`` (default ``1``) is the optional within-cell
         spatial-moment basis size per axis (#240 D5b-S3-A0); at ``> 1``
         the scheme-owned MODAL moment axis is composed on (see
-        :meth:`BulkField._compose_spatial_moments`). The
+        :meth:`BulkField.compose_spatial_moments`). The
         :class:`ScalarSourceSink` scattering-source accumulator is the
         carrier that selects ``> 1`` at S3-A so the slope rows can hold
         :math:`\Sigma_s \cdot \hat\phi`.
         """
-        return cls._compose_spatial_moments(
+        return cls.compose_spatial_moments(
             mesh.bulk_space, mesh, spatial_moments,
         )
 
@@ -792,7 +770,7 @@ class MomentField(BulkField):
     #: on every moment so the in-sweep ``moment_buf`` can carry the
     #: within-cell slopes the diffusion-limit-consistent scattering source
     #: needs between sweeps. Single-sourced "append iff > 1" via
-    #: :func:`~orpheus.numerics.spaces.spatial_moment_space.spatial_moment_tail`.
+    #: :func:`~orpheus.numerics.moment_layout.spatial_moment_tail`.
     spatial_moments: int = 1
 
     # ── Metadata read-through (the axes-less family's own ng) ────────
@@ -880,11 +858,11 @@ class MomentField(BulkField):
         ``space.find_factor(...)`` per Issue #207).
 
         ``spatial_moments`` (default ``1``, byte-identical #240 D5b-S3-A0)
-        optionally composes a within-cell
-        :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-        factor on AFTER the cell-group space — EXACTLY the same ``*``
-        composition that adds the angular head ("append iff > 1",
-        single-sourced with the space's own shape contract).
+        optionally widens the cell-group factor by the scheme's own
+        mass-weighted spatial-moment axis (CS4c step 6 item 6.2c-iii —
+        :meth:`BulkField.compose_spatial_moments`, the same composer the
+        angular and scalar mints ride; "append iff > 1", single-sourced
+        with the space's own shape contract).
         """
         return cls(
             values=values,

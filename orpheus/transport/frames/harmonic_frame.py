@@ -465,21 +465,17 @@ class HarmonicFrame(GalerkinFrame):
         the spherical-harmonic space on a full-sphere rule; single source:
         the Parseval metric rides into the product), the cell group is the
         angular space's own energy/spatial axes (the same instances the
-        carrier's mints share, so the product content-equals the carrier's
-        cached ``SNMesh.moment_space(L, width)`` — the object the moment
-        fields hold since CS4c step 6 item 6.2b — which since #429 tracker
-        2.5 reads the SAME basis through the mesh's quadrature) — with the
-        ``SpatialMomentSpace`` factor appended for a widened angular space.
+        carrier's mints share, so the product is structurally EQUAL to the
+        carrier's cached ``SNMesh.moment_space(L, width)`` — the object the
+        moment fields hold since CS4c step 6 item 6.2b, reading the same
+        frame's dressed head since 6.2c-ii and composing the same
+        scheme-owned spatial-moment axis since 6.2c-iii) — the widened
+        angular space's own moment axis riding along.
         Runs once per mint: the derivation direction is moment = f(angular,
         L), never the reverse.
         """
-        from orpheus.numerics.moment_layout import SPATIAL_MOMENT_AXIS_LABEL
         from orpheus.numerics.quadrature.directional import Quadrature
         from orpheus.numerics.space import FunctionSpace
-        from orpheus.numerics.spaces.spatial_moment_space import (
-            SpatialMomentSpace,
-        )
-        from orpheus.transport.fields._bases import BulkField
 
         axes = angular_space.axes
         if axes is None:
@@ -495,17 +491,12 @@ class HarmonicFrame(GalerkinFrame):
         # so the axes-less refusal above no longer catches it; this does,
         # by name (hazard H-6: a guard must not silently lose its subject).
         axes[0].generator_as(Quadrature, consumer="HarmonicFrame.moment_space_on")
-        cell_axes = [
-            ax for ax in axes[1:] if ax.label != SPATIAL_MOMENT_AXIS_LABEL
-        ]
-        base = self.basis_space * FunctionSpace.of_axes(*cell_axes)
-        per_axis = BulkField.spatial_moments_per_axis_of(angular_space)
-        if per_axis == 1:
-            return base
-        ndim = next(
-            len(ax.shape) for ax in cell_axes if ax.label == "spatial"
-        )
-        return base * SpatialMomentSpace.from_per_axis(per_axis, ndim)
+        # The cell group is the angular space's OWN axes — energy, spatial
+        # and, on a widened iterate, the scheme's mass-weighted spatial-
+        # moment axis (CS4c step 6 item 6.2c-iii: ONE spelling of the
+        # tail; until then this dropped that axis and re-appended a
+        # Euclidean ``SpatialMomentSpace`` class).
+        return self.basis_space * FunctionSpace.of_axes(*axes[1:])
 
     # ── the mint verbs (one per face-with-a-consumer) ─────────────────
 

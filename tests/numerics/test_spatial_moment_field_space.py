@@ -31,7 +31,8 @@ from orpheus.numerics.quadrature import Quadrature
 from orpheus.numerics.axis import BasisKind
 from orpheus.numerics.moment_layout import SPATIAL_MOMENT_AXIS_LABEL
 from orpheus.numerics.space import FunctionSpace
-from orpheus.numerics.spaces import SpatialMomentSpace, SphericalHarmonicSpace
+from orpheus.numerics.spaces import SphericalHarmonicSpace
+from orpheus.transport.fields._bases import BulkField
 from orpheus.sn.mesh.augmented_mesh import SNMesh
 from orpheus.transport.spatial import DiamondDifference, LinearDiscontinuous
 from orpheus.transport.fields import HarmonicMomentFlux
@@ -147,7 +148,9 @@ def test_harmonic_moment_flux_default_byte_identical(scheme_name, dd_2d, ld_2d):
     The windowed iterate carrier. Default ``spatial_moments=1`` →
     ``(L+1, 2L+1, ng, *spatial)`` with NO trailing spatial-moment axis, AND
     the composition tree carries only the angular ``SphericalHarmonicSpace``
-    factor (the spatial factor is absent — ``find_factor`` raises for it).
+    factor (no axis labelled ``spatial_moment`` rides the product — since
+    CS4c step 6 item 6.2c-iii the tail is the scheme's own axis, never a
+    separate class).
     """
     mesh = {"dd": dd_2d, "ld": ld_2d}[scheme_name]
     L = 1
@@ -156,10 +159,13 @@ def test_harmonic_moment_flux_default_byte_identical(scheme_name, dd_2d, ld_2d):
     np.testing.assert_equal(field.space.shape, expected)
     np.testing.assert_equal(field.values.shape, expected)
     np.testing.assert_equal(field.spatial_moments, 1)
-    # the angular factor is present; the spatial factor is NOT (byte-id tree)
+    # the angular factor is present; the spatial-moment axis is NOT (byte-id tree)
     np.testing.assert_equal(field.space.find_factor(SphericalHarmonicSpace).L, L)
-    with pytest.raises(KeyError):
-        field.space.find_factor(SpatialMomentSpace)
+    assert field.space.axes is not None
+    np.testing.assert_equal(
+        [ax.label for ax in field.space.axes if ax.label == SPATIAL_MOMENT_AXIS_LABEL], [],
+    )
+    np.testing.assert_equal(BulkField.spatial_moments_per_axis_of(field.space), 1)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -203,7 +209,7 @@ def test_bulk_field_widened_2d_shape(field_factory, ld_2d):
     np.testing.assert_equal(field.space.shape[-1:], independent_tail)
     np.testing.assert_equal(field.values.shape, field.space.shape)
     # CS4b S2: on an axis-built bulk space the tail is the scheme-owned
-    # MODAL moment AXIS (mass-carrying), not a SpatialMomentSpace factor.
+    # MODAL moment AXIS (mass-carrying) — the scheme's own, the ONE spelling of the tail (6.2c-iii).
     tail_axis = field.space.axes[-1]
     np.testing.assert_equal(tail_axis.label, SPATIAL_MOMENT_AXIS_LABEL)
     assert tail_axis.kind is BasisKind.MODAL
@@ -236,7 +242,9 @@ def test_harmonic_moment_flux_widened_2d_shape(ld_2d):
     r"""A widened windowed iterate gets a trailing ``per_axis ** ndim`` axis.
 
     ``spatial_moments=2`` on a 2-D mesh → ``(L+1, 2L+1, ng, *spatial, 4)``;
-    BOTH moment factors (angular SH + spatial) are queryable by type — the
+    BOTH moment factors coexist — the angular head queryable by type, the
+    spatial tail the scheme's own MODAL axis (mass-weighted, labelled
+    ``spatial_moment``; CS4c step 6 item 6.2c-iii) read by label — the
     orthogonal-axes invariant on the live carrier.
     """
     mesh = ld_2d
@@ -248,7 +256,11 @@ def test_harmonic_moment_flux_widened_2d_shape(ld_2d):
     np.testing.assert_equal(field.spatial_moments, 2)
     # both moment factors coexist (orthogonal axes)
     np.testing.assert_equal(field.space.find_factor(SphericalHarmonicSpace).L, L)
-    np.testing.assert_equal(field.space.find_factor(SpatialMomentSpace).per_axis, 2)
+    np.testing.assert_equal(BulkField.spatial_moments_per_axis_of(field.space), 2)
+    assert field.space.axes is not None
+    tail = [ax for ax in field.space.axes if ax.label == SPATIAL_MOMENT_AXIS_LABEL]
+    np.testing.assert_equal(len(tail), 1)
+    np.testing.assert_equal(tail[0], mesh.scheme.moment_axis(mesh.axes))
 
 
 @pytest.mark.foundation

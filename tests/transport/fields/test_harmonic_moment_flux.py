@@ -37,6 +37,7 @@ from orpheus.geometry import BC, CoordSystem, Mesh1D
 from orpheus.numerics.quadrature import Quadrature
 from orpheus.sn.mesh.augmented_mesh import SNMesh
 from orpheus.transport.fields.harmonic_moment_flux import HarmonicMomentFlux
+from orpheus.transport.spatial import LinearDiscontinuous
 from tests.sn._test_helpers import placeholder_materials
 from orpheus.numerics.spaces.moment_head import MomentHead
 
@@ -72,12 +73,18 @@ def _sn(family: str = "flat") -> SNMesh:
         Quadrature.gauss_legendre(4) if family == "flat"
         else Quadrature.level_symmetric(4)
     )
-    return SNMesh(mesh, quadrature, placeholder_materials(ng=_NG))
+    # Linear-Discontinuous: the widened (spatial_moments = 2) rows need a
+    # scheme that MINTS a moment axis — since CS4c step 6 item 6.2c-iii the
+    # moment product's tail is the scheme's own mass-weighted axis (the
+    # angular side's rule since CS4b S4), so a widened request on a DD
+    # carrier is refused rather than given a Euclidean tail. Width-1 rows
+    # are scheme-blind (no tail).
+    return SNMesh(mesh, quadrature, placeholder_materials(ng=_NG), scheme=LinearDiscontinuous())
 
 
 def _head(sn: SNMesh, L: int = _L) -> MomentHead:
-    """The angular head this mesh's frame induces — the single source of the layout."""
-    head = sn.quad.angular_frame(L).basis.space
+    """The angular head this mesh's frame induces — the single source of the layout (the frame's Parseval-dressed head, item 6.2c-ii)."""
+    head = sn.quad.angular_frame(L).basis_space
     assert isinstance(head, MomentHead)
     return head
 
@@ -247,11 +254,26 @@ class TestViews:
             pytest.fail("scalar target must be the product's bulk factor")
 
     @pytest.mark.parametrize("family", _FAMILIES)
-    def test_scalar_flux_widened_self_derive_refuses(self, family):
-        """The widened self-derive is REFUSED by contract (S4): the
-        widened target carries the scheme's mass-bearing moment axis,
-        which the densified SpatialMomentSpace factor does not hold —
-        the caller holding the pose passes space=. NOT a #399 defect."""
-        f = _field(_sn(family), 2, seed=38)
-        with pytest.raises(TypeError, match="cannot self-derive"):
-            f.scalar_flux()
+    def test_scalar_flux_widened_self_derives_the_widened_bulk(self, family):
+        """The widened self-derive is HONEST since CS4c step 6 item
+        6.2c-iii: the moment product's cell-group factor is the carrier's
+        widened bulk carrying the scheme's mass-weighted moment axis (the
+        S4 refusal's reason — a Euclidean ``SpatialMomentSpace`` tail
+        without that axis — is gone), so the target is the product's own
+        factor, equal to the widened angular space's scalar marginal a
+        caller used to have to pass."""
+        sn = _sn(family)
+        f = _field(sn, 2, seed=38)
+        s = f.scalar_flux()
+        npt.assert_array_equal(s.values, f.values[_head(sn).isotropic_slot])
+        if s.space != f.space.factors[1]:  # type: ignore[union-attr]
+            pytest.fail("scalar target must be the product's widened bulk factor")
+        from orpheus.numerics.moment_layout import SPATIAL_MOMENT_AXIS_LABEL
+        assert s.space.axes is not None
+        tail = [ax for ax in s.space.axes if ax.label == SPATIAL_MOMENT_AXIS_LABEL]
+        if len(tail) != 1 or tail[0] != sn.scheme.moment_axis(sn.axes):
+            pytest.fail("the widened scalar target must carry the scheme's own moment axis")
+        # and it equals the explicit-target path
+        explicit = f.scalar_flux(space=s.space)
+        if explicit.space != s.space:
+            pytest.fail("explicit and self-derived targets must be one space")

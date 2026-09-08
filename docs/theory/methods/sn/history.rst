@@ -43,6 +43,97 @@ them.  Trust ``git``, not this column.
      - Issue
      - Where
    * - 2026-09-08
+     - **The spatial-moment tail is the discretization scheme's own axis —
+       ONE spelling of the factor on every side** (campaign 1 residue,
+       CS4c step 6 item 6.2c-iii).
+       **(1) The two spellings.**  Since CS4b the widened ANGULAR and
+       SCALAR spaces carried the scheme-owned ``MODAL``
+       :meth:`moment_axis
+       <orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_axis>`
+       — mass-weighted, because :math:`\theta` enters
+       :meth:`moment_mass_diagonal
+       <orpheus.transport.spatial.scheme.DiscretizationSchemeBase.moment_mass_diagonal>`,
+       appended BY LABEL by the fields' own composer.  The
+       harmonic-MOMENT product carried something else: a separate
+       Euclidean, axes-less ``SpatialMomentSpace`` class, appended with
+       ``*`` at the carrier's hub and — after DROPPING the angular
+       space's own tail axis — at the frame's derivation too.  One
+       within-cell factor, two spellings, and the second one carried no
+       measure.
+       **(2) The four consequences it carried.**  A widened moment
+       product was **axes-less** — an axes-less factor takes ``*``'s
+       non-axis arm, so the whole product lost its ``axes`` record even
+       after item 6.2c-ii axis-ified its head.  ``[M]`` 2026-09-08,
+       composing the same 2-D LD product against a stand-in axes-less
+       Euclidean tail of the identical ``(4,)`` shape: the product's
+       ``axes`` is ``None``, where the scheme's axis gives
+       ``[harmonic, energy, spatial, spatial_moment]`` — same ``shape``
+       both ways, which is exactly why ``(name, shape)`` identity could
+       not see the difference.  Its tail also carried **no mass**, so the
+       moment field's norm was not the field's energy on that factor; the frame had to drop and re-append to stay
+       ``(name, shape)``-equal to the hub, i.e. ruling O-5 held at width
+       1 by construction and at width 2 only by a coincidence of two
+       identical work-arounds; and the widened
+       :meth:`HarmonicMomentFlux.scalar_flux
+       <orpheus.transport.fields.harmonic_moment_flux.HarmonicMomentFlux.scalar_flux>`
+       self-derive was **REFUSED by contract** (CS4b S4) because the
+       product's own cell-group factor lacked the axis the scalar target
+       needed — the caller holding the pose had to pass ``space=``.
+       **(3) What moved.**  Three edits, no new concept.  The carrier's
+       :meth:`SNMesh.moment_space
+       <orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>` composes its
+       cell group THROUGH the fields' composer, now public as
+       :meth:`BulkField.compose_spatial_moments
+       <orpheus.transport.fields._bases.BulkField.compose_spatial_moments>`
+       — the same one the angular and scalar mints ride.
+       :meth:`HarmonicFrame.moment_space_on
+       <orpheus.transport.frames.harmonic_frame.HarmonicFrame.moment_space_on>`
+       stopped filtering the tail out of ``axes[1:]``, so it threads the
+       angular space's own axis object through.  And the "append iff > 1"
+       cell policy, ``spatial_moment_tail``, is re-homed in
+       :mod:`orpheus.numerics.moment_layout` beside the
+       :func:`~orpheus.numerics.moment_layout.face_moment_tail` it
+       delegates to.
+       **(4) What the tree gains.**  The widened moment product is
+       axis-built and its tail IS the scheme's axis, so hub and frame
+       agree structurally at width 2 exactly as at width 1 (ruling O-5) —
+       ``[M]`` ``==`` with equal hashes, and the frame's tail axis is the
+       angular space's axis ``is``-identically.  The moment field's norm
+       carries the cell mass on its tail exactly as the angular field's
+       does: Parseval across the tail, ``[M]`` on a 2-D LD carrier at
+       :math:`L = 1`, ``spatial_moments = 2``, the widened pairing
+       ``2.5644556769900286`` equals the four per-slot un-widened
+       pairings weighted by the mass ``[1, 1/3, 1/3, 1/9]`` to
+       ``1.7e-16`` relative, against ``5.7369`` for the retired Euclidean
+       tail — a factor **2.24**, so the measure is not decoration.  This
+       is ruling R-6.2c-1's ONE-space principle (*the carrier's norm is
+       the field's energy*) applied to the tail rather than to the head.
+       ``scalar_flux`` self-derives at EVERY width, so the S4 refusal is
+       gone; and a widened request on a slopeless carrier is now refused
+       by the SCHEME (``[M]`` ``DiamondDifference has no moment axis
+       (is_multi_moment is False)``) — the angular side's rule since CS4b
+       S4, arriving on the moment side.
+       **(5) The retirement.**  ``SpatialMomentSpace`` and its module are
+       deleted and no longer exported, so the mistake is unspellable
+       rather than merely refused; with it went its
+       ``average_moment_index`` accessor, whose constant
+       (:data:`~orpheus.numerics.moment_layout.AVERAGE_MOMENT`) every
+       consumer already imported directly (``[M]`` 5 modules, 10 read
+       sites).  Its gate module retired too and its surviving claims were
+       re-keyed rather than deleted (the corpus account is
+       :ref:`the SN chapter's moment-factor section <spatial-moment-space>`).
+       The new gate is
+       ``tests/numerics/test_spatial_moment_tail_is_the_schemes_axis.py``
+       — the axis-built tail, the O-5 agreement at both widths, the
+       Parseval row with a Euclidean-tail negative control, the
+       slopeless refusal, the ``scalar_flux`` / ``truncate`` round trip,
+       and an import-level proof that the class is unspellable.  Full
+       account: :ref:`the moment-factor section <spatial-moment-space>`,
+       :ref:`spaces-moment-head-axis-built` and
+       :ref:`frame-the-one-moment-space`.
+     - —
+     - landing hash pending, on ``main``
+   * - 2026-09-08
      - **The moment carrier's norm is the field's energy — ONE moment
        space, Parseval-dressed** (campaign 1 residue, CS4c step 6 item
        6.2c-ii; ruling R-6.2c-1).
@@ -121,11 +212,12 @@ them.  Trust ``git``, not this column.
        ``has_coordinate_cone`` on a moment space flips ``None`` →
        ``False``, giving the MODAL refusal arm its first production
        witness.
-       **(7) What did NOT land.**  The spatial-moment TAIL: a widened
-       moment space still appends the Euclidean, axes-less
-       ``SpatialMomentSpace``, so a widened product is axes-less overall.
-       Item **6.2c-iii** makes it the scheme's own mass-weighted
-       ``moment_axis`` and retires the class.  Full account:
+       **(7) What did NOT land, and closed the same day.**  The
+       spatial-moment TAIL: a widened moment space still appended the
+       Euclidean, axes-less ``SpatialMomentSpace``, so a widened product
+       was axes-less overall.  Item **6.2c-iii** — the entry above —
+       made it the scheme's own mass-weighted ``moment_axis`` and retired
+       the class.  Full account:
        :ref:`frame-the-one-moment-space` and
        :ref:`spaces-moment-head-axis-built`; the defect-catalogue view is
        ERR-039 chapter 4.
@@ -393,8 +485,9 @@ them.  Trust ``git``, not this column.
        the cell group the carrier's own
        :attr:`~orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space`
        (the same instance the scalar family holds), and the
-       :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-       tail appended iff the width exceeds 1.  The moment family is now
+       ``SpatialMomentSpace`` tail appended iff the width exceeds 1 (item
+       6.2c-iii replaced that class with the scheme's own axis the next
+       day).  The moment family is now
        entirely CONSUMERS: both factories, ``space_on`` and the admission
        reference resolve through ``_space_for_mesh_and_L``, whose whole
        body is a read of the carrier behind a typed refusal for a carrier

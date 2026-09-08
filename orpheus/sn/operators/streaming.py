@@ -995,7 +995,7 @@ class StreamingCollisionOperator(
                 )
         # The sweep output carries the trailing 2^d spatial-moment axis at a
         # multi-moment closure (the φ̂ iterate, #240 D5b-S3); the typed wrap
-        # selects the SpatialMomentSpace factor so the iterate is a legal typed
+        # selects the scheme's spatial-moment axis so the iterate is a legal typed
         # state.  DD/Step (per_axis == 1) → no factor, byte-identical.
         per_axis = sn_mesh.scheme.spatial_basis_per_axis
         if moment_frame is None:

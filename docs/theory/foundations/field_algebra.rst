@@ -778,9 +778,18 @@ answers ``False`` and every moment field's ``cone_violations`` is
 refused. `[M]` 2026-09-08, on the 33 shipped (rule, :math:`L`) frames:
 ``has_coordinate_cone`` is ``False`` on 33 of 33 (previously ``None`` on
 33 of 33). ⚠ The ``None`` arm has NOT retired — it is still the honest
-answer for every legacy space, and for a WIDENED moment product, whose
-axes-less ``SpatialMomentSpace`` tail keeps the whole product axes-less
-until item 6.2c-iii lands.
+answer for every axes-less legacy space, the SN
+:attr:`~orpheus.sn.mesh.augmented_mesh.SNMesh.full_field_space`
+composite among them (`[M]` 2026-09-08: ``None``).
+⛔ This sentence also named *"a WIDENED moment product, whose axes-less*
+``SpatialMomentSpace`` *tail keeps the whole product axes-less until item
+6.2c-iii lands"* — true until later the same day. Item **6.2c-iii**
+landed: a widened moment product's tail is the discretization scheme's
+own ``MODAL`` ``moment_axis``, so the product is axis-built and answers
+``False`` like every other moment space (`[M]` 2026-09-08, 2-D LD,
+:math:`L = 1`, ``spatial_moments = 2``). A widened space is therefore
+*more* refused, not less — its tail is expansion coefficients too, and
+the ``False`` arm is the honest answer for both of its ``MODAL`` axes.
 
 The ``False`` arm's test-constructed gate stays, paired with its positive
 leg (the same values on an all-nodal space answering exactly what the

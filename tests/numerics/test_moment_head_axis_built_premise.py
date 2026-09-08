@@ -271,7 +271,7 @@ def test_the_product_still_exposes_its_head_as_factor_zero(label: str) -> None:
 
     ``TensorProductSpace.from_factors`` stores ``factors`` on BOTH arms, so
     the tree query the moment carriers rely on (``space.factors[0].L``,
-    ``find_factor(SpatialMomentSpace)``) is untouched — the head-shaped worry
+    ``find_factor(<head class>)``) is untouched — the head-shaped worry
     only arises if the mint moves from ``head * bulk`` to ``of_axes(...)``.
     """
     axis_head = _axis_built(_HEADS[label]())
