@@ -9561,3 +9561,160 @@ out is that no arm in the battery touches it.
 | P5d `_reflect_trace` × 1.001 | 12 | `G1`+`G2` only; trace legs GREEN (L78l) |
 | P6 the G-S `implicit` un-split | 6 | **`cart2d_gs` only** |
 | A1–A8 (primitives) | 0–3 | every one of the 8 rows has a catcher; A5/A7/A8 redden exactly one each |
+
+---
+
+## L79 — CS4c step 6 (the CS2 residue), pre-carve verification plan (2026-09-07)
+
+Tree `main` @ `b889089e`, tracked tree clean throughout. Deliverable
+`scratch/_step6/test_architect_verification_plan.md` (1077 lines) + **4 NEW test
+files, 55 rows, green on unmodified production, pyright 0**. Battery scope
+`tests/{numerics,transport,sn/architecture,sn/operators}` = **5550 passed /
+2 skipped / 16 xfailed / 117.3 s**; 10 arms, monkeypatch-only.
+
+### L79a — the F1 ruling's two incompatible contracts (H-1, BLOCKING)
+
+Live signatures at HEAD:
+
+```
+RadialCharacteristicField.require_member(x, *, space: 'FullFieldSpace', context: str)
+_require_typed_composite(method: str, sn_mesh: 'SNMesh', field: 'FullField')
+```
+
+RC compares `x.interior.space != space.interior_space` where `space` is
+`self._field_space` (`boundary.py:1106`) — the operator's BOUND end. `space_on`
+semantics compare `psi.interior.space != psi.interior.space_on(mesh)`, and
+`space_on` is `type(self)._space_for_mesh_and_L(mesh, self.L,
+spatial_moments=self.spatial_moments)` (`_bases.py:914`) — a SELF-CONSISTENCY
+check keyed on the operand's own class, L and width, not an
+agreement-with-the-operator check at all. The caller cannot supply that space
+before dereferencing `.interior`, which is the read the guard prevents.
+
+The 5 call sites the one body must serve: `streaming.py:405/434/741/764` (L) +
+`boundary.py:714` (B). Recommended resolution: mesh-keyed
+`FullField.require_member(x, *, mesh, context)` — promote
+`_require_typed_composite` onto the carrier verbatim, mirroring RC's SHAPE
+(classmethod on the carrier, `TypeError` for the type / `ValueError` for the
+content, `context` names the surface).
+
+### L79b — the dispatch reads the FACTORS (H-2, BLOCKING)
+
+`TensorProductSpace.from_factors` (`space.py:1093-1114`):
+
+1. `any(f.metric is not None)` → `_tensor_product_factored_metric`
+2. `all(f.axes is not None)` → axis threading, `weights=None`
+3. else → `_tensor_product_inner_weights` (DENSE)
+
+`[M]` `p8_factors.py`, 8 rows (slab/sphere/cylinder/cart2d × L∈{0,1}): the
+angular head (`LegendreSpace` 1-D, `SphericalHarmonicSpace` curvi/2-D) carries
+`axes=None`, a dense `inner_product_weights` slot, `metric=None`; the bulk is
+`of_axes`-built. ⟹ arms 1 and 2 are both unreachable; arm 3 fires 18 of 18 on a
+windowed solve. Corollary the plan row misses: under the cheapest fix (swap arm 3
+for the factored builder) `_dense_axes_weights` does NOT retire — the builder
+calls it for the axis-built bulk factor at `space.py:940` — so per-AXIS
+positioning is required for the row's retirement list to be honest.
+
+### L79c — the B1 shim: bit-identical VALUES, 3 structural reds
+
+`p11_shim.py` installs the post-carve `*` in-process (name/shape unchanged — the
+validity control) and re-runs a 2-D windowed SI solve at `max_inner=12`:
+
+| observable | today vs shim |
+|---|---|
+| `Solution.scalar_flux` | `array_equal` True, `max|Δ| = 0.0` |
+| outer `flux_residuals` (11) | `array_equal` True |
+| SI `increment_norms` (12) | `max|Δ| = 1.776e-15`, **rel 4.250e-17** |
+
+`p10_applied.py` explains it: the moment `TensorProductSpace`'s metric is read
+**6× via `norm`→`inner_product`** (once per SI iterate) and **0× via
+`apply_metric`**. So the only production consumer is the SI diagnostic norm, and
+the CS3 trajectory pin (`rtol=1e-12`) has 5 orders of headroom.
+
+Yet the same shim as a battery arm reddens **3**:
+`test_space_algebra.py::test_inner_product_factorises_weighted`,
+`::test_inner_product_mixed_euclidean_and_weighted`,
+`test_space_of_axes.py::test_mul_threads_axes_and_does_not_fabricate_them`.
+
+### L79d — the orphaned unknown-face guard (H-4)
+
+`_reflect_trace` (`boundary.py:596-601`) raises
+`ValueError("_reflect_trace: face(s) [...] are not boundary faces of this mesh")`.
+`[M]` `p4_reflect.py`, 4 of 4 geometries:
+
+```
+reflect_rows_inplace(bf, faces=['bogus_face'])  -> SILENT
+reflect_into_inflow (bf, faces=['bogus_face'])  -> ValueError
+```
+
+`reflect_rows_inplace` filters `selected = {f: rows for f in faces if f in
+self.rows and size}` (`:1252-1256`) first; `_apply_faces` always passes
+`faces=None`. Sole witness: `test_sn_boundary_operator.py::
+TestFaceRestrictedReflect::test_unknown_face_raises`.
+
+### L79e — the constant-hash arm's red set
+
+`__hash__ → 0`, **6 of 5550**:
+`test_basis_domain.py::test_d1_an_energy_space_and_a_spatial_space_are_not_the_same_space`;
+`test_slab_orbit_space.py::test_a1_a_slab_angular_space_is_not_a_spatial_space_on_its_chart[2|8|16]`;
+`test_spatial_moment_space.py::test_equality_by_size_identity`;
+`test_spherical_harmonic_space.py::test_spherical_harmonic_space_equality_by_name_shape`.
+
+### L79f — the full battery table
+
+| arm | FAILED | ERROR | reading |
+|---|---:|---:|---|
+| `none` | 0 | 0 | baseline |
+| `A1_eq_always_true` | **85** | 1 | POSITIVE CONTROL |
+| `A3_eq_shape_only` | 39 | 0 | drop the name conjunct |
+| `A4_of_axes_constant_digest` | 20 | 0 | every axis product collides |
+| `A5_axis_identity_drops_weights` | 20 | 0 | measure-blind axis identity |
+| `A7_hash_constant` | 6 | 0 | the false-red family (L79e) |
+| `B1_shim_factored` | **3** | 0 | REFUTED null (L79c) |
+| `B2_drop_first_factor_measure` | 6 | 0 | Euclidean-factor mutation |
+| `B3_factored_wrong_block` | 2 | 0 | wrong-block: `test_dense_metric.py::…does_not_go_silently_euclidean`, `test_harmonic_frame.py::…carries_the_dense_parseval_metric` |
+| `B4_space_ignores_L` | **41** | 0 | after the module fix; first run `rc=3 / banner=0` |
+
+### L79g — the F4 order and the degenerate-parameter factory
+
+`reflect_inflow_inplace` (`boundary.py:816`) = `self.reflect_into_inflow(...)`.
+`SweepSchedule.jacobi(ndim, octants)` builds ONE group with `reflect_faces=()`
+⟹ `lower_inflow_rows` returns `{}` ⟹ `split` puts every inflow row of every
+`_face_laws` face into `upper`. `[M]` `split(jacobi).upper.rows` == the per-face
+full inflow set on slab / sphere / cylinder / cart2d, `lower` empty on all four.
+Helper re-expression (zero the inflow, then add through that mask):
+`array_equal` on 4 of 4 with `|inflow|max` 9.6e-01 … 2.6e+00 pre-call; positive
+control (drop the zeroing) 1.766 / 1.078 / 1.457 / 2.592.
+
+### L79h — the mint-rate law (the config-robust memory gate)
+
+`[M]` `p7_mintlaw.py`, one 2-D Cartesian windowed SI solve, `FunctionSpace
+.__mul__` activations: `max_inner` 3 → **12**, 6 → 18, 12 → 30, 24 → **54**,
+i.e. exactly `2·max_inner + 6` (`boundary.py:714` contributes `max_inner+1`,
+`streaming.py:1056` `max_inner`, the frame mints 4, `zeros_for_mesh_and_L` 1).
+⟹ the post-carve claim to gate is **INVARIANCE in `max_inner`**, not an absolute
+count — a §6c red-before that no fixture retuning can decay.
+
+### L79i — the dense-vs-factored band, draw-stable
+
+`[M]` `p9_band.py`, 200 seeds × 8 rows: bit-equal **0 of 8 rows**, max abs
+3.55e-15 … 1.14e-13, max rel 3.456e-16, **max ULP exactly 2.0 on every row and
+every draw**. Shipped band `nulp=4`. `array_equal` would be a false red;
+an absolute `atol` tracks the data magnitude and is not draw-stable.
+
+### L79j — census corrections to the brief
+
+* `B_b` ctor sites: prod 1 / tests **13** (not 8) — ALL 13 pass a
+  `<mesh>.radial_characteristic_field_space` (a `cached_property` annotated
+  `'FullFieldSpace | None'`); `[M]` **2** (`test_psi_half_coupling.py:603, :3099`)
+  pass a runtime `None` and are the ctor guard's only witnesses.
+* helper call sites: 7 files, including `test_solver_components.py:467` and
+  EXCLUDING `_generate_2d_octant_snapshots.py` (comment only).
+* the retiring verbs' direct callers: **11 calls in 3 files**, not 2.
+* B_a's content message has **1** pin tree-wide
+  (`test_space_content_witnesses.py:216`), NOT the four in
+  `test_psi_half_coupling.py` (all System-B); its role-parse message has 0.
+* `ELEGANCE-DEBT` token: **0** occurrences in `orpheus/` + `tests/` today.
+* `Axis._identity_key` excludes `generator` and encodes weights as
+  `.tobytes()`, so a structural `__eq__` through `Axis` never reaches
+  `DiscreteMeasure.__eq__` (which still RAISES) — the CS2 hazard is NOT on
+  step 6's path.

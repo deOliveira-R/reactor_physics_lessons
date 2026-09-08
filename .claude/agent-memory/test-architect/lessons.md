@@ -2785,3 +2785,79 @@ patching the `ClassVar` alone reports MC inert. → `L76h`
   do not delete it. ⚠ Sibling: **a retired `@pytest.mark.sentinel` is a lost
   capability-node canary** — the marker migrates with the rewire, and nothing in a
   symbol grep flags it. → `L78i`, `L78j`
+
+## CS4c step-6 additions (2026-09-07, the CS2 residue — pre-carve) → `L79`
+
+**§1 (gates that cannot red).**
+
+- **⛔⛔ A ruling that says "mirror verb X" can name a SHAPE and a SEMANTICS that
+  NO ONE SIGNATURE satisfies — check the precedent's ARGUMENT SOURCE, not just
+  its adjectives.** `[M]` step 6's F1 ruled *"mint `FullField.require_member`
+  mirroring `RadialCharacteristicField.require_member`, keeping today's
+  `space_on` semantics"*. RC's verb is `(x, *, space, context)` and compares
+  against the space the CALLER supplies (the operator's bound end); `space_on`
+  compares against a space derived from the OPERAND (`type(x.interior)
+  ._space_for_mesh_and_L(mesh, x.interior.L, …)`), which the caller cannot
+  compute before the `.interior` read the guard exists to prevent. The sibling
+  guard the ruling did NOT name (`streaming.py:121 _require_typed_composite`) is
+  MESH-keyed for exactly this reason. ⟹ `plan-authoring` §1's PRECEDENT clause,
+  one level in: read where the precedent's reference value COMES FROM, because a
+  ruling can constrain the shape and the semantics independently and make the
+  pair unspellable. → `L79a`
+- **⛔⛔ A "re-point the consumer" carve is unlandable when the DISPATCH reads the
+  OPERANDS' state — census the factors, not the arm.** `[M]` `TensorProductSpace
+  .from_factors` picks its metric arm from the FACTORS (`any(f.metric)` →
+  factored; `all(f.axes)` → per-axis; else DENSE), and on all 8 shipped SN
+  (geometry × L) rows the angular head is `axes=None` + dense-slot + `metric=None`
+  ⟹ **both non-dense arms are unreachable** and the P7 factored arm fires 0×.
+  A row saying "make `*` carry the factored metric natively at the three mints"
+  cannot be executed by editing `__mul__`'s body. ⟹ before crediting a
+  consumer-side re-point, print the DISPATCH PREDICATE's inputs on a production
+  instance (`vv` #28's build-the-operand directive, at the dispatch tier) and
+  ship that reading as a PREMISE row so the carve's flip is visible. → `L79b`
+- **⛔ A retirement can orphan a guard by removing its only public ROUTE while the
+  guard AND its witness survive — distinct from "the guard has no witness".**
+  `[M]` `_reflect_trace`'s unknown-face `ValueError` is reachable only through
+  `reflect_into_inflow` (the verb step 6 retires): `reflect_rows_inplace` filters
+  `faces` against `self.rows` BEFORE calling it (SILENT on a bogus face, 4 of 4
+  geometries) and `_apply_faces` always passes `faces=None`. ⟹ the retirement
+  audit's FIFTH search: for every retiring verb, list the guards DOWNSTREAM of it
+  and ask which other public surface reaches each. → `L79d`
+- **⭐ `hash(a) != hash(b)` as a "these are different" leg is a LATENT FALSE RED,
+  and a mutation battery finds the whole family in one arm.** `[M]` an
+  `__hash__ → 0` arm (LEGAL Python — only `a == b ⟹ hash(a) == hash(b)` is a
+  law) reddened **6 of 5550** rows, and all six are space-separation legs spelled
+  through hashes (`L70a`, now measured at corpus scale). ⟹ run a constant-hash
+  arm before ANY identity carve; its red set is the re-pose list, not coverage.
+  → `L79e`
+
+**§2 (harness discipline).**
+
+- **⭐ A "declared null" arm that models the POST-carve semantics is the cheapest
+  §6b test-migration census there is — and mine was refuted.** `[M]` a shim
+  installing item 6.2's proposed `*` (factored metric, no dense weights) left the
+  2-D windowed solve's `scalar_flux` and outer residuals **bit-identical**
+  (`max|Δ| = 0.0`) yet reddened **3** rows tree-wide — all three pinning the
+  legacy dense arm's STRUCTURE. Predicting it inert from the VALUE probe was
+  wrong; running it converted "watch for surprises" into a named 3-row migration
+  list. → `L79c`
+- **⛔ An arm naming the wrong MODULE for a method defined on a BASE reports
+  `rc=3 / FAILED=0 / banner=0` and attributes nothing.** `[M]` `_bases
+  .HarmonicMomentFlux` does not exist (the class is in `harmonic_moment_flux.py`;
+  the method is on `MomentField`); the plugin raised at `pytest_configure` and the
+  row read a clean zero — which would have said *"the moment space's L-keying is
+  ungated"*. Re-run against the BASE with a bite check: **41 reds**. The banner
+  count in the driver line is what caught it. → `L79f`
+
+**§6 (carve archetypes) — RETIRING A VERB WHOSE FAÇADE CALLS IT.**
+
+- **⛔ Order the retirement by the CALL GRAPH, not by the plan's sentence.** `[M]`
+  `reflect_inflow_inplace`'s whole body is `self.reflect_into_inflow(...)`, so the
+  ruled order *"retire A; re-express the helper; then retire B"* leaves B broken
+  between steps (`plan-authoring` §6b). Landable order: re-express the CONSUMER
+  first, then retire both in one commit. ⭐ Companion, and it dissolved a whole
+  "new production surface?" question: **before minting a factory for a special
+  case, evaluate the existing parameterized factory at its DEGENERATE parameter**
+  — `[M]` `B.split(SweepSchedule.jacobi(...)).upper.rows` IS the full-inflow mask
+  on 4 of 4 geometries (jacobi has `reflect_faces=()` ⟹ `lower_inflow_rows`
+  returns `{}` ⟹ every inflow row lands in `upper`). → `L79g`

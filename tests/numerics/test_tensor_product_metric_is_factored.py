@@ -1,0 +1,251 @@
+r"""Pre-carve anchors for the CS4c step-6 tensor-product metric carve (§7.3 / F2).
+
+**What this file is.** Step 6 item 6.2 stops ``FunctionSpace.__mul__`` from
+DENSIFYING a tensor product's metric into one ``(L+1, 2L+1, ng, nx[, ny])``
+weights tensor and has it carry the per-factor
+:class:`~orpheus.numerics.metric.FactoredMetric` instead.  Both arms exist in
+production TODAY (``space.py``'s ``_tensor_product_inner_weights`` — the live
+one — and ``_tensor_product_factored_metric`` — the P7 arm, which fires 0× on
+every measured SN path), so the equivalence they must satisfy is measurable
+BEFORE the carve.  That is the whole point: the carve then inherits a measured
+band instead of adopting one.
+
+**The band is 2 ULP, and it is DRAW-STABLE.**  `[M]` 2026-09-07, 200 seeds ×
+8 (geometry × L) rows = 1600 draws, dense arm vs factored arm on the SAME
+production factors:
+
+==================  ==========  ==========  ==========  =========
+row                 bit-equal   max abs     max rel     max ULP
+==================  ==========  ==========  ==========  =========
+slab   L=0 / L=1    8/200 1/200 3.55e-15    2.53e-16    **2.0**
+sphere L=0 / L=1    4/200 0/200 1.14e-13    3.03e-16    **2.0**
+cyl    L=0 / L=1    2/200 0/200 5.68e-14    3.15e-16    **2.0**
+cart2d L=0 / L=1    0/200 0/200 3.55e-15    3.46e-16    **2.0**
+==================  ==========  ==========  ==========  =========
+
+⛔ ``np.array_equal`` would be a FALSE RED — **0 of 8 rows are bit-equal over a
+full seed sweep** (``vv`` #31: "bit-exact" is a property of the DRAW until a
+sweep makes it a property of the fixture).  An absolute ``atol`` is
+fixture-dependent (3.5e-15 … 1.1e-13, tracking the data magnitude).  The ULP
+distance is the draw-stable statistic and it is exactly **2** on every row and
+every draw, so the shipped band is ``nulp=4`` — 2× the measured worst.
+
+**Mechanism, so the band is a reason and not a constant.**  The dense arm
+forms ``w_head ⊗ w_bulk`` once and multiplies; the factored arm multiplies by
+each factor's diagonal in turn.  One extra rounding, reduction depth +1 —
+``vv-principles`` §bit-identity criterion 3.
+
+**Activation evidence (mutation battery, 2026-09-07, scope 5550 rows).**
+
+=========================================  =====  ====================================
+arm                                        reds   note
+=========================================  =====  ====================================
+drop one factor's measure                    6    the Euclidean-factor mutation
+position the FactoredMetric entries         2    the wrong-block mutation
+in REVERSED factor order
+install the factored arm globally (shim)     3    the 3 gates the carve must re-key
+=========================================  =====  ====================================
+
+The wrong-block arm's 2 reds are ``test_dense_metric.py::…does_not_go_silently
+_euclidean`` and ``test_harmonic_frame.py::…carries_the_dense_parseval_metric``
+— neither is on this file's claim, so **G2.1's teeth are net-new** for the
+per-mint equivalence.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+import orpheus.numerics.space as _spacemod
+from orpheus.numerics.space import FunctionSpace, TensorProductSpace
+from tests.sn.architecture.test_monomorphic_leaves import (
+    _cart2d,
+    _cylinder,
+    _slab,
+    _sphere,
+)
+
+pytestmark = pytest.mark.foundation
+
+#: MEASURED worst ULP distance between the two arms over 1600 draws: 2.0.
+#: The shipped band is 2× that (never a bare `array_equal` — 0 of 8 rows are
+#: bit-equal over a seed sweep).
+_ARM_AGREEMENT_NULP = 4
+
+_GEOMETRIES = {"slab": _slab, "sphere": _sphere, "cylinder": _cylinder, "cart2d": _cart2d}
+_ORDERS = (0, 1)
+_SEEDS = (0, 1, 2, 3, 4)
+
+
+def _capture_production_factor_tuples(sn_mesh, L: int) -> "list[tuple[FunctionSpace, ...]]":
+    """Every factor tuple PRODUCTION hands to ``TensorProductSpace.from_factors``
+    while minting the moment family's space on ``sn_mesh`` at order ``L``.
+
+    Read off production rather than re-derived here (``coding-elegance``
+    Pattern 2): the two ``_bases.py`` mints (``head * mesh.bulk_space`` and the
+    optional ``* SpatialMomentSpace``) and the ``harmonic_frame`` mint
+    (``basis_space * of_axes(*cell_axes)``) all funnel through this one
+    classmethod, so a transcription of any of them into the test could drift.
+    """
+    from orpheus.transport.fields.harmonic_moment_flux import HarmonicMomentFlux
+
+    captured: list[tuple[FunctionSpace, ...]] = []
+    original = TensorProductSpace.from_factors.__func__
+
+    def recording(cls, factors):
+        captured.append(tuple(factors))
+        return original(cls, factors)
+
+    TensorProductSpace.from_factors = classmethod(recording)   # type: ignore[method-assign]
+    try:
+        HarmonicMomentFlux.zeros_for_mesh_and_L(
+            sn_mesh, L, spatial_moments=sn_mesh.scheme.spatial_basis_per_axis,
+        )
+        frame = sn_mesh.quad.angular_frame(L)
+        # ⚠ `moment_space_on` is HarmonicFrame's mint; a GalerkinFrame (what a
+        # 1-D rule returns) does not carry it.  Guarded so the row reports the
+        # mints it REACHED rather than dying on a frame-family difference.
+        mint = getattr(frame, "moment_space_on", None)
+        if mint is not None:
+            mint(sn_mesh.angular_trial_space)
+    finally:
+        TensorProductSpace.from_factors = classmethod(original)  # type: ignore[method-assign]
+    return captured
+
+
+def _dense_arm(factors) -> "np.ndarray | None":
+    return _spacemod._tensor_product_inner_weights(factors)
+
+
+def _factored_arm(factors):
+    return _spacemod._tensor_product_factored_metric(factors)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# G2.1 — the two arms agree to a DRAW-STABLE 2 ULP on production's factors
+# ═════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("geometry", list(_GEOMETRIES), ids=list(_GEOMETRIES))
+@pytest.mark.parametrize("L", _ORDERS, ids=[f"L{n}" for n in _ORDERS])
+def test_g2_1_dense_and_factored_metric_arms_agree_to_the_measured_band(geometry, L):
+    r"""``dense-weights ⊙ x`` ≡ ``FactoredMetric.apply(x)`` on every factor
+    tuple production mints, to ``nulp=4``.
+
+    ACTIVATION, asserted in the row: at least one captured tuple must produce
+    NON-``None`` dense weights, else the comparison is ``x`` against ``x``
+    (``vv`` Mode 8's tautological class — a metric-free product makes both
+    arms the identity).
+
+    The row is parametrized over FIVE seeds because a single draw's reading is
+    a property of the draw, not of the fixture (``vv`` #31): `[M]` 0 of 8
+    (geometry × L) rows are bit-equal over 200 seeds, so a one-seed
+    ``array_equal`` row would be green today and red on any fixture edit.
+    """
+    sn_mesh = _GEOMETRIES[geometry]()
+    tuples = _capture_production_factor_tuples(sn_mesh, L)
+    if not tuples:
+        pytest.fail(
+            f"[{geometry} L={L}] production minted NO tensor product — the "
+            f"row's subject does not exist on this mesh"
+        )
+
+    weighted = [f for f in tuples if _dense_arm(f) is not None]
+    if not weighted:
+        pytest.fail(
+            f"[{geometry} L={L}] every captured factor tuple is Euclidean "
+            f"(dense weights are None on all {len(tuples)}) — both arms are "
+            f"the identity and the comparison is vacuous"
+        )
+
+    for factors in weighted:
+        dense = _dense_arm(factors)
+        assert dense is not None                       # narrowing; `weighted` filtered
+        metric = _factored_arm(factors)
+        shape = tuple(int(n) for f in factors for n in f.shape)
+        for seed in _SEEDS:
+            x = np.random.default_rng(seed).standard_normal(shape)
+            via_dense = x * _spacemod._broadcast_leading(dense, x.ndim)
+            via_factored = metric.apply(x)
+            np.testing.assert_array_almost_equal_nulp(
+                via_dense, via_factored, nulp=_ARM_AGREEMENT_NULP,
+            )
+
+
+def test_g2_1b_the_arm_that_actually_fires_on_an_sn_path_is_the_DENSE_one():
+    r"""The dispatch PREMISE of item 6.2, pinned.
+
+    ``TensorProductSpace.from_factors`` chooses between three arms:
+    a ``FactoredMetric`` when any factor carries a metric OBJECT; per-axis
+    threading when EVERY factor carries ``axes``; else the dense outer
+    product.  `[M]` on every shipped SN mint the angular head is
+    ``axes=None`` with a dense ``inner_product_weights`` slot and NO metric
+    object, so **the dense arm is the only reachable one** — which is why the
+    P7 factored arm fired 0× across 11 measured SN runs and why item 6.2
+    cannot be executed by re-pointing ``__mul__``'s body alone.
+
+    This row is the honest statement of that premise, and it is what the
+    carve must FLIP (lessons L61a / L73a: gate the premise, so the day it
+    stops holding the suite says WHICH claim it lost).
+    """
+    findings: list[str] = []
+    for geometry, factory in _GEOMETRIES.items():
+        sn_mesh = factory()
+        for L in _ORDERS:
+            head = sn_mesh.quad.angular_frame(L).basis.space
+            product = head * sn_mesh.bulk_space
+            findings.append(
+                f"{geometry} L={L}: head.axes={head.axes is not None} "
+                f"head.metric={head.metric is not None} "
+                f"product.ipw={product.inner_product_weights is not None} "
+                f"product.metric={product.metric is not None}"
+            )
+            if head.axes is not None or head.metric is not None:
+                pytest.fail(
+                    "the angular head now carries axes or a metric object — "
+                    "the product no longer takes the DENSE arm, so item 6.2's "
+                    f"premise has moved.\n  " + "\n  ".join(findings)
+                )
+            if product.inner_product_weights is None or product.metric is not None:
+                pytest.fail(
+                    "the moment product no longer densifies — item 6.2 has "
+                    f"landed and this premise row must be re-posed.\n  "
+                    + "\n  ".join(findings)
+                )
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# G2.3 — the SEPARATION the memory assertion is about, sized honestly
+# ═════════════════════════════════════════════════════════════════════════
+
+def test_g2_3_dense_versus_per_axis_storage_separates_by_three_orders():
+    r"""A dense tensor-product metric costs ``prod(shape)`` doubles; the
+    per-axis form costs ``sum(shape)``.
+
+    Sized on a SYNTHETIC pair rather than on a ledger mesh on purpose: `[M]`
+    the ledger's 2-D moment product separates by only **8×** (1152 B dense vs
+    144 B per-axis), which is too weak to be a keystone.  ``(2000,) ⊗ (2000,)``
+    separates by **1000×** in a few milliseconds, so the leg is
+    fixture-honest (lessons L59c — never gate "does not allocate" by asking a
+    densifier to ``MemoryError``; size it for SEPARATION on reachable
+    ``ndarray.nbytes``).
+
+    ⚠ This row does NOT say production avoids the dense form — it says the two
+    forms are separable, i.e. that the memory assertion item 6.2 makes is a
+    measurable claim.  The assertion itself is a post-carve gate.
+    """
+    n = 2000
+    w = np.linspace(1.0, 2.0, n)
+    a = FunctionSpace(name="A", shape=(n,), inner_product_weights=w)
+    b = FunctionSpace(name="B", shape=(n,), inner_product_weights=w.copy())
+
+    dense = _dense_arm((a, b))
+    assert dense is not None, "CONTROL INVALID: the synthetic factors are Euclidean"
+    per_axis_bytes = a.inner_product_weights.nbytes + b.inner_product_weights.nbytes  # type: ignore[union-attr]
+    ratio = dense.nbytes / per_axis_bytes
+    if dense.nbytes != n * n * 8 or ratio < 100.0:
+        pytest.fail(
+            f"the dense/per-axis separation is {ratio:.1f}× "
+            f"({dense.nbytes} B vs {per_axis_bytes} B) — expected ≥ 100× at "
+            f"n={n}; the memory claim item 6.2 makes is not measurable here"
+        )

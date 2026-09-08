@@ -1509,3 +1509,30 @@ always pair it with an AST `Attribute.attr` call count. Also from the same censu
 direct Assign-from-call catches 7 of 62 reads; helper-return and fixture-param resolution
 catches the rest — and the L ≥ 1 population turned out to have ZERO ψ readers, i.e. the fix's
 witness had to be named as a deliverable (§6c) rather than found.
+
+## L-040 -- A retirement's PROSE census has three populations a symbol grep merges — xrefs, PROMISSORY claims, and CONVENTION statements — and only the middle one is MUST-FIX whichever way the ruling goes
+
+`[M]` 2026-09-07 (CS4c step 6 prose census, `scratch/_step6/explorer_prose_census.md`). Six vocabulary
+items over docs/orpheus/tests, ~1 300 raw hits. What made the deliverable usable was NOT the hit count
+but sorting each hit into: (a) an **xref** that DIES with the symbol (`:meth:`, an autodoc identifier —
+10 for two verbs); (b) a **promissory present-tense claim** — "until the S3 flip", "CS2 retires it",
+"the verb stays", "stays legal until CS4" — which is false AFTER the step if it lands AND mis-worded if
+the step re-scopes (17 + 19 + 8 sites); (c) a **convention statement** — "identity is `(name, shape)`",
+"the space is a TensorProductSpace" — false ONLY if a specific ruling lands (~66 sites; ~20 survive a
+per-class re-scope). A count that merges (b) and (c) over-prices the sweep 4×, and one that misses (b)
+ships a plan whose own docs promise a mechanism the census refuted.
+
+Four cheap corollaries from the same run:
+- **`dead_references` measures the PRESENT tree** (0 dead / 68 checked before a retirement is the EXPECTED
+  reading, not reassurance); the xref set for a planned retirement comes from the grep, and roles whose
+  explicit target is the CLASS (`:meth:`X._m <pkg.X>`) will never be flagged even after the method dies.
+- **A guard-message pin census must map each `match=` to the OPERATOR it exercises** — 17 pins on
+  "space-content", exactly 1 on the operator being re-shaped (`TestO13BoundaryOperator`); the production
+  comment claiming "the pins in test_psi_half_coupling.py" were re-keyed for it was over-broad (those 4
+  hit System B). A pin count without its exercised-operator column prices a message change wrong.
+- **The step-code homonym**: "S3" on this corpus is CS4b-S3 (landed content digests, ~40 sites), "the S3
+  flip" (unlanded structural identity, 17 sites), and #240 D5b-S3 (12 sites). A brief naming a step by
+  its code needs the homonym check before the census, or the landed sites read as the pending ones.
+- **The memory/absence claim**: a chartered assertion ("no state-sized weight tensor is allocated") had
+  **0 spellings** in the tree — the deliverable flips from "fix the prose" to "the step OWES the gate";
+  say so explicitly, because a zero from a validated filter reads as "nothing to do".

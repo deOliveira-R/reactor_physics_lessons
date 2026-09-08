@@ -11,7 +11,7 @@ carries its own headings, so a summary line is a second copy that drifts
 ## 1. Lessons (read first)
 
 - [lessons.md](lessons.md) — the exploration lessons, L-001…L-038, each headed by
-  its own one-line rule (L-039 added 2026-09-05: Nexus `callers` on METHODS ⟹ read the `unresolved` count). The spine (blast-radius = graph+grep+constructors+doc-nodes;
+  its own one-line rule (L-039 2026-09-05: Nexus `callers` on METHODS ⟹ read the `unresolved` count; L-040 2026-09-07: a retirement's PROSE census = xrefs / PROMISSORY claims / CONVENTION statements — sort before counting). The spine (blast-radius = graph+grep+constructors+doc-nodes;
   verify-premise-first; durable-shape vs line-map; git-is-authoritative-for-merge-status)
   is PROMOTED to AGENT.md Operating Principles 4–7; L1/L2/L3/L5 remain there as the
   forensic war-stories behind them. Skim the headings, read the one that matches your
