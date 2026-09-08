@@ -82,10 +82,12 @@ def _mask_non_existent_m(c: np.ndarray, L: int) -> np.ndarray:
 @pytest.mark.catches("ERR-039")
 @pytest.mark.verifies("sh-space-metric")
 def test_space_inner_product_weights_equal_4pi_over_2l_plus_1():
-    r"""``SphericalHarmonicSpace.from_L(L).inner_product_weights[\ell] == 4\pi/(2\ell+1)``.
+    r"""``SphericalHarmonicSpace.from_L(L)``'s head-axis measure is :math:`4\pi/(2\ell+1)` per degree.
 
     The Gram-matrix diagonal :math:`g_C` lives in exactly one place —
-    on the space — and the padded ``(L+1, 2L+1)`` layout matches the
+    on the space's single :class:`~orpheus.numerics.axis.HarmonicAxis` as its
+    measure (CS4c step 6 item 6.2c-ii; the legacy ``inner_product_weights``
+    slot stays ``None``) — and the padded ``(L+1, 2L+1)`` layout matches the
     :class:`~orpheus.transport.fields.harmonic_moment_flux.HarmonicMomentFlux`
     storage convention (row :math:`\ell` carries
     :math:`4\pi/(2\ell+1)` in the :math:`2\ell+1` valid slots, zero in
@@ -94,7 +96,10 @@ def test_space_inner_product_weights_equal_4pi_over_2l_plus_1():
     L = 4
     space = SphericalHarmonicSpace.from_L(L)
     expected_per_ell = 4.0 * np.pi / (2.0 * np.arange(L + 1) + 1.0)
-    weights = space.inner_product_weights
+    assert space.inner_product_weights is None and space.metric is None
+    assert space.axes is not None and len(space.axes) == 1
+    weights = space.axes[0].weights
+    assert weights is not None
     assert weights.shape == (L + 1, 2 * L + 1)
     for ell in range(L + 1):
         np.testing.assert_allclose(
@@ -330,8 +335,9 @@ def test_moment_projection_codomain_is_spherical_harmonic_space():
     Type-level guarantee (software invariant — tagged ``foundation``
     per ``vv-principles`` §"V&V level taxonomy") that ``M.H``
     composition via the generic adjoint machinery finds the SH metric
-    correctly. The equality convention is ``(name, shape)``: two
-    SphericalHarmonicSpaces of matching :math:`L` compare equal.
+    correctly. Equality is STRUCTURAL (CS4c step 6): the codomain is the
+    frame's Parseval-dressed head, equal to another dressing of the same
+    pairing and NOT to the basis's continuum mint of the same order.
 
     Also confirms the face's ``domain``/``codomain`` are cached (same
     object identity on repeat access — the frame caches its spaces) —
@@ -345,7 +351,9 @@ def test_moment_projection_codomain_is_spherical_harmonic_space():
     assert isinstance(cod, SphericalHarmonicSpace)
     assert cod.L == L
     assert cod.shape == (L + 1, 2 * L + 1)
-    assert cod == SphericalHarmonicSpace.from_L(L)
+    assert cod == GalerkinFrame(SphericalHarmonicBasis(L=L), measure).basis_space
+    assert cod != SphericalHarmonicSpace.from_L(L)   # the continuum head is another space
+    assert cod.name == SphericalHarmonicSpace.from_L(L).name
 
     # Caching: repeated access returns the SAME object (not just an
     # equal one).  Pins the @cached_property contract — the Krylov
@@ -511,17 +519,16 @@ def test_R_transpose_carries_d_ell_and_RH_carries_d_ell_squared(lebedev_L_pair):
 
 
 @pytest.mark.foundation
-def test_spherical_harmonic_space_equality_by_name_shape():
-    r"""SphericalHarmonicSpace equality follows :class:`FunctionSpace`'s ``(name, shape)`` convention.
+def test_spherical_harmonic_space_equality_is_structural():
+    r"""SphericalHarmonicSpace equality follows :class:`FunctionSpace`'s STRUCTURAL convention (CS4c step 6).
 
     Two ``SphericalHarmonicSpace.from_L(L)`` instances with the same
-    :math:`L` produce equal :class:`SphericalHarmonicSpace` objects
-    even when their ``inner_product_weights`` arrays are distinct
-    ``ndarray`` allocations. This convention lets the shipped
-    :class:`DualSpace` / :class:`TensorProductSpace` constructors
-    compose :class:`SphericalHarmonicSpace` instances (e.g.
-    ``SphericalHarmonicSpace.from_L(L) * CellGroup``) without spurious
-    inequalities from FP-level metric differences.
+    :math:`L` produce equal objects — their head axes carry bit-identical
+    measures (the same formula, the same arithmetic), so distinct
+    ``ndarray`` allocations are one axis. A different order is a different
+    space, and — the identity flip — a bare hand-named ``FunctionSpace``
+    wearing the head's ``(name, shape)`` is NOT the head: an axis-built
+    space is never equal to a name-built one.
     """
     a = SphericalHarmonicSpace.from_L(3)
     b = SphericalHarmonicSpace.from_L(3)
@@ -532,9 +539,6 @@ def test_spherical_harmonic_space_equality_by_name_shape():
     assert hash(a) == hash(b)
     assert len({a, c}) == 2   # separation through the container
 
-    # Cross-class equality with a bare FunctionSpace carrying the same
-    # (name, shape) — supports the "equal-shape spaces compare equal"
-    # invariant under DualSpace / TensorProductSpace composition.
     from orpheus.numerics.space import FunctionSpace
     bare = FunctionSpace(name="spherical_harmonic_space", shape=(4, 7))
-    assert a == bare
+    assert a != bare and bare != a

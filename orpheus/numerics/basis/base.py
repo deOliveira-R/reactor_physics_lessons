@@ -156,6 +156,13 @@ class TruncatedBasis(Protocol):
         """The coefficient space this truncated family spans."""
         ...
 
+    def at_order(self, L_new: int, /) -> "TruncatedBasis":
+        """THIS family at the truncation order ``L_new`` — the same functions
+        cut at another degree (same domain, same spent axis), the verb a
+        head truncates THROUGH (:func:`~orpheus.numerics.spaces.moment_head.truncated_head`,
+        CS4c step 6 item 6.2c-ii)."""
+        ...
+
 
 class Basis(ABC):
     r"""Abstract discrete spectral basis — the synthesis side of a :class:`FrameBase`.
@@ -411,13 +418,17 @@ class Basis(ABC):
     def space(self) -> "FunctionSpace":
         r"""The coefficient :class:`FunctionSpace` this basis spans.
 
-        Carries the basis's CONTINUUM Gram as its ``inner_product_weights`` (or no
-        metric at all, for a measure-free basis like the indicators). The frame's
-        codomain (:attr:`~orpheus.numerics.frame.FrameBase.basis_space`) REPLACES
-        the metric with the discrete PARSEVAL inverse — that dressed copy, not
-        this space, is what the Hilbert-adjoint machinery reads (F-0,
-        ``frame_square_recarve.md``); this space's own metric stays the
-        continuum / cross-Gram vocabulary of ``project``/``gram``. The
+        A harmonic family's space is AXIS-BUILT (CS4c step 6 item 6.2c-ii):
+        one MODAL head axis carrying the basis's CONTINUUM Gram as its
+        measure, this basis its generator. A measure-free basis like the
+        indicators carries no metric at all. The frame's codomain
+        (:attr:`~orpheus.numerics.frame.FrameBase.basis_space`) re-DRESSES
+        that space with the discrete PARSEVAL inverse (the head axis
+        re-weighted, the frame its generator) — the dressed space, not this
+        one, is the ONE moment space the tree binds (the operator ends, the
+        moment fields, the Hilbert-adjoint machinery — ruling R-6.2c-1,
+        2026-09-08); this space's own metric stays the continuum /
+        cross-Gram vocabulary of ``project``/``gram``. The
         basis owns exactly one space (the nodal/domain space comes from the
         measure), so the unqualified name is unambiguous — matching the
         ``Field.space`` convention. The :class:`FrameBase` re-exposes it provenance-

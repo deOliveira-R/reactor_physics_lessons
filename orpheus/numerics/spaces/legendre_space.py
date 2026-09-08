@@ -23,10 +23,12 @@ would move every operator end's metric (`[M]` the verification memo §3).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
+from orpheus.numerics.axis import BasisKind, LegendreAxis
 from orpheus.numerics.basis.legendre_basis import LegendreBasis
 from orpheus.numerics.space import FunctionSpace
+from orpheus.numerics.spaces.moment_head import truncated_head
 
 __all__ = ["LegendreSpace"]
 
@@ -44,10 +46,14 @@ class LegendreSpace(FunctionSpace):
         are two spaces (the tree carries two poles; tracker 2.4).
     shape : tuple[int, ...]
         Inherited. MUST equal ``(L + 1,)``; ``__post_init__`` checks.
-    inner_product_weights : NDArray, optional
-        The per-degree continuum Gram :math:`4\pi/(2\ell+1)` (module
-        docstring); a frame's dressed ``basis_space`` REPLACES it with the
-        Parseval inverse exactly as for the spherical-harmonic space.
+    axes : tuple[LegendreAxis], optional
+        ONE :class:`~orpheus.numerics.axis.LegendreAxis` (CS4c step 6 item
+        6.2c-ii) whose measure is the per-degree continuum Gram
+        :math:`4\pi/(2\ell+1)` (module docstring) and whose identity
+        carries the spent axis; a frame's dressed ``basis_space``
+        re-weights it with the Parseval inverse exactly as for the
+        spherical-harmonic space. The legacy ``inner_product_weights`` slot
+        stays ``None``.
     L : int, default 0
         Maximum degree retained.
     spent_axis : str, default ``"x"``
@@ -56,9 +62,11 @@ class LegendreSpace(FunctionSpace):
 
     Notes
     -----
-    Equality and hashing are by ``(name, shape)`` alone, inherited from
-    :class:`FunctionSpace` — ``L`` is encoded in ``shape`` and the axis in
-    ``name``.
+    Equality and hashing are STRUCTURAL, inherited from
+    :class:`FunctionSpace` (the identity flip, CS4c step 6): the head axis
+    — family, order, measure AND the spent axis — is the identity, so
+    ``from_L(1, "x")`` and ``from_L(1, "z")`` are two spaces although
+    their measures are ``array_equal`` (`[M]` hazard H-10).
     """
 
     L: int = 0
@@ -85,20 +93,39 @@ class LegendreSpace(FunctionSpace):
         return FunctionSpace.__hash__(self)
 
     @classmethod
+    def for_basis(cls, basis: LegendreBasis) -> "LegendreSpace":
+        r"""The coefficient space ``basis`` spans — THE mint of the Legendre
+        head (CS4c step 6 item 6.2c-ii): one :class:`~orpheus.numerics.axis.LegendreAxis`
+        carrying the basis's continuum Gram and its spent axis, ``basis``
+        itself as the axis's generator. :attr:`LegendreBasis.space`
+        delegates here; :meth:`from_L` is the ``(L, axis)`` sugar.
+        """
+        L = basis.L
+        head_axis = LegendreAxis(
+            "legendre",
+            (L + 1,),
+            basis.metric_per_ell,
+            kind=BasisKind.MODAL,
+            generator=basis,
+            spent_axis=basis.axis,
+        )
+        return cls(
+            name=f"legendre_space({basis.domain.name})",
+            shape=(L + 1,),
+            axes=(head_axis,),
+            L=L,
+            spent_axis=basis.axis,
+        )
+
+    @classmethod
     def from_L(cls, L: int, axis: str = "x") -> "LegendreSpace":
-        r"""The canonical Legendre space for degree :math:`L` about ``axis``.
+        r"""The canonical Legendre space for degree :math:`L` about ``axis``
+        — :meth:`for_basis` over ``LegendreBasis(L=L, axis=axis)``.
 
         The metric is sourced from :class:`LegendreBasis` so the
         :math:`4\pi/(2\ell+1)` formula lives in exactly one place.
         """
-        basis = LegendreBasis(L=L, axis=axis)
-        return cls(
-            name=f"legendre_space({basis.domain.name})",
-            shape=(L + 1,),
-            inner_product_weights=basis.metric_per_ell,
-            L=L,
-            spent_axis=axis,
-        )
+        return cls.for_basis(LegendreBasis(L=L, axis=axis))
 
     # ── the MomentHead surface ───────────────────────────────────────
 
@@ -115,13 +142,11 @@ class LegendreSpace(FunctionSpace):
             )
         return (l,)
 
-    def truncated(self, L_new: int, /) -> "LegendreSpace":
-        r"""This family's space at the lower order ``L_new``, about the same axis, under this head's own name."""
-        if not 0 <= L_new <= self.L:
-            raise ValueError(
-                f"LegendreSpace.truncated: L_new={L_new} must lie in [0, {self.L}]."
-            )
-        return replace(type(self).from_L(L_new, self.spent_axis), name=self.name)
+    def truncated(self, L_new: int, /) -> "FunctionSpace":
+        r"""This family's space at the lower order ``L_new``, about the same
+        axis, under this head's own name — re-minted by the head axis's
+        generator (:func:`~orpheus.numerics.spaces.moment_head.truncated_head`)."""
+        return truncated_head(self, L_new)
 
     # ── delegated convention (single source in the basis) ──────────
 

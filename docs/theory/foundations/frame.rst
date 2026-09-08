@@ -318,10 +318,21 @@ Key Facts
   `[M]` 2026-09-02 the angular moment space had **eight** homes (one
   basis + seven ``from_L(L)`` re-mints) and now has one. ⚠ Two spellings
   live on a frame and they are different objects: ``basis.space``
-  carries the CONTINUUM Gram and is the end an :math:`\ell`-diagonal
-  operator wants; ``basis_space`` carries the Parseval metric
-  :math:`G^{-1}` and is the ANALYSIS FACE's codomain
-  (:ref:`frame-parseval-metric`). ``==`` cannot tell them apart.
+  carries the CONTINUUM Gram :math:`g_C` and is the basis's own
+  coefficient space; ``basis_space`` carries the Parseval metric
+  :math:`G^{-1}` — a positioned :math:`G^{+}` where the discrete Gram is
+  dense — and is the ANALYSIS FACE's codomain
+  (:ref:`frame-parseval-metric`). ⛔ Until CS4c step 6 item 6.2c-ii
+  (2026-09-08) this bullet ended *"``==`` cannot tell them apart"* and
+  called the continuum one *"the end an* :math:`\ell`\ *-diagonal operator
+  wants"*. Both halves are now false. The harmonic heads are AXIS-BUILT,
+  so the measure is part of the identity: `[M]` over the 33 shipped
+  (rule, :math:`L`) rows ``frame.basis_space == frame.basis.space`` is
+  **0 of 33** (it was 33 of 33). And ruling **R-6.2c-1** binds the ONE
+  moment space the tree carries — the carrier's cached mint, every
+  moment field, every operator end — to ``basis_space``, because *the
+  carrier's norm is the field's energy*
+  (:ref:`frame-moment-space-single-home`).
 
 
 The discrete frame — analysis, synthesis, and the frame operator
@@ -583,8 +594,13 @@ inner product :math:`\langle\cdot,\cdot\rangle_\star` with
    the coefficient-space inner product, and exactly one symbol makes
    the choice it determines:
    :attr:`~orpheus.numerics.frame.FrameBase.basis_space`, which installs
-   :math:`G^{-1}` (zero on dead slots) as the codomain's
-   ``inner_product_weights``. The *norm* on the left is then evaluated
+   :math:`G^{-1}` (zero on dead slots) as the codomain's metric — since
+   CS4c step 6 item 6.2c-ii by RE-WEIGHTING the coefficient space's single
+   head axis, or, on a ``DENSE`` frame, by emptying that axis's measure and
+   POSITIONING :math:`G^{+}` as a
+   :class:`~orpheus.numerics.metric.DenseMetric` on the space's derived
+   metric object; before it, as a plain ``inner_product_weights`` array.
+   The *norm* on the left is then evaluated
    by the generic
    :meth:`FunctionSpace.inner_product
    <orpheus.numerics.space.FunctionSpace.inner_product>`, which is NOT
@@ -2176,7 +2192,10 @@ read right-to-left:
    V_i\,\phi_i = \Phi_R` (a single ``analysis ∘ reconstruction`` probe
    of the all-ones coefficient vector; the off-diagonals are
    structurally zero, so the row-sum IS the diagonal — see
-   :meth:`frame.gram <orpheus.numerics.frame.FrameBase.gram>`).
+   :attr:`frame.gram_inverse
+   <orpheus.numerics.frame.FrameBase.gram_inverse>`, whose
+   :attr:`~orpheus.numerics.frame.CrossGramInverse.diagonal` IS that
+   probe).
 #. **inverse Gram** :math:`G^{-1} = \operatorname{diag}(1/\Phi_R)` =
    :meth:`FunctionSpace.apply_inverse_metric
    <orpheus.numerics.space.FunctionSpace.apply_inverse_metric>` on a
@@ -4089,12 +4108,30 @@ tree; tracker 2.5 removes it before the repair, not with it.
 `[M]` after the step the same command returns **6** lines, of which
 **exactly one** is an executable call — ``spherical_harmonic_basis.py:403``,
 the basis's own ``space`` property — and the other five are docstring
-mentions. (``SphericalHarmonicSpace.truncated`` calls
+mentions. (``SphericalHarmonicSpace.truncated`` called
 ``type(self).from_L`` inside the space's own module, which is where a
-family is *entitled* to name itself.)
+family is *entitled* to name itself; since 2026-09-08 it delegates to
+:func:`~orpheus.numerics.spaces.moment_head.truncated_head`, which re-mints
+through the head axis's generator instead — see the truncation paragraph
+below.)
 
 Which space, though — ``basis.space`` or ``basis_space``?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. important::
+
+   **Answered twice. Tracker 2.5 (2026-09-02) chose the basis's
+   continuum ``space``; CS4c step 6 item 6.2c-ii (2026-09-08, ruling
+   R-6.2c-1) OVERTURNED that and binds the frame's Parseval-dressed
+   ``basis_space``.** The whole of this sub-subsection is preserved as
+   the original argument — it is *why anyone chose the continuum end*,
+   and a future reader owes it — with the re-measurement that refuted it
+   set beside each claim. The one-sentence ruling is *the carrier's norm
+   is the field's energy*: the moment vector a solver holds is what the
+   analysis face emitted, so the inner product it carries must be the one
+   under which its norm IS the band-limited field's :math:`L^2(\mathrm
+   d\Omega)` energy — and that is Parseval's :math:`G^{-1}`, a theorem
+   (:eq:`frame-parseval-isometry`), not a convention.
 
 A frame carries **two** spellings of the coefficient space and they are
 different objects. The basis's own
@@ -4108,37 +4145,136 @@ because the analysis face returns covariant moments
 :ref:`frame-parseval-what-was-wrong` for what the pre-F-0 continuum
 reading cost).
 
-⚠ So the fork is a live hazard for a reader of this page: the corpus
-stamps the continuum Gram with a ⛔ *"the wrong side for covariant
-moments"* (:ref:`spherical-harmonics`, the three-metric table), and
-tracker 2.5 binds the operator ends to exactly that space. **It is not a
-regression of F-0, because it is not the same object.** F-0's verdict is
-about the **analysis face's codomain**, where the value IS a covariant
-moment vector. :math:`\Lambda`'s ends are the domain and codomain of an
-**endomorphism** on the coefficient index set — an object whose adjoint,
-under any metric diagonal in :math:`\ell`, is its transpose.
+*(Written 2026-09-02, and preserved:)* ⚠ So the fork is a live hazard for
+a reader of this page: the corpus stamps the continuum Gram with a ⛔
+*"the wrong side for covariant moments"* (:ref:`spherical-harmonics`, the
+three-metric table), and tracker 2.5 binds the operator ends to exactly
+that space. **It is not a regression of F-0, because it is not the same
+object.** F-0's verdict is about the **analysis face's codomain**, where
+the value IS a covariant moment vector. :math:`\Lambda`'s ends are the
+domain and codomain of an **endomorphism** on the coefficient index set —
+an object whose adjoint, under any metric diagonal in :math:`\ell`, is
+its transpose.
+
+⛔ **REFUTED 2026-09-08 (item 6.2c-ii, ruling R-6.2c-1) — the argument is
+sound and its premise was never checked.** The reasoning above is
+*conditional*: it says the continuum end is ADMISSIBLE for
+:math:`\Lambda`, because an :math:`\ell`-diagonal metric commutes with a
+per-:math:`\ell` scalar. It never established that the dressed end is
+INADMISSIBLE, and the sentence it was defended with — *"the dressed end
+would move* :math:`\Lambda`\ *'s Hilbert adjoint on 10 of 33 rows (the
+dense-Gram rows)"* — does not survive re-measurement. Three findings,
+each with its denominator
+(``tests/transport/frames/test_moment_metric_fork_premise.py``, `[M]`
+2026-09-07 on ``main`` @ ``79d2944a``, probes ``scratch/_step6_2c/``
+``p3_scan_161.py`` / ``p4_lambda_adjoint.py`` / ``p8_parseval.py`` /
+``p9_on_range.py``):
+
+#. **The count and its attribution are both wrong.** Applied to an
+   arbitrary head draw, :math:`\Lambda^{*}` differs from
+   :math:`\Lambda^{\top}` under the dressed end on **5 of 33** rows, and
+   **3 of the 5 are DIAGONAL-Gram** rows. The mechanism is not Gram
+   density: it is the Parseval metric's Moore–Penrose **projection** of
+   the slots a folded rule cannot see (on a σ-folded rule the σ-odd
+   harmonics vanish at every node, so :math:`\operatorname{diag} G = 0`
+   there and :math:`G^{+}` zeroes them, while :math:`g_C` does not).
+   :math:`\Lambda^{*}` is then :math:`P\Lambda^{\top}P`, not
+   :math:`\Lambda^{\top}`.
+#. ⭐ **On the only inputs production can hold, the objection does not
+   bite at all.** A moment vector a solver holds is a COVARIANT
+   :math:`\varphi = M\psi`, never a raw coefficient draw. Re-run on
+   :math:`\varphi = M\psi` for a random angular field: :math:`\Lambda^{*}
+   \ne \Lambda^{\top}` on **0 of 33** rows (all :math:`\le
+   1.9\times10^{-16}`). The slots the pseudo-inverse zeroes are exactly
+   the slots whose moment is identically zero for every field the rule
+   can see — `[M]` 41 %…79 % of a raw draw's mass is off the range of
+   :math:`M` on the folded and level-symmetric rows.
+#. **The companion figure reproduces under no statistic.** The same gate
+   docstring recorded *"the dressed metric would move ``apply_metric`` by
+   96–161 %"*, naming no statistic, no fixture and no denominator. `[M]`
+   the draw-free per-element movement :math:`|p_\ell/g_\ell - 1|` spans
+   **0.5 %…100.0 %** over the 33 rows and 0.5 %…222 % over 60 rows at
+   :math:`L \le 4`; **no row lands in** :math:`[155\,\%, 170\,\%]`. Where
+   ``161 %`` came from is unrecoverable from the tree.
+
+And the price of the *other* arm was never on the table. `[M]` the
+Parseval ratio :math:`\lVert M\psi\rVert^2_{\Phi_L} /
+\lVert\psi\rVert^2_W` for a band-limited :math:`\psi`:
+
+.. list-table:: `[M]` What each end costs — re-measured 2026-09-08,
+               33 shipped (rule, :math:`L`) rows
+   :header-rows: 1
+   :widths: 26 22 24 28
+
+   * - end bound to :math:`\Phi_L`
+     - Parseval holds
+     - :math:`\Lambda^{*} = \Lambda^{\top}` on a physical :math:`\varphi`
+     - what it costs
+   * - dressed ``basis_space`` (:math:`G^{-1}` / :math:`G^{+}`) —
+       **shipped since 6.2c-ii**
+     - **33 / 33**, ratio :math:`1.0000000000`
+     - **33 / 33**
+     - nothing on any production input; 5 / 33 off the range of
+       :math:`M`, which no solver can reach
+   * - continuum ``basis.space`` (:math:`g_C`) — tracker 2.5's choice
+     - **0 / 33**, ratio :math:`3.41\ldots157.91`
+     - 33 / 33
+     - the frame square's isometry, i.e. the F-0 / P7 repair itself
+       (`[M]` 148 battery reds if reverted)
+
+The upper end of that ratio is exact rather than sampled: on a
+degree-exact full-sphere rule :math:`G = g_C`, so at :math:`\ell = 0` the
+ratio is :math:`(4\pi)^2 = 157.9137`. (Re-measured independently for this
+page at one draw per row: **0 of 33** at :math:`1`, range
+:math:`4.07\ldots157.9137`; the lower end is draw-dependent, the upper
+end is not.)
+
+⟹ the fork was never a correctness question about the converged flux
+(`[M]` ``scalar_flux`` is ``array_equal``, the residual trajectory
+bit-identical and ``n_inner`` unchanged under either end), and never a
+:math:`\Lambda`-adjoint question (no physical input separates them). It
+is: **does the moment carrier's norm mean the field's energy?** Under
+:math:`G^{-1}` it does, exactly; under :math:`g_C` the recorded number is
+:math:`\lVert G\Delta c\rVert_{g_C}`, a quantity with no reading in the
+transport equation and differing from the un-windowed arm's
+:math:`\lVert\Delta\psi\rVert` by :math:`\approx 4\pi`.
 
 The identity the step installs:
 
 .. math::
    :label: moment-space-read-off-the-frame
 
-   \Phi_L \;\equiv\; \bigl(\text{the basis } q\text{'s frame binds at } L
-   \bigr).\texttt{space},
+   \Phi_L \;\equiv\; \bigl(\text{the frame } q \text{ binds at } L
+   \bigr).\texttt{basis\_space},
    \qquad
    \Lambda,\,F_0,\,N_0 : \Phi_L \to \Phi_L ,
    \qquad
    \text{head}(\phi) \;=\; \Phi_L ,
 
 .. (vv-status rationale) Named-field-typing identity: the angular moment
-   space is the coefficient space of the basis the quadrature bound, read
+   space is the coefficient space the quadrature's frame carries, read
    off the frame, and it is the shared end of every moment-space operator
    and the head factor of every moment field. Not a solver claim — no
    eigenvalue, no flux. The verifiable content is the foundation gate
    ``tests/transport/frames/test_moment_space_is_read_off_the_frame.py``
-   (the ROUTE / METRIC-IDENTITY / DOOR trio) plus the composability guard
-   ``A.domain == B.codomain`` it leans on.
+   (the ROUTE / METRIC / DOOR trio) plus the composability guard
+   ``A.domain == B.codomain`` it leans on, and — since the head became
+   axis-built — the hub/frame agreement gate
+   ``tests/sn/mesh/test_hub_and_frame_agree_on_the_moment_space.py``.
 .. vv-status: moment-space-read-off-the-frame documented
+
+.. note::
+
+   ⛔ **The right-hand side read** ``(the basis q's frame binds at
+   L).space`` **until CS4c step 6 item 6.2c-ii (2026-09-08).** The
+   *reader* half of the identity — nobody re-mints from :math:`L` — is
+   untouched and is what this subsection is about. What moved is WHICH of
+   the frame's two coefficient spellings the tree binds: ruling
+   **R-6.2c-1** replaced the basis's continuum ``space`` with the frame's
+   Parseval-dressed ``basis_space``, so :math:`\Phi_L` now carries
+   :math:`G^{-1}` (or a positioned :math:`G^{+}`) instead of
+   :math:`g_C`. The subsection below preserves the original argument and
+   sets the re-measurement beside it.
 
 with :math:`q` the quadrature, so that *which family* is the quadrature's
 decision (:meth:`Quadrature._harmonic_basis
@@ -4171,7 +4307,7 @@ built as ``HarmonicFrame.from_galerkin(q.angular_frame(L))``:
      - content-equal, never the same object
    * - ``frame.basis_space == frame.basis.space``
      - 33 / 33
-     - ``(name, shape)``-equal — **equality is metric-blind**
+     - ``(name, shape)``-equal — **equality was metric-blind**
    * - ``frame.basis_space`` metric ≠ ``frame.basis.space`` metric
      - 33 / 33
      - the fork a ``==`` gate structurally cannot see
@@ -4180,6 +4316,27 @@ The last two rows are the reason the gate for this step asserts the metric
 ARRAY and not the space: a ``==`` comparison would have passed under
 *either* choice (``vv-principles`` #19 — the reading that discriminates is
 the wrong-structure one).
+
+.. note::
+
+   ⛔ **Row 4 is HISTORY since CS4c step 6 item 6.2c-ii (2026-09-08).**
+   The numbers above are unchanged as a record of the 2026-09-02 tree, and
+   rows 1–3 still reproduce; row 4 does not. Both harmonic heads became
+   AXIS-BUILT — one
+   :class:`~orpheus.numerics.axis.HarmonicAxis` (rectangular) or
+   :class:`~orpheus.numerics.axis.LegendreAxis` (flat) whose MEASURE is
+   the head's metric — and an axis-built space's identity IS its axis
+   tuple, weights bytes included (:ref:`spaces-identity-bridge`). So the
+   metric entered the identity and the two heads separated: `[M]`
+   re-measured for this page on the same 33 rows,
+   ``frame.basis_space == frame.basis.space`` is **0 of 33**, and every
+   one of the 33 dressed heads reports ``axes is not None``. Row 5 stands
+   and is now *implied* by row 4 rather than hidden from it. ⭐ The
+   consequence for gate design runs the other way too: the ``==``
+   assertion that could adjudicate nothing on the 2026-09-02 tree is,
+   on this one, exactly the discriminating instrument — which is why the
+   hub/frame agreement gate can assert ``==`` and mean it
+   (``tests/sn/mesh/test_hub_and_frame_agree_on_the_moment_space.py``).
 
 The size of the fork is **draw-free and exact**, not a sampled number. On
 a degree-exact full-sphere rule the discrete Gram reproduces the continuum
@@ -4204,8 +4361,14 @@ weights sum to :math:`2` rather than :math:`4\pi`, the discrete Gram is
 :math:`\ell = 0, 1`. (That :math:`\Sigma w = 2` is itself the slab's
 signature: a 1-D rule integrates over :math:`\mu`, not over the sphere.)
 
-Why the continuum space is the right end for :math:`\Lambda`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Why the continuum space was chosen as the end for :math:`\Lambda`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+⛔ **This sub-subsection is the tracker-2.5 argument, PRESERVED. Its
+conclusion was overturned on 2026-09-08 (item 6.2c-ii, R-6.2c-1); read it
+with the three-point refutation above and the closing note below.** The
+heading read *"Why the continuum space is the right end for*
+:math:`\Lambda`\ *"* until then.
 
 :math:`\Lambda` is a scalar per :math:`\ell` (Funk–Hecke, above), so it
 **commutes** with any metric that is diagonal in :math:`\ell` and constant
@@ -4261,6 +4424,43 @@ frame's dressed space would have moved :math:`\Lambda`'s adjoint by up to
 invisible everywhere a full-sphere regression fixture would have looked —
 which is the shape of a change that ships green and is wrong later.
 
+.. warning::
+
+   ⛔ **Retraction (2026-09-08, item 6.2c-ii).** The table's *numbers* are
+   a matrix-level measurement and stand as recorded; its *reading* does
+   not. Two things were missing, and each alone reverses the conclusion.
+
+   **(a) The statistic ranges over vectors production cannot produce.**
+   The table is a relative Frobenius norm of the whole
+   :math:`\Lambda^{*}` matrix, i.e. it pushes every basis vector
+   :math:`e_k` through both arms. A solver never holds an arbitrary
+   :math:`e_k`; it holds a covariant :math:`\varphi = M\psi`, and the
+   columns where the two arms differ are precisely the ones OFF the range
+   of :math:`M` — the σ-odd slots a folded rule cannot see, whose moment
+   is identically zero for every field. `[M]` re-run on
+   :math:`\varphi = M\psi`: the two arms agree on **33 of 33** rows
+   (:math:`\le 1.9\times10^{-16}`). The draw-free matrix statistic is the
+   *stronger* instrument for "do these operators differ" and the *wrong*
+   one for "can this difference reach the solve" — vv-principles Mode 12
+   at the level of the measured functional's DOMAIN rather than its
+   invariance group.
+
+   **(b) The comparison has one leg.** ":math:`158\,\%` on the rules this
+   campaign is repairing" prices the dressed end and never prices the
+   continuum one. `[M]` the continuum end breaks Parseval on **33 of 33**
+   rows by a factor :math:`3.41\ldots157.91` — the F-0/P7 repair, on
+   every shipped rule, including all six full-sphere degree-exact
+   families the paragraph above calls "inert". The row that reads *inert*
+   in this table is not inert in the other column; it was simply never
+   measured.
+
+   ⟹ the sentence *"would have moved* :math:`\Lambda`\ *'s adjoint by up
+   to 158 %"* is retained above because it is a true statement about a
+   matrix; it is not evidence about the fork, and it must not be
+   re-quoted as though it were. The gate docstring that carried its
+   companion figures (*"10 of 33 (the dense-Gram rows)"*, *"96–161 %"*)
+   was rewritten with its statistic in 6.2c-ii's commit.
+
 With the continuum end, :math:`\Lambda^{*} = \Lambda^{\top}` holds on all
 33 rows **exactly**: `[M]` the column-built adjoint matrix and the
 transpose of the column-built forward matrix are ``array_equal``,
@@ -4270,8 +4470,11 @@ its own reciprocal. (Applied to a random vector instead, the same
 identity reads :math:`\le 1.82\times10^{-16}` relative — the reduction
 order, not the algebra.)
 
-**Nothing moved.** The two ends' metrics are ``array_equal`` (table
-above), so ``.H`` is the *same float program* under either — `[M]`
+**Nothing moved** *(true of tracker 2.5, which replaced a* ``from_L(L)``
+*mint with a metric-IDENTICAL read; item 6.2c-ii is the step that does
+move the metric — see* :ref:`frame-the-one-moment-space` *)*\ **.** The two
+ends' metrics are ``array_equal`` (table above), so ``.H`` is the *same
+float program* under either — `[M]`
 2026-09-02, ``Λ.H`` applied to a fixed draw is ``array_equal`` between
 the read space and the ``from_L(L)`` mint it replaces on **33 of 33**
 rows — and the forward ``apply`` / ``apply_transpose`` never read an end
@@ -4352,6 +4555,14 @@ caller passes an integer.
 
 ⚠ **Gotcha, and it is older than this step: the FACE's moment codomain
 and the FIELD's space are metric-different and compare EQUAL.**
+⛔ **RESOLVED 2026-09-08 — read this paragraph and the one after it as
+history, and the resolution at** :ref:`frame-the-one-moment-space`. Item
+6.2c-ii gave the two the SAME metric (the frame's Parseval one) and made
+the heads axis-built, so they are now metric-identical and compare equal
+*because* they are the same space rather than in spite of not being. The
+account is preserved because it is the clearest statement of the seam,
+and because the *shape* of the defect — two producers, one equality
+relation that cannot see what they disagree about — is the reusable part.
 :meth:`HarmonicFrame.moment_space_on
 <orpheus.transport.frames.harmonic_frame.HarmonicFrame.moment_space_on>`
 builds the analysis face's codomain from the frame's **dressed**
@@ -4390,6 +4601,91 @@ makes the head axis-built and so promotes its weights into the identity
 (:ref:`spaces-identity-bridge`), is where that seam is decided — 6.2b
 deliberately leaves the ruling open.
 
+
+.. _frame-the-one-moment-space:
+
+✅ The seam is CLOSED — one moment space, one metric (2026-09-08)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Item **6.2c-ii** decided it, and closed it in the direction the two
+paragraphs above left open. The mechanism is that the harmonic heads
+became **axis-built**: each carries ONE MODAL head axis
+(:class:`~orpheus.numerics.axis.HarmonicAxis` for the rectangular family,
+:class:`~orpheus.numerics.axis.LegendreAxis` for the flat one) whose
+MEASURE *is* the head's metric, and an axis-built space's identity is its
+axis tuple — weights bytes included. So the metric stopped being invisible
+to ``==``, the two heads stopped being interchangeable, and one of them
+had to be chosen. Ruling **R-6.2c-1** chose the frame's dressed one.
+
+What that changes, stated as the tree now reads:
+
+.. list-table:: The moment space after item 6.2c-ii
+   :header-rows: 1
+   :widths: 30 34 36
+
+   * - Question
+     - Before (tracker 2.5 → 6.2b)
+     - After (6.2c-ii)
+   * - the head's metric
+     - continuum :math:`g_C = 4\pi/(2\ell+1)`
+     - Parseval :math:`G^{-1}`, or a positioned
+       :class:`~orpheus.numerics.metric.DenseMetric` :math:`G^{+}` where
+       the discrete Gram is dense
+   * - who owns the head
+     - the basis (``basis.space``)
+     - the FRAME (``basis_space``) — and the frame is the head axis's
+       :attr:`~orpheus.numerics.axis.Axis.generator`, the object that can
+       re-dress it at another order
+   * - hub vs. face codomain
+     - ``==`` (metric-blind), metric-different
+     - ``==`` and metric-IDENTICAL — one space, two owners (ruling O-5);
+       ``is`` *within* each owner, ``==`` *across* them, because the frame
+       cannot see the carrier
+   * - ``head == basis.space``
+     - ``True`` (`[M]` 33 / 33)
+     - ``False`` (`[M]` 0 / 33) — the continuum head survives only as the
+       basis's own coefficient space
+   * - what admits a windowed operand
+     - ``(name, shape)`` — a metric-blind seam
+     - structural identity; there is no seam left to be blind
+
+⭐ **The two owners, and why "one space" is stated as ``==`` and not as
+``is``.** The carrier's cached
+:meth:`SNMesh.moment_space
+<orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>` and the frame's
+:meth:`HarmonicFrame.moment_space_on
+<orpheus.transport.frames.harmonic_frame.HarmonicFrame.moment_space_on>`
+both build ``<head> ⊗ <cell axes>`` and both read the head off
+``frame.basis_space``. They cannot share an *instance*: the frame is
+constructed from ``(basis, measure)`` and has no reference to the carrier,
+so no cache lookup can reach across. What they share is *identity*, which
+under structural equality is the whole of what a composability guard asks.
+Within each owner the object is interned (``is``), across them it is
+``==`` — gated in
+``tests/sn/mesh/test_hub_and_frame_agree_on_the_moment_space.py``.
+
+⚠ **The refusal that had to be re-keyed, and why it is a hazard worth
+naming (H-6).** ``moment_space_on`` used to refuse a non-per-ordinate
+space by testing ``axes is None`` — which happened to catch a MOMENT space
+too, because a moment space was axes-less. Once the head is axis-built a
+moment space HAS axes, so the old guard silently lost its subject: `[M]`
+handed one, it returned a plausible-looking product instead of raising.
+The refusal is now keyed on the generator channel — the leading axis must
+narrow to a :class:`~orpheus.numerics.quadrature.directional.Quadrature`
+— so it names its subject again. This is the standing lesson that a guard
+must be re-derived, not merely re-read, when the thing it inspects changes
+shape.
+
+⚠ **What is NOT closed: the spatial-moment TAIL.** A *widened* moment
+space (LD, ``spatial_moments > 1``) still appends the Euclidean, axes-less
+:class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`,
+so that product is axes-less overall even though its head is not — and the
+widened *angular* space already carries the scheme's mass-weighted
+``moment_axis``, i.e. the same factor spelled twice. Item **6.2c-iii**
+makes the hub's and the frame's tail the scheme's own axis and retires the
+class. It has NOT landed; until it does, read the tail's Euclidean metric
+as a known gap rather than a decision.
+
 Truncation is the same rule applied to a *lower* order.
 :meth:`HarmonicMomentFlux.truncate
 <orpheus.transport.fields.harmonic_moment_flux.HarmonicMomentFlux.truncate>`
@@ -4399,10 +4695,33 @@ block by the new head's own shape, so a spherical-harmonic head truncates
 to a spherical-harmonic head and a Legendre head to a Legendre head. The
 implementation on
 :meth:`SphericalHarmonicSpace.truncated
-<orpheus.numerics.spaces.SphericalHarmonicSpace.truncated>` returns
-``from_L(L_new)`` under **this** head's own name, so identity survives the
-order change; a head that had been renamed cannot be handed back the
-default name, which is the tell of an integer mint. ⚠ The kept block is
+<orpheus.numerics.spaces.SphericalHarmonicSpace.truncated>` delegates to
+:func:`~orpheus.numerics.spaces.moment_head.truncated_head`, which re-mints
+the family at ``L_new`` under **this** head's own name, so identity
+survives the order change; a head that had been renamed cannot be handed
+back the default name, which is the tell of an integer mint.
+
+⛔ **That delegation is item 6.2c-ii's, and it replaced a
+``from_L(L_new)`` call — a change of MECHANISM, not of spelling (ruling
+O-3: re-mint AND re-axis, never slice).** Once the head carries its metric
+as an axis MEASURE, "the same family one order down" stops being a pure
+function of :math:`L`: the metric belongs to whichever object DRESSED the
+head, and only that object can re-derive it at the new order.
+:func:`~orpheus.numerics.spaces.moment_head.truncated_head` therefore
+dispatches on the head axis's
+:attr:`~orpheus.numerics.axis.Axis.generator` — a
+:class:`~orpheus.numerics.basis.base.TruncatedBasis` re-spans the continuum
+family and hands back ITS space; a
+:class:`~orpheus.numerics.frame.GalerkinFrame` re-poses itself through
+:meth:`~orpheus.numerics.frame.GalerkinFrame.at_order` and hands back its
+dressed space at that order. ⚠ And a *slice* of the parent's dressing is
+not merely inelegant, it is **undefined**: the discrete Gram's diagonality
+verdict can FLIP with :math:`L` — `[M]` ``folded_product(2,4)`` is DENSE at
+:math:`L = 2` and DIAGONAL at :math:`L = 1`, so the parent's metric is a
+matrix :math:`G^{+}` and the child's a diagonal :math:`G^{-1}`, and no
+sub-block of the first is the second. A truncated moment field therefore
+lands on exactly the space its carrier mints at ``L_new`` (structurally
+equal, ruling O-5), never on a second-metric twin. ⚠ The kept block is
 the head's leading corner in each of its own axes — a lower order keeps
 the low-index modes of every head layout — which is what makes the slice
 layout-agnostic rather than hard-coded to the harmonics'
@@ -4432,13 +4751,17 @@ to catch is green by construction):
        guard ``A.domain == B.codomain`` under
        :meth:`frame.conjugate <orpheus.numerics.frame.FrameBase.conjugate>`,
        which is the red a reverted producer produces
-   * - **METRIC IDENTITY**
-     - the bound end carries the basis's own CONTINUUM Gram, bit-for-bit
-       equal to the ``from_L(L)`` mint, on every (rule, :math:`L`) row
-     - the frame's Parseval-dressed ``basis_space``, asserted to be
-       ``(name, shape)``-equal and metric-DIFFERENT — the negative
-       control that makes the positive leg discriminating rather than
-       blind
+   * - **METRIC**
+     - *(as written 2026-09-02:)* the bound end carries the basis's own
+       CONTINUUM Gram, bit-for-bit equal to the ``from_L(L)`` mint, on
+       every (rule, :math:`L`) row. ⛔ **Item 6.2c-ii FLIPPED this leg**
+       (R-6.2c-1): the bound end is the frame's Parseval-dressed
+       ``basis_space``, and the assertion moved with the binding
+     - *(2026-09-02:)* the frame's Parseval-dressed ``basis_space``,
+       asserted ``(name, shape)``-equal and metric-DIFFERENT. **Since
+       6.2c-ii** the negative control is the CONTINUUM head, which is now
+       also structurally UNEQUAL — so the leg discriminates twice over,
+       on the metric array AND on ``==``
    * - **DOOR**
      - both doors demand the ``TruncatedBasis`` surface, typed, with a
        message naming the truncation order
@@ -4783,8 +5106,134 @@ coefficient-extraction verb :meth:`project
 <orpheus.numerics.frame.FrameBase.project>` is the Petrov-Galerkin
 :math:`G^{-1}M` derived term-by-term for the homogenisation consumer in
 :ref:`sn-homogenization-petrov-galerkin-frame`; its diagonal-Gram normalisation
-:attr:`gram <orpheus.numerics.frame.FrameBase.gram>` is the row-sum
-probe of :ref:`frame-least-squares-discipline`.
+is the typed ARROW :attr:`gram_inverse
+<orpheus.numerics.frame.FrameBase.gram_inverse>`, whose action is the
+row-sum probe of :ref:`frame-least-squares-discipline` and whose ends
+are the two faces' coefficient ends (:ref:`frame-gram-inverse-arrow`).
+
+
+.. _frame-gram-inverse-arrow:
+
+The projection normalisation is an ARROW, not a metric-twin space
+==================================================================
+
+:meth:`project <orpheus.numerics.frame.FrameBase.project>` is
+:math:`G^{-1}M`: analyse against the test functions, then divide by the
+cross Gram :math:`G_{kj} = \langle\chi_k, \phi_j\rangle_W = (MR)_{kj}`.
+The frame computes :math:`G` with a single ``analysis ∘ reconstruction``
+probe of the all-ones coefficient vector — the **row sum** of :math:`MR`
+— and inverts it as a masked reciprocal
+(:ref:`frame-least-squares-discipline` states the two structural
+conditions under which that probe IS the normalisation).
+
+The question this section settles is *what kind of object* that
+reciprocal is. Until CS4c step 6 item 6.2c-ii (2026-09-08) it was a
+**space**: ``FrameBase.gram`` returned the TEST space re-dressed with the
+probe diagonal as its ``inner_product_weights``, and the
+:math:`G`-orthogonal projector was spelled
+
+.. code-block:: python
+
+   frame.conjugate(InverseMetricOperator(frame.gram))     # retired
+
+i.e. as an endomorphism of that re-dressed twin. Since 6.2c-ii it is a
+typed **arrow**,
+:class:`~orpheus.numerics.frame.CrossGramInverse`, exposed as
+:attr:`FrameBase.gram_inverse
+<orpheus.numerics.frame.FrameBase.gram_inverse>`, and the projector is
+
+.. code-block:: python
+
+   frame.conjugate(frame.gram_inverse)                    # = R G⁻¹ M
+
+⭐ **Two independent reasons, and the second is the one that generalises.**
+
+**(1) The twin stopped type-checking.** A metric-twin is *the same space
+with a different metric*, which is only expressible while identity is
+metric-blind. Item 6.2c-ii made the harmonic heads axis-built, so the
+measure entered the identity (:ref:`spaces-identity-bridge`) and
+``replace(test_space, inner_product_weights=probe)`` became a **different
+space** from ``test_space``. The composition
+``conjugate(InverseMetricOperator(twin))`` then failed
+:class:`~orpheus.numerics.operator.OperatorProduct`'s own
+space-compatibility guard on every harmonic frame — the guard doing
+exactly its job, on a spelling that had been relying on the seam.
+
+**(2) The twin was a costume, and it carried a real hazard.**
+:math:`G^{-1}` maps the analysis face's covariant output (in
+:attr:`~orpheus.numerics.frame.FrameBase.test_space`) to the trial side's
+contravariant coefficients (in
+:attr:`~orpheus.numerics.frame.FrameBase.basis_space`). Those ARE the two
+faces' coefficient ends — it was an arrow all along, wearing an
+endomorphism's clothes. Spelled as one it composes by construction, and a
+whole class of defect becomes **unspellable**: the arrow's action reads
+the probe diagonal and NO space's metric, so a dressed test space can
+never leak its Parseval metric into the normalisation. That leak was not
+hypothetical — `[M]` 2026-08-30, the pre-P7 spelling handed the probe a
+space whose ``apply_inverse_metric`` applied its own matrix instead, a
+**162 %** projection error on the overlap frame (:math:`\Sigma_R`
+``[7.0, 11.0]`` for a true :math:`[8/3, 16/3]`). P7 fixed it by teaching
+``gram`` to *strip* the dressing — a guard. The arrow removes the state
+the guard was guarding.
+
+.. list-table:: :class:`~orpheus.numerics.frame.CrossGramInverse` at a glance
+   :header-rows: 1
+   :widths: 24 76
+
+   * - Slot
+     - What it is
+   * - ``domain``
+     - :attr:`~orpheus.numerics.frame.FrameBase.test_space` — the analysis
+       codomain, where a covariant moment lands
+   * - ``codomain``
+     - :attr:`~orpheus.numerics.frame.FrameBase.basis_space` — the
+       reconstruction domain, the trial coefficient space. One space on a
+       :class:`~orpheus.numerics.frame.GalerkinFrame`, two on a
+       :class:`~orpheus.numerics.frame.PetrovGalerkinFrame`
+   * - ``diagonal``
+     - the probe :math:`(MR\,\mathbf 1)` — the cross Gram's row sums, in
+       the analysis codomain's layout
+   * - action
+     - the Moore–Penrose reciprocal of that diagonal, one spelling: the
+       :class:`~orpheus.numerics.metric.DiagonalMetric`'s own inverse
+       arithmetic, zero on dead slots, broadcast against the coefficient
+       array's leading block
+   * - ``is_adjointable``
+     - ``True`` — a real diagonal is self-adjoint, and its two ends share
+       one shape
+
+The consumers moved with it: :meth:`project
+<orpheus.numerics.frame.FrameBase.project>` is now literally
+``gram_inverse.apply(analysis.apply(field))``, and the SN loss-kernel
+gauge spells its :math:`G`-orthogonal projector
+``frame.conjugate(frame.gram_inverse)``. The ``DENSE``-trial refusal is
+unchanged and still lives on this property
+(:ref:`frame-least-squares-discipline`).
+
+⭐ **The pattern worth carrying: when a "metric-twin space" appears in a
+composition, ask whether the two ends are actually different spaces.**
+Under structural identity a twin is a different object, so the twin
+spelling was always either a type error or a claim that the metric is not
+part of identity. Both halves of that dilemma are answered the same way —
+give the map its own type and let its ends be the ends it actually has.
+
+.. _frame-at-order:
+
+A frame can re-pose itself at another order
+============================================
+
+:meth:`GalerkinFrame.at_order <orpheus.numerics.frame.GalerkinFrame.at_order>`
+returns THIS frame over the same measure with its trial family cut at
+``L_new``: same class, same measure, the trial basis's own
+:meth:`~orpheus.numerics.basis.base.TruncatedBasis.at_order`. It exists
+because the frame is the head's :attr:`generator
+<orpheus.numerics.axis.Axis.generator>` (:ref:`frame-the-one-moment-space`)
+and a head must be re-dressable at every order — the metric is the frame's
+to install, and the discrete Gram's verdict can change with :math:`L`
+(:ref:`frame-moment-space-single-home`, the truncation paragraph). It
+refuses a trial that carries no truncation order, by name; and the frame it
+returns is structurally equal to the quadrature's own interned frame at
+that order, so truncation does not fork the frame cache.
 
 
 .. _frame-least-squares-discipline:
@@ -4832,8 +5281,8 @@ The first two rows are the **built** frames: a
 :class:`~orpheus.numerics.frame.GalerkinFrame` (diagonal Gram,
 ``test is trial``) and the forward
 :class:`~orpheus.numerics.frame.PetrovGalerkinFrame` (diagonal *or*
-partition-of-unity). For both, :attr:`FrameBase.gram
-<orpheus.numerics.frame.FrameBase.gram>` is a single row-sum probe and
+partition-of-unity). For both, :attr:`FrameBase.gram_inverse
+<orpheus.numerics.frame.FrameBase.gram_inverse>` is a single row-sum probe and
 :meth:`project <orpheus.numerics.frame.FrameBase.project>` is a per-cell
 reciprocal (a Moore–Penrose pseudo-inverse, so an empty / zero-flux
 region maps to :math:`\Sigma_R = 0` for free), **not** a linear solve.
@@ -5750,8 +6199,15 @@ Implementation map
   :meth:`reconstruct_after <orpheus.numerics.frame.FrameBase.reconstruct_after>`
   (:math:`R\circ A`), and
   :meth:`project <orpheus.numerics.frame.FrameBase.project>`
-  (:math:`G^{-1}M`) with its :attr:`gram
-  <orpheus.numerics.frame.FrameBase.gram>` cross-Gram probe.
+  (:math:`G^{-1}M`) with its :attr:`gram_inverse
+  <orpheus.numerics.frame.FrameBase.gram_inverse>` cross-Gram arrow
+  (:class:`~orpheus.numerics.frame.CrossGramInverse`,
+  ``test_space → basis_space``).
+* :meth:`GalerkinFrame.at_order
+  <orpheus.numerics.frame.GalerkinFrame.at_order>` — THIS frame over the
+  same measure with its truncated trial family cut at ``L_new``; the verb
+  a frame-dressed moment head truncates through
+  (:func:`~orpheus.numerics.spaces.moment_head.truncated_head`).
 * :class:`~orpheus.numerics.basis.GramStructure` — the trial basis's
   projection-validity declaration (``DIAGONAL`` / ``PARTITION_OF_UNITY``
   / ``DENSE``) that decides whether :meth:`project
@@ -5929,10 +6385,11 @@ frames measured — the recorded F-0 limitation repaired. The phase's
 design pre-flight injected the dressing on unmodified production over
 four test trees (4371 tests) and reddened **two** gates, neither of
 which observes the adjoint, so the change landed with the gate that
-does. (ii) :attr:`FrameBase.gram
-<orpheus.numerics.frame.FrameBase.gram>` had to learn to **strip** the
-dressing: the row-sum probe is CROSS-Gram machinery and must never
-inherit the trial-side Parseval metric, `[M]` on pain of a
+does. (ii) ``FrameBase.gram`` — the accessor CS4c step 6 item 6.2c-ii
+retired in favour of the :attr:`gram_inverse
+<orpheus.numerics.frame.FrameBase.gram_inverse>` arrow — had to learn to
+**strip** the dressing: the row-sum probe is CROSS-Gram machinery and
+must never inherit the trial-side Parseval metric, `[M]` on pain of a
 :math:`162\,\%` projection error on the overlap frame. The correctness
 evidence is the wrong-metric discriminator, not reciprocity — the
 Hilbert-adjoint identity holds for every invertible :math:`G` and can
@@ -5962,6 +6419,48 @@ replaces on **33 of 33** (rule, :math:`L`) rows and the slab flux
 ``array_equal`` pre/post at :math:`L = 0` … :math:`3`. A capability, not
 a repair — ERR-080 stays open. Full account:
 :ref:`frame-moment-space-single-home`.
+
+⛔ **The fork half of that entry was OVERTURNED on 2026-09-08 (item
+6.2c-ii, ruling R-6.2c-1).** The *single-source* half stands untouched and
+is what the entry is about. What did not survive is the choice of END:
+`[M]` the :math:`158\,\%` is a whole-matrix statistic over columns off the
+range of :math:`M` (on a physical :math:`\varphi = M\psi` the two ends
+agree on **33 of 33** rows), and the leg it never priced is that the
+continuum end breaks Parseval on **33 of 33** rows by
+:math:`3.41\ldots157.91`. See :ref:`frame-the-one-moment-space`.
+
+**2026-09-08 — CS4c step 6 item 6.2c: the head becomes AXIS-BUILT and
+there is ONE moment space.** Two commits. **6.2c-i** (``db5be2ec``) made a
+space's metric a DERIVED object: an axis-built space's metric is one
+:class:`~orpheus.numerics.metric.FactoredMetric` over its axes — a
+:class:`~orpheus.numerics.metric.DiagonalMetric` per weighted axis on its
+own block, nothing on a counting axis — with an explicit metric object
+admitted beside the axes only as the positioned **overlay** of forms (one
+entry per axis, in order, a form only where the axis carries no measure),
+MERGED into the derived entries rather than substituted for them. That is
+the home a dense Gram needed (ruling R-6.2c-2: *a Gram is a FORM, never
+on* ``Axis.weights``); the inline ``_apply_axes_weights`` loop retired into
+:meth:`DiagonalMetric.apply_block
+<orpheus.numerics.metric.DiagonalMetric.apply_block>`, bit-identically.
+**6.2c-ii** then made both harmonic heads axis-built — one
+:class:`~orpheus.numerics.axis.HarmonicAxis` or
+:class:`~orpheus.numerics.axis.LegendreAxis`, ``MODAL``, whose measure IS
+the head's metric — which puts the metric into the identity and forces the
+fork. Ruled: the ONE moment space carries **Parseval**, so the carrier's
+cached mint, every moment field, every operator end and the frame's own
+faces read ``frame.basis_space``; the continuum head survives as the
+basis's own coefficient space. Three consequences this page owns: the
+metric-blind ``(name, shape)`` seam is **gone**
+(:ref:`frame-the-one-moment-space`); the projection normalisation became
+the typed arrow :class:`~orpheus.numerics.frame.CrossGramInverse`, because
+its metric-twin spelling stopped type-checking under structural identity
+(:ref:`frame-gram-inverse-arrow`); and truncation re-mints through the
+head axis's generator, with :meth:`GalerkinFrame.at_order
+<orpheus.numerics.frame.GalerkinFrame.at_order>` as the frame-side verb
+(:ref:`frame-at-order`). `[M]` the converged flux, the residual trajectory
+and ``n_inner`` are unchanged; what moves is the SI increment DIAGNOSTIC —
+``‖Δφ‖`` by 91.6 % and ρ by 3.85 % relative — pinned for the first time by
+``tests/sn/solve/test_windowed_si_diagnostic_trajectory.py``.
 
 References
 ==========

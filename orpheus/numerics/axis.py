@@ -27,8 +27,13 @@ The five slots, precisely
   minted this axis — a :class:`~orpheus.numerics.measure.DiscreteMeasure`
   or :class:`~orpheus.numerics.quadrature.directional.Quadrature` for
   NODAL factors, a :class:`~orpheus.numerics.basis.base.Basis` for MODAL
-  ones — or ``None`` where no generator object exists (the counting
-  axis). An axis is a **forgetful map** from its generator (it keeps the
+  ones — or, on a moment HEAD a frame has dressed with its Parseval
+  metric, the :class:`~orpheus.numerics.frame.FrameBase` that dressed it
+  (the Stage-2 generator: the pairing basis ⊗ measure induces the
+  coefficient space's metric, and only the frame can re-dress the head at
+  another order; CS4c step 6 item 6.2c-ii) — or ``None`` where no
+  generator object exists (the counting axis). An axis is a **forgetful
+  map** from its generator (it keeps the
   weights and drops the nodes); the accessor lets a consumer recover the
   un-forgotten data (direction cosines, level structure) THROUGH the
   space instead of being handed the generator separately. Deliberately
@@ -96,6 +101,7 @@ if TYPE_CHECKING:
     from orpheus.data.energy_grid import EnergyGrid
     from orpheus.data.macro_xs.mixture import Mixture
     from orpheus.numerics.basis.base import Basis
+    from orpheus.numerics.frame import FrameBase
     from orpheus.numerics.measure import DiscreteMeasure
     from orpheus.numerics.quadrature.directional import Quadrature
 
@@ -144,7 +150,7 @@ class Axis:
     kind : BasisKind
         Keyword-only, no default — the basis character is physics and
         must be spelled at every mint.
-    generator : DiscreteMeasure | Basis | Quadrature | None, default None
+    generator : DiscreteMeasure | Basis | Quadrature | FrameBase | None, default None
         Keyword-only provenance: the object that minted this axis (see
         the module docstring's slot table). NOT part of the identity —
         equality, hash and the ``of_axes`` name digest ignore it. Prefer
@@ -172,7 +178,7 @@ class Axis:
     shape: tuple[int, ...]
     weights: NDArray | None = field(default=None, repr=False)
     kind: BasisKind = field(kw_only=True)
-    generator: DiscreteMeasure | Basis | Quadrature | None = field(
+    generator: DiscreteMeasure | Basis | Quadrature | FrameBase | None = field(
         default=None, kw_only=True, repr=False
     )
 
@@ -440,3 +446,73 @@ class EnergyAxis(Axis):
     def _identity_key(self) -> tuple[Any, ...]:
         e = self.edges
         return (*super()._identity_key(), None if e is None else e.tobytes())
+
+
+@dataclass(frozen=True, eq=False)
+class HarmonicAxis(Axis):
+    r"""The angular MOMENT factor of the real spherical-harmonic family — the
+    rectangular ``(L+1, 2L+1)`` coefficient table of
+    :class:`~orpheus.numerics.basis.spherical_harmonic_basis.SphericalHarmonicBasis`
+    (the addition-theorem-shifted ``[l + m]`` column, zero-padded outside
+    :math:`|m| \le \ell`), ``MODAL`` — a spectral coefficient may be negative
+    for a positive function, so the factor carries no coordinate cone
+    (CS4c step 6 item 6.2c-ii, ruled 2026-09-07/08).
+
+    **The measure IS the head's metric.** Minted by the BASIS
+    (:meth:`SphericalHarmonicSpace.from_L
+    <orpheus.numerics.spaces.spherical_harmonic_space.SphericalHarmonicSpace.from_L>`)
+    the weights are the CONTINUUM Gram :math:`4\pi/(2\ell+1)` broadcast to
+    the padded layout; re-dressed by a FRAME
+    (:attr:`~orpheus.numerics.frame.FrameBase.basis_space`) they are the
+    Parseval inverse of the discrete Gram's diagonal — or ``None`` with the
+    matrix pseudo-inverse POSITIONED on the space's derived metric object
+    when that Gram is dense (item 6.2c-i) — and the frame becomes the
+    axis's :attr:`generator`, the object that can re-dress the head at
+    another order (:func:`~orpheus.numerics.spaces.moment_head.truncated_head`).
+
+    **Identity** is the class plus ``(label, shape, kind, weights)``: the
+    family is the class, the order is the shape, and — since the identity
+    flip (CS4c step 6, 2026-09-07) — the METRIC enters the identity through
+    the weights, so a frame-dressed head and a continuum head of the same
+    order are two spaces (the metric-blind ``(name, shape)`` seam that let
+    them pass for one is gone; the tree carries ONE moment space per
+    carrier, the frame's, ruling R-6.2c-1).
+    """
+
+
+@dataclass(frozen=True, eq=False)
+class LegendreAxis(Axis):
+    r"""The angular MOMENT factor of the Legendre family on
+    :math:`S^2/O(2)_a` — the FLAT ``(L+1,)`` coefficient axis of
+    :class:`~orpheus.numerics.basis.legendre_basis.LegendreBasis` (one
+    coefficient per degree: the trivial isotypic component of
+    :math:`O(2)_a` is one-dimensional in every degree), ``MODAL``.
+
+    Everything :class:`HarmonicAxis` says about the measure and the
+    generator holds here; what this family ADDS to the identity is the
+    axis of the spent stabiliser, ``spent_axis`` — `[M]` 2026-09-08 (the
+    6.2c verification round, hazard H-10): ``LegendreSpace.from_L(1, "x")``
+    and ``from_L(1, "z")`` carry ``array_equal`` weights and one shape, so
+    a family-generic identity would COLLAPSE two physically different
+    spaces (the tree carries two poles). The spent axis is therefore part
+    of :meth:`_identity_key`, exactly as an :class:`EnergyAxis` carries its
+    group edges.
+
+    Parameters
+    ----------
+    spent_axis : str
+        Keyword-only. The axis of the spent :math:`O(2)_a` stabiliser —
+        ``"x"``, ``"y"`` or ``"z"``.
+    """
+
+    spent_axis: str = field(kw_only=True)
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.spent_axis not in ("x", "y", "z"):
+            raise ValueError(
+                f"LegendreAxis: spent_axis must be x/y/z, got {self.spent_axis!r}."
+            )
+
+    def _identity_key(self) -> tuple[Any, ...]:
+        return (*super()._identity_key(), self.spent_axis)

@@ -1,17 +1,17 @@
 r"""``InverseMetricOperator`` — a space's inverse metric AS an operator.
 
-The adapter exists for exactly one reason, and
-:func:`test_the_frame_can_now_spell_its_own_projector` is that reason: the
-projection algebra :math:`\Pi = R \circ G^{-1} \circ M` is already written
-down in the tree (:mod:`orpheus.numerics.frame`,
-:class:`~orpheus.numerics.basis.IndicatorBasis`), but
-:attr:`~orpheus.numerics.frame.FrameBase.gram` hands back a
-``FunctionSpace`` while
-:meth:`~orpheus.numerics.frame.FrameBase.conjugate` wants a
-``LinearOperator`` — so :math:`G^{-1}` could not be SPELLED and
-:meth:`~orpheus.numerics.frame.FrameBase.project` had to stop at
-coefficients.  If that composition test ever goes away, the type has no
-justification left.
+The adapter lets a SPACE's inverse metric enter the operator algebra —
+the trace metrics' :math:`G^{+}`, a degenerate metric's Moore–Penrose face.
+:func:`test_the_frame_can_now_spell_its_own_projector` was its founding
+reason: the projection algebra :math:`\Pi = R \circ G^{-1} \circ M` was
+written down in the tree but the frame's probe was a ``FunctionSpace``
+while :meth:`~orpheus.numerics.frame.FrameBase.conjugate` wants a
+``LinearOperator``. Since CS4c step 6 item 6.2c-ii the frame owns that
+factor as a typed arrow (:attr:`~orpheus.numerics.frame.FrameBase.gram_inverse`,
+``test_space → basis_space``): an endomorphism of a metric-twin space
+cannot compose with the faces once the metric enters space identity, so the
+projector row below spells the frame's own arrow, and this adapter keeps
+the space-side rows (the degenerate trace metrics) as its justification.
 
 ⚠ The degenerate-metric rows are the load-bearing ones.  `[M]` the SN
 trace metric :math:`G = |\Omega\cdot\hat n| w_n` is EXACTLY zero on
@@ -147,21 +147,21 @@ def test_it_inverts_the_metric_off_the_null_space(name):
 
 @pytest.mark.foundation
 def test_the_frame_can_now_spell_its_own_projector():
-    r"""⭐ THE reason this type exists: ``conjugate(G⁻¹)`` is the projector.
+    r"""⭐ ``conjugate(G⁻¹)`` is the projector — spelled with the frame's own arrow.
 
-    ``frame.conjugate(InverseMetricOperator(frame.gram))`` composes
+    ``frame.conjugate(frame.gram_inverse)`` composes
     :math:`R \circ G^{-1} \circ M`, which for a Galerkin frame (test ==
     trial) is the orthogonal projector onto ``span(basis)``.  Asserted
     the way a projector is defined — idempotence — plus agreement with
     the frame's own ``project``/``reconstruction`` pair, so the operator
     spelling and the array spelling cannot drift.
 
-    Before this adapter the composition could not be built at all:
-    ``gram`` is a ``FunctionSpace`` and ``conjugate`` takes a
-    ``LinearOperator``.
+    Until item 6.2c-ii the composition went through this adapter over the
+    frame's probe SPACE; the arrow (:class:`~orpheus.numerics.frame.CrossGramInverse`)
+    is the same :math:`G^{-1}` with the faces' ends as its type.
     """
     frame = GalerkinFrame(SphericalHarmonicBasis(L=3), lebedev_sphere(13))
-    projector = frame.conjugate(InverseMetricOperator(frame.gram))
+    projector = frame.conjugate(frame.gram_inverse)
 
     rng = np.random.default_rng(0)
     # The field lives on the MEASURE's nodes (``table`` is ``(n_nodes, …)``),

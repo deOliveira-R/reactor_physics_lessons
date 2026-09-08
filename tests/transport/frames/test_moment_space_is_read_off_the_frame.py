@@ -21,15 +21,28 @@ Three gates, each with the input it rejects (``plan-authoring`` §6c):
   from ``L``) fails the composability guard loudly, which is the red.
   The mutant is unconstructible before the door widened — so the door
   and the producers are ONE step (``plan-authoring`` §6b);
-* **the METRIC-IDENTITY gate** — Landing A binds the basis's own
-  CONTINUUM space (``basis.space``), not the frame's Parseval-dressed
-  ``basis_space``: `[M]` the two are ``(name, shape)``-equal and
-  metric-DIFFERENT on 33 of 33 shipped (rule, L) rows (the per-ℓ ratio is
-  exactly ``[(2ℓ+1)/4π]²``), and Λ's Hilbert adjoint under the continuum
-  end is its transpose exactly while the dressed end would move it on 10
-  of 33 rows. A ``(name, shape)`` equality cannot see that fork, so this
-  gate asserts the metric ARRAY, with the dressed space as its negative
-  control;
+* **the METRIC gate** — ⛔ RE-POSED at CS4c step 6 item 6.2c-ii (ruling
+  R-6.2c-1, 2026-09-08). Landing A (2026-09-02) bound the basis's own
+  CONTINUUM space (``basis.space``) and recorded as its reason that *"Λ's
+  Hilbert adjoint under the continuum end is its transpose exactly while
+  the dressed end would move it on 10 of 33 rows (the dense-Gram rows)"*
+  and that the dressed metric *"would move apply_metric by 96–161 %"*.
+  `[M]` re-measured (``scratch/_step6_2c/p3_scan_161.py``,
+  ``p4_lambda_adjoint.py``, ``p9_on_range.py``, 33 shipped (rule, L)
+  rows): the adjoint moves on **5** rows for an ARBITRARY head draw,
+  **3 of them DIAGONAL-Gram** (the mechanism is the Parseval metric's
+  Moore–Penrose projection of the slots a folded rule cannot see, not
+  Gram density), and on **0 of 33** for a physical moment ``φ = Mψ``;
+  and NO statistic reproduces 161 % (the draw-free per-element movement
+  spans 0.5 %…100 % over the 33 rows). What the continuum binding COST
+  was measured too: Parseval ``‖Mψ‖² = ‖ψ‖²_W`` fails on 33 of 33 rows
+  under it (ratio 3.41…157.91) and holds on 33 of 33 under the dressed
+  metric. The tree therefore binds the FRAME's Parseval-dressed
+  ``basis_space`` everywhere — the operator ends, the moment fields, the
+  carrier's cached moment space — and the two heads are structurally
+  UNEQUAL (the head is axis-built; its measure enters the identity), so
+  this gate asserts the ends ARE the frame's space and are NOT the
+  continuum mint, with the continuum head as its negative control;
 * **the DOOR gate** — the frame asks for the
   :class:`~orpheus.numerics.basis.base.TruncatedBasis` SURFACE (a
   truncation order), typed, at the door: an indicator trial is refused
@@ -49,6 +62,7 @@ import pytest
 from orpheus.geometry import BC, Mesh1D
 from orpheus.numerics.basis.base import Basis, GramStructure, TruncatedBasis
 from orpheus.numerics.basis.indicator_basis import IndicatorBasis
+from orpheus.numerics.metric import DenseMetric, FactoredMetric
 from orpheus.numerics.basis.spherical_harmonic_basis import SphericalHarmonicBasis
 from orpheus.numerics.frame import GalerkinFrame
 from orpheus.numerics.manifold import SPHERE, Manifold, RealSpace
@@ -109,7 +123,13 @@ class _ForeignTruncatedBasis(Basis):
         return cls(L=order, parent=basis)
 
     def _parent(self) -> Basis:
-        return self.parent
+        # the parent FOLLOWS this twin's order, so a re-mint at another order
+        # (``at_order``, item 6.2c-ii — the head truncates through it) still
+        # delegates to the honest family at THAT order
+        return self.parent.at_order(self.L) if getattr(self.parent, "L", None) != self.L else self.parent  # type: ignore[attr-defined]
+
+    def at_order(self, L_new: int, /) -> "_ForeignTruncatedBasis":
+        return replace(self, L=L_new)
 
     def evaluate(self, points, /):
         return self._parent().evaluate(points)
@@ -268,60 +288,96 @@ _RULES = {
 }
 
 
+def _head_measure(space: FunctionSpace) -> np.ndarray | None:
+    """The head's diagonal metric where the axis doctrine put it — the single head axis's measure."""
+    assert space.axes is not None and len(space.axes) == 1, "a moment head is a single-axis space"
+    return space.axes[0].weights
+
+
 @pytest.mark.parametrize("label", sorted(_RULES))
 @pytest.mark.parametrize("L", [0, 1, 2])
-def test_landing_a_binds_the_continuum_space_and_is_metric_identical(label: str, L: int) -> None:
-    """The space the operator ends and field heads now read is the basis's
-    OWN (continuum-metric) space — ``(name, shape)``-equal AND
-    ``array_equal`` on the metric to the ``from_L(L)`` mint it replaces —
-    and NOT the frame's Parseval-dressed ``basis_space``, which is
-    ``(name, shape)``-equal and metric-different (the fork a ``==`` gate
-    cannot see)."""
+def test_the_tree_binds_the_frames_parseval_space_and_not_the_continuum_head(label: str, L: int) -> None:
+    """RE-POSED at CS4c step 6 item 6.2c-ii (ruling R-6.2c-1): the space the
+    operator ends and field heads read is the FRAME's Parseval-dressed
+    ``basis_space`` — axis-built, the frame its head axis's generator — and
+    it is structurally UNEQUAL to the basis's own continuum head (the
+    ``from_L(L)`` mint, ``basis.space``), which is this gate's negative
+    control: same family, same order, same name, different measure ⟹ a
+    different space (the metric-blind ``(name, shape)`` seam Landing A
+    leaned on is gone).
+
+    The metric is asserted on the ARRAY per row: on a DIAGONAL-Gram row the
+    head axis's measure is the Moore–Penrose reciprocal of the discrete Gram's
+    diagonal (zero on dead slots); on a DENSE-Gram row (`[M]` 2 of these 33:
+    ``gauss_legendre(2)`` and ``folded_product(2,4)`` at L = 2) the axis
+    carries no measure and the matrix pseudo-inverse is POSITIONED on the
+    space's derived metric object (item 6.2c-i)."""
     q = _RULES[label]()              # built in the body, never in the parametrize list
     frame = HarmonicFrame.from_galerkin(q.angular_frame(L))
-    ends = frame.basis.space
-    # ⛔ RE-KEYED 2026-09-02 (#429): the mint to compare against is the one the
-    # rule's ORBIT SPACE carries. A 1-D rule's frame binds the flat Legendre
-    # head, a sphere rule's the rectangular harmonics — so a gate that
-    # compared every rule to ``SphericalHarmonicSpace.from_L(L)`` was reading
-    # one family's layout as the contract.
-    minted = (
+    dressed = frame.basis_space
+    # ⛔ RE-KEYED 2026-09-02 (#429): the family to compare against is the one
+    # the rule's ORBIT SPACE carries — a 1-D rule's frame binds the flat
+    # Legendre head, a sphere rule's the rectangular harmonics.
+    continuum = (
         LegendreSpace.from_L(L, "x") if label.startswith("gauss_legendre")
         else SphericalHarmonicSpace.from_L(L)
     )
-    assert ends == minted
-    assert ends.inner_product_weights is not None and minted.inner_product_weights is not None
-    np.testing.assert_array_equal(ends.inner_product_weights, minted.inner_product_weights)
-    dressed = frame.basis_space
-    assert dressed == ends                       # equality is metric-blind ...
-    if dressed.metric is not None:               # ... the DENSE arm installs a matrix metric
-        assert dressed.inner_product_weights is None
-    else:                                        # ... the diagonal arm installs the Parseval inverse
-        assert dressed.inner_product_weights is not None
-        assert not np.array_equal(dressed.inner_product_weights, ends.inner_product_weights)
+    assert frame.basis.space == continuum, "the basis's own space IS the continuum mint"
+    assert dressed.name == continuum.name and dressed.shape == continuum.shape
+    assert dressed != continuum and continuum != dressed, (
+        "the dressed head and the continuum head must be two spaces — the metric is the identity"
+    )
+    assert dressed.axes is not None and len(dressed.axes) == 1
+    assert dressed.axes[0].generator is frame, "the frame dresses the head and becomes its generator"
+    assert dressed.inner_product_weights is None
+    diag = np.diagonal(frame.discrete_gram).reshape(dressed.shape)
+    live = diag > 0.0
+    if frame.discrete_gram_structure is GramStructure.DENSE:
+        assert (label, L) in {("gauss_legendre(2)", 2), ("folded_product(2,4)", 2)}
+        assert _head_measure(dressed) is None, "a dense Gram leaves the axis measure-less"
+        assert isinstance(dressed.metric, FactoredMetric) and len(dressed.metric.entries) == 1
+        assert isinstance(dressed.metric.entries[0][1], DenseMetric)
+    else:
+        assert dressed.metric is None
+        measure = _head_measure(dressed)
+        assert measure is not None
+        np.testing.assert_allclose(measure[live], 1.0 / diag[live], rtol=1e-15)
+        np.testing.assert_array_equal(measure[~live], 0.0)
+        # the negative control: the continuum head's measure is the OTHER array
+        cont = _head_measure(continuum)
+        assert cont is not None and not np.array_equal(cont, measure)
 
 
-def test_the_operator_ends_carry_the_continuum_metric_not_the_dressed_one() -> None:
-    """On a real posed composite the scattering factor's ends carry the
-    basis's continuum Gram bit-for-bit (`[M]` 2026-09-02: the dressed
-    metric would move ``apply_metric`` by 96–161 %)."""
+def test_the_operator_ends_carry_the_frames_parseval_space_not_the_continuum_one() -> None:
+    """On a real posed composite the scattering factor's ends ARE the frame's
+    Parseval-dressed space (structurally equal to the carrier's cached moment
+    head — one space, two owners) and NOT the basis's continuum head: `[M]`
+    (2026-09-08, the fork's ground) the two metrics differ by exactly
+    ``[(2ℓ+1)/4π]²`` per degree on every shipped row, Parseval holds on 33
+    of 33 rows under the dressed one and on 0 under the continuum one, and
+    the converged flux and the residual trajectory are bit-identical under
+    either — the SI increment norm (diagnostics) is the only reader."""
     sn = _slab()
     L = 1                      # the synthetic data carries P0 and P1
     S = ScatteringOperator.from_solver_data(mat_xs=_mat_xs(), space=sn.full_field_space, scattering_order=L)
     ends = S._moment_transfer(skip_l0=False).domain
-    # the mint the ends must equal is the FRAME's basis space — on this slab
-    # fixture the flat Legendre head, on a sphere rule the harmonics'. ⭐ Both
-    # families carry the SAME per-degree continuum Gram 4pi/(2l+1) (the
-    # descent is an isometry), which is exactly what makes Landing A's
-    # binding metric-identical across the ERR-080 repair.
-    minted = sn.quad.angular_frame(L).basis.space
-    assert ends.inner_product_weights is not None and minted.inner_product_weights is not None
-    np.testing.assert_array_equal(ends.inner_product_weights, minted.inner_product_weights)
-    assert ends.metric is None
-    np.testing.assert_array_equal(
-        np.asarray(minted.inner_product_weights).reshape(-1),
-        4.0 * np.pi / (2.0 * np.arange(L + 1) + 1.0),
-    )
+    frame = sn.quad.angular_frame(L)
+    assert ends == frame.basis_space
+    assert ends != frame.basis.space
+    hub_space = sn.moment_space(L)
+    assert isinstance(hub_space, TensorProductSpace)
+    hub_head = hub_space.factors[0]
+    assert ends == hub_head, "the operator ends and the carrier's cached moment head are one space"
+    measure = _head_measure(ends)
+    assert measure is not None
+    # the slab's Legendre frame is DIAGONAL: the Parseval measure is the
+    # reciprocal of the discrete Gram's diagonal — (2l+1)/2 on a GL rule
+    # exact through degree L, i.e. NOT the continuum 4π/(2l+1)
+    np.testing.assert_allclose(measure, 1.0 / np.diagonal(frame.discrete_gram), rtol=1e-12)
+    cont = _head_measure(frame.basis.space)
+    assert cont is not None
+    np.testing.assert_array_equal(np.asarray(cont).reshape(-1), 4.0 * np.pi / (2.0 * np.arange(L + 1) + 1.0))
+    assert not np.array_equal(measure, cont)
 
 
 # ═══════════════════════════════════════════════════════════════════════

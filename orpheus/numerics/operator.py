@@ -3874,19 +3874,16 @@ class InverseMetricOperator(LinearOperator):
     :math:`G^{+} : V^{*} \to V` — the adapter that lets a space's metric
     enter the operator algebra instead of only being *applied* to arrays.
 
-    **Why this exists (the one missing link).** The projection algebra is
-    already factored, and the tree says so:
-    :math:`\Pi = R \circ G^{-1} \circ M` — reconstruction ∘ inverse-Gram ∘
-    analysis (:mod:`orpheus.numerics.frame`,
-    :class:`~orpheus.numerics.basis.IndicatorBasis`).  But
-    :attr:`~orpheus.numerics.frame.FrameBase.gram` returns a
-    ``FunctionSpace``, and :meth:`~orpheus.numerics.frame.FrameBase.conjugate`
-    takes a ``LinearOperator`` — so :math:`G^{-1}` could not be *spelled*,
-    and :meth:`~orpheus.numerics.frame.FrameBase.project` had to stop at
-    coefficients (it is :math:`G^{-1}M`, never :math:`R\,G^{-1}M`).  With
-    this adapter ``frame.conjugate(InverseMetricOperator(frame.gram))`` IS
-    the G-orthogonal projector onto ``span(basis)``, built from machinery
-    that already exists and already carries spaces.
+    **Why this exists.** A space's metric enters the operator algebra
+    through this adapter — the trace metrics' inverses, a degenerate
+    metric's Moore–Penrose face — wherever :math:`G^{+}` of a SPACE is the
+    operator wanted. (Until CS4c step 6 item 6.2c-ii the frame's projector
+    was spelled through it too, as
+    ``frame.conjugate(InverseMetricOperator(frame.gram))`` over a metric-twin
+    of the test space; the frame now owns that factor as a typed arrow,
+    :attr:`~orpheus.numerics.frame.FrameBase.gram_inverse` — an endomorphism
+    of a twin space cannot compose with the faces once the metric enters
+    space identity.)
 
     **The arithmetic is the SPACE's, not ours** (Cardinal Rule 2): every
     apply delegates to

@@ -88,7 +88,7 @@ def _head_shape(mesh: SNMesh, L: int) -> tuple[int, ...]:
 
 def _head_of(mesh: SNMesh, L: int) -> MomentHead:
     """The angular head OBJECT — the surface that says where the isotropic slot and each degree block live."""
-    head = mesh.quad.angular_frame(L).basis.space
+    head = mesh.quad.angular_frame(L).basis_space   # the frame's Parseval-dressed head — the ONE moment space (6.2c-ii)
     assert isinstance(head, MomentHead)
     return head
 
@@ -757,8 +757,8 @@ class TestRankOneAngularHead:
         vals = rng.standard_normal((*head.shape, mesh.ng, *mesh.spatial_shape))
         phi = HarmonicMomentFlux.from_mesh_and_L(vals, mesh, L)
 
-        # equality, not identity: the head is re-derived per space mint and
-        # LegendreSpace compares by (name, shape) like every FunctionSpace.
+        # equality, not identity: the frame re-dresses the head per access and
+        # LegendreSpace compares structurally (its axis) like every FunctionSpace.
         assert phi.head == head
         assert phi.ng == mesh.ng
         np.testing.assert_array_equal(phi.scalar_flux().values, vals[0])

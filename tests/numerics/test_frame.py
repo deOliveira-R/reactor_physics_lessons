@@ -48,7 +48,7 @@ from orpheus.numerics.manifold import COSINE_INTERVAL, SPHERE, RealSpace
 from orpheus.numerics.symmetry import SubgroupOfO3
 from orpheus.numerics.frame import FrameBase, GalerkinFrame, PetrovGalerkinFrame
 from orpheus.numerics.measure import DiscreteMeasure
-from orpheus.numerics.metric import _DENSE_METRIC_RCOND, DenseMetric
+from orpheus.numerics.metric import _DENSE_METRIC_RCOND, DenseMetric, FactoredMetric
 from orpheus.numerics.operator import NotInvertible
 from orpheus.numerics.quadrature import Quadrature, lebedev_sphere
 from orpheus.numerics.spaces import SphericalHarmonicSpace
@@ -163,10 +163,18 @@ def test_reconstruction_hilbert_adjoint_falls_out_of_the_frame_spaces(sh_frame):
 @pytest.mark.foundation
 def test_basis_space_is_the_spherical_harmonic_space(sh_frame):
     frame, L = sh_frame
-    # basis.space rebuilds per call (cheap); the Frame caches it. Equal by
-    # (name, shape), and the Frame's cached instance is shared across the faces.
-    assert frame.basis_space == frame.basis.space
-    assert frame.basis_space == SphericalHarmonicSpace.from_L(L)
+    # the frame's codomain is the SH space of order L — the basis's own space
+    # re-DRESSED with the Parseval measure (its head axis re-weighted, the
+    # frame its generator), so since the identity flip (CS4c step 6, item
+    # 6.2c-ii) it is a DIFFERENT space from the continuum mint, same family,
+    # same order, same name; the Frame caches it and shares it across the faces.
+    assert isinstance(frame.basis_space, SphericalHarmonicSpace)
+    assert frame.basis_space.L == L and frame.basis_space.shape == (L + 1, 2 * L + 1)
+    assert frame.basis_space.name == frame.basis.space.name == SphericalHarmonicSpace.from_L(L).name
+    assert frame.basis_space != frame.basis.space
+    assert frame.basis_space != SphericalHarmonicSpace.from_L(L)
+    assert frame.basis.space == SphericalHarmonicSpace.from_L(L)
+    assert frame.basis_space.axes is not None and frame.basis_space.axes[0].generator is frame
     # the analysis codomain / reconstruction domain are that same space
     assert frame.analysis.codomain is frame.basis_space
     assert frame.reconstruction.domain is frame.basis_space
@@ -452,12 +460,12 @@ def test_basis_gram_structure_declarations():
 
 @pytest.mark.foundation
 def test_project_refuses_dense_gram_trial():
-    r"""``project`` / ``.gram`` REFUSE a DENSE-Gram trial — illegal state unrepresentable.
+    r"""``project`` / ``.gram_inverse`` REFUSE a DENSE-Gram trial — illegal state unrepresentable.
 
     The row-sum probe is wrong for a trial that is neither disjoint nor a partition of
     unity; rather than return a silently-wrong coarsening, the frame raises
     :class:`NotInvertible` (the dense ``(MR)⁻¹M`` solve is unbuilt — #275). Mutation
-    gate: a trial declaring ``GramStructure.DENSE`` reddens BOTH ``.gram`` and
+    gate: a trial declaring ``GramStructure.DENSE`` reddens BOTH ``.gram_inverse`` and
     ``.project``, while the otherwise-identical DIAGONAL trial succeeds — proving the
     refusal keys on the declaration, not on some unrelated failure.
     """
@@ -476,7 +484,7 @@ def test_project_refuses_dense_gram_trial():
         WeightedIndicatorBasis(IndicatorBasis((edges,), RealSpace(1)), np.ones(2)),
     )
     with pytest.raises(NotInvertible, match="DENSE"):
-        _ = dense.gram
+        _ = dense.gram_inverse
     with pytest.raises(NotInvertible, match="DENSE"):
         dense.project(np.array([3.0, 5.0]))
     # Control: the SAME geometry with the honest DIAGONAL trial projects fine.
@@ -637,7 +645,7 @@ def test_parseval_dressing_installed_on_diagonal_frames(make_frame):
     assert frame.discrete_gram_structure is GramStructure.DIAGONAL
     diag = np.diagonal(frame.discrete_gram).reshape(frame.basis.space.shape)
     live = diag > 0.0
-    metric = frame.basis_space.inner_product_weights
+    metric = _dressed_measure(frame)
     assert metric is not None
     np.testing.assert_allclose(metric[live], 1.0 / diag[live], rtol=1e-15)
     np.testing.assert_array_equal(metric[~live], 0.0)
@@ -793,7 +801,7 @@ def test_the_slab_frame_is_DIAGONAL_after_the_err080_repair():
     # the DIAGONAL dressing is the plain reciprocal, and no DenseMetric is
     # installed (the arm the old body asserted)
     assert frame.basis_space.metric is None
-    weights = frame.basis_space.inner_product_weights
+    weights = _dressed_measure(frame)
     assert weights is not None
     np.testing.assert_allclose(weights, 1.0 / diag, rtol=1e-12)
 
@@ -838,8 +846,7 @@ def test_the_dense_matrix_parseval_dressing_rides_a_quotient_basis_frame():
         f"rank-deficient; live-block relative offdiag {relative_offdiag:.3e}"
     )
 
-    metric = frame.basis_space.metric
-    assert isinstance(metric, DenseMetric)
+    metric = _dense_metric_of(frame)
     np.testing.assert_allclose(
         metric.matrix,
         np.linalg.pinv(
@@ -901,23 +908,25 @@ def test_overlap_frame_measures_dense_while_declaring_partition_of_unity():
 
 @pytest.mark.foundation
 def test_the_gram_row_sum_probe_survives_a_dense_dressed_test_space():
-    r"""C3 (P7 S2, battery arm M14): ``gram``/``project`` are CROSS-Gram
-    machinery and must never inherit the test space's Parseval dressing.
+    r"""C3 (P7 S2, battery arm M14): ``gram_inverse``/``project`` are
+    CROSS-Gram machinery and must never inherit the test space's Parseval
+    dressing.
 
     The pre-P7 spelling ``replace(self.test_space,
     inner_product_weights=diagonal)`` carried a dense-dressed test
     space's metric OBJECT into the probe — [M] 2026-08-30 (pre-flight,
     ``scratch/p7/preflight.log``): ``frame.project([2,4,6])`` read
     ``[7.0, 11.0]`` against the true ``[8/3, 16/3]`` (rel 1.625), a
-    silent VALUE error, with no guard involved. The repaired spelling
-    strips the object while installing the row-sum diagonal.
-
-    The dressed state is simulated by pre-seeding the ``basis_space``
-    cache (the same idiom as the pre-repair-metric red gate) — so this
-    witness has teeth NOW, before the S3 installer dresses anything.
+    silent VALUE error, with no guard involved. Since CS4c step 6 item
+    6.2c-ii the normalisation is an ARROW (:class:`CrossGramInverse`,
+    ``test_space → basis_space``) whose action reads the probe diagonal
+    and no space's metric — the leak is UNSPELLABLE, and this row asserts
+    the arrow's ends, its diagonal and its value on the pre-seeded
+    dense-dressed frame (the same idiom as the pre-repair-metric red gate).
     """
     from dataclasses import replace as _replace
 
+    from orpheus.numerics.frame import CrossGramInverse
     from orpheus.numerics.metric import DenseMetric
 
     ob = OverlapBasis(
@@ -936,10 +945,18 @@ def test_the_gram_row_sum_probe_survives_a_dense_dressed_test_space():
     )
     vars(frame)["basis_space"] = dressed  # the cached_property pre-seed idiom
     assert frame.test_space is dressed  # the Galerkin identity holds on the seed
-    probe = frame.gram
-    assert probe.metric is None, "the probe must not carry the dressing"
+    probe = frame.gram_inverse
+    assert isinstance(probe, CrossGramInverse)
+    assert probe.domain is frame.test_space and probe.codomain is frame.basis_space
+    np.testing.assert_allclose(probe.diagonal, [1.5, 1.5])   # the row sums of MR on this overlap frame
     np.testing.assert_array_equal(
         frame.project(np.array([2.0, 4.0, 6.0])), [8.0 / 3.0, 16.0 / 3.0],
+    )
+    # and the frame's own projector composes through the arrow
+    projector = frame.conjugate(probe)
+    np.testing.assert_allclose(
+        projector.apply(np.array([2.0, 4.0, 6.0])),
+        frame.reconstruction.apply(frame.project(np.array([2.0, 4.0, 6.0]))),
     )
 
 
@@ -956,8 +973,7 @@ def test_dense_frames_are_dressed_with_the_pseudo_inverse_gram(make_frame):
     """
     frame = make_frame()
     assert frame.discrete_gram_structure is GramStructure.DENSE
-    metric = frame.basis_space.metric
-    assert isinstance(metric, DenseMetric)
+    metric = _dense_metric_of(frame)
     g = frame.discrete_gram
     expected = np.linalg.pinv(
         (g + g.T) / 2.0, hermitian=True, rcond=_DENSE_METRIC_RCOND
@@ -966,11 +982,41 @@ def test_dense_frames_are_dressed_with_the_pseudo_inverse_gram(make_frame):
     assert frame.test_space is frame.basis_space
 
 
+def _dressed_measure(frame) -> np.ndarray | None:
+    """The dressed head's DIAGONAL metric where the axis doctrine put it (CS4c
+    step 6 item 6.2c-ii): the single head axis's measure on an axis-built
+    coefficient space, the legacy weights slot on an axes-less one (the
+    indicator bases, CS2)."""
+    space = frame.basis_space
+    if space.axes is not None:
+        assert len(space.axes) == 1, "a coefficient space is single-axis"
+        return space.axes[0].weights
+    return space.inner_product_weights
+
+
+def _continuum_measure(frame) -> np.ndarray:
+    """The basis's own CONTINUUM Gram — the head axis's measure on ``basis.space`` (axis-built since item 6.2c-ii)."""
+    space = frame.basis.space
+    measure = space.axes[0].weights if space.axes is not None else space.inner_product_weights
+    assert measure is not None
+    return np.asarray(measure)
+
+
+def _dense_metric_of(frame) -> DenseMetric:
+    """The installed DenseMetric — POSITIONED on the derived object of an
+    axis-built head (item 6.2c-i), bare on an axes-less coefficient space —
+    narrowed, so a diagonal-dressed frame fails HERE, loudly."""
+    metric = frame.basis_space.metric
+    if isinstance(metric, FactoredMetric):
+        assert len(metric.entries) == 1, f"{frame}: a coefficient space is single-axis"
+        metric = metric.entries[0][1]
+    assert isinstance(metric, DenseMetric), f"{frame} carries no DenseMetric (metric={metric!r})"
+    return metric
+
+
 def _dense_matrix_of(frame) -> np.ndarray:
     """The installed DenseMetric's matrix — narrowed, so a diagonal-dressed frame fails HERE, loudly."""
-    metric = frame.basis_space.metric
-    assert isinstance(metric, DenseMetric), f"{frame} carries no DenseMetric (metric={metric!r})"
-    return np.asarray(metric.matrix)
+    return np.asarray(_dense_metric_of(frame).matrix)
 
 
 def _parseval_ratio_range(gram: np.ndarray, metric: np.ndarray) -> tuple[float, float]:
@@ -1047,9 +1093,7 @@ def test_no_diagonal_metric_can_satisfy_parseval_on_a_dense_frame():
     diagonal = _parseval_ratio_range(gram, _diagonal_candidate_metric(gram))
     continuum = _parseval_ratio_range(
         gram,
-        np.diag(
-            np.asarray(frame.basis.space.inner_product_weights, dtype=float).reshape(-1)
-        ),
+        np.diag(np.asarray(_continuum_measure(frame), dtype=float).reshape(-1)),
     )
 
     assert dense == pytest.approx((1.0, 1.0), abs=1e-12), f"dense range {dense}"
@@ -1161,11 +1205,7 @@ def test_the_dense_dressing_reds_under_the_diagonal_and_the_pre_repair_metrics()
     for label, metric, floor in (
         (
             "continuum",
-            np.diag(
-                np.asarray(
-                    frame.basis.space.inner_product_weights, dtype=float
-                ).reshape(-1)
-            ),
+            np.diag(np.asarray(_continuum_measure(frame), dtype=float).reshape(-1)),
             10.0,
         ),
         ("diagonal", _diagonal_candidate_metric(gram), 2.5),

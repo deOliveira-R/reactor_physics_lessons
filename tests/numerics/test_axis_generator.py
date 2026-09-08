@@ -396,6 +396,12 @@ class TestG5GeneratorAsIsTheOneRefusalHome:
             # refusal fires only where a space genuinely lost its
             # generator (a hand-built axis fed to a frame mint).
             ("orpheus/transport/frames/harmonic_frame.py", "for_space"),
+            # CS4c step 6 item 6.2c-ii (hazard H-6): the moment-codomain
+            # derivation refuses a MOMENT space by the same channel — a
+            # moment space is axis-built too since then, so the axes-less
+            # refusal no longer catches it; its leading axis is a MODAL head
+            # whose generator is a basis or a frame, never the quadrature.
+            ("orpheus/transport/frames/harmonic_frame.py", "moment_space_on"),
             # (An n2n.py from_solver_data entry lived here §14.1–§16.4:
             # the tier-2 mint recovered bare WEIGHTS through this channel
             # until CS4c step 4's harmonization retired the weights field

@@ -100,11 +100,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from orpheus.numerics.axis import BasisKind, EnergyAxis
-from orpheus.numerics.basis.base import Basis, GramStructure
+from orpheus.numerics.basis.base import Basis, GramStructure, TruncatedBasis
 from orpheus.numerics.basis.indicator_basis import IndicatorBasis
 from orpheus.numerics.manifold import IndexSet, ManifoldMap, quotient_onto
 from orpheus.numerics.measure import DiscreteMeasure
-from orpheus.numerics.metric import DenseMetric
+from orpheus.numerics.metric import DenseMetric, DiagonalMetric, FactoredMetric
 from orpheus.numerics.operator import (
     AxisRetractionOperator,
     AxisSectionOperator,
@@ -162,6 +162,115 @@ def _descent_arrow(basis: Basis, measure: DiscreteMeasure, role: str) -> Manifol
             f"(Quadrature.angular_frame derives it) — #429, ERR-080."
         )
     return arrow
+
+
+class CrossGramInverse(LinearOperator):
+    r"""The row-sum-collapsed inverse cross Gram :math:`G^{-1}` of a frame, as
+    a typed arrow ``test_space → basis_space`` (CS4c step 6 item 6.2c-ii).
+
+    The projection normalisation of :meth:`FrameBase.project` and the middle
+    factor of the :math:`G`-orthogonal projector
+    ``frame.conjugate(frame.gram_inverse)`` :math:`= R\,G^{-1}M`. Its action is
+    the Moore–Penrose reciprocal of the probe diagonal — ONE spelling, the
+    :class:`~orpheus.numerics.metric.DiagonalMetric`'s own inverse
+    arithmetic (zero on dead slots), broadcast against the coefficient
+    array's leading block — and it reads NO space's metric, so a frame's
+    Parseval dressing (diagonal or dense) can never leak into the
+    normalisation. Self-adjoint as a real diagonal.
+
+    Parameters
+    ----------
+    diagonal : NDArray
+        The probe :math:`(M R\,\mathbf 1)` — the cross Gram's row sums, in the
+        analysis codomain's layout.
+    domain, codomain : FunctionSpace
+        The analysis codomain (the TEST coefficient space) and the
+        reconstruction domain (the TRIAL coefficient space) — one space on a
+        Galerkin frame, two on a Petrov–Galerkin one.
+    """
+
+    def __init__(
+        self, diagonal: NDArray, *, domain: FunctionSpace, codomain: FunctionSpace,
+    ) -> None:
+        self._metric = DiagonalMetric(np.asarray(diagonal, dtype=float))
+        self._domain = domain
+        self._codomain = codomain
+
+    @property
+    def diagonal(self) -> NDArray:
+        r"""The cross Gram's row sums :math:`(M R\,\mathbf 1)` this arrow inverts."""
+        return self._metric.weights
+
+    @property
+    def domain(self) -> FunctionSpace:
+        return self._domain
+
+    @property
+    def codomain(self) -> FunctionSpace:
+        return self._codomain
+
+    def apply(self, x: NDArray) -> NDArray:
+        return self._metric.apply_inverse(x)
+
+    def apply_transpose(self, x: NDArray) -> NDArray:
+        # Self-adjoint: a real diagonal is its own transpose (and the two
+        # ends share one shape).
+        return self._metric.apply_inverse(x)
+
+    @property
+    def is_adjointable(self) -> bool:
+        return True
+
+    def __repr__(self) -> str:
+        return f"CrossGramInverse({self._domain!r} → {self._codomain!r})"
+
+
+def _dressed(
+    space: FunctionSpace,
+    *,
+    frame: "FrameBase",
+    diagonal: NDArray | None = None,
+    dense: DenseMetric | None = None,
+) -> FunctionSpace:
+    r"""Install a FRAME-owned metric on a basis's coefficient space — the
+    one spelling of the F-0 dressing (:attr:`FrameBase.basis_space`).
+
+    On an AXIS-BUILT coefficient space (a harmonic family's head, CS4c
+    step 6 item 6.2c-ii) the metric lives where the axis doctrine put it:
+    a diagonal dressing RE-WEIGHTS the head axis (the measure IS the
+    metric), a dense one empties the axis's measure and POSITIONS the form
+    on the space's derived metric object (item 6.2c-i) — and in both the
+    frame becomes the axis's :attr:`~orpheus.numerics.axis.Axis.generator`,
+    the object that can re-dress the head at another order
+    (:meth:`GalerkinFrame.at_order`). On an axes-less space (the indicator
+    bases' coefficient spaces — CS2 axis-ifies them) the legacy slots carry
+    it, exactly as before.
+    """
+    if diagonal is None and dense is None:
+        raise ValueError("_dressed: a dressing installs a diagonal or a dense form")
+    axes = space.axes
+    if axes is None:
+        return replace(space, inner_product_weights=diagonal, metric=dense)
+    if len(axes) != 1:
+        raise NotImplementedError(
+            f"a frame dresses a single-axis coefficient space; "
+            f"{space.name!r} carries {len(axes)} axes."
+        )
+    axis = axes[0]
+    if dense is not None:
+        return replace(
+            space,
+            axes=(replace(axis, weights=None, generator=frame),),
+            inner_product_weights=None,
+            metric=FactoredMetric(((axis.shape, dense),)),
+        )
+    assert diagonal is not None  # narrowing only
+    return replace(
+        space,
+        axes=(replace(axis, weights=np.asarray(diagonal).reshape(axis.shape), generator=frame),),
+        inner_product_weights=None,
+        metric=None,
+    )
 
 
 @dataclass(frozen=True)
@@ -303,7 +412,7 @@ class FrameBase(ABC):
         property of the *pairing* (basis ⊗ measure), so the frame owns it: the
         basis's own ``space`` keeps the continuum Gram (for the SH basis
         :math:`4\pi/(2\ell+1)` — the cross-Gram vocabulary of
-        :attr:`gram`/:meth:`project`), and the frame REPLACES the metric with
+        :attr:`gram_inverse`/:meth:`project`), and the frame REPLACES the metric with
         the measured inverse. With this metric the faces' ``.H`` is the
         physical Hilbert adjoint: for the SH frame :math:`M^{*} = R/W` and
         :math:`R^{*} = W\,M` with :math:`W = \sum_n w_n` — the frame square
@@ -337,9 +446,13 @@ class FrameBase(ABC):
         wrap, and the refusal era's record lives in this file's history
         and the error catalog's ERR-039 entry.)
 
-        Equality is untouched either way: ``(name, shape)`` identity is
-        metric-blind, so ``basis_space == basis.space`` still holds and no
-        consumer's ``==`` moves.
+        ⭐ Since CS4c step 6 item 6.2c-ii (2026-09-08) the dressing is
+        VISIBLE to equality: the head is axis-built and its measure enters
+        the identity, so ``basis_space != basis.space`` (`[M]` 0 of 33
+        shipped (rule, L) rows equal), the frame becomes the head axis's
+        generator, and the tree binds THIS space everywhere the moment
+        space is spelled (ruling R-6.2c-1) — the metric-blind seam that
+        let the two pass for one is gone.
         """
         space = self.basis.space
         if self.discrete_gram_structure is not GramStructure.DIAGONAL:
@@ -347,19 +460,17 @@ class FrameBase(ABC):
             # not diagonal. Install the matrix pseudo-inverse of the
             # measured Gram (DenseMetric.inverse_of keeps the exact
             # symmetrized Gram as the inverse face) and STRIP the basis's
-            # continuum weights — the dressing REPLACES the metric on
-            # this arm exactly as the diagonal arm overwrites it, and a
-            # space carrying both sources is the illegal state the
-            # exclusivity guard refuses.
-            return replace(
-                space,
-                inner_product_weights=None,
-                metric=DenseMetric.inverse_of(self.discrete_gram),
+            # continuum measure — the dressing REPLACES the metric on
+            # this arm exactly as the diagonal arm overwrites it (on an
+            # axis-built head the form is POSITIONED on the derived object
+            # and the axis carries no measure, item 6.2c-i).
+            return _dressed(
+                space, dense=DenseMetric.inverse_of(self.discrete_gram), frame=self,
             )
         diag = np.diagonal(self.discrete_gram).reshape(space.shape)
         live = diag > 0.0
         inverse = np.where(live, 1.0 / np.where(live, diag, 1.0), 0.0)
-        return replace(space, inner_product_weights=inverse)
+        return _dressed(space, diagonal=inverse, frame=self)
 
     # ── test side (the analysis face) ─────────────────────────────────────
     @cached_property
@@ -454,19 +565,36 @@ class FrameBase(ABC):
 
     # ── the coefficient-extraction verb (homogenise / condense) ──────────
     @cached_property
-    def gram(self) -> FunctionSpace:
-        r"""The coefficient space carrying the frame-Gram diagonal :math:`G_R = \langle\chi_R, \phi_R\rangle_W`.
+    def gram_inverse(self) -> "CrossGramInverse":
+        r"""The projection normalisation :math:`G^{-1}` as an ARROW, ``test_space → basis_space``.
 
         :meth:`project` normalises by the cross Gram :math:`G_{kj} = \langle\chi_k,
         \phi_j\rangle_W = (M R)_{kj}` of the analysis :math:`M` and reconstruction
         :math:`R`. This property takes a **single** ``analysis ∘ reconstruction``
         probe of the all-ones coefficient vector — the **row sum** of :math:`M R` —
-        and installs it as the coefficient space's metric, so :meth:`project`'s
-        normalisation is the reciprocal
-        :meth:`~orpheus.numerics.space.FunctionSpace.apply_inverse_metric` (whose
-        Moore–Penrose pseudo-inverse zeroes empty / zero-weight regions for free).
-        The diagonal acquires the test weight's trailing (group, …) shape from the
-        analysis face.
+        and returns its masked reciprocal as a typed operator between the two
+        faces' coefficient ends (the Moore–Penrose pseudo-inverse zeroes empty /
+        zero-weight regions for free), so :meth:`project` is ``G⁻¹ ∘ M`` and
+        ``frame.conjugate(frame.gram_inverse)`` is the :math:`G`-orthogonal
+        projector :math:`R\,G^{-1}M` onto ``span(basis)`` — ONE spelling of
+        "project onto a span" for every frame. The diagonal acquires the test
+        weight's trailing (group, …) shape from the analysis face.
+
+        ⭐ **Why an arrow and not a metric-twin space** (CS4c step 6 item
+        6.2c-ii, 2026-09-08). Until then this property (``gram``) returned the
+        TEST space re-dressed with the probe diagonal as its metric, and the
+        projector was spelled ``conjugate(InverseMetricOperator(frame.gram))``
+        — an endomorphism of that twin. Under structural space identity (the
+        metric enters the identity of an axis-built head) the twin is a
+        DIFFERENT space from ``test_space``, so the composition's own
+        compatibility guard refused it on every harmonic frame; and the twin
+        was always a costume: :math:`G^{-1}` maps the test space's covariant
+        output to the trial space's contravariant coefficients — its ends ARE
+        the faces' ends. Spelled as the arrow it composes by construction,
+        and the hazard the old spelling had to guard against (a dense-dressed
+        test space leaking its metric OBJECT into the probe — `[M]`
+        2026-08-30, rel 1.625 on the overlap frame) is unspellable: the
+        arrow's action reads the probe diagonal, never a space's metric.
 
         The row-sum probe is the weight :meth:`project` needs under EITHER of two
         sufficient conditions — distinguish them, because the second does NOT imply a
@@ -498,7 +626,7 @@ class FrameBase(ABC):
         """
         if self.basis.gram_structure is GramStructure.DENSE:
             raise NotInvertible(
-                f"FrameBase.project / .gram needs a row-sum-collapsible trial Gram, but "
+                f"FrameBase.project / .gram_inverse needs a row-sum-collapsible trial Gram, but "
                 f"the trial {type(self.basis).__name__} declares GramStructure.DENSE: "
                 f"its cross Gram MR is neither diagonal nor a partition of unity, so the "
                 f"row-sum probe is NOT the projection normalisation G⁻¹. The dense "
@@ -507,17 +635,9 @@ class FrameBase(ABC):
                 f"this basis."
             )
         ones = np.ones(self.basis_space.shape)
-        diagonal = self.analysis.apply(self.reconstruction.apply(ones))
-        # The probe is a CROSS-Gram object: its row-sum diagonal IS the
-        # projection normalisation, and it must never inherit the test
-        # space's own PARSEVAL dressing — a dense-dressed test_space
-        # would otherwise hand this replace() two metric sources, and
-        # the pre-P7 spelling silently applied the dense matrix inside
-        # project() instead of the probe reciprocal ([M] 2026-08-30:
-        # rel 1.625 on the overlap frame's [8/3, 16/3]). Strip the
-        # object, install the diagonal.
-        return replace(
-            self.test_space, inner_product_weights=diagonal, metric=None
+        diagonal = np.asarray(self.analysis.apply(self.reconstruction.apply(ones)))
+        return CrossGramInverse(
+            diagonal, domain=self.test_space, codomain=self.basis_space,
         )
 
     def project(self, field: NDArray, /) -> NDArray:
@@ -525,22 +645,22 @@ class FrameBase(ABC):
 
         The Petrov-Galerkin coefficient extraction: analyse the field against the
         test functions (:math:`(M f)_k = \langle\chi_k, f\rangle_W`), then normalise
-        by the cross :attr:`gram` :math:`G`. For flux-weighted spatial homogenisation
+        by the cross Gram :math:`G` (:attr:`gram_inverse`). For flux-weighted spatial homogenisation
         (``test`` :math:`= \varphi\cdot\mathbf 1_R`, ``trial`` :math:`= \mathbf 1_R`)
         this is the rate-preserving effective cross section :math:`\Sigma_R = \int_R
         \varphi\Sigma\,\mathrm{d}V / \int_R\varphi\,\mathrm{d}V`; for a
         :class:`GalerkinFrame` (``test = trial``) it is the orthogonal projection onto
-        the coarse space. The normalisation is a reciprocal (the diagonal :attr:`gram`
+        the coarse space. The normalisation is a reciprocal (the diagonal :attr:`gram_inverse`
         probe) for both the disjoint-indicator / orthogonal-harmonic consumers (Gram
         genuinely diagonal) AND the partition-of-unity
         :class:`~orpheus.numerics.basis.OverlapBasis` (non-diagonal Gram, but the
-        row-sum probe is still the right per-region weight — see :attr:`gram`); the
+        row-sum probe is still the right per-region weight — see :attr:`gram_inverse`); the
         dense solve is the (unbuilt) least-squares seam only. Trailing (group, …)
         axes ride the analysis and broadcast against the diagonal Gram (so a vector
         channel divides by :math:`\Phi_{R,g}` and a ``[g_from, g_to]`` matrix channel
         by its source-group :math:`\Phi_{R,g_{\mathrm{from}}}`).
         """
-        return self.gram.apply_inverse_metric(self.analysis.apply(field))
+        return self.gram_inverse.apply(self.analysis.apply(field))
 
 
 @dataclass(frozen=True)
@@ -615,6 +735,29 @@ class GalerkinFrame(PetrovGalerkinFrame):
     def test_table(self) -> NDArray:
         # test is trial → reuse the trial table (same array; 0-ULP-identical analysis).
         return self.table
+
+    def at_order(self, L_new: int, /) -> "GalerkinFrame":
+        r"""THIS frame over the same measure with its truncated trial family
+        cut at ``L_new`` — the verb a frame-dressed moment head truncates
+        THROUGH (:func:`~orpheus.numerics.spaces.moment_head.truncated_head`,
+        CS4c step 6 item 6.2c-ii): the head's metric is the frame's to
+        install at every order (the discrete Gram's verdict can flip with
+        :math:`L`), so a lower-order head is a lower-order FRAME's dressing,
+        never a slice of the parent's. The same class (a
+        :class:`~orpheus.transport.frames.harmonic_frame.HarmonicFrame`
+        re-poses as a ``HarmonicFrame``), the same measure; structurally
+        equal to the quadrature's own interned frame at that order.
+        """
+        basis = self.basis
+        if not isinstance(basis, TruncatedBasis):
+            raise TypeError(
+                f"{type(self).__name__}.at_order: the trial "
+                f"{type(basis).__name__} carries no truncation order, so "
+                f"there is no family to cut at L_new={L_new}."
+            )
+        lower = basis.at_order(L_new)
+        assert isinstance(lower, Basis)  # narrowing only: the protocol's conformers are bases
+        return type(self)(lower, self.measure)
 
     @cached_property
     def test_space(self) -> FunctionSpace:

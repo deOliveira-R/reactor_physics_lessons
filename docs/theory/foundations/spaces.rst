@@ -25,7 +25,7 @@ Function Spaces: Axes, Measure, and the Collapse Doctrine
       role: "the space layer — a function space as the ordered product of its AXES (index shape, factor measure, basis kind, the generator that minted it, and the structural identity that deliberately excludes that generator), the counting-measure theorem on the energy axis, and the collapse doctrine that decides which axes survive a degeneracy and why"
       depends_on: [field_algebra, frame]
       related: [manifolds, discrete_measures, operator_algebra, operator_adjoint]
-      status: "seeded at campaign-1 CS1 (the Energy axis); the generator slot landed at CS5 (2026-08-29); the densifying half of the `*` product retired at CS4c step 6 item 6.2a (2026-09-07); the Harmonic axis subclass (with the Legendre / spatial-moment ones) is CS4c step 6 item 6.2c, ruled 2026-09-07 and sequenced after 6.2b; the Spatial / Quadrature subclasses stay CS2 and unscheduled"
+      status: "seeded at campaign-1 CS1 (the Energy axis); the generator slot landed at CS5 (2026-08-29); the densifying half of the `*` product retired at CS4c step 6 item 6.2a (2026-09-07); the metric became a DERIVED object over the axes, with a dense form positioned on it as an overlay, at item 6.2c-i (2026-09-08); the Harmonic and Legendre axis subclasses landed at item 6.2c-ii (2026-09-08), so both moment heads are axis-built; the spatial-moment tail is item 6.2c-iii and has NOT landed; the Spatial / Quadrature subclasses stay CS2 and unscheduled"
 
 
 This page develops the **space layer**: what a discrete function space
@@ -230,14 +230,16 @@ the same space" is a claim this corpus has **overturned**.
      ``(name, shape)`` identity: for the digest-named composites and
      traces (five classes, four digest-folding factories) that IS
      content identity because the factory folds content into the name
-     (CS4b S3); for the family-tagged moment heads
-     (``'spherical_harmonic_space'``, ``'legendre_space(…)'``,
-     ``'spatial_moment_space'``) it is family + dimension, deliberately
-     metric-blind until the heads become axis-built (step 6 items
-     6.2b/6.2c); a hand-built legacy space carries whatever its author
-     wrote. An axis-built space is never equal to a hand-named one
-     wearing its label. Until the flip the doctrine flowed through a
-     BRIDGE — the injectively derived name
+     (CS4b S3); for a family-tagged head it is family + dimension and
+     therefore deliberately metric-BLIND — which as of item 6.2c-ii
+     (2026-09-08) describes only
+     :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`,
+     since the two harmonic heads became axis-built and now carry their
+     metric in the identity through their head axis's measure
+     (:ref:`spaces-moment-head`); a hand-built legacy space carries
+     whatever its author wrote. An axis-built space is never equal to a
+     hand-named one wearing its label. Until the flip the doctrine flowed
+     through a BRIDGE — the injectively derived name
      (:ref:`spaces-identity-bridge`).
 
 
@@ -277,14 +279,21 @@ position of a monolithic shape tuple.
        ``MODAL`` ⟹ it does not. Keyword-only with **no default** — the
        basis character is physics and must be spelled at every mint.
    * - ``generator``
-     - ``DiscreteMeasure | Basis | Quadrature | None``, keyword-only,
-       default ``None``
+     - ``DiscreteMeasure | Basis | Quadrature | FrameBase | None``,
+       keyword-only, default ``None``
      - **Provenance, never identity** (CS5). The object that minted this
        factor, kept so the axis's forgetting is recoverable: an axis
        drops its generator's NODES, and this slot is how a consumer
        holding only the space gets them back. ``None`` is an honest
        reading wherever no generator object exists.
-       :ref:`spaces-axis-generator` develops it.
+       :ref:`spaces-axis-generator` develops it. ⭐ The
+       :class:`~orpheus.numerics.frame.FrameBase` arm is item 6.2c-ii's
+       (2026-09-08) and is the *stage-2* reading of the slot: on a moment
+       head the generator is not what supplied the INDEX SET but what
+       supplied the MEASURE — the pairing (basis ⊗ measure) induces the
+       coefficient space's metric, so only the frame can re-dress the
+       head at another order
+       (:func:`~orpheus.numerics.spaces.moment_head.truncated_head`).
    * - identity
      - structural, **per subclass**
      - :math:`(\text{type}, \text{label}, \text{shape}, \text{kind},
@@ -1111,19 +1120,47 @@ mints the rank-:math:`d` pairing, that row must be inverted
 its gate says so in its own name
 (``test_the_rank_d_spatial_axis_is_generator_less_BY_CONTRACT``).
 
-**No MODAL axis has a generator yet, and no ``Basis`` can mint one.**
-The :attr:`~orpheus.numerics.axis.Axis.generator` annotation admits a
-:class:`~orpheus.numerics.basis.base.Basis` — that is the chartered
-MODAL arm — but `[M]` ``hasattr(Basis, "axis")`` is ``False`` and no
-subclass defines it, so the arm is **declared and unbuilt**. Two
-consequences worth stating: the section law
-:eq:`spaces-axis-generator-section` currently ranges over
-measure-generated and quadrature-generated axes only, and a
-hand-constructed ``generator=<some Basis>`` axis would fail it with an
-``AttributeError`` rather than a ``False``. The arm becomes real when
-CS2 mints the harmonic axis — the same phase that gives the ``False``
-arm of ``has_coordinate_cone`` its first production witness
-(:ref:`spaces-nodal-modal`).
+**No MODAL axis has a generator yet, and no ``Basis`` can mint one** —
+✅ **discharged 2026-09-08, CS4c step 6 item 6.2c-ii, and not by the
+phase this paragraph predicted.** The paragraph read, until then: *"The*
+:attr:`~orpheus.numerics.axis.Axis.generator` *annotation admits a*
+:class:`~orpheus.numerics.basis.base.Basis` *— that is the chartered
+MODAL arm — but* `[M]` ``hasattr(Basis, "axis")`` *is* ``False`` *and no
+subclass defines it, so the arm is* **declared and unbuilt**\ *. … The
+arm becomes real when CS2 mints the harmonic axis."* Both moment heads
+are now axis-built and both carry a MODAL head axis with a live
+generator, so the arm is real — and three details of the prediction were
+wrong, each worth keeping:
+
+* **It was not CS2.** Item 6.2c-ii minted the axis, for the metric's
+  sake rather than for CS2's spatial-factor reasons.
+* **The mint verb is not** ``Basis.axis``. `[M]` ``hasattr(Basis,
+  "axis")`` is **still** ``False``: the head axis is built inside
+  :meth:`SphericalHarmonicSpace.for_basis
+  <orpheus.numerics.spaces.spherical_harmonic_space.SphericalHarmonicSpace.for_basis>`
+  / :meth:`LegendreSpace.for_basis
+  <orpheus.numerics.spaces.legendre_space.LegendreSpace.for_basis>`, and
+  the basis's :attr:`~orpheus.numerics.basis.base.Basis.space` delegates
+  there. So the section law
+  :eq:`spaces-axis-generator-section` still ranges over the
+  measure- and quadrature-generated axes only — a MODAL axis's
+  provenance is recoverable (``axis.generator``), but there is no
+  ``generator.axis(label)`` half to close the round trip with.
+* **The generator is not always the basis.** It is whichever object
+  installed the head's MEASURE: the basis on a continuum head
+  (``for_basis`` / ``from_L``), and the **frame** on the
+  Parseval-dressed one the tree actually binds
+  (:attr:`~orpheus.numerics.frame.FrameBase.basis_space`). That is why
+  the annotation gained a
+  :class:`~orpheus.numerics.frame.FrameBase` arm and why
+  :func:`~orpheus.numerics.spaces.moment_head.truncated_head` dispatches
+  on the generator's KIND rather than assuming one.
+
+⚠ The prediction's last clause was right: this is also where the
+``False`` arm of ``has_coordinate_cone`` got its first production
+witness. `[M]` an axis-built moment head reports
+``has_coordinate_cone`` ``False`` (33 of 33 shipped (rule, :math:`L`)
+frames), where it read ``None`` before — see :ref:`spaces-nodal-modal`.
 
 **No solve-time consumer read a generator, and that is why two gates
 were withheld** — ✅ **discharged 2026-08-29.** CS5 landed the machinery
@@ -1811,9 +1848,15 @@ metric can come from, and **exactly one of them may be occupied**:
        never substituted for it: every other axis keeps supplying its
        own block, and a product of axis-built factors carries its
        factors' overlays concatenated beside its axes.
-     - A form no weight array can spell. Today's founding occupant is
-       the frame's matrix Parseval metric; the dense-Gram moment head of
-       item 6.2c-ii is the axis-built one.
+     - A form no weight array can spell. The founding occupant is the
+       frame's matrix Parseval metric :math:`G^{+}`, and since item
+       6.2c-ii (2026-09-08) it rides an AXIS-BUILT space: on a
+       dense-Gram frame the dressing empties the head axis's measure and
+       positions :math:`G^{+}` on the space's derived object
+       (:ref:`spaces-moment-head-axis-built`). `[M]` **17 of 75** shipped
+       (rule, :math:`L`) rows measure ``DENSE``, **2 of them at**
+       :math:`L \le 2` (``gauss_legendre(2)`` and ``folded_product(2,4)``,
+       both at :math:`L = 2`) — so this is a shipped path, not a corner.
    * - ``inner_product_weights``
      - resolved to a
        :class:`~orpheus.numerics.metric.DiagonalMetric`, whose
@@ -2092,15 +2135,19 @@ to a plausible-looking value, with no error and no warning):
        spaces, none of which enters a product. What 6.2a changed is the
        arm's REACHABILITY, not its existence: the dense arm it shared the
        dispatch with is gone, so every axes-less product now takes it
-   * - :attr:`FrameBase.gram
-       <orpheus.numerics.frame.FrameBase.gram>`
+   * - ``FrameBase.gram`` (retired 2026-09-08 → :attr:`gram_inverse
+       <orpheus.numerics.frame.FrameBase.gram_inverse>`)
      - ``replace(test_space, inner_product_weights=diagonal)`` on a
        dressed test space handed the **row-sum probe** a space whose
        ``apply_inverse_metric`` ignores that slot and applies its own
        matrix
-     - **strips** the metric object while installing the probe
+     - **stripped** the metric object while installing the probe
        diagonal — the cross-Gram machinery must never inherit the
-       trial-side Parseval dressing
+       trial-side Parseval dressing. ⭐ Item 6.2c-ii went further and made
+       the state unspellable: the normalisation is now the typed arrow
+       :class:`~orpheus.numerics.frame.CrossGramInverse`, whose action
+       reads the probe diagonal and NO space's metric
+       (:ref:`frame-gram-inverse-arrow`)
 
 The third is the sharpest, because it is not a missing feature but a
 live projection error on a production path
@@ -2371,28 +2418,61 @@ when the basis is orthogonal on that measure. The generator induces, the
 space holds: a frame that measures its own Gram dresses the *space* it
 mints, and no axis is asked to carry a matrix it has no way to produce.
 
-**2. Identity stays metric-blind.** Space identity is
-:math:`(\text{name}, \text{shape})`, so a dressed and an undressed space
-of the same name compare equal and hash equal, and the frame's
-``basis_space == basis.space`` invariant survives the dressing
-untouched. The ``metric`` field is declared ``compare=False`` for the
-same **structurally mandatory** reason the weights slot is: an ndarray
-inside a dataclass-generated ``__eq__`` makes the comparison return an
-array and ``hash()`` raise. (The chartered doctrine that *metric
-differences imply space differences* is unaffected — it flows through
-the axis-derived name, :ref:`spaces-identity-bridge`, and an axis-built
-space cannot carry a metric object at all.)
+**2. Identity stays metric-blind** — ⛔ **OVERTURNED 2026-09-08, twice
+over; the paragraph is preserved because its REASON survived while its
+claim did not.** As written (P7, 2026-08-30): *"Space identity is*
+:math:`(\text{name}, \text{shape})`\ *, so a dressed and an undressed
+space of the same name compare equal and hash equal, and the frame's*
+``basis_space == basis.space`` *invariant survives the dressing
+untouched. … (The chartered doctrine that* metric differences imply
+space differences *is unaffected — it flows through the axis-derived
+name,* :ref:`spaces-identity-bridge`\ *, and an axis-built space cannot
+carry a metric object at all.)"*
 
-⚠ **The consequence for any GATE over these two spellings**: a
-``==`` assertion is structurally blind to which of them a producer
-bound, so it cannot adjudicate a choice between them. `[M]` 2026-09-02
-over 33 shipped (rule, :math:`L`) rows the frame's ``basis_space`` and
-its ``basis.space`` are ``(name, shape)``-equal on **33 of 33** and
-metric-different on **33 of 33**. When #429 tracker 2.5 bound the
-angular operator ends to one of the two, the gate that pins the choice
-therefore had to assert the metric ARRAY with the other spelling as its
-negative control (``vv-principles`` #19) —
-:ref:`frame-moment-space-single-home`.
+Two later steps falsified both of its clauses, in opposite directions:
+
+* the **identity flip** (CS4c step 6, 2026-09-07) made an axis-built
+  space compare by its ``axes`` tuple DIRECTLY, so the doctrine stopped
+  flowing through the derived name and started being the definition; and
+* item **6.2c-ii** (2026-09-08) made the moment heads axis-built, so
+  ``basis_space`` and ``basis.space`` differ in their head axis's measure
+  and are therefore **different spaces**. `[M]` re-measured on the same
+  33 shipped (rule, :math:`L`) rows: ``frame.basis_space ==
+  frame.basis.space`` is **0 of 33** where it was 33 of 33.
+
+Item **6.2c-i** (2026-09-08) also repealed the parenthetical's last
+clause: an axis-built space CAN carry a metric object, as the positioned
+overlay of forms merged into its axes-derived metric
+(:ref:`spaces-metric-three-sources`) — which is how a dense Gram lives on
+an axis-built head at all.
+
+What survives untouched is the **reason** the ``metric`` field is
+declared ``compare=False``, and it is worth separating from the claim it
+was attached to: it is **structurally mandatory**, not a statement about
+identity. An ndarray inside a dataclass-generated ``__eq__`` makes the
+comparison return an array and ``hash()`` raise, so a *subclass's*
+generated ``__eq__`` must never reach the field — exactly the reason
+``inner_product_weights`` and ``axes`` carry the same flag. The manual
+``__eq__`` reads ``axes`` regardless; ``compare=False`` governs what the
+dataclass machinery generates, not what identity IS.
+
+⚠ **The consequence for any GATE over these two spellings, and it
+INVERTED.** *(2026-09-02:)* a ``==`` assertion was structurally blind to
+which spelling a producer bound, so it could not adjudicate between them;
+`[M]` over 33 shipped (rule, :math:`L`) rows the two were ``(name,
+shape)``-equal on **33 of 33** and metric-different on **33 of 33**, and
+the gate that pinned #429 tracker 2.5's choice therefore had to assert
+the metric ARRAY with the other spelling as its negative control
+(``vv-principles`` #19). Since 6.2c-ii the metric IS the identity on
+these spaces, so ``==`` is the discriminating instrument — which is what
+lets the hub/frame agreement gate assert ``==`` and mean it
+(``tests/sn/mesh/test_hub_and_frame_agree_on_the_moment_space.py``). ⭐
+The transferable half: *whether a* ``==`` *gate is blind or
+discriminating is a property of the identity relation, not of the gate* —
+so a re-typing that moves a field into the identity silently upgrades
+every equality assertion in the corpus, and a docstring calling one of
+them "metric-blind" goes stale without its file being touched. Full
+account: :ref:`frame-moment-space-single-home`.
 
 **3. Expressible is not known — the curvilinear moment mass stays
 refused.** The multi-moment cell mass on a curved chart was blocked on
@@ -2461,12 +2541,107 @@ one-dimensional in every degree
 Two families with different ranks means the layout is a *variable*, so
 it needs an owner. :class:`~orpheus.numerics.spaces.moment_head.MomentHead`
 is a ``runtime_checkable`` ``Protocol`` carrying exactly what a consumer
-must not assume: ``L``, ``shape``, ``isotropic_slot``,
+must not assume: ``L``, ``shape``, ``name``, ``isotropic_slot``,
 ``degree_block(l)``, ``truncated(L_new)``. Both classes satisfy it
 structurally — no base class, no registration — and a consumer holding
 ``space.factors[0]`` narrows with ``isinstance``, the same
 key-on-what-it-declares idiom as
 :class:`~orpheus.numerics.basis.base.TruncatedBasis` on the basis side.
+
+.. _spaces-moment-head-axis-built:
+
+Both heads are AXIS-BUILT, and the head axis's measure IS the metric
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Landed 2026-09-08, CS4c step 6 item **6.2c-ii**. Until then both head
+classes were name-built — ``axes is None``, the metric in the legacy
+``inner_product_weights`` slot — which is what made them *metric-blind by
+design* under ``(name, shape)`` identity. Each now carries exactly ONE
+axis, a ``MODAL`` subclass of :class:`~orpheus.numerics.axis.Axis`:
+
+.. list-table:: The head axis, per family
+   :header-rows: 1
+   :widths: 24 38 38
+
+   * -
+     - :class:`~orpheus.numerics.axis.HarmonicAxis`
+     - :class:`~orpheus.numerics.axis.LegendreAxis`
+   * - head class
+     - ``SphericalHarmonicSpace``
+     - ``LegendreSpace``
+   * - ``shape``
+     - :math:`(L+1,\ 2L+1)` — rank 2
+     - :math:`(L+1,)` — rank 1
+   * - ``weights``
+     - the padded continuum Gram, or the frame's Parseval inverse (or
+       ``None`` with :math:`G^{+}` positioned on the space's derived
+       metric object, where the discrete Gram is dense)
+     - the same, on the flat layout
+   * - ``kind``
+     - ``MODAL`` — a spectral coefficient may be negative for a positive
+       function, so there is no coordinate cone
+     - ``MODAL``
+   * - extra identity data
+     - none — family is the class, order is the shape
+     - ``spent_axis`` — WHICH :math:`O(2)_a` stabiliser the fold spent
+   * - ``generator``
+     - the ``Basis`` on a continuum head, the ``FrameBase`` on a dressed
+       one
+     - the same
+
+⭐ **Why the Legendre axis needs** ``spent_axis`` **in its identity, and
+why finding that out cost nothing** (hazard H-10, `[M]` 2026-09-08). The
+tree carries two poles, so ``LegendreSpace.from_L(1, "x")`` and
+``from_L(1, "z")`` are two physically different spaces — and before the
+axis existed they were separated only by their NAMES, which encode the
+orbit space. :meth:`Axis._identity_key
+<orpheus.numerics.axis.Axis>` is ``(type, label, shape, kind, weights
+bytes)``, and `[M]` those two heads' weights are ``array_equal``: a
+family-generic axis labelled ``"harmonic"`` makes them **compare
+EQUAL** — a silent collapse of two poles into one. Two repairs were
+available (label by the spent axis, or subclass and extend the key);
+subclassing won, because it is the same move
+:class:`~orpheus.numerics.axis.EnergyAxis` already makes for its group
+edges, and because a label is a *role* name rather than a place to smuggle
+identity data.
+
+⚠ **The measure enters the identity, and that is the whole point.** Two
+heads of one order that differ only in their metric are now two spaces —
+which is what let the corpus's chartered doctrine (*metric differences
+imply space differences*) finally reach the moment layer, and what forced
+the fork over WHICH metric the one moment space carries. That fork was
+ruled Parseval; the full account, with both ends priced, is
+:ref:`frame-the-one-moment-space`.
+
+⭐ **The mint is** ``for_basis``\ **, not** ``from_L``\ **.** Both classes
+grew a ``for_basis`` classmethod
+(:meth:`SphericalHarmonicSpace.for_basis
+<orpheus.numerics.spaces.spherical_harmonic_space.SphericalHarmonicSpace.for_basis>`,
+:meth:`LegendreSpace.for_basis
+<orpheus.numerics.spaces.legendre_space.LegendreSpace.for_basis>`)
+that takes the BASIS and records it as the head axis's
+generator; ``from_L`` is order-only sugar over the plain family, and
+:attr:`Basis.space <orpheus.numerics.basis.base.Basis.space>` delegates to
+``for_basis``. The distinction is load-bearing rather than stylistic:
+`[M]` a first spelling minted a *fresh* ``SphericalHarmonicBasis(L=L)``
+as the generator, so a σ-even restriction's head was generated by a plain
+harmonic basis and a frame's head by a content-equal copy — 48 gate rows
+red on ``generator is frame.basis``. Provenance must be the object that
+actually spans the head, or the generator channel answers a question about
+some other object.
+
+.. warning::
+
+   ⚠ **The spatial-moment TAIL is NOT axis-built.** A widened moment
+   space (LD, ``spatial_moments > 1``) still appends the Euclidean,
+   axes-less
+   :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`,
+   so such a product is axes-less overall even though its head is not, and
+   ``SpatialMomentSpace`` remains the corpus's one surviving metric-blind
+   family-tagged head. Item **6.2c-iii** makes the tail the discretization
+   scheme's own mass-weighted ``moment_axis`` — which the widened
+   *angular* space already carries, i.e. one factor spelled twice — and
+   retires the class. It has **not** landed.
 
 .. list-table:: What the head answers, per family
    :header-rows: 1
@@ -3992,8 +4167,11 @@ taken.
        and stopped densifying: the dense outer-product weights builder
        and the mixed-product bridge that fed it are gone, and a product
        never populates ``inner_product_weights``. What remains of the
-       twin is *axes-lessness*, not densification — item **6.2c**
-       axis-ifies the angular head and closes that.
+       twin is *axes-lessness*, not densification — ✅ item **6.2c-ii**
+       (2026-09-08) axis-ified both angular heads and closed that for the
+       un-widened product; a WIDENED moment product is still axes-less,
+       because its ``SpatialMomentSpace`` tail is (item 6.2c-iii, not
+       landed — :ref:`spaces-moment-head-axis-built`).
        ⛔ This row read *"CS2. The legacy* ``*`` *path is documented
        above and kept working; its own gates live in a separate test
        module so the retirement is a file-level move"* until then. The
@@ -4110,6 +4288,52 @@ status.
      - Architectural milestone
      - Issue
      - Where
+   * - 2026-09-08
+     - **The metric becomes a DERIVED object over the axes, and both
+       moment heads become AXIS-BUILT** (CS4c step 6 item 6.2c, rulings
+       R-6.2c-1 / R-6.2c-2). Two commits. **6.2c-i** replaced the
+       "axes win, the object is ignored" short-circuit with one
+       :class:`~orpheus.numerics.metric.FactoredMetric` DERIVED from the
+       axes — a :class:`~orpheus.numerics.metric.DiagonalMetric` per
+       weighted axis on its own block, nothing on a counting axis — and
+       admits an explicit metric object beside the axes only as the
+       positioned **OVERLAY** of forms: one entry per axis, in order, a
+       form ONLY on a block whose axis carries no measure, MERGED into
+       the derived entries rather than substituted for them. That is the
+       home a dense Gram needs (*a Gram is a FORM, never on*
+       :attr:`Axis.weights <orpheus.numerics.axis.Axis.weights>`), and the
+       guard refuses the three ways of spelling a second source: a bare
+       object beside axes, blocks that do not follow the axes, a
+       positioned ``DiagonalMetric``, and a form beside a weighted axis.
+       ⭐ The overlay reading is the carve's own correction — the first
+       spelling let an explicit object WIN wholesale, so a caller had to
+       restate every other axis's measure inside it (a twin spelling) and
+       a product would have dropped a factor's form. The inline
+       ``FunctionSpace._apply_axes_weights`` loop retired into
+       :meth:`DiagonalMetric.apply_block
+       <orpheus.numerics.metric.DiagonalMetric.apply_block>` —
+       operation-for-operation the same reshape-and-multiply, so
+       bit-identical on every axis-built space. **6.2c-ii** then made
+       :class:`~orpheus.numerics.spaces.spherical_harmonic_space.SphericalHarmonicSpace`
+       and
+       :class:`~orpheus.numerics.spaces.legendre_space.LegendreSpace`
+       axis-built — one ``MODAL``
+       :class:`~orpheus.numerics.axis.HarmonicAxis` /
+       :class:`~orpheus.numerics.axis.LegendreAxis`, the latter carrying
+       its spent :math:`O(2)_a` axis in the identity — so the metric
+       entered the identity and the corpus's chartered doctrine reached
+       the moment layer (:ref:`spaces-moment-head-axis-built`). `[M]` 17
+       of 75 shipped (rule, :math:`L`) rows measure a ``DENSE`` Gram and
+       2 of them sit at :math:`L \le 2`, so the positioned-form path is
+       exercised, not hypothetical. Consequences elsewhere: the ONE
+       moment space the tree binds became the frame's Parseval-dressed
+       head (:ref:`frame-the-one-moment-space`); the ``MODAL`` arm of the
+       :attr:`~orpheus.numerics.axis.Axis.generator` slot, declared and
+       unbuilt since CS5, is live (:ref:`spaces-generator-seams`); and
+       ``has_coordinate_cone`` got its first production ``False``.
+     - —
+     - ``numerics/space.py``, ``numerics/metric.py``,
+       ``numerics/axis.py``, ``numerics/spaces/``
    * - 2026-08-30
      - **The metric becomes an OBJECT — a space can carry a
        non-diagonal** :math:`G` (campaign 1, phase P7). The metric stops
@@ -4131,7 +4355,9 @@ status.
        taught: :meth:`DualSpace.of
        <orpheus.numerics.space.DualSpace.of>` threads the object,
        ``TensorProductSpace.from_factors`` grows a dense-factor arm, and
-       :attr:`FrameBase.gram <orpheus.numerics.frame.FrameBase.gram>`
+       ``FrameBase.gram`` (retired at item 6.2c-ii in favour of the
+       :attr:`gram_inverse
+       <orpheus.numerics.frame.FrameBase.gram_inverse>` arrow)
        **strips** it while installing the row-sum probe (`[M]` the
        pre-P7 spelling returned ``[7.0, 11.0]`` for a projection whose
        true value is :math:`[8/3,\,16/3]` — a silent value error, and

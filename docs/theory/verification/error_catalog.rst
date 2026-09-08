@@ -3229,7 +3229,11 @@ older entries classify against.
    prevented. The :math:`(2\ell+1)` literal lives in exactly one place:
    ``SphericalHarmonicBasis.addition_theorem_factor``; the :math:`g_C =
    \mathrm{diag}(4\pi/(2\ell+1))` metric on
-   ``SphericalHarmonicSpace.inner_product_weights``.
+   ``SphericalHarmonicSpace.inner_product_weights``. ⚠ That last slot
+   name is history: since CS4c step 6 item 6.2c-ii (2026-09-08) the space
+   is AXIS-BUILT and :math:`g_C` is the MEASURE of its single
+   :class:`~orpheus.numerics.axis.HarmonicAxis`;
+   ``inner_product_weights`` is ``None`` there.
 
    The Wave 0 test ``TestApplyTransposeIsWWeightedAdjoint`` was renamed to
    ``TestApplyTransposeIsRepresentationTranspose`` (still
@@ -3385,9 +3389,12 @@ older entries classify against.
    (layout padding, a folded rule's σ-odd columns, an empty indicator
    region) — and, *as F-0 shipped it*, the **undressed** space when the
    verdict is DENSE. (⭐ That last clause is history: campaign 1 P7
-   dresses the DENSE arm too — see the chapter below.) The basis keeps
+   dresses the DENSE arm too — see the chapter below. ⭐ So is the
+   ``inner_product_weights=`` spelling: since item 6.2c-ii the dressing
+   RE-WEIGHTS the space's single head axis, and the frame becomes that
+   axis's generator — chapter 4.) The basis keeps
    :math:`g_C`: it is the continuum Gram and the cross-Gram vocabulary
-   of ``project``/``gram``, a genuinely different object.
+   of ``project``/``gram_inverse``, a genuinely different object.
 
    **The refusal arm was part of the fix, not a gap** — and it has
    since been repaired rather than merely tolerated. On the slab
@@ -3466,6 +3473,69 @@ older entries classify against.
    corollary for review: when a defect can only be seen at the END of a
    chain, the absence of any end-of-chain consumer is not safety, it is
    *latency* — the clock starts when the first consumer lands.
+
+   **Chapter 4 — CS4c step 6 item 6.2c-ii (2026-09-08): the Parseval
+   metric becomes the metric of the ONE moment space, and the seam that
+   let two of them coexist is gone.** Chapters 1–3 got the metric right
+   *on the frame's codomain*. They left a second object standing: the
+   moment FIELD's space and every moment-domain operator END were bound
+   to the basis's continuum ``basis.space``, kept ``(name,
+   shape)``-equal to the dressed codomain so the frame's faces would
+   admit the field's operands. Two spaces, two metrics, one equality —
+   the metric-blind seam. Item 6.2c-ii made both moment heads AXIS-BUILT,
+   which puts the measure into the identity and makes the two heads
+   structurally UNEQUAL, so one had to be chosen; ruling R-6.2c-1 chose
+   **Parseval**, and the whole tree now reads
+   ``frame.basis_space``.
+
+   ⭐ **Why this belongs to ERR-039 rather than to a new ERR number: it
+   is the same defect one consumer further out, and the same shield
+   failed.** The defect class is *"a metric was installed by whoever
+   happened to mint the object, and nothing could compare the two."*
+   Chapter 2 found it between the basis and the frame; chapter 4 finds
+   it between the frame and the carrier. And the reason it survived is
+   again that **no gate could see it**: ``==`` was metric-blind, so the
+   admission check the faces run
+   (``operand.space != space``) waved through a field carrying the wrong
+   metric — `[M]` the analysis face STAMPED its returned moment flux with
+   its dressed codomain while the sweep's iterate wrap and the boundary
+   guard compared against the carrier's continuum space, and both passed.
+
+   ⛔ **Two inherited ``[M]`` claims that had to be retracted, and the
+   shape of the error is worth more than either.** The gate that pinned
+   the 2026-09-02 binding recorded, in prose, that the dressed end *"would
+   move* :math:`\Lambda`\ *'s Hilbert adjoint on 10 of 33 rows (the
+   dense-Gram rows)"* and that the dressed metric *"would move
+   ``apply_metric`` by 96–161 %"*. Re-measured 2026-09-07 on ``main`` @
+   ``79d2944a``:
+
+   * the adjoint moves on **5 of 33** rows, and **3 of the 5 are
+     DIAGONAL-Gram** — the mechanism is the Parseval metric's
+     Moore–Penrose PROJECTION of the σ-odd slots a folded rule cannot
+     see, not Gram density, so the count and its attribution were both
+     wrong;
+   * on a PHYSICAL moment :math:`\varphi = M\psi` — the only kind a
+     solver can hold — it moves on **0 of 33** (all :math:`\le
+     1.9\times10^{-16}`); and
+   * **no statistic reproduces 161 %.** The draw-free per-element
+     movement spans 0.5 %…100.0 % over the 33 rows and 0.5 %…222 % over
+     60 rows at :math:`L \le 4`; no row lands in :math:`[155\,\%,
+     170\,\%]`.
+
+   **Lesson (chapter 4):** *a figure with no statistic, no fixture and no
+   denominator is not a measurement, and it is most dangerous when it is
+   the reason for a design.* Both retracted claims sat in a shipped gate's
+   docstring, where they read as evidence; the surviving one had also
+   never been paired with the other arm's price — `[M]` the continuum end
+   breaks Parseval on **33 of 33** rows by a factor
+   :math:`3.41\ldots157.91`, i.e. it un-does chapters 1–3, and that leg
+   was never on the table. ⟹ when a claim ranks two DESIGNS, it owes
+   both legs and the population each was measured over
+   (``vv-principles`` #24). Catchers:
+   ``tests/transport/frames/test_moment_metric_fork_premise.py`` (the
+   three facts, each with the other candidate as its negative control)
+   and ``tests/sn/mesh/test_hub_and_frame_agree_on_the_moment_space.py``
+   (one space, two owners).
 
 .. error-entry:: ERR-040
    :title: Tangential ordinate silently classified as inflow OR outflow at a face requiring strict partition
@@ -6462,6 +6532,17 @@ older entries classify against.
      **33 of 33**; and end-to-end on **this entry's own gate fixture**
      the converged scalar flux is ``np.array_equal`` pre/post at
      :math:`L = 0, 1, 2` **and** :math:`3`, ``max|Δ| = 0.0``.
+
+     ⚠ **The SPELLING in the paragraph above changed on 2026-09-08 and
+     the finding did not.** CS4c step 6 item 6.2c-ii re-bound the seven
+     sites from ``frame.basis.space`` to ``frame.basis_space`` (ruling
+     R-6.2c-1 — the Parseval metric; ERR-039 chapter 4), so "READS the
+     frame" is still exactly what they do and *which of the frame's two
+     coefficient spellings* is what moved. The 2026-09-02 numbers are
+     unchanged as a record of that tree; on this one the two spellings
+     are no longer interchangeable — `[M]` ``frame.basis_space ==
+     frame.basis.space`` is **0 of 33**, because the heads became
+     axis-built and their measure entered the identity.
 
      ⛔ **Nothing here repairs the defect, and the bit-identity at the
      two DEFECTIVE orders is the POINT, not a disappointment.** A pre-step

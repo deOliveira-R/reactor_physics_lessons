@@ -69,7 +69,8 @@ pytestmark = pytest.mark.foundation
 _HARMONIC_AXIS_LABEL = "harmonic"
 
 
-# ── the simulated 6.2c head ───────────────────────────────────────────
+# ── the head's two spellings: the axis-built production one (since 6.2c-ii)
+#    and the RETIRED dense-slot twin, re-built here as the comparison oracle ──
 
 
 #: The two shipped head families.  Typed as their union so the ``MomentHead``
@@ -79,21 +80,26 @@ _HARMONIC_AXIS_LABEL = "harmonic"
 Head = SphericalHarmonicSpace | LegendreSpace
 
 
-def _axis_built[T: Head](head: T) -> T:
-    """The SAME head, re-expressed with its measure on ONE rank-``r`` axis.
+def _dense_slot_twin[T: Head](head: T) -> T:
+    """The SAME head in its RETIRED spelling — the measure in the legacy
+    ``inner_product_weights`` slot, no axes (what ``from_L`` minted until CS4c
+    step 6 item 6.2c-ii, 2026-09-08).
 
     ``replace`` preserves every other subclass field (``L``, and
     ``LegendreSpace.spent_axis``), so the only thing that moves is WHERE the
-    measure lives — which is exactly item 6.2c's edit.
+    measure lives — the twin is the independent oracle for the bit-identity
+    rows and the name-built partner for the identity rows.
     """
-    w = head.inner_product_weights
-    axis = Axis(
-        _HARMONIC_AXIS_LABEL,
-        head.shape,
-        None if w is None else np.asarray(w),
-        kind=BasisKind.MODAL,
-    )
-    return replace(head, inner_product_weights=None, axes=(axis,))
+    assert head.axes is not None and len(head.axes) == 1, "a production head is single-axis"
+    w = head.axes[0].weights
+    return replace(head, axes=None, inner_product_weights=None if w is None else np.asarray(w))
+
+
+def _axis_built[T: Head](head: T) -> T:
+    """The production head IS axis-built since item 6.2c-ii — identity, kept
+    so the rows below read as they were written (the premise landed)."""
+    assert head.axes is not None
+    return head
 
 
 def _bulk(ng: int = 2, spatial: tuple[int, ...] = (4, 3)) -> FunctionSpace:
@@ -138,11 +144,12 @@ def test_the_head_metric_is_bit_identical_on_the_axis_route(label: str) -> None:
     axis) — `[M]` 2026-09-07 it reddens all 8 rows of this gate, 17 rows of
     this file and 43 of the 4501-row battery scope.
     """
-    head = _HEADS[label]()
-    axis_head = _axis_built(head)
+    axis_head = _HEADS[label]()
+    head = _dense_slot_twin(axis_head)           # the retired spelling, the oracle
     assert axis_head.axes is not None
     assert axis_head.inner_product_weights is None
     assert axis_head.metric is None
+    assert head.axes is None and head.inner_product_weights is not None
 
     rng = np.random.default_rng(20260907)
     x = rng.standard_normal(head.shape + (2, 4))
@@ -172,10 +179,10 @@ def test_the_product_metric_is_bit_identical_when_the_head_gains_axes(label: str
     Reddens under: the battery's ``A5`` arm (a per-axis measure dropped) —
     `[M]` all 8 rows of this gate.
     """
-    head = _HEADS[label]()
+    axis_head = _HEADS[label]()
     bulk = _bulk()
-    today = head * bulk
-    axis_product = _axis_built(head) * bulk
+    today = _dense_slot_twin(axis_head) * bulk    # the retired spelling's product: the factored arm
+    axis_product = axis_head * bulk
 
     assert isinstance(today.metric, FactoredMetric) and today.axes is None
     assert axis_product.metric is None
@@ -200,7 +207,7 @@ def test_no_reachable_array_on_the_axis_product_is_state_sized() -> None:
     shapes ``(3, 5)``, ``(2,)``, ``(4, 3)`` the product's index set has 360
     entries and NO array the space can reach has that size.
     """
-    head = _axis_built(SphericalHarmonicSpace.from_L(2))
+    head = SphericalHarmonicSpace.from_L(2)
     product = head * _bulk()
     assert product.axes is not None
     n = int(np.prod(product.shape))
@@ -247,8 +254,8 @@ def test_the_moment_head_surface_survives(label: str) -> None:
     Reddens under: minting the head as a bare ``FunctionSpace.of_axes(...)``
     (the design alternative §6 O-4 rejects) — the protocol members vanish.
     """
-    head = _HEADS[label]()
-    axis_head = _axis_built(head)
+    axis_head = _HEADS[label]()
+    head = _dense_slot_twin(axis_head)
     assert isinstance(axis_head, MomentHead)
     assert axis_head.L == head.L
     assert axis_head.shape == head.shape
@@ -283,7 +290,7 @@ def test_the_product_still_exposes_its_head_as_factor_zero(label: str) -> None:
 @pytest.mark.parametrize("label", sorted(_HEADS))
 def test_two_axis_built_mints_of_one_head_are_one_space(label: str) -> None:
     """Structural identity: same axes ⟹ same space, and hash-consistent."""
-    a, b = _axis_built(_HEADS[label]()), _axis_built(_HEADS[label]())
+    a, b = _HEADS[label](), _HEADS[label]()
     assert a is not b
     assert a == b and hash(a) == hash(b)
     assert len({a, b}) == 1
@@ -297,8 +304,8 @@ def test_an_axis_built_head_is_never_equal_to_its_name_built_twin(label: str) ->
     just the construction sites — every partner has to move in the same commit
     (``plan-authoring`` §6b).
     """
-    head = _HEADS[label]()
-    axis_head = _axis_built(head)
+    axis_head = _HEADS[label]()
+    head = _dense_slot_twin(axis_head)
     assert axis_head.name == head.name and axis_head.shape == head.shape
     assert axis_head != head
     assert head != axis_head
@@ -306,29 +313,26 @@ def test_an_axis_built_head_is_never_equal_to_its_name_built_twin(label: str) ->
 
 @pytest.mark.parametrize("L", [0, 1, 2])
 def test_the_metric_enters_the_identity_once_the_head_is_axis_built(L: int) -> None:
-    r"""⛔ **THE FORK, in one assertion.**  Two heads that differ ONLY in their
-    measure are ``==`` today (identity is ``(name, shape)`` on a name-built
-    space) and UNEQUAL once axis-built (``Axis.__eq__`` compares weights bytes).
-
-    That is why item 6.2c cannot land without ruling which metric the ONE
-    moment space carries: the frame's Parseval-dressed head and the field's
-    continuum head stop being interchangeable at
-    ``HarmonicFrame._admit`` (`harmonic_frame.py:128`).
-    ⛔ RE-POSED BY 6.2c — after the ruling ONE of the two mints disappears.
+    r"""⭐ **THE FORK, in one assertion — RULED and LANDED (R-6.2c-1, item
+    6.2c-ii).**  Two heads that differ ONLY in their measure — the basis's
+    continuum head and the frame's Parseval-dressed head — are UNEQUAL now
+    that the head is axis-built (``Axis.__eq__`` compares weights bytes);
+    their RETIRED dense-slot twins are ``==`` (the metric-blind
+    ``(name, shape)`` identity of a name-built space), which is the seam the
+    tree carried until 6.2c-ii and the reason the fork had to be ruled
+    before the head could be axis-built. The tree binds the dressed one.
     """
-    continuum = SphericalHarmonicSpace.from_L(L)
-    w = np.asarray(continuum.inner_product_weights)
-    live = w > 0.0
-    dressed_weights = np.where(live, 1.0 / np.where(live, w, 1.0), 0.0)
-    dressed = replace(continuum, inner_product_weights=dressed_weights)
-
-    assert continuum == dressed, "today: (name, shape) identity is metric-BLIND"
+    frame = Quadrature.lebedev(11).angular_frame(L)
+    continuum = frame.basis.space
+    dressed = frame.basis_space
+    assert isinstance(continuum, SphericalHarmonicSpace) and isinstance(dressed, SphericalHarmonicSpace)
+    assert continuum.axes is not None and dressed.axes is not None
     assert not np.array_equal(
-        np.asarray(continuum.inner_product_weights),
-        np.asarray(dressed.inner_product_weights),
+        np.asarray(continuum.axes[0].weights), np.asarray(dressed.axes[0].weights),
     )
-    assert _axis_built(continuum) != _axis_built(dressed), (
-        "axis-built: the measure IS the identity — the two heads separate"
+    assert continuum != dressed, "axis-built: the measure IS the identity — the two heads separate"
+    assert _dense_slot_twin(continuum) == _dense_slot_twin(dressed), (
+        "the retired name-built spelling was metric-BLIND — that was the seam"
     )
 
 
@@ -338,31 +342,50 @@ def test_the_metric_enters_the_identity_once_the_head_is_axis_built(L: int) -> N
 
 
 @pytest.mark.parametrize("label", sorted(_HEADS))
-def test_truncated_re_mints_through_from_L_and_LOSES_the_axes(label: str) -> None:
-    r"""⛔ RE-POSED BY 6.2c — a RECORD of today's ``truncated`` behaviour.
+def test_truncated_re_mints_through_the_generator_and_KEEPS_the_axes(label: str) -> None:
+    r"""P1 (was the ⛔ RECORD of the pre-6.2c-ii behaviour — ``truncated``
+    re-minted through ``from_L`` and LOST the axes, `[M]` 2026-09-07).
 
-    ``SphericalHarmonicSpace.truncated`` / ``LegendreSpace.truncated`` are
-    ``replace(type(self).from_L(L_new), name=self.name)``, and ``from_L``
-    builds a DENSE-SLOT space.  So an axis-built head truncates to an axes-less
-    one, which — under the identity flip — is UNEQUAL to the ``L_new``
-    axis-built mint and EQUAL to the old name-built one.
-
-    `[M]` 2026-09-07: ``axis_head.truncated(L-1).axes is None``.  After 6.2c
-    ``HarmonicMomentFlux.truncate`` (`harmonic_moment_flux.py:330`) would hand
-    back a head that fails every downstream ``_admit``, so ``truncated`` MUST
-    move in the same commit — it is a §6b member no construction census
-    returns (its call line names no head class).
+    A basis-generated head truncates through its BASIS: the lower head is
+    axis-built and equal to the ``L_new`` mint of the same family and spent
+    axis (:func:`~orpheus.numerics.spaces.moment_head.truncated_head`).
+    Negative control: the retired dense-slot twin of the lower mint is NOT
+    what comes back.
     """
     head = _HEADS[label]()
     if head.L == 0:
         pytest.skip("L = 0 has no lower order to truncate to")
-    axis_head = _axis_built(head)
-    lower = axis_head.truncated(head.L - 1)
-    assert lower.axes is None, "TODAY: truncated() drops the axes"
-    # family-agnostic, and neither leg is a tautology: the truncated head
-    # equals the NAME-built lower mint and NOT the axis-built one.
-    assert lower == head.truncated(head.L - 1)
-    assert lower != _axis_built(lower)
+    lower = head.truncated(head.L - 1)
+    assert isinstance(lower, MomentHead)
+    assert lower.axes is not None, "truncated() keeps the axes (re-mints through the generator)"
+    assert lower.L == head.L - 1 and lower.name == head.name
+    minted = type(head).from_L(head.L - 1, head.spent_axis) if isinstance(head, LegendreSpace) else type(head).from_L(head.L - 1)
+    assert lower == minted
+    assert lower != _dense_slot_twin(minted)
+    assert minted.axes is not None
+    assert lower.axes[0].generator == minted.axes[0].generator
+
+
+@pytest.mark.parametrize("label", ["gauss_legendre(8)", "lebedev(11)", "folded_product(4,8)"])
+def test_a_frame_dressed_head_truncates_to_the_frames_dressed_head_at_the_lower_order(label: str) -> None:
+    r"""P1, the FRAME arm: the head a moment field carries is the frame's
+    Parseval-dressed one, and it truncates through its FRAME — the lower
+    head is the frame at ``L_new``'s dressed space (re-dressed, never
+    sliced: the Gram verdict can flip with ``L``), structurally equal to the
+    quadrature's own interned frame's head at that order — on both families.
+    Negative control: the basis's continuum head at ``L_new`` is another space.
+    """
+    quad = _RULES[label]()
+    L = 2
+    dressed = quad.angular_frame(L).basis_space
+    assert isinstance(dressed, MomentHead)
+    assert dressed.axes is not None and dressed.axes[0].generator is quad.angular_frame(L)
+    lower = dressed.truncated(L - 1)
+    assert isinstance(lower, MomentHead)
+    assert lower.axes is not None and lower.L == L - 1 and lower.name == dressed.name
+    assert lower == quad.angular_frame(L - 1).basis_space
+    assert lower != quad.angular_frame(L - 1).basis.space
+    assert lower.axes[0].generator == quad.angular_frame(L - 1)
 
 
 def test_a_dense_gram_lives_positioned_on_the_axis_built_heads_own_object() -> None:
@@ -419,9 +442,9 @@ def test_the_cone_answer_flips_from_unanswerable_to_refusing() -> None:
     ``orpheus/`` and 35 test calls, none on a moment field), so the flip is
     predicted inert — battery arm ``C1`` measures it rather than asserting it.
     """
-    head = SphericalHarmonicSpace.from_L(1)
+    axis_head = SphericalHarmonicSpace.from_L(1)
+    head = _dense_slot_twin(axis_head)            # the retired spelling answered None
     assert head.has_coordinate_cone is None
-    axis_head = _axis_built(head)
     assert axis_head.has_coordinate_cone is False
     assert (axis_head * _bulk()).has_coordinate_cone is False
     assert (head * _bulk()).has_coordinate_cone is None
@@ -447,26 +470,32 @@ def test_the_production_head_of_every_family_is_axis_buildable(label: str, L: in
     r"""The head a shipped rule's frame actually binds — built through the
     production chain, not hand-minted (``vv`` #28: build the operand).
 
-    Scope note, stated so the green is not read wider than it is: this row
-    covers the **continuum** head (``frame.basis.space``), which is dense-slot
-    on every rule and every ``L``.  The frame's **dressed** head is a different
-    object; on a DENSE-Gram row it is axis-buildable only with its dense
-    form POSITIONED on the space's own metric object (hazard H-1, resolved
-    by ruling R-6.2c-2 and pinned separately by
-    ``test_a_dense_gram_lives_positioned_on_the_axis_built_heads_own_object``).
+    Both heads are covered: the **continuum** head (``frame.basis.space``,
+    the basis its generator) and the frame's **dressed** head
+    (``frame.basis_space``, the frame its generator) — each axis-built, each
+    bit-identical to its own retired dense-slot twin on the metric verbs; on
+    a DENSE-Gram row the dressed head carries no axis measure and its dense
+    form is POSITIONED on the space's own metric object (hazard H-1, ruling
+    R-6.2c-2), so the twin comparison is made on the continuum head only there.
     """
+    from orpheus.numerics.frame import GramStructure
     from orpheus.transport.frames import HarmonicFrame
 
     frame = HarmonicFrame.from_galerkin(_RULES[label]().angular_frame(L))
-    head = frame.basis.space
-    assert isinstance(head, (SphericalHarmonicSpace, LegendreSpace)), (
-        "every shipped rule binds one of the two head families"
-    )
-    assert head.inner_product_weights is not None, "the continuum head is dense-slot"
-    axis_head = _axis_built(head)
     rng = np.random.default_rng(11)
-    x = rng.standard_normal(head.shape + (2, 3))
-    np.testing.assert_array_equal(
-        np.asarray(axis_head.apply_metric(x)), np.asarray(head.apply_metric(x)),
-    )
-    assert isinstance(axis_head, MomentHead) and axis_head.L == L
+    for head, generator in ((frame.basis.space, frame.basis), (frame.basis_space, frame)):
+        assert isinstance(head, (SphericalHarmonicSpace, LegendreSpace)), (
+            "every shipped rule binds one of the two head families"
+        )
+        assert head.axes is not None and head.inner_product_weights is None
+        assert head.axes[0].generator is generator
+        assert isinstance(head, MomentHead) and head.L == L
+        if head.axes[0].weights is None:
+            assert frame.discrete_gram_structure is GramStructure.DENSE and head is frame.basis_space
+            assert isinstance(head.metric, FactoredMetric)
+            continue
+        twin = _dense_slot_twin(head)
+        x = rng.standard_normal(head.shape + (2, 3))
+        np.testing.assert_array_equal(
+            np.asarray(head.apply_metric(x)), np.asarray(twin.apply_metric(x)),
+        )

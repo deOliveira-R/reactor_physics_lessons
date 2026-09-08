@@ -139,8 +139,8 @@ class TestTheBindingAtTheSolveOrder:
         basis = S.frame.basis
         assert isinstance(basis, TruncatedBasis)
         assert basis.L == S.legendre_order == n2n.legendre_order == _L
-        moment = LegendreMomentTransfer.on_basis(
-            TransferMaterialField.n2n(solver.mat_xs), basis, skip_l0=False,
+        moment = LegendreMomentTransfer.on_frame(
+            TransferMaterialField.n2n(solver.mat_xs), S.frame, skip_l0=False,
         )
         conjugated = S.frame.conjugate(moment).apply(psi.values)
         np.testing.assert_allclose(

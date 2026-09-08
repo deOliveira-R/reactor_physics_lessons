@@ -43,11 +43,16 @@ solve converges (the STOP rides the residual — ``iteration.py:795-801``).
 companion THEOREM is the Parseval identity in
 ``tests/transport/frames/test_moment_metric_fork_premise.py``.
 
-⛔ **RE-POSED BY CS4c step 6 item 6.2c.**  When the moment head becomes
-axis-built, ONE metric is chosen for the ONE moment space.  If the ruling is
-the Parseval metric, leg 2's numbers move by the measured 91.6 % / 3.85 % and
-leg 3's assertion flips sides — both loudly, which is the point of freezing
-them now.
+⭐ **RE-BASELINED at CS4c step 6 item 6.2c-ii (ruling R-6.2c-1, 2026-09-08:
+Parseval on the ONE moment space).**  The head became axis-built and the hub
+binds the frame's Parseval-dressed head; leg 2's numbers moved by the
+predicted amount (first increment 41.80 → 3.514, the ``(2ℓ+1)/4π`` per-degree
+rescaling of the measure; ρ's first three 0.5141/0.4469/0.4520 →
+0.5339/0.4604/0.4379, its tail 0.515407 → 0.515407 to six figures) while
+the converged flux and the residual (stopping) trajectory stayed
+bit-identical — exactly the diagnostic-only movement the pin was frozen to
+catch.  Leg 3 flipped sides: the hub's space IS the Parseval one, the
+continuum head is the negative control, and the two are structurally UNEQUAL.
 """
 
 from __future__ import annotations
@@ -73,24 +78,30 @@ _NG = 2
 _INNER_TOL = 1e-6
 _MAX_INNER = 60
 
-#: `[M]` 2026-09-07, `main` @ 79d2944a, serial, one process: bit-identical
-#: across repeated runs.  22 recorded increments; the head carries the
-#: CONTINUUM Gram 4π/(2ℓ+1) (which metric is asserted directly, below).
+#: `[M]` 2026-09-08, item 6.2c-ii's carve (``scratch/_step6_2c_ii_capture_pin.py``),
+#: serial, one process: bit-identical across two runs.  21 recorded
+#: increments (22 iterations); the head carries the PARSEVAL measure
+#: (2ℓ+1)/4π (which metric is asserted directly, below).  The pre-6.2c-ii
+#: record under the CONTINUUM Gram (2026-09-07, `main` @ 79d2944a) began
+#: 4.179894982724e+01, 2.148977886811e+01, 9.603944803076e+00, … with ρ
+#: 0.514122458983, 0.446907567640, 0.452014915232 and the same 0.5154 tail —
+#: the per-degree rescaling moved every norm and the transient's ρ, and
+#: nothing else.
 _INCREMENT_NORMS = (
-    4.179894982724e+01, 2.148977886811e+01, 9.603944803076e+00,
-    4.341126296059e+00, 2.163202902533e+00, 1.072425668726e+00,
-    5.389857653439e-01, 2.744171773514e-01, 1.399923053592e-01,
-    7.170869223686e-02, 3.681085282022e-02, 1.891803619665e-02,
-    9.732067621689e-03, 5.009504656272e-03, 2.579631202657e-03,
-    1.328776432601e-03, 6.845953559090e-04, 3.527602742530e-04,
-    1.817907968915e-04, 9.369090752327e-05, 4.828892524695e-05,
+    3.514474665456e+00, 1.876376388366e+00, 8.638103445179e-01,
+    3.783050970788e-01, 1.905250076482e-01, 9.395561078154e-02,
+    4.711414441828e-02, 2.398082066636e-02, 1.222101989425e-02,
+    6.257184540491e-03, 3.211368493661e-03, 1.650056186842e-03,
+    8.487633667205e-04, 4.368677554167e-04, 2.249546543204e-04,
+    1.158724504343e-04, 5.969756683535e-05, 3.076091049425e-05,
+    1.585221444080e-05, 8.169864110239e-06, 4.210801858851e-06,
 )
 
 #: The first three contraction ratios — the shape of the transient.  The tail
 #: settles to ≈ 0.5154 (the fixture's scattering ratio); pinning the head is
 #: what carries the metric information, the tail is the physics.
-_RHO_HEAD = (0.514122458983, 0.446907567640, 0.452014915232)
-_RHO_TAIL = 0.515406740350
+_RHO_HEAD = (0.533899534633, 0.460360911528, 0.437949255273)
+_RHO_TAIL = 0.515406596981
 
 _RTOL = 1e-9
 
@@ -166,16 +177,16 @@ def test_every_recorded_increment_norm_is_taken_on_the_moment_space(monkeypatch)
     )
 
 
-def test_the_recorded_trajectory_was_taken_under_the_CONTINUUM_head_metric() -> None:
+def test_the_recorded_trajectory_was_taken_under_the_PARSEVAL_head_metric() -> None:
     r"""WHICH metric the frozen numbers belong to — asserted on the ARRAY.
 
     This is the fork's own gate (``plan-authoring`` §2: a ruling must be
     visible in the test, not implied by a green).  The hub's moment space
     (:meth:`~orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space`) binds the
-    basis's CONTINUUM coefficient space, #429 tracker 2.5 Landing A — its head
-    carries ``4π/(2ℓ+1)`` in the live slots and 0 in the ``|m| > ℓ`` padding.
-
-    ⛔ RE-POSED BY 6.2c if the fork rules the Parseval metric.
+    frame's Parseval-dressed head (ruling R-6.2c-1, item 6.2c-ii) — an
+    axis-built head whose single axis carries the reciprocal of the discrete
+    Gram's diagonal, ``(2ℓ+1)/4π`` on this degree-exact sphere rule, in the
+    live slots and 0 in the ``|m| > ℓ`` padding; the frame is its generator.
     """
     sn_mesh = SNMesh(
         _mesh(), Quadrature.level_symmetric(sn_order=_SN_ORDER), _two_region_fissile(),
@@ -184,14 +195,22 @@ def test_the_recorded_trajectory_was_taken_under_the_CONTINUUM_head_metric() -> 
     assert isinstance(space, TensorProductSpace) and _is_moment_space(space)
     head = space.factors[0]
     assert isinstance(head, MomentHead)
-    weights = head.inner_product_weights
-    assert weights is not None and head.metric is None
+    assert head.inner_product_weights is None and head.metric is None
+    assert head.axes is not None and len(head.axes) == 1
+    frame = sn_mesh.quad.angular_frame(_L)
+    assert head.axes[0].generator is frame
+    weights = head.axes[0].weights
+    assert weights is not None
     live = np.asarray(weights) > 0.0
-    expected = 4.0 * np.pi / (2.0 * np.arange(_L + 1) + 1.0)
+    expected = (2.0 * np.arange(_L + 1) + 1.0) / (4.0 * np.pi)
     np.testing.assert_allclose(
         np.asarray(weights)[live],
         np.repeat(expected, [2 * l + 1 for l in range(_L + 1)]),
-        rtol=0.0, atol=0.0,
+        rtol=1e-15, atol=0.0,
+    )
+    gram_diag = np.diagonal(frame.discrete_gram)
+    np.testing.assert_allclose(
+        np.asarray(weights)[live], 1.0 / gram_diag[gram_diag > 0.0], rtol=1e-15,
     )
 
 
@@ -270,19 +289,22 @@ def test_the_pin_discriminates_the_head_metric_choice() -> None:
     sn_mesh = SNMesh(
         _mesh(), Quadrature.level_symmetric(sn_order=_SN_ORDER), _two_region_fissile(),
     )
-    continuum_space = sn_mesh.moment_space(_L)
+    dressed_space = sn_mesh.moment_space(_L)
     frame = HarmonicFrame.from_galerkin(sn_mesh.quad.angular_frame(_L))
-    dressed_space = frame.basis_space * sn_mesh.bulk_space
+    assert dressed_space == frame.basis_space * sn_mesh.bulk_space, (
+        "the hub's space IS the frame's dressed product — one space, two owners (O-5)"
+    )
+    continuum_space = frame.basis.space * sn_mesh.bulk_space   # the loser, as the negative control
     assert continuum_space.shape == dressed_space.shape
-    assert continuum_space == dressed_space, (
-        "the two candidates are (name, shape)-equal today — that IS the seam 6.2c removes"
+    assert continuum_space != dressed_space, (
+        "the two candidates are two SPACES since 6.2c-ii — the metric-blind seam is gone"
     )
 
     rng = np.random.default_rng(20260907)
-    x = rng.standard_normal(continuum_space.shape)
+    x = rng.standard_normal(dressed_space.shape)
     # zero the |m| > l padding, as every real moment field has
-    assert isinstance(continuum_space, TensorProductSpace)
-    head = continuum_space.factors[0]
+    assert isinstance(dressed_space, TensorProductSpace)
+    head = dressed_space.factors[0]
     assert isinstance(head, MomentHead)
     mask = np.zeros(head.shape, dtype=bool)
     for l in range(_L + 1):

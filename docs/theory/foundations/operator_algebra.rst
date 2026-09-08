@@ -4563,12 +4563,17 @@ the carrier verbs.
    *family's* truncation order, shared by the σ-even restriction a folded
    rule binds and by the Legendre basis on :math:`S^2/O(2)_a` that
    tracker 3.4 bound on a 1-D one the same day. The same step made every operator
-   end and every moment-field head READ the bound basis's coefficient
-   space instead of re-minting it from the integer, so the family the
-   quadrature chooses propagates by construction. See
-   :ref:`frame-moment-space-single-home` for the eight-homes census, the
-   ``basis.space``-vs-``basis_space`` fork with its measurements, and the
-   gates.
+   end and every moment-field head READ the coefficient space off the
+   FRAME instead of re-minting it from the integer, so the family the
+   quadrature chooses propagates by construction. ⚠ Which of the frame's
+   two coefficient spellings they read moved on 2026-09-08 (CS4c step 6
+   item 6.2c-ii, ruling R-6.2c-1): tracker 2.5 bound the basis's continuum
+   ``basis.space``, and the tree now binds the frame's Parseval-dressed
+   ``basis_space`` — ONE moment space, whose norm is the field's energy.
+   See :ref:`frame-moment-space-single-home` for the eight-homes census
+   and the ``basis.space``-vs-``basis_space`` fork with its measurements,
+   :ref:`frame-the-one-moment-space` for the ruling that closed it, and
+   the gates.
 
 .. note::
 

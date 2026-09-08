@@ -1258,18 +1258,25 @@ class SNMesh(MaterialMesh):
         The carrier owns its spaces the way it owns
         :attr:`angular_bulk_space` and :attr:`angular_trial_space`: the
         quadrature frame at ``L`` is read for the angular HEAD
-        (``quad.angular_frame(L).basis.space`` — the basis's continuum
-        coefficient space, #429 tracker 2.5 Landing A: never minted from
-        ``L``; the frame's Parseval-dressed ``basis_space`` is the frame's
-        OWN codomain and stays a separate, ``(name, shape)``-equal object —
-        see :mod:`orpheus.transport.frames.harmonic_frame`), the cell
-        group IS :attr:`bulk_space` (the same instance the scalar family
-        holds), and the within-cell spatial-moment tail is appended iff
+        (``quad.angular_frame(L).basis_space`` — the frame's
+        Parseval-dressed coefficient space, the ONE moment space the tree
+        binds since CS4c step 6 item 6.2c-ii, ruling R-6.2c-1 2026-09-08:
+        *the carrier's norm is the field's energy* — ``‖Mψ‖² = ‖ψ‖²_W``
+        holds on 33 of 33 shipped (rule, L) rows under it and on 0 under
+        the basis's continuum Gram that #429 Landing A had bound here;
+        never minted from ``L``. The frame's
+        :meth:`~orpheus.transport.frames.harmonic_frame.HarmonicFrame.moment_space_on`
+        derives a structurally EQUAL object from the angular space — two
+        owners, one space, ruling O-5), the cell group IS
+        :attr:`bulk_space` (the same instance the scalar family holds),
+        and the within-cell spatial-moment tail is appended iff
         ``spatial_moments > 1`` (the "append iff > 1" predicate shared
         with the fields' composer, :func:`~orpheus.numerics.spaces.spatial_moment_space.spatial_moment_tail`;
-        as a ``*`` factor, because this product is axes-less until item
-        6.2c makes the head axis-built — the axis-built tail is the
-        fields' :meth:`~orpheus.transport.fields._bases.BulkField._compose_spatial_moments`).
+        as an axes-less ``*`` factor — so the WIDENED product is axes-less
+        while the un-widened one is axis-built since item 6.2c-ii; item
+        6.2c-iii makes the tail the scheme's own mass-weighted axis, the
+        one the fields' :meth:`~orpheus.transport.fields._bases.BulkField._compose_spatial_moments`
+        already appends to the angular space, and retires the class).
 
         **Why the hub, and why a keyed cache.** Every moment field on this
         carrier (:meth:`HarmonicMomentFlux.from_mesh_and_L
@@ -1302,7 +1309,7 @@ class SNMesh(MaterialMesh):
             spatial_moment_tail,
         )
 
-        head = self.quad.angular_frame(L).basis.space
+        head = self.quad.angular_frame(L).basis_space
         space = head * self.bulk_space
         n_moments = cell_moment_count(spatial_moments, self.ndim)
         if spatial_moment_tail(n_moments) != ():

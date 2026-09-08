@@ -61,7 +61,6 @@ from orpheus.transport.fields.angular_flux import AngularFlux
 
 from tests.sn.operators._composite_operand import bulk_apply
 from tests.transport._integral_kernel_helpers import require
-from orpheus.numerics.basis.spherical_harmonic_basis import SphericalHarmonicBasis
 from orpheus.transport.material_field import TransferMaterialField
 
 pytestmark = pytest.mark.foundation
@@ -149,8 +148,8 @@ class TestLegendreMomentTransferHasRealSpaces:
     def test_lambda_domain_is_codomain_is_basis_space(self, solver_p1_het):
         op = solver_p1_het.scattering_op
         frame = op.frame
-        lam = LegendreMomentTransfer.on_basis(
-            TransferMaterialField.scattering(solver_p1_het.mat_xs), SphericalHarmonicBasis(L=op.legendre_order), skip_l0=True,
+        lam = LegendreMomentTransfer.on_frame(
+            TransferMaterialField.scattering(solver_p1_het.mat_xs), op.frame, skip_l0=True,
         )
         # Λ is endomorphic on coefficient (basis) space.
         require(
@@ -176,8 +175,8 @@ class TestLegendreMomentTransferHasRealSpaces:
         ``(R∘Λ∘M)ᵀ`` falls out for free).
         """
         op = solver_p1_het.scattering_op
-        lam = LegendreMomentTransfer.on_basis(
-            TransferMaterialField.scattering(solver_p1_het.mat_xs), SphericalHarmonicBasis(L=op.legendre_order), skip_l0=True,
+        lam = LegendreMomentTransfer.on_frame(
+            TransferMaterialField.scattering(solver_p1_het.mat_xs), op.frame, skip_l0=True,
         )
         require(
             lam.is_adjointable and not lam.is_invertible,
@@ -210,8 +209,8 @@ class TestLegendreMomentTransferHasRealSpaces:
         """
         op = solver_p1_het.scattering_op
         frame = op.frame
-        lam = LegendreMomentTransfer.on_basis(
-            TransferMaterialField.scattering(solver_p1_het.mat_xs), SphericalHarmonicBasis(L=op.legendre_order), skip_l0=True,
+        lam = LegendreMomentTransfer.on_frame(
+            TransferMaterialField.scattering(solver_p1_het.mat_xs), op.frame, skip_l0=True,
         )
         inner = OperatorProduct(lam, frame.analysis)
         require(
@@ -258,8 +257,8 @@ class TestFrameConjugateEqualsRLambdaM:
         op = solver_p1_het.scattering_op
         frame = op.frame
         conjugate = _require_conjugate(frame)
-        lam = LegendreMomentTransfer.on_basis(
-            TransferMaterialField.scattering(solver_p1_het.mat_xs), SphericalHarmonicBasis(L=op.legendre_order), skip_l0=True,
+        lam = LegendreMomentTransfer.on_frame(
+            TransferMaterialField.scattering(solver_p1_het.mat_xs), op.frame, skip_l0=True,
         )
         psi = _aniso_psi(solver_p1_het)
 
@@ -302,8 +301,8 @@ class TestFrameReconstructAfterEqualsRLambda:
         op = solver_p1_het.scattering_op
         frame = op.frame
         reconstruct_after = _require_reconstruct_after(frame)
-        lam = LegendreMomentTransfer.on_basis(
-            TransferMaterialField.scattering(solver_p1_het.mat_xs), SphericalHarmonicBasis(L=op.legendre_order), skip_l0=True,
+        lam = LegendreMomentTransfer.on_frame(
+            TransferMaterialField.scattering(solver_p1_het.mat_xs), op.frame, skip_l0=True,
         )
         psi = _aniso_psi(solver_p1_het)
         moments = frame.analysis.apply(psi.values)  # φ = M·ψ (the windowed bulk)
@@ -334,8 +333,8 @@ class TestFrameReconstructAfterEqualsRLambda:
         frame = op.frame
         conjugate = _require_conjugate(frame)
         reconstruct_after = _require_reconstruct_after(frame)
-        lam = LegendreMomentTransfer.on_basis(
-            TransferMaterialField.scattering(solver_p1_het.mat_xs), SphericalHarmonicBasis(L=op.legendre_order), skip_l0=True,
+        lam = LegendreMomentTransfer.on_frame(
+            TransferMaterialField.scattering(solver_p1_het.mat_xs), op.frame, skip_l0=True,
         )
         psi = _aniso_psi(solver_p1_het)
         moments = frame.analysis.apply(psi.values)  # φ = M·ψ (the windowed bulk)
@@ -373,8 +372,8 @@ class TestProductionApplyEqualsComposedOperator:
         op = solver_p1_het.scattering_op
         frame = op.frame
         conjugate = _require_conjugate(frame)
-        lam = LegendreMomentTransfer.on_basis(
-            TransferMaterialField.scattering(solver_p1_het.mat_xs), SphericalHarmonicBasis(L=op.legendre_order), skip_l0=True,
+        lam = LegendreMomentTransfer.on_frame(
+            TransferMaterialField.scattering(solver_p1_het.mat_xs), op.frame, skip_l0=True,
         )
         psi = _aniso_psi(solver_p1_het)
         np.testing.assert_array_equal(

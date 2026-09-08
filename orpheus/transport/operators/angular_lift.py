@@ -322,19 +322,24 @@ class AngularLift(CompositeBound, Generic[EnergyT]):
 
     @property
     def _moment_space(self) -> FunctionSpace:
-        r"""The coefficient space of the bound frame's BASIS — the
+        r"""The bound frame's Parseval-dressed coefficient space — the
         endomorphic ends of the internally-minted moment factors.
 
-        READ off the frame (``frame.basis.space``), never minted from an
+        READ off the frame (``frame.basis_space``), never minted from an
         order: which family spans the moments is the quadrature's
-        decision. The continuum-metric space (the basis's own), not the
-        frame's Parseval-dressed ``basis_space``: `[M]` #429 tracker 2.5
-        the two are ``(name, shape)``-equal and metric-DIFFERENT on 33 of
-        33 shipped (rule, L) rows, and under the continuum end the
-        factor's Hilbert adjoint is its transpose EXACTLY
-        (:math:`\Lambda^* = \Lambda^{\mathsf T}`, 0.0 on 33/33) while the
-        dressed end would move it on 10 of 33."""
-        return self.frame.basis.space
+        decision, and which METRIC it carries is the frame's (CS4c step 6
+        item 6.2c-ii, ruling R-6.2c-1, 2026-09-08). Until then the ends
+        bound the basis's CONTINUUM space (#429 Landing A) for a recorded
+        reason that did not survive re-measurement: `[M]` the factor's
+        Hilbert adjoint is its transpose on every PHYSICAL moment
+        :math:`\varphi = M\psi` under BOTH metrics (33 of 33 rows), and the
+        dressed end moves it only on arbitrary head draws off the range of
+        analysis (5 of 33, three of them on DIAGONAL-Gram rules — not the
+        "10 of 33 dense rows" the ruling recorded). With the ends on the
+        frame's space the moment iterate, the operator ends and the
+        frame's faces share ONE metric, and structural space identity
+        admits them without a metric-blind seam."""
+        return self.frame.basis_space
 
     @property
     def _scalar_interior_space(self) -> FunctionSpace:

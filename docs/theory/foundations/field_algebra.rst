@@ -373,14 +373,24 @@ stated over.
    factors, and :meth:`Field.cone_violations
    <orpheus.numerics.field.Field.cone_violations>` consults that answer
    before doing any arithmetic — see :ref:`spaces-nodal-modal` for the
-   space-layer statement. ⚠ The harmonic sentence above still holds
-   TODAY: the property is three-valued, and no harmonic-moment space in
-   the tree is axis-built — `[M]` the only axis mint inside ``orpheus/``
-   is :attr:`MaterialMesh.bulk_space
-   <orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space>` — so
-   every one of them takes the ``None`` arm and the predicate answers
-   about coefficients exactly as described. The refusal arm becomes production-reachable when CS2
-   mints the harmonic axis.
+   space-layer statement. ⛔ **The harmonic sentence above still holds;
+   the paragraph that used to follow it does NOT.** Until 2026-09-08 this
+   read *"the property is three-valued, and no harmonic-moment space in
+   the tree is axis-built — `[M]` the only axis mint inside* ``orpheus/``
+   *is* :attr:`MaterialMesh.bulk_space
+   <orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space>` *— so
+   every one of them takes the* ``None`` *arm … The refusal arm becomes
+   production-reachable when CS2 mints the harmonic axis."* CS4c step 6
+   item 6.2c-ii made both moment heads axis-built
+   (:ref:`spaces-moment-head-axis-built`), so the moment space now takes
+   the ``False`` arm and :meth:`Field.cone_violations
+   <orpheus.numerics.field.Field.cone_violations>` REFUSES on it instead
+   of answering about coefficients — which is the stronger behaviour the
+   dichotomy always argued for, arriving from a different phase than
+   predicted. `[M]` 2026-09-08: ``has_coordinate_cone`` is ``False`` on
+   all 33 shipped (rule, :math:`L`) frames' moment heads, where it read
+   ``None`` before; and an AST census of ``orpheus/`` finds **11** axis
+   mints (7 ``of_axes`` + 4 ``for_basis``), not one.
 
 
 .. _cone-overturn-adjudication:
@@ -753,17 +763,30 @@ This is the element-level face of a space-layer distinction; the
 space-layer statement, and why ``None`` is a third value rather than a
 defaulted ``False``, is :ref:`spaces-nodal-modal`.
 
-⚠ **The refusal arm has no production witness yet.** `[M]` the only
-axis-built space minted inside ``orpheus/`` today is
-:attr:`MaterialMesh.bulk_space
-<orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space>`, whose
-factors are both ``NODAL``, and no harmonic-moment space is axis-built
-— so production reaches only the ``True`` and ``None`` arms. The
-``False`` arm is gated by a test-constructed modal axis, paired with its
-positive leg (the same values on an all-nodal space answering exactly
-what the legacy path answers) as ``vv-principles`` anti-pattern #11
-requires of any contract-validation method. It becomes
-production-reachable when CS2 mints the harmonic axis.
+✅ **The refusal arm HAS a production witness, since 2026-09-08.** The
+paragraph here read, until then: *"the only axis-built space minted
+inside* ``orpheus/`` *today is* :attr:`MaterialMesh.bulk_space
+<orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space>`\ *, whose
+factors are both* ``NODAL``\ *, and no harmonic-moment space is
+axis-built — so production reaches only the* ``True`` *and* ``None``
+*arms. … It becomes production-reachable when CS2 mints the harmonic
+axis."* CS4c step 6 item 6.2c-ii minted it instead, for the metric's sake
+rather than CS2's: both moment heads carry ONE ``MODAL`` head axis
+(:class:`~orpheus.numerics.axis.HarmonicAxis` /
+:class:`~orpheus.numerics.axis.LegendreAxis`), so every moment space
+answers ``False`` and every moment field's ``cone_violations`` is
+refused. `[M]` 2026-09-08, on the 33 shipped (rule, :math:`L`) frames:
+``has_coordinate_cone`` is ``False`` on 33 of 33 (previously ``None`` on
+33 of 33). ⚠ The ``None`` arm has NOT retired — it is still the honest
+answer for every legacy space, and for a WIDENED moment product, whose
+axes-less ``SpatialMomentSpace`` tail keeps the whole product axes-less
+until item 6.2c-iii lands.
+
+The ``False`` arm's test-constructed gate stays, paired with its positive
+leg (the same values on an all-nodal space answering exactly what the
+legacy path answers) as ``vv-principles`` anti-pattern #11 requires of
+any contract-validation method; what it gained is a production input it
+can be run against.
 
 
 .. _cone-preservation-is-a-realization-property:

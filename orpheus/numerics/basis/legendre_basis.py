@@ -77,7 +77,7 @@ level-symmetric rule — user-ruled 2026-09-02).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cached_property
 from typing import TYPE_CHECKING
 
@@ -264,4 +264,8 @@ class LegendreBasis(Basis):
         r"""The :class:`~orpheus.numerics.spaces.legendre_space.LegendreSpace` of degree :math:`L` this basis spans (lazy import: the space imports this basis)."""
         from orpheus.numerics.spaces.legendre_space import LegendreSpace
 
-        return LegendreSpace.from_L(self.L, self.axis)
+        return LegendreSpace.for_basis(self)
+
+    def at_order(self, L_new: int, /) -> "LegendreBasis":
+        r"""This family about the same spent axis, cut at degree ``L_new``."""
+        return replace(self, L=L_new)

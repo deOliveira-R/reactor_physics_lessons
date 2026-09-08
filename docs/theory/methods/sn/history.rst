@@ -42,8 +42,148 @@ them.  Trust ``git``, not this column.
      - Architectural milestone
      - Issue
      - Where
-   * - in dev
-       (2026-09-07)
+   * - 2026-09-08
+     - **The moment carrier's norm is the field's energy — ONE moment
+       space, Parseval-dressed** (campaign 1 residue, CS4c step 6 item
+       6.2c-ii; ruling R-6.2c-1).
+       **(1) The seam this closes.**  The tree carried TWO angular moment
+       heads with two metrics.  The frame's analysis codomain
+       (:attr:`~orpheus.numerics.frame.FrameBase.basis_space`) carried the
+       Parseval metric :math:`G^{-1}`, the inverse *discrete* Gram; the
+       moment FIELD's space, the carrier's cached
+       :meth:`SNMesh.moment_space
+       <orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>` and every
+       moment-domain operator END carried the basis's *continuum* Gram
+       :math:`g_C = 4\pi/(2\ell+1)` (#429 tracker 2.5's "Landing A",
+       2026-09-02).  They coexisted only because space identity was
+       ``(name, shape)`` and therefore metric-BLIND: `[M]` the analysis
+       face STAMPED its returned
+       :class:`~orpheus.transport.fields.harmonic_moment_flux.HarmonicMomentFlux`
+       with its dressed codomain while the sweep's iterate wrap and the
+       boundary guard compared against the carrier's continuum space, and
+       ``_admit`` waved both through on ``operand.space != space``.
+       **(2) Why it had to be decided now.**  Making the heads AXIS-BUILT
+       — one ``MODAL``
+       :class:`~orpheus.numerics.axis.HarmonicAxis` (rectangular
+       :math:`(L+1, 2L+1)`) or
+       :class:`~orpheus.numerics.axis.LegendreAxis` (flat
+       :math:`(L+1,)`, carrying its spent :math:`O(2)_a` axis in the
+       identity) whose MEASURE *is* the head's metric — puts the metric
+       into the identity, so the two heads stop being interchangeable and
+       the frame would refuse every windowed operand.  One metric had to
+       be chosen.
+       **(3) The measurement the ruling was taken on, and what it
+       refuted.**  Landing A's recorded reason was that the dressed end
+       *"would move* :math:`\Lambda`\ *'s Hilbert adjoint on 10 of 33 rows
+       (the dense-Gram rows)"* and the dressed metric *"would move
+       ``apply_metric`` by 96–161 %"*.  Re-run on ``main`` @ ``79d2944a``
+       (33 shipped (rule, :math:`L`) rows): the adjoint moves on **5 of
+       33** and **3 of the 5 are DIAGONAL-Gram** — the mechanism is the
+       Parseval metric's Moore–Penrose PROJECTION of the σ-odd slots a
+       folded rule cannot see, not Gram density; on a PHYSICAL moment
+       :math:`\varphi = M\psi`, the only kind a solver holds, it moves on
+       **0 of 33**; and **no statistic reproduces 161 %**.  The other leg,
+       never priced before: Parseval holds on **33 of 33** under
+       :math:`G^{-1}` and FAILS on **33 of 33** under :math:`g_C`, ratio
+       :math:`3.41\ldots157.91`.
+       **(4) What the solver sees.**  `[M]` the converged flux, the
+       residual (stopping) trajectory and ``n_inner`` are **bit-identical**
+       either way — the moment metric's ONLY production reader is the SI
+       increment norm, and ``iteration.py`` records that increment as
+       DIAGNOSTICS while the stop rides the residual.  What moves is that
+       diagnostic's MEANING: under :math:`G^{-1}`,
+       :math:`\lVert\Delta\varphi\rVert` IS the band-limited angular
+       increment's :math:`L^2(\mathrm d\Omega)` norm — the same physical
+       quantity the un-windowed arm records — where under :math:`g_C` it
+       was :math:`\lVert G\Delta c\rVert_{g_C}`, off by :math:`\approx
+       4\pi` and with no reading in the transport equation.  Numerically
+       ``‖Δφ‖`` moves **91.6 %** and ρ **3.85 %** relative.
+       **(5) The gate that did not exist.**  That movement was seen by
+       NOTHING: the tree's one SI-trajectory pin refuses a windowed
+       fixture by construction.
+       ``tests/sn/solve/test_windowed_si_diagnostic_trajectory.py``
+       closes it — a ROUTE leg (a counting spy proving the norms came
+       from the moment space, asserted EXACT against the record's own
+       length), a VALUE leg at ``rtol = 1e-9``, and a DISCRIMINATION leg
+       measuring that the frozen numbers are metric-dependent.  It was
+       re-baselined by this item and its docstring carries both records.
+       **(6) Three consequences that are not about the metric.**  The
+       projection normalisation became a typed ARROW
+       (:class:`~orpheus.numerics.frame.CrossGramInverse`,
+       ``test_space → basis_space``) because its metric-twin-space
+       spelling stopped type-checking under structural identity — and the
+       2026-08-30 leak it needed a guard against is now unspellable.
+       ``truncated()`` re-mints AND re-axes through the head axis's
+       GENERATOR (the basis on a continuum head, the FRAME on a dressed
+       one) rather than slicing, because the Gram's verdict can flip with
+       :math:`L` — `[M]` ``folded_product(2,4)`` is DENSE at
+       :math:`L = 2` and DIAGONAL at :math:`L = 1`.  And
+       ``has_coordinate_cone`` on a moment space flips ``None`` →
+       ``False``, giving the MODAL refusal arm its first production
+       witness.
+       **(7) What did NOT land.**  The spatial-moment TAIL: a widened
+       moment space still appends the Euclidean, axes-less
+       ``SpatialMomentSpace``, so a widened product is axes-less overall.
+       Item **6.2c-iii** makes it the scheme's own mass-weighted
+       ``moment_axis`` and retires the class.  Full account:
+       :ref:`frame-the-one-moment-space` and
+       :ref:`spaces-moment-head-axis-built`; the defect-catalogue view is
+       ERR-039 chapter 4.
+     - —
+     - landing hash pending, on ``main``
+   * - 2026-09-08
+     - **A space's metric is DERIVED from its axes, and a dense Gram is a
+       FORM positioned on it** (campaign 1 residue, CS4c step 6 item
+       6.2c-i; ruling R-6.2c-2).
+       **(1) The rule that was replaced.**  ``FunctionSpace`` resolved its
+       metric by a short-circuit — *if the space is axis-built, the axes
+       win and any explicit metric object is ignored* — with the
+       per-axis weights applied by an inline loop
+       (``_apply_axes_weights``) that spelled the same reshape-and-multiply
+       arithmetic a second time.  That rule made a dense Gram
+       **unspellable on an axis-built space**, which is precisely what
+       item 6.2c-ii needed: a frame whose discrete Gram measures ``DENSE``
+       dresses its head with a matrix :math:`G^{+}`, and `[M]` **17 of 75**
+       shipped (rule, :math:`L`) rows measure ``DENSE`` — **2 of them at**
+       :math:`L \le 2` (``gauss_legendre(2)`` and ``folded_product(2,4)``,
+       both at :math:`L = 2`), so this is a shipped path.
+       **(2) What ships instead.**  A space's metric is ONE
+       :class:`~orpheus.numerics.metric.FactoredMetric` DERIVED from its
+       axes: a :class:`~orpheus.numerics.metric.DiagonalMetric` per
+       weighted axis on that axis's own index block, nothing on a
+       counting-measure axis, and no object at all when every block is
+       Euclidean.  An explicit metric object beside the axes is admitted
+       only as the positioned **OVERLAY** of forms — one entry per axis,
+       in order, a form ONLY on a block whose axis carries no measure —
+       and is MERGED into the derived entries, never substituted for them.
+       So *each axis supplies its diagonal block from its measure; a
+       dense-Gram head supplies a positioned*
+       :class:`~orpheus.numerics.metric.DenseMetric` *on its block* — a
+       Gram is a FORM, never a value of
+       :attr:`Axis.weights <orpheus.numerics.axis.Axis.weights>`.
+       **(3) The correction the carve made to its own design.**  The first
+       spelling let an explicit object WIN wholesale.  That is a twin: a
+       caller installing a form on ONE block would have had to restate
+       every other axis's measure inside the same object, and a product of
+       axis-built factors would have dropped a factor's form.  The overlay
+       reading removes the choice — and the guard makes the ambiguous
+       states unrepresentable, refusing a bare object beside axes, blocks
+       that do not follow the axes, a positioned ``DiagonalMetric`` (a
+       diagonal measure is the axis's own to carry), and a form beside a
+       weighted axis (two sources on one block).
+       **(4) It is bit-identical where nothing is positioned.**
+       :meth:`DiagonalMetric.apply_block
+       <orpheus.numerics.metric.DiagonalMetric.apply_block>` is
+       operation-for-operation the reshape-and-multiply the retired inline
+       loop performed, so every axis-built space's pairing is unchanged;
+       and `[M]` a relaxed guard ALONE — admitting the object without
+       replacing the short-circuit — would have left the resolution
+       reading the axes and silently ignoring the object, ``max|Δ| =
+       14.6`` on a dense-Gram head.  The doctrine's home is
+       :ref:`spaces-metric-three-sources`.
+     - —
+     - ``db5be2ec`` on ``main``
+   * - 2026-09-07
      - **A reflect verb with no production caller does not exist — the
        sweep-tier helper rides the live one** (campaign 1 residue, CS4c
        step 6 item 6.5).
@@ -118,8 +258,7 @@ them.  Trust ``git``, not this column.
        overwrite <gs-whole-face-overwrite-rejected>` (why the assignment
        was retained, and why that ruling was overridden).
      - —
-     - the CS4c step-6 carve on ``main`` (uncommitted at the time of
-       writing — trust ``git``)
+     - ``79d2944a`` on ``main``
    * - 2026-09-07
      - **A bound leaf's ends are never** ``None`` **— the streaming and
        boundary leaves declare their spaces without** ``Optional``

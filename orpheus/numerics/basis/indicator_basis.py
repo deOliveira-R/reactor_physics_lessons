@@ -346,7 +346,7 @@ class IndicatorBasis(Basis):
         (F-0; exactly zero on empty regions).  Other consumers install their own
         diagonals from the bound measure the same way (e.g. homogenisation's
         flux·volume region masses :math:`\Phi_R` on
-        :attr:`~orpheus.numerics.frame.FrameBase.gram`, via
+        :attr:`~orpheus.numerics.frame.FrameBase.gram_inverse`, via
         :func:`dataclasses.replace`).
         """
         from orpheus.numerics.space import FunctionSpace

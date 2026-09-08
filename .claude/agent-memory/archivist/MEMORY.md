@@ -41,6 +41,9 @@ means merged). **No owed Sphinx pass on merged work.** Landed SN milestones live
 
 **One line per pass. The evidence is in the lesson; `git log --oneline -- docs/` is the index.**
 
+- **CS4c step 6 items 6.2c-i/-ii** — a ruling OVERTURNED a landed one (2026-09-08; 7 `.rst`,
+  +1144/−152). Banner the section TITLE, not just the errata; two honest `[M]` can disagree by
+  STATISTIC; a `==` gate's blindness belongs to the identity relation → [[lessons-L100]]
 - **CS4c step 6 items 6.3/6.4/6.5** — a promoted helper's old name lives in a doc `code-block`
   (2026-09-07; 5 `.rst`). A retirement's brief listed the two dead VERBS and missed the helper that
   MOVED; a published control band was one draw (40 seeds refuted it) → [[lessons-L99]]

@@ -67,7 +67,7 @@ class OverlapBasis(IndicatorBasis):
     columns share support, so the cross Gram is non-diagonal). It is latent: no
     consumer calls ``mass_matrix`` (the frame's :meth:`~orpheus.numerics.frame.FrameBase.project`
     uses the partition-of-unity row-sum probe, not the full Gram — see
-    :attr:`~orpheus.numerics.frame.FrameBase.gram`). A future least-squares consumer
+    :attr:`~orpheus.numerics.frame.FrameBase.gram_inverse`). A future least-squares consumer
     that needs the dense Gram must compute it for the fractional case, not trust the
     inherited diagonal claim.
     """
@@ -130,7 +130,7 @@ class OverlapBasis(IndicatorBasis):
         row straddling a coarse boundary populates ≥2 columns, so the cross Gram
         :math:`MR` is non-diagonal. The :meth:`~orpheus.numerics.frame.FrameBase.project`
         row-sum probe stays valid because the rows are a partition of unity (see
-        :attr:`~orpheus.numerics.frame.FrameBase.gram`), NOT because the Gram is diagonal.
+        :attr:`~orpheus.numerics.frame.FrameBase.gram_inverse`), NOT because the Gram is diagonal.
         """
         return GramStructure.PARTITION_OF_UNITY
 

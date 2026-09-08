@@ -355,7 +355,7 @@ sufficiently-exact angular cubature:
    :by: orpheus.numerics.basis.spherical_harmonic_basis.SphericalHarmonicBasis.reconstruct
 
 .. implements:: pi-r-equals-4pi-i
-   :by: orpheus.numerics.frame.FrameBase.gram
+   :by: orpheus.numerics.frame.FrameBase.gram_inverse
 
 .. implements:: pi-r-equals-4pi-i
    :by: orpheus.numerics.frame.GalerkinFrame
@@ -426,7 +426,13 @@ lives in exactly ONE place in the codebase.
           :ref:`frame-parseval-dense-arm`).
         - :math:`\Pi^* = S_0 \circ G^{-1} = R/W`
           (:eq:`hilbert-adjoint-equals-metric-times-S0`) — **shipped**,
-          and the physical adjoint for the carried moments.
+          and the physical adjoint for the carried moments. ⭐ Since CS4c
+          step 6 item 6.2c-ii (2026-09-08) this is also the metric of the
+          ONE moment space the tree binds — the carrier's cached mint,
+          every moment field and every operator end — because *the
+          carrier's norm is the field's energy* (ruling R-6.2c-1,
+          :ref:`frame-the-one-moment-space`). The continuum row above is
+          now ONLY the basis's own coefficient space.
 
    Why the third is the physical one, in one line: the analysis face's
    output is the **covariant** moment vector :math:`\varphi = Gc`
@@ -459,8 +465,8 @@ lives in exactly ONE place in the codebase.
   **discrete** trial Gram
   (:attr:`FrameBase.discrete_gram
   <orpheus.numerics.frame.FrameBase.discrete_gram>`), carried on the
-  analysis face's codomain (the frame's ``basis_space``) as its
-  ``inner_product_weights``. That codomain is a
+  analysis face's codomain (the frame's ``basis_space``) as its metric.
+  That codomain is a
   :class:`~orpheus.numerics.spaces.SphericalHarmonicSpace` — but the
   *frame-dressed* copy, not the one
   :meth:`~orpheus.numerics.spaces.SphericalHarmonicSpace.from_L`
@@ -468,7 +474,16 @@ lives in exactly ONE place in the codebase.
   :math:`g_C` (:eq:`sh-space-metric`) and
   :attr:`FrameBase.basis_space
   <orpheus.numerics.frame.FrameBase.basis_space>` REPLACES it with
-  :math:`G^{-1}`. The general statement, and the SH collapse of it:
+  :math:`G^{-1}`. ⚠ Since item 6.2c-ii (2026-09-08) the space is
+  AXIS-BUILT and the metric lives on its single ``MODAL`` head axis as
+  that axis's MEASURE — so *replaces* now means "re-weights the head
+  axis" (or, on a ``DENSE`` frame, "empties the axis's measure and
+  positions :math:`G^{+}` on the space's derived metric object"), and the
+  two copies are structurally UNEQUAL rather than ``(name,
+  shape)``-equal: `[M]` ``frame.basis_space == frame.basis.space`` is 0
+  of 33 shipped (rule, :math:`L`) rows
+  (:ref:`spaces-moment-head-axis-built`). The general statement, and the
+  SH collapse of it:
 
 .. math::
    :label: hilbert-adjoint-equals-metric-times-S0
@@ -649,8 +664,9 @@ it equals :math:`\mathrm{diag}(4\pi/(2\ell+1))` per :math:`\ell`:
    of diagonal (`[M]` the best diagonal candidate reads a Parseval
    ratio of :math:`1.806`; see :ref:`frame-parseval-dense-arm`). Use
    :eq:`sh-space-metric` when you mean the convention (``project`` /
-   :attr:`FrameBase.gram <orpheus.numerics.frame.FrameBase.gram>`, the
-   cross-Gram :math:`MR`); use
+   :attr:`FrameBase.gram_inverse
+   <orpheus.numerics.frame.FrameBase.gram_inverse>`, the cross-Gram
+   :math:`MR`); use
    :eq:`hilbert-adjoint-equals-metric-times-S0` when you mean what
    ``.H`` computes.
 

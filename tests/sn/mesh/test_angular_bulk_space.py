@@ -433,10 +433,16 @@ class TestG15ConePredicates:
         assert sn.angular_bulk_space.has_coordinate_cone is True
         assert sn.bulk_space.has_coordinate_cone is True
 
-    def test_harmonic_moment_and_trace_families_answer_none(self):
+    def test_the_harmonic_moment_family_answers_false_and_the_trace_family_none(self):
+        """The moment head is a MODAL axis since CS4c step 6 item 6.2c-ii
+        (a spectral coefficient may be negative for a positive function), so
+        the moment product's cone answer is a definite ``False`` — the typed
+        refusal :meth:`Field.cone_violations` turns it into — where the
+        axes-less head answered ``None`` (unanswerable). The trace family is
+        still name-built and still answers ``None``."""
         sn = _slab()
         moment_space = HarmonicMomentFlux.zeros_for_mesh_and_L(sn, 1).space
-        assert moment_space.has_coordinate_cone is None
+        assert moment_space.has_coordinate_cone is False
         assert sn.angular_trace.has_coordinate_cone is None
 
     def test_the_ld_moment_tail_is_modal_so_the_cone_reads_false(self):

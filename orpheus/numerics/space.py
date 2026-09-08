@@ -220,11 +220,12 @@ class FunctionSpace(Generic[Carrier]):
     — ``'spherical_harmonic_space'`` is a tag, not a digest —
     :class:`~orpheus.numerics.spaces.legendre_space.LegendreSpace`,
     :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`)
-    carry only their family and, through ``shape``, their truncation
-    order — deliberately metric-blind, which is what lets a frame's
+    carried only their family and, through ``shape``, their truncation
+    order — deliberately metric-blind, which is what let a frame's
     Parseval-dressed head still equal the field's continuum head (the
-    admission seam that CS4c step 6 items 6.2b/6.2c re-pose when the
-    heads become axis-built); a hand-built legacy space carries whatever
+    admission seam CS4c step 6 items 6.2b/6.2c re-posed: since 6.2c-ii the
+    two harmonic heads are axis-built and the tree binds the frame's; the
+    spatial-moment tail follows at 6.2c-iii); a hand-built legacy space carries whatever
     its author wrote.
     Until the flip the same doctrine flowed through a BRIDGE: identity
     was ``(name, shape)`` for every space and :meth:`of_axes` derived the
@@ -338,8 +339,9 @@ class FunctionSpace(Generic[Carrier]):
         # axes-less spaces keep the nominal ``(name, shape)`` identity —
         # content identity where the factory folds content into the name
         # (the composites and traces, CS4b S3), family + dimension on the
-        # family-tagged heads (SH / Legendre / SpatialMomentSpace —
-        # metric-blind by design until they become axis-built, item 6.2c).
+        # remaining family-tagged head (SpatialMomentSpace — metric-blind
+        # by design until it becomes axis-built, item 6.2c-iii; the two
+        # harmonic heads are axis-built since 6.2c-ii).
         if self.axes is not None or other.axes is not None:
             if self.axes is None or other.axes is None:
                 return False

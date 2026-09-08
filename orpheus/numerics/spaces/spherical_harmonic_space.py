@@ -5,9 +5,11 @@ This module ships the typed home of the ERR-039 Gram matrix
 a free literal (the ``two_l_plus_one`` array, which is
 :math:`4\pi \cdot g_C^{-1}` wearing a disguise) on the since-retired
 harmonic-reconstruction operator, and as a prose warning on the moment
-projection's representation transpose. It now lives here: the space carries
-the metric as :attr:`inner_product_weights`, and the metric formula itself is
-sourced from :class:`~orpheus.numerics.basis.SphericalHarmonicBasis` so the
+projection's representation transpose. It now lives here: the space is
+AXIS-BUILT (CS4c step 6 item 6.2c-ii) — one
+:class:`~orpheus.numerics.axis.HarmonicAxis` whose MEASURE is the metric —
+and the metric formula itself is sourced from
+:class:`~orpheus.numerics.basis.SphericalHarmonicBasis` so the
 :math:`(2\ell+1)` literal exists in exactly one place.
 
 What this enables
@@ -16,15 +18,21 @@ What this enables
 The discrete spherical-harmonic :class:`~orpheus.numerics.frame.GalerkinFrame`'s
 codomain is this space **re-dressed by the frame** (F-0,
 ``frame_square_recarve.md``): :meth:`SphericalHarmonicSpace.from_L` carries the
-CONTINUUM Gram :math:`g_C = 4\pi/(2\ell+1)`, and :attr:`FrameBase.basis_space
-<orpheus.numerics.frame.FrameBase.basis_space>` REPLACES the metric with the
-PARSEVAL metric — the inverse of the frame's discrete Gram,
-:math:`(2\ell+1)/4\pi` on a degree-exact sphere rule — because the carried
-moments are COVARIANT (:math:`\varphi = Gc`) and only :math:`G^{-1}` makes
-analysis an isometry onto its image (`[M]` ``scratch/probe_f1_parseval.py``,
-2026-08-24: continuum-side Parseval ratio 118.7 vs 1.000). The generic
-``AdjointOperator`` machinery then computes ``frame.analysis.H`` as the
-physical :math:`S_0 \circ G^{-1} = R/W` with no bespoke code.
+CONTINUUM Gram :math:`g_C = 4\pi/(2\ell+1)` as its head axis's measure, and
+:attr:`FrameBase.basis_space <orpheus.numerics.frame.FrameBase.basis_space>`
+re-weights that axis with the PARSEVAL metric — the inverse of the frame's
+discrete Gram, :math:`(2\ell+1)/4\pi` on a degree-exact sphere rule (a
+positioned matrix pseudo-inverse where the Gram is dense) — because the
+carried moments are COVARIANT (:math:`\varphi = Gc`) and only :math:`G^{-1}`
+makes analysis an isometry onto its image (`[M]` ``scratch/probe_f1_parseval.py``,
+2026-08-24: continuum-side Parseval ratio 118.7 vs 1.000). Since CS4c step 6
+item 6.2c-ii (ruling R-6.2c-1, 2026-09-08: *the carrier's norm is the
+field's energy*) that dressed head is the ONE moment space the tree binds
+— the carrier's cached moment space, every moment field, every operator
+end — and the two heads are structurally UNEQUAL (the measure enters the
+identity), so the metric-blind seam that let them pass for one is gone.
+The generic ``AdjointOperator`` machinery then computes ``frame.analysis.H``
+as the physical :math:`S_0 \circ G^{-1} = R/W` with no bespoke code.
 
 ERR-039 in one sentence: the addition-theorem reconstruction
 :math:`R = (2\ell+1) S_0` and the analysis face's Hilbert adjoint
@@ -53,8 +61,10 @@ from typing import Optional
 import numpy as np
 from numpy.typing import NDArray
 
+from orpheus.numerics.axis import BasisKind, HarmonicAxis
 from orpheus.numerics.basis.spherical_harmonic_basis import SphericalHarmonicBasis
 from orpheus.numerics.space import FunctionSpace
+from orpheus.numerics.spaces.moment_head import truncated_head
 
 
 __all__ = ["SphericalHarmonicSpace"]
@@ -115,16 +125,19 @@ class SphericalHarmonicSpace(FunctionSpace):
     shape : tuple[int, ...]
         Inherited from :class:`FunctionSpace`. MUST equal
         ``(L + 1, 2 * L + 1)``; ``__post_init__`` checks.
-    inner_product_weights : NDArray, optional
-        Inherited from :class:`FunctionSpace`. The padded ``(L+1, 2L+1)``
-        metric tensor, zero in the :math:`|m| > \ell` padding. WHICH metric
-        depends on the instance's provenance: :meth:`from_L` installs the
-        CONTINUUM Gram (row :math:`\ell` holds :math:`4\pi/(2\ell+1)`),
-        while a frame's dressed ``basis_space`` — built from this same class
-        via :func:`dataclasses.replace` — carries the PARSEVAL inverse
-        (:math:`(2\ell+1)/4\pi` on a degree-exact rule; F-0,
-        :attr:`FrameBase.basis_space
-        <orpheus.numerics.frame.FrameBase.basis_space>`).
+    axes : tuple[HarmonicAxis], optional
+        Inherited from :class:`FunctionSpace`. ONE
+        :class:`~orpheus.numerics.axis.HarmonicAxis` (CS4c step 6 item
+        6.2c-ii) whose measure is the padded ``(L+1, 2L+1)`` metric tensor,
+        zero in the :math:`|m| > \ell` padding. WHICH metric depends on the
+        instance's provenance: :meth:`from_L` installs the CONTINUUM Gram
+        (row :math:`\ell` holds :math:`4\pi/(2\ell+1)`, the basis its
+        generator), while a frame's dressed ``basis_space`` — built from
+        this same class via :func:`dataclasses.replace` — carries the
+        PARSEVAL inverse (:math:`(2\ell+1)/4\pi` on a degree-exact rule;
+        the frame its generator; F-0, :attr:`FrameBase.basis_space
+        <orpheus.numerics.frame.FrameBase.basis_space>`). The legacy
+        ``inner_product_weights`` slot stays ``None``.
     L : int, default 0
         Maximum harmonic degree retained. Must satisfy
         ``shape == (L + 1, 2 * L + 1)``.
@@ -137,10 +150,11 @@ class SphericalHarmonicSpace(FunctionSpace):
     :attr:`FunctionSpace.inner_product_weights` which has a default,
     so every subsequent field must also have one.
 
-    Equality and hashing are by ``(name, shape)`` alone (inherited from
-    :class:`FunctionSpace`); ``shape == (L+1, 2L+1)`` already encodes
-    :math:`L`, so equal-:math:`L` spaces compare equal even when their
-    ``inner_product_weights`` arrays are distinct ``ndarray`` objects.
+    Equality and hashing are STRUCTURAL (inherited from
+    :class:`FunctionSpace` since the identity flip, CS4c step 6): the head
+    axis — family, order, measure — is the identity, so a frame-dressed
+    head and the continuum head of the same order are two spaces, and two
+    dressed heads over one pairing are one.
     """
 
     L: int = 0
@@ -159,15 +173,13 @@ class SphericalHarmonicSpace(FunctionSpace):
 
     # ── Equality / hashing inherited from FunctionSpace ───────────────
     #
-    # FunctionSpace defines explicit __eq__ and __hash__ on (name, shape).
-    # The @dataclass(frozen=True) decorator on this subclass would
-    # otherwise auto-generate its own __eq__ / __hash__ that compare ALL
-    # fields (including the ndarray inner_product_weights) — and ndarray
-    # equality returns an array, raising at use time.  Explicitly
-    # delegating restores the (name, shape) identity convention; ``L``
-    # is already encoded in ``shape`` so excluding it from equality is
-    # consistent with the abstract-vector-space framing where the
-    # identity of a space is its type tag + dimension.
+    # FunctionSpace defines explicit structural __eq__ and __hash__ (the
+    # axes when both sides carry them). The @dataclass(frozen=True)
+    # decorator on this subclass would otherwise auto-generate its own
+    # __eq__ / __hash__ that compare ALL fields (including ndarray-bearing
+    # ones) — and ndarray equality returns an array, raising at use time.
+    # Explicitly delegating keeps the structural identity; ``L`` is
+    # already encoded in the head axis's shape.
 
     def __eq__(self, other: object) -> bool:
         return FunctionSpace.__eq__(self, other)
@@ -178,8 +190,37 @@ class SphericalHarmonicSpace(FunctionSpace):
     # ── Constructor ──────────────────────────────────────────────────
 
     @classmethod
+    def for_basis(cls, basis: SphericalHarmonicBasis) -> "SphericalHarmonicSpace":
+        r"""The coefficient space ``basis`` spans — THE mint of the harmonic
+        head (CS4c step 6 item 6.2c-ii): one :class:`~orpheus.numerics.axis.HarmonicAxis`
+        carrying the basis's continuum Gram on the padded layout, and
+        ``basis`` itself as the axis's generator (provenance is the object
+        that spans the head — the σ-even restriction's head is generated by
+        the σ-even basis, not by a plain-harmonic re-mint of its order).
+        :attr:`SphericalHarmonicBasis.space` delegates here; :meth:`from_L`
+        is the order-only sugar over the plain family.
+        """
+        L = basis.L
+        shape = (L + 1, 2 * L + 1)
+        head_axis = HarmonicAxis(
+            "harmonic",
+            shape,
+            _padded_metric_tensor(L, basis.metric_per_ell),
+            kind=BasisKind.MODAL,
+            generator=basis,
+        )
+        return cls(
+            name="spherical_harmonic_space",
+            shape=shape,
+            axes=(head_axis,),
+            L=L,
+        )
+
+    @classmethod
     def from_L(cls, L: int) -> "SphericalHarmonicSpace":
-        r"""Construct the canonical SH space for truncation degree :math:`L`.
+        r"""Construct the canonical SH space for truncation degree :math:`L`
+        — the plain real-harmonic family's head, :meth:`for_basis` over
+        ``SphericalHarmonicBasis(L=L)``.
 
         Builds the metric tensor from :class:`SphericalHarmonicBasis` so
         the :math:`(2\ell+1)` / :math:`4\pi/(2\ell+1)` formulas live in
@@ -194,20 +235,15 @@ class SphericalHarmonicSpace(FunctionSpace):
         -------
         SphericalHarmonicSpace
             With ``name="spherical_harmonic_space"``,
-            ``shape=(L+1, 2L+1)``, and ``inner_product_weights`` carrying
-            the padded :math:`4\pi/(2\ell+1)` CONTINUUM Gram. (A frame's
+            ``shape=(L+1, 2L+1)``, and ONE :class:`~orpheus.numerics.axis.HarmonicAxis`
+            whose measure is the padded :math:`4\pi/(2\ell+1)` CONTINUUM
+            Gram and whose generator is the basis. (A frame's
             ``basis_space`` is this object re-dressed with the discrete
             Parseval inverse — :attr:`FrameBase.basis_space
-            <orpheus.numerics.frame.FrameBase.basis_space>`, F-0.)
+            <orpheus.numerics.frame.FrameBase.basis_space>`, F-0 — the
+            moment space the tree binds.)
         """
-        basis = SphericalHarmonicBasis(L=L)
-        weights = _padded_metric_tensor(L, basis.metric_per_ell)
-        return cls(
-            name="spherical_harmonic_space",
-            shape=(L + 1, 2 * L + 1),
-            inner_product_weights=weights,
-            L=L,
-        )
+        return cls.for_basis(SphericalHarmonicBasis(L=L))
 
     # ── Delegated properties (single source of truth in the basis) ───
 
@@ -228,28 +264,21 @@ class SphericalHarmonicSpace(FunctionSpace):
         """
         return self.basis.metric_per_ell
 
-    def truncated(self, L_new: int) -> "SphericalHarmonicSpace":
+    def truncated(self, L_new: int) -> "FunctionSpace":
         r"""This family's space at the lower order ``L_new`` — the head a moment field truncates TO.
 
         The moment carrier truncates by asking its angular HEAD factor for
         the same family one order down, never by re-minting a family from
         an integer (#429 tracker 2.5): a Legendre head truncates to a
-        Legendre head, a spherical-harmonic head to this. Returns the
-        CONTINUUM-metric member (:meth:`from_L`) under THIS head's own
-        name — the head keeps its identity and only its order moves — so
-        a frame-dressed head drops its Parseval dressing on truncation,
-        exactly as it always did: the metric is the frame's to install,
-        never the field's to carry across orders. (The production name
-        is the class's canonical one, so this is bit-identical to the
-        ``from_L(L_new)`` it replaced; what it refuses to do is hand a
-        renamed head back the default name — the tell of an integer mint.)
+        Legendre head, a spherical-harmonic head to this. Re-minted by the
+        head axis's GENERATOR (:func:`~orpheus.numerics.spaces.moment_head.truncated_head`,
+        CS4c step 6 item 6.2c-ii): the basis re-spans the continuum head at
+        ``L_new``; a frame re-DRESSES its Parseval head at ``L_new`` — the
+        metric is the frame's to install at every order, and the truncated
+        head is structurally the carrier's own space at ``L_new``. The head
+        keeps its identity (its name) and only its order moves.
         """
-        if not 0 <= L_new <= self.L:
-            raise ValueError(
-                f"SphericalHarmonicSpace.truncated: L_new={L_new} must lie "
-                f"in [0, {self.L}]."
-            )
-        return replace(type(self).from_L(L_new), name=self.name)
+        return truncated_head(self, L_new)
 
     # ── the MomentHead surface (orpheus.numerics.spaces.moment_head) ──
 

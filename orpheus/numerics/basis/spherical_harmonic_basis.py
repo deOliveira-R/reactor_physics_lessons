@@ -90,7 +90,7 @@ References
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cached_property
 from math import factorial, sqrt
 from typing import TYPE_CHECKING
@@ -420,16 +420,25 @@ class SphericalHarmonicBasis(Basis):
     def space(self) -> "SphericalHarmonicSpace":
         r"""The :class:`SphericalHarmonicSpace` of degree :math:`L` this basis spans.
 
-        Its Gram :math:`g_C = \mathrm{diag}(4\pi/(2\ell+1))` (carried as
-        ``inner_product_weights``) is the codomain metric the spherical-harmonic
-        :class:`~orpheus.numerics.frame.GalerkinFrame` and the Hilbert-adjoint
-        machinery read. Lazy import: ``SphericalHarmonicSpace`` imports this basis,
-        so a top-level import would cycle.
+        Axis-built (CS4c step 6 item 6.2c-ii): one
+        :class:`~orpheus.numerics.axis.HarmonicAxis` whose measure is the
+        continuum Gram :math:`g_C = \mathrm{diag}(4\pi/(2\ell+1))` on the
+        padded layout, this basis its generator. The spherical-harmonic
+        :class:`~orpheus.numerics.frame.GalerkinFrame` re-dresses it with the
+        discrete Parseval inverse (:attr:`~orpheus.numerics.frame.FrameBase.basis_space`)
+        — that dressed head is the moment space the tree binds. Lazy import:
+        ``SphericalHarmonicSpace`` imports this basis, so a top-level import
+        would cycle.
         """
         from orpheus.numerics.spaces.spherical_harmonic_space import (
             SphericalHarmonicSpace,
         )
-        return SphericalHarmonicSpace.from_L(self.L)
+        return SphericalHarmonicSpace.for_basis(self)
+
+    def at_order(self, L_new: int, /) -> "SphericalHarmonicBasis":
+        r"""This family (the same class — the σ-even restriction stays σ-even)
+        cut at degree ``L_new``."""
+        return replace(self, L=L_new)
 
 
 

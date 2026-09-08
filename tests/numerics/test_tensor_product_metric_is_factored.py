@@ -207,31 +207,35 @@ def test_g2_1_dense_and_factored_metric_arms_agree_to_the_measured_band(geometry
             )
 
 
-def test_g2_2_the_moment_product_carries_a_factored_metric_and_no_dense_slot():
-    r"""Item 6.2a LANDED (2026-09-07): on every shipped SN mint the product
-    of the angular head with the axis-built bulk carries a
-    :class:`FactoredMetric` positioned per block and NO dense weights.
+def test_g2_2_the_moment_product_carries_no_dense_slot_and_threads_its_axes():
+    r"""Item 6.2c-ii LANDED (2026-09-08): on every shipped SN mint the angular
+    head is AXIS-BUILT, so ``head * bulk`` takes ``from_factors``' axis arm —
+    the product's ``axes`` is the concatenation, ``inner_product_weights`` is
+    ``None``, and the metric is DERIVED from the axes (no object at all on a
+    DIAGONAL-Gram frame; on a DENSE-Gram frame the head's positioned
+    pseudo-inverse rides beside the axes as the product's overlay of forms,
+    item 6.2c-i).
 
-    Until 6.2a this row (then ``test_g2_1b``) pinned the OPPOSITE premise:
-    ``from_factors`` took the DENSE arm on every shipped mint, because the
-    head is ``axes=None`` with a dense ``inner_product_weights`` slot and
-    no metric object, so the P7 factored arm fired 0 times across 11
-    measured SN runs. The head is STILL axes-less here — item 6.2c makes
-    it axis-built — which is why the product's ``axes`` is ``None``; the
-    row keeps the two facts apart so the day 6.2c lands the suite says
-    which claim moved (lessons L61a / L73a: gate the premise).
+    History, kept apart so the suite says which claim moved: until 6.2a
+    (then ``test_g2_1b``) the product took the DENSE arm and formed a
+    ``(L+1, 2L+1, ng, nx[, ny])`` weights tensor per mint; from 6.2a to
+    6.2c-ii (then this row's previous body) it took the FACTORED arm —
+    one ``DiagonalMetric`` entry for the axes-less head's dense slot plus
+    one per bulk axis — with ``axes is None``.
 
-    Block structure asserted: one entry for the head (its dense slot as a
-    ``DiagonalMetric``) plus one entry per BULK AXIS — per axis, never per
-    factor, so no ``(ng, nx[, ny])`` tensor is formed for the bulk either.
+    Value leg: the product's pairing equals the head's pairing times the
+    bulk's, on the Parseval-dressed head every consumer now holds.
     """
+    from orpheus.numerics.frame import GramStructure
+
     findings: list[str] = []
     for geometry, factory in _GEOMETRIES.items():
         sn_mesh = factory()
         bulk_axes = sn_mesh.bulk_space.axes
         assert bulk_axes is not None, "the carrier's bulk space is of_axes-built"
         for L in _ORDERS:
-            head = sn_mesh.quad.angular_frame(L).basis.space
+            frame = sn_mesh.quad.angular_frame(L)
+            head = frame.basis_space
             product = head * sn_mesh.bulk_space
             findings.append(
                 f"{geometry} L={L}: head.axes={head.axes is not None} "
@@ -239,39 +243,33 @@ def test_g2_2_the_moment_product_carries_a_factored_metric_and_no_dense_slot():
                 f"product.ipw={product.inner_product_weights is not None} "
                 f"product.metric={type(product.metric).__name__}"
             )
-            if head.axes is not None:
+            if head.axes is None or product.axes is None:
                 pytest.fail(
-                    "the angular head is axis-built — item 6.2c has landed; "
-                    "re-pose this row on the all-axes arm.\n  "
-                    + "\n  ".join(findings)
+                    "the angular head / the moment product is not axis-built — "
+                    "item 6.2c-ii regressed.\n  " + "\n  ".join(findings)
                 )
+            assert len(product.axes) == 1 + len(bulk_axes)
+            assert product.axes[0] is head.axes[0]
             if product.inner_product_weights is not None:
                 pytest.fail(
-                    f"[{geometry} L={L}] the moment product still DENSIFIES "
+                    f"[{geometry} L={L}] the moment product DENSIFIES "
                     f"({product.inner_product_weights.nbytes} B).\n  "
                     + "\n  ".join(findings)
                 )
-            if not isinstance(product.metric, FactoredMetric):
-                pytest.fail(
-                    f"[{geometry} L={L}] the moment product carries "
-                    f"{type(product.metric).__name__}, not a FactoredMetric.\n  "
-                    + "\n  ".join(findings)
-                )
-            expected_blocks = 1 + len(bulk_axes)
-            if len(product.metric.entries) != expected_blocks:
-                pytest.fail(
-                    f"[{geometry} L={L}] the factored metric has "
-                    f"{len(product.metric.entries)} blocks; expected "
-                    f"{expected_blocks} (the head + one per bulk axis) — the "
-                    f"bulk factor is being positioned per FACTOR, i.e. densified"
-                )
-            head_block, head_metric = product.metric.entries[0]
-            if head_block != head.shape or not isinstance(head_metric, DiagonalMetric):
-                pytest.fail(
-                    f"[{geometry} L={L}] the head's block is {head_block} with "
-                    f"{type(head_metric).__name__}; expected {head.shape} with a "
-                    f"DiagonalMetric carrying its dense slot"
-                )
+            if frame.discrete_gram_structure is GramStructure.DENSE:
+                assert isinstance(product.metric, FactoredMetric)
+                forms = [f for _, f in product.metric.entries]
+                assert forms[0] is not None and all(f is None for f in forms[1:])
+            else:
+                assert product.metric is None
+            # the value leg: the product pairing factorises over the head and the bulk
+            rng = np.random.default_rng(L + 7)
+            x = rng.standard_normal(head.shape)
+            y = rng.standard_normal(sn_mesh.bulk_space.shape)
+            xy = np.multiply.outer(x, y)
+            want = float(head.inner_product(x, x)) * float(sn_mesh.bulk_space.inner_product(y, y))
+            np.testing.assert_allclose(product.inner_product(xy, xy), want, rtol=1e-12)
+
 
 
 # ═════════════════════════════════════════════════════════════════════════

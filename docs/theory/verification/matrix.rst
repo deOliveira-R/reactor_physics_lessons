@@ -9,7 +9,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **11860**
+Total tests collected: **11914**
 
 V&V level distribution
 ----------------------
@@ -18,11 +18,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 1304, 11.0%
-   L1, 1755, 14.8%
+   L0, 1304, 10.9%
+   L1, 1755, 14.7%
    L2, 71, 0.6%
    L3, 0, 0.0%
-   foundation, 8704, 73.4%
+   foundation, 8758, 73.5%
    unmarked, 26, 0.2%
 
 Tagging source
@@ -34,7 +34,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 11755
+   explicit, 11809
    class-name, 46
    func-name, 0
    case, 33
@@ -276,6 +276,7 @@ Module × level grid
    fields/test_role_partners, 0, 0, 0, 0, 22, 0
    fields/test_scalar_boundary_flux, 0, 0, 0, 0, 15, 0
    frames/test_binding_tightness, 0, 0, 0, 0, 20, 0
+   frames/test_frame_mints_refuse_a_moment_space, 0, 0, 0, 0, 4, 0
    frames/test_harmonic_frame, 0, 0, 0, 0, 29, 0
    frames/test_moment_metric_fork_premise, 0, 0, 0, 0, 101, 0
    frames/test_moment_space_is_read_off_the_frame, 0, 0, 0, 0, 36, 0
@@ -307,6 +308,7 @@ Module × level grid
    mc/test_properties, 24, 0, 0, 0, 0, 0
    mesh/test_angular_bulk_space, 0, 0, 0, 0, 24, 0
    mesh/test_cylindrical_quadrature_admission, 0, 0, 0, 0, 16, 0
+   mesh/test_hub_and_frame_agree_on_the_moment_space, 0, 0, 0, 0, 36, 0
    mesh/test_hub_owns_the_moment_space, 0, 0, 0, 0, 11, 0
    mesh/test_radial_characteristic_carrier, 0, 0, 0, 0, 13, 0
    mesh/test_radial_characteristic_slot_coordination, 0, 0, 0, 0, 25, 0
@@ -365,6 +367,7 @@ Module × level grid
    numerics/test_full_field_space, 0, 0, 0, 0, 7, 0
    numerics/test_generating_measure, 0, 78, 0, 0, 178, 0
    numerics/test_green_operator, 0, 0, 0, 0, 11, 0
+   numerics/test_harmonic_axis, 0, 0, 0, 0, 11, 0
    numerics/test_indicator_basis, 0, 0, 0, 0, 11, 0
    numerics/test_inner_product_functional, 4, 0, 0, 0, 0, 0
    numerics/test_invariance, 0, 0, 0, 0, 120, 0
@@ -379,7 +382,7 @@ Module × level grid
    numerics/test_measure, 0, 17, 0, 0, 48, 0
    numerics/test_measure_partition, 12, 0, 0, 0, 0, 0
    numerics/test_measure_phase, 0, 0, 0, 0, 12, 0
-   numerics/test_moment_head_axis_built_premise, 0, 0, 0, 0, 78, 0
+   numerics/test_moment_head_axis_built_premise, 0, 0, 0, 0, 81, 0
    numerics/test_operator, 0, 0, 0, 0, 59, 0
    numerics/test_operator_capability_predicates, 0, 0, 0, 0, 26, 0
    numerics/test_operator_protocols, 0, 0, 0, 0, 16, 0

@@ -83,7 +83,7 @@ is ``0.000e+00`` off-diagonal at :math:`d = 2` and **``4.05e-01``** at
 :math:`1\times1` Gram is diagonal for free), and a suite that only exercised
 :math:`d = 2` would certify ``DIAGONAL`` on a basis that is 43 % off-diagonal
 where it matters — producing a silently mis-normalised projector, because
-:attr:`~orpheus.numerics.frame.FrameBase.gram`'s row-sum probe equals the true
+:attr:`~orpheus.numerics.frame.FrameBase.gram_inverse`'s row-sum probe equals the true
 diagonal only when :math:`MR` is diagonal. **Every d=3 row in this file exists
 for that reason; do not trim them to speed the suite up.**
 """
@@ -343,7 +343,7 @@ def test_each_block_gram_is_the_identity_which_is_what_earns_DIAGONAL(
     r"""⭐ :math:`\Phi^{\mathsf T} G \Phi = I` per block — the load-bearing gate.
 
     :attr:`LossKernelBasis.gram_structure` declares ``DIAGONAL``, and
-    :attr:`~orpheus.numerics.frame.FrameBase.gram` computes its diagonal by the
+    :attr:`~orpheus.numerics.frame.FrameBase.gram_inverse` computes its diagonal by the
     row-sum probe ``analysis(reconstruction(ones))``, which equals the true
     diagonal ONLY if :math:`MR` is diagonal. So the declaration is a promise
     about this matrix, and if it were false the projector would be silently
@@ -381,7 +381,7 @@ def test_the_frame_gram_probe_agrees_with_the_true_gram():
     """The frame's own row-sum shortcut returns all ones, as orthonormality implies.
 
     Closes the loop between the declaration and the machinery that consumes it:
-    this asserts the value ``FrameBase.gram`` actually computes, not the matrix
+    this asserts the value ``FrameBase.gram_inverse`` actually computes, not the matrix
     we believe it stands for.
     """
     from orpheus.numerics.frame import GalerkinFrame
@@ -406,7 +406,7 @@ def test_the_frame_gram_probe_agrees_with_the_true_gram():
             DiscreteMeasure(nodes=indices.astype(float),
                             weights=metric[indices], support=block.basis.domain),
         )
-        diagonal = np.asarray(frame.gram.inner_product_weights)
+        diagonal = np.asarray(frame.gram_inverse.diagonal)
         np.testing.assert_allclose(diagonal, np.ones_like(diagonal), atol=1e-12)
 
 

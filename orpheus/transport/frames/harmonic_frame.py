@@ -64,12 +64,14 @@ codomain leaking into the apply signature — user diagnosis, 2026-08-22). Its
 spherical-harmonic factor is the frame's OWN F-0-dressed
 :attr:`~orpheus.numerics.frame.FrameBase.basis_space`, so the Parseval metric
 rides into the product codomain with a single source: the frame's codomain IS
-the SH factor. (``dataclasses.replace`` preserves ``(name, shape)``, so the
-derived product still content-equals the carrier's own cached moment space
-— :meth:`SNMesh.moment_space <orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>`
-since CS4c step 6 item 6.2b, the object every moment field and admission
-guard on that carrier holds — the admission seam is metric-blind: the two
-are one ``(name, shape)`` and two metrics, the frame's Parseval-dressed and
+the SH factor. Since CS4c step 6 item 6.2c-ii (ruling R-6.2c-1) the
+carrier's own cached moment space —
+:meth:`SNMesh.moment_space <orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>`,
+the object every moment field and admission guard on that carrier holds —
+reads the SAME dressed head, so the derived product is STRUCTURALLY equal
+to it (one space, two owners, ruling O-5); until then the admission seam
+was metric-blind: the two were one ``(name, shape)`` and two metrics, the
+frame's Parseval-dressed and
 the carrier's continuum one (#429 tracker 2.5, Landing A). Item 6.2c, which
 makes the head axis-built and its weights part of the identity, is where
 that seam is decided.)
@@ -342,11 +344,13 @@ class HarmonicFrame(GalerkinFrame):
     ``quadrature.angular_frame(L)`` via :meth:`from_galerkin`. WHICH family
     the frame binds is the quadrature's decision, derived from the point
     set its measure lives on; this frame reads the basis it is handed. ⭐
-    The basis is the single source of the angular coefficient space: the
-    operator ends and the moment fields minted downstream read
-    ``frame.basis.space`` (#429 tracker 2.5, 2026-09-02 — until then seven
-    production sites re-minted it from ``L`` as the full-sphere family,
-    which is exactly the family a 1-D rule must NOT bind). Identity is the
+    The FRAME is the single source of the angular coefficient space: the
+    operator ends and the moment fields minted downstream read its
+    Parseval-dressed ``basis_space`` (CS4c step 6 item 6.2c-ii, ruling
+    R-6.2c-1; #429 tracker 2.5 had bound the basis's own ``basis.space``
+    on 2026-09-02 — until then seven production sites re-minted it from
+    ``L`` as the full-sphere family, which is exactly the family a 1-D
+    rule must NOT bind). Identity is the
     table's identity: two frames over the same pairing are the same
     projection, and every face minted here shares this frame's cached table
     and F-0 Parseval codomain.
@@ -470,6 +474,7 @@ class HarmonicFrame(GalerkinFrame):
         L), never the reverse.
         """
         from orpheus.numerics.moment_layout import SPATIAL_MOMENT_AXIS_LABEL
+        from orpheus.numerics.quadrature.directional import Quadrature
         from orpheus.numerics.space import FunctionSpace
         from orpheus.numerics.spaces.spatial_moment_space import (
             SpatialMomentSpace,
@@ -484,6 +489,12 @@ class HarmonicFrame(GalerkinFrame):
                 "cannot name the cell axes the moment codomain is derived "
                 "from."
             )
+        # The leading axis must be the QUADRATURE's per-ordinate axis — a
+        # moment space is axis-built too since CS4c step 6 item 6.2c-ii
+        # (its leading axis is a MODAL head minted by a basis or a frame),
+        # so the axes-less refusal above no longer catches it; this does,
+        # by name (hazard H-6: a guard must not silently lose its subject).
+        axes[0].generator_as(Quadrature, consumer="HarmonicFrame.moment_space_on")
         cell_axes = [
             ax for ax in axes[1:] if ax.label != SPATIAL_MOMENT_AXIS_LABEL
         ]

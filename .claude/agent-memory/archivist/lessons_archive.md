@@ -11828,3 +11828,122 @@ Jacobi-upper identity 4/4 and ran a 40-seed sweep that refuted a published
 band) · Failed approaches 5 (the retention ruling preserved verbatim + why it
 was overridden) · Code traceability 5 · Derivation source n/a. Weakest:
 derivation depth — this was a retirement pass, not a math pass.
+
+
+## L-100 — a RULING that OVERTURNS a landed one: the errata are not enough, the ANSWER's own heading is
+
+**Task.** CS4c step 6 items 6.2c-i/-ii (2026-09-08): the moment head became axis-built and
+ruling R-6.2c-1 overturned #429 tracker 2.5's "Landing A" choice of coefficient end.
+7 theory pages, +1144/−152.
+
+### (a) ⭐⭐ A page that ANSWERS a question in its own section title needs the status banner AT
+THE TITLE, not only at the errata — because §3's "refuted text stays" guarantees the wrong
+answer is the one a top-down reader meets first
+
+`frame.rst` carried a sub-subsection literally titled *"Which space, though — ``basis.space``
+or ``basis_space``?"*, ~340 lines of argument, and a closing "unchanged by 6.2b" note. The
+answer flipped. Putting the refutation only in a trailing block would have left every
+summariser — human or model — reading 300 lines of a **correct, careful, and now-wrong**
+argument before reaching the reversal. Repair shape that worked:
+
+1. an `.. important::` **immediately under the title**, stating "answered twice", both dates,
+   both rulings, and the one-sentence ruling;
+2. the original argument preserved verbatim, prefixed *(Written 2026-09-02, and preserved:)*;
+3. a `⛔ REFUTED` block right after it, with the three findings each carrying its denominator;
+4. a NEW labelled section (`frame-the-one-moment-space`) for the resolution, so other pages
+   can `:ref:` the ANSWER rather than the debate;
+5. the sibling headings (`⚠ Gotcha…`, `Why the continuum space is the right end…`) each got
+   their own banner — a heading is a claim, and a **bolded heading is the highest-decay
+   sentence on a page**.
+
+⚠ The tell that a title needs this: the title contains a QUESTION, a VERDICT ("is the right
+end for"), or a state ("is unchanged by"). Grep `^~\{4,\}`/`^-\{4,\}` neighbours for those.
+
+### (b) ⭐⭐ Two `[M]` numbers can BOTH be honest and DISAGREE — the difference is the STATISTIC,
+and a docs pass must not relay a brief's "REFUTED" without finding out which
+
+The brief said Landing A's *"the adjoint moves on 10 of 33 rows"* was REFUTED at **5 of 33**.
+Both are right. The page's 10 is a **matrix-level** relative Frobenius (every basis vector
+pushed through both arms); the memo's 5 is **applied to one draw**. Writing "the 10 was wrong"
+would have published a false refutation of a correct measurement. What actually refutes the
+*conclusion* is a third statistic nobody had taken: **0 of 33** on a PHYSICAL moment
+`φ = Mψ`, because the differing columns are off the range of `M`.
+⟹ before writing "⛔ REFUTED", ask **what did each side MEASURE?** — and if the statistics
+differ, the honest deliverable is a retraction of the *reading*, not of the number. I wrote
+the table's numbers as standing and tombstoned its interpretation in two named parts:
+(a) the statistic ranges over vectors production cannot produce; (b) the comparison has one
+leg (the continuum end's Parseval cost was never priced).
+
+### (c) ⭐ A `==`-gate's blindness is a property of the IDENTITY RELATION, not of the gate —
+so a re-typing silently upgrades or downgrades every equality assertion in the corpus
+
+`spaces.rst` ruling 2 said *"Identity stays metric-blind … the* `basis_space == basis.space`
+*invariant survives the dressing untouched"*, and a `vv #19` note said a `==` gate therefore
+"cannot adjudicate". Both were true and both inverted when the measure entered the identity
+(`[M]` 0 of 33 where it was 33 of 33). Nothing in either file changed. ⟹ when a carve moves a
+field INTO an identity, grep the corpus for `metric-blind` / `cannot tell them apart` /
+`(name, shape)`-equal and re-derive each: some become false, and some become *stronger* claims
+that now under-sell a real gate (the mirror in `coding-standards`).
+⭐ The reusable sentence I published: *whether a `==` gate is blind or discriminating is a
+property of the identity relation, not of the gate.*
+
+### (d) ⭐⭐ A "declared and unbuilt" seam is discharged by a DIFFERENT phase than it predicts,
+and 3 of the 4 clauses of the prediction were wrong — keep them all
+
+`spaces.rst` carried *"No MODAL axis has a generator yet, and no `Basis` can mint one … The
+arm becomes real when CS2 mints the harmonic axis."* Item 6.2c-ii made it real. `[M]` the
+prediction was wrong three ways and right once: **not CS2** (it was the metric's phase); the
+mint verb is **not `Basis.axis`** (`hasattr(Basis,"axis")` is STILL `False` — the axis is built
+inside `for_basis`, so the section law `a.generator.axis(label) == a` still does NOT range over
+MODAL axes); and the generator is **not always the basis** (it is the FRAME on the dressed head,
+which is why the annotation gained a `FrameBase` arm). Right clause: it did give
+`has_coordinate_cone`'s `False` arm its first production witness.
+⟹ a ✅-discharge is a four-part audit, not a tense flip: *did the predicted PHASE do it, the
+predicted MECHANISM, the predicted OBJECT, and does the law that rode on it now hold?*
+
+### (e) ⭐ A retired ACCESSOR that returned a metric-TWIN space is a docs event, not just a
+rename — and its dead `:attr:` refs are invisible at every Sphinx severity
+
+`FrameBase.gram` (the TEST space re-dressed with the probe as its metric) retired into the
+arrow `CrossGramInverse` / `gram_inverse`. `[M]` **11** dead `:attr:`/`:meth:` refs in
+`docs/theory` (6 mine to fix, 1 an `.. implements:: :by:` the main agent took, 3 more it
+flagged, 1 in a historical entry) and **4 more in `orpheus/` docstrings** that only
+`dead_references` can see. Two distinct repairs, and the choice is per-site:
+- a **live** description → re-point to `gram_inverse` (and re-word if the sentence says a SPACE
+  carries the probe as its metric — the arrow does not);
+- a **historical** entry → make the old name a plain ``literal`` + name the successor. Do NOT
+  re-point history's subject; the P7 entry is *about* `gram` having had to strip a dressing.
+
+### (f) ⭐ The "landed hash" convention has an exception clause, and reading it found a STALE
+✅ row two entries above where I was writing
+
+`history.rst`'s preamble: an entry lands **with its merge hash**; the only exception is a Where
+column naming an *unmerged branch*. The item-6.5 row read `in dev (2026-09-07)` / *"the CS4c
+step-6 carve on ``main`` (uncommitted at the time of writing)"* — which names `main`, not a
+branch, so the clause does not cover it. `[M]` `79d2944a`'s subject IS that item's title and it
+is an ancestor of HEAD. Stamped it. (L-099's lesson, paying again: read the page's own statement
+of a convention rather than the neighbours' behaviour.)
+
+### (g) ⚠ Verify the ISSUE in a changelog's Issue column before writing it
+
+I drafted `#448` for the 6.2c dev-history row from campaign context. `gh issue view 448` →
+*"SN finalize reconstructs the returned angular flux from a P0-only source"* — a different piece
+of work. The neighbouring rows show `—` is the corpus's convention when no issue tracks the row.
+One `gh` call; a wrong issue link is a minted false claim (`process-discipline`).
+
+### (h) Measurements I took rather than relayed (all re-run this session, host `.venv`)
+
+| claim | mine |
+|---|---|
+| `frame.basis_space == frame.basis.space` | **0 of 33** (was 33 of 33) |
+| dressed head `axes is not None` | 33 of 33 |
+| `has_coordinate_cone` on a dressed head | `False` × 33 (was `None`) |
+| Parseval ratio, dressed / continuum | **33/33 at 1.0** / **0/33**, range 4.07…**157.9137** — and the upper end is EXACT, `(4π)²` at ℓ=0 on a degree-exact rule, so publish it as structural and the lower end as draw-dependent |
+| DENSE Gram inventory | **17 of 75**, **2 at L ≤ 2** (`gauss_legendre(2)`, `folded_product(2,4)`, both L=2) — reproduces the memo to the row |
+| `factors` / `factors[0]` / `find_factor` survive axis-building | yes (ruling O-4 confirmed on a live product) |
+| un-widened moment product `axes is None` | **False**; widened (with the `SpatialMomentSpace` tail) **True** — which is what licenses "the tail is the remaining gap" |
+| axis mints in `orpheus/` | **11** by AST (7 `of_axes` + 4 `for_basis`), not the "1" a page claimed |
+| `hasattr(Basis, "axis")` | **False**, still |
+
+⚠ The Parseval lower end differed from the memo's (4.07 vs 3.41) — one draw per row. I published
+the range with the draw named and the upper end as the structural value. (L-071's family.)

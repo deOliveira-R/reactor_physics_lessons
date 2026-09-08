@@ -15,6 +15,50 @@ every retired symbol leaves no present-tense-false mention · the build's WARNIN
 
 ## 1. Ground truth is the LIVE tree — every other surface lies eventually
 
+- **⭐⭐ WHEN A RULING OVERTURNS A LANDED ONE, BANNER THE SECTION *TITLE* — §3 guarantees the
+  refuted answer is what a top-down reader meets FIRST.** A page whose sub-section is titled
+  with the QUESTION (*"Which space, though — X or Y?"*) or with a VERDICT (*"Why X is the
+  right end"*, *"unchanged by item N"*) carries the old answer in its highest-decay sentence.
+  Shape that worked: `.. important::` **under the title** (answered twice, both dates, the
+  one-sentence ruling) → the original argument preserved verbatim, prefixed *(Written
+  <date>, and preserved:)* → `⛔ REFUTED` with per-finding denominators → a NEW labelled
+  section for the ANSWER so siblings `:ref:` the resolution, not the debate. Banner every
+  sibling heading too. → L-100
+- **⭐⭐ TWO `[M]` NUMBERS CAN BOTH BE HONEST AND DISAGREE — the difference is the STATISTIC;
+  never relay a brief's "REFUTED" without asking what each side MEASURED.** `[M]` briefed
+  *"10 of 33 was refuted → 5 of 33"*; both are right (whole-MATRIX Frobenius vs applied to
+  ONE draw). What refutes the *conclusion* is a third statistic nobody had taken — **0 of 33**
+  on a physical `φ = Mψ`, the differing columns being off the range of `M`. ⟹ retract the
+  READING, not the number, and name the two defects separately (the statistic ranges over
+  inputs production cannot produce; the comparison has one leg — the other end's cost was
+  never priced). → L-100
+- **⭐⭐ A `==`-GATE'S BLINDNESS IS A PROPERTY OF THE IDENTITY RELATION, NOT OF THE GATE — a
+  re-typing silently upgrades or downgrades every equality assertion in the corpus, with no
+  file touched.** `[M]` *"identity stays metric-blind … the invariant survives the dressing"*
+  + a `vv #19` note saying a `==` gate "cannot adjudicate" both INVERTED when the measure
+  entered the identity (0 of 33 where it was 33 of 33). ⟹ after such a carve grep
+  `metric-blind` / `cannot tell them apart` / `(name, shape)`-equal and re-derive each: some
+  go false, some become STRONGER claims that now under-sell a real gate. → L-100
+- **⭐⭐ A "declared and unbuilt" SEAM is discharged by a different phase than it predicts —
+  audit FOUR clauses, don't flip a tense.** `[M]` *"no MODAL axis has a generator; the arm
+  becomes real when CS2 mints the harmonic axis"*: wrong PHASE (the metric's), wrong MECHANISM
+  (`hasattr(Basis,"axis")` is **still** False — built inside `for_basis`, so the section law
+  still does not range over MODAL axes), wrong OBJECT (the generator is the FRAME on a dressed
+  head, not the basis) — and right once. Ask: predicted phase? mechanism? object? does the law
+  that rode on it now hold? → L-100
+- **⭐ A RETIRED ACCESSOR THAT RETURNED A METRIC-TWIN SPACE needs a per-site choice, and its
+  dead `:attr:` refs are invisible at EVERY Sphinx severity.** `[M]` 11 dead refs in
+  `docs/theory` + 4 in `orpheus/` docstrings only `dead_references` sees. **Live** description
+  → re-point to the successor AND re-word if the sentence says a SPACE carries the probe (an
+  arrow does not); **historical** entry → old name as a plain ``literal`` + name the successor,
+  never re-point history's subject. → L-100
+- **⭐ READ THE CHANGELOG'S OWN EXCEPTION CLAUSE, AND VERIFY THE ISSUE COLUMN.** The "lands with
+  its hash" preamble excepts only a Where naming an *unmerged branch*; a row saying
+  *"uncommitted … on `main`"* is not covered — `[M]` its commit subject matched an ancestor of
+  HEAD, so I stamped it. Separately: `gh issue view` every number before writing it — my drafted
+  `#448` was a different piece of work, and `—` is the convention when nothing tracks the row.
+  → L-100, L-099
+
 **Meta-rule: the brief is the FLOOR; live code is the rule.** Brief, docstring, verdict memo,
 retirement shim, scanner finding, plan line and "MEASURED" block are point-in-time snapshots.
 Verify, then write, then FLAG every scope-expansion the verification forced.

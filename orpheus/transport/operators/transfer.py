@@ -119,6 +119,7 @@ from orpheus.transport.operators.isotropic_transfer import IsotropicTransfer
 from orpheus.transport.operators.lift import interior_space_of
 
 if TYPE_CHECKING:
+    from orpheus.numerics.frame import FrameBase
     from orpheus.transport.mesh.material_xs_field import MaterialXSField
 
 
@@ -217,14 +218,45 @@ class LegendreMomentTransfer(BoundOperator):
         skip_l0: bool = True,
     ) -> "LegendreMomentTransfer":
         r"""Tier-2 mint: bring a channel's field to the basis's order and
-        bind the endomorphic ends on the BASIS's coefficient space
+        bind the endomorphic ends on the BASIS's own coefficient space
         (``basis.space`` supplying both — the endomorphism sugar lives
-        HERE, never on the exact ctor). The basis is the single source of
-        the moment space (#429 tracker 2.5): an integer cannot say which
-        family — full harmonics on a sphere rule, Legendre on a 1-D rule
-        — so the caller hands the basis its frame bound, and the ends are
-        that basis's, never re-minted."""
+        HERE, never on the exact ctor). The basis names the FAMILY (#429
+        tracker 2.5: an integer cannot say which — full harmonics on a
+        sphere rule, Legendre on a 1-D rule), so the ends are that basis's
+        continuum-Gram space, never re-minted from ``L``. This is the
+        frame-less algebra mint (the test tier's); PRODUCTION binds Λ on
+        the frame's Parseval-dressed ``basis_space`` through the exact
+        ctor (:meth:`TransferOperator._moment_transfer`), the ONE moment
+        space the tree carries since CS4c step 6 item 6.2c-ii."""
         ends = basis.space
+        return cls(
+            transfer.at_order(basis.L),
+            skip_l0=skip_l0,
+            domain=ends,
+            codomain=ends,
+        )
+
+    @classmethod
+    def on_frame(
+        cls,
+        transfer: "TransferMaterialField",
+        frame: "FrameBase",
+        *,
+        skip_l0: bool = True,
+    ) -> "LegendreMomentTransfer":
+        r"""Tier-2 mint on the FRAME's Parseval-dressed coefficient space —
+        the ends production binds (CS4c step 6 item 6.2c-ii, ruling
+        R-6.2c-1), so the factor composes with the frame's faces
+        (``frame.conjugate(Λ)``) by construction. The order is the frame's
+        bound family's; :meth:`on_basis` is the frame-less sibling on the
+        basis's own continuum space."""
+        basis = frame.basis
+        if not isinstance(basis, TruncatedBasis):
+            raise TypeError(
+                f"LegendreMomentTransfer.on_frame: the frame's trial "
+                f"{type(basis).__name__} carries no truncation order."
+            )
+        ends = frame.basis_space
         return cls(
             transfer.at_order(basis.L),
             skip_l0=skip_l0,
@@ -235,7 +267,7 @@ class LegendreMomentTransfer(BoundOperator):
     @property
     def _head(self) -> MomentHead:
         r"""The angular HEAD the moment verbs read the layout from — this
-        operator's own domain (the bound basis's coefficient space)."""
+        operator's own domain (the bound frame's coefficient space)."""
         return _moment_head_of(self.domain, type(self).__name__)
 
     @property
