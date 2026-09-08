@@ -29,6 +29,38 @@ Verify, then write, then FLAG every scope-expansion the verification forced.
   (`[((3,5), DiagonalMetric), ((2,), None), ((4,), DiagonalMetric)]` = one entry for the
   dense-slot leaf, one PER AXIS of the axis-built factor, `None` for a counting measure).
   → L-097, L-089
+- **⭐⭐ A TABLE'S CAPTION OWNS ITS COLUMNS — "update column X" can be an instruction to
+  FALSIFY the caption.** A cell's meaning is `caption × header`; a brief written from the
+  cell's CONTENT sees neither. `[M]` briefed *"the SITE column now reads
+  `SNMesh.moment_space(L)`"* on a table captioned *"the seven re-mint sites, **at the
+  pre-2.5 tree**"* — the hub did not exist then. In a historical table exactly ONE column
+  is present-tense (here *"Now reads"*), and it is the only one that can rot: move that
+  one. ⭐ Sibling, same brief: a **site-ORDINAL** ("add the sentence at the first site") is
+  a position, and the content can be a non-sequitur there (a field-vs-face sentence at a
+  frame-internal table, 180 lines before the reader meets a field space). Place by
+  CONTENT, leave the named sites' claims untouched, and write the deviation + its reason
+  into the report — a silent relocation reads as sloppiness, a stated one is a finding
+  about the brief. → L-098
+- **⭐⭐ "Protocol X RETIRES" often means RE-SURFACED — diff the OLD surface against the
+  NEW, because the new predicate is the publishable sentence.** `[M]` `_angular_head_space`
+  really retired (`hasattr` False) while `_CarriesQuadrature` became `_CarriesMomentSpace`,
+  demanding `moment_space` instead of `quad` — a different QUESTION, and the honest one
+  (*a carrier could carry a quadrature and still own no moment space*). One `hasattr`
+  answers "gone?"; only a read answers "replaced by what?". ⚠ And a residual census that
+  reports **0** for a retired name you were meant to keep as history means you deleted the
+  history — mine correctly reads 1, my own past-tense quotation. → L-098
+- **⭐ A brief describing code STILL BEING TYPED is a FORECAST — verify the symbol before
+  re-pointing anything at it, and report what breaks if the forecast lands later.** `[M]`
+  briefed *"now spelled ONCE as `compose_spatial_moments`"*; at the end of the pass the
+  module-level name is **False** and the private classmethod is unchanged, so 3 live
+  `:meth:` refs must NOT move — but a later hoist kills them in silence, so the report
+  hands the renaming commit an explicit *"grep `docs/`"*. → L-098
+- **⭐ A `*`/operator-count census is an AST question and the natural GUESS is wrong.**
+  `[M]` a name-filtered `BinOp(Mult)` walk (positive control = the two known sites) read
+  **4** before AND after the carve — the count did not move, the field-side MEMBER did.
+  "The hub adds a site" is the reasoned answer and it is false, because the composer's
+  axes-less arm became a `raise`. Re-run the census; the *member moved, count didn't* is
+  the sentence. → L-098
 - **⭐⭐ A DOCS PASS FOR ITEM N IS WHERE ITEM N−k's UN-SWEPT ROT SURFACES, and the trigger
   is PROXIMITY, not predicate.** `[M]` *"the refusal has no production witness yet … the
   only axis mint in `orpheus/` is `MaterialMesh.bulk_space`"* — both halves false, and

@@ -1248,6 +1248,75 @@ class SNMesh(MaterialMesh):
             *base.axes, self.scheme.moment_axis(self.axes),
         )
 
+    def moment_space(
+        self, L: int, *, spatial_moments: int = 1,
+    ) -> "FunctionSpace":
+        r"""The harmonic-moment space this carrier induces at truncation
+        order ``L`` — ONE object per ``(L, spatial_moments)`` (CS4c step 6
+        item 6.2b, 2026-09-07).
+
+        The carrier owns its spaces the way it owns
+        :attr:`angular_bulk_space` and :attr:`angular_trial_space`: the
+        quadrature frame at ``L`` is read for the angular HEAD
+        (``quad.angular_frame(L).basis.space`` — the basis's continuum
+        coefficient space, #429 tracker 2.5 Landing A: never minted from
+        ``L``; the frame's Parseval-dressed ``basis_space`` is the frame's
+        OWN codomain and stays a separate, ``(name, shape)``-equal object —
+        see :mod:`orpheus.transport.frames.harmonic_frame`), the cell
+        group IS :attr:`bulk_space` (the same instance the scalar family
+        holds), and the within-cell spatial-moment tail is appended iff
+        ``spatial_moments > 1`` (the "append iff > 1" predicate shared
+        with the fields' composer, :func:`~orpheus.numerics.spaces.spatial_moment_space.spatial_moment_tail`;
+        as a ``*`` factor, because this product is axes-less until item
+        6.2c makes the head axis-built — the axis-built tail is the
+        fields' :meth:`~orpheus.transport.fields._bases.BulkField._compose_spatial_moments`).
+
+        **Why the hub, and why a keyed cache.** Every moment field on this
+        carrier (:meth:`HarmonicMomentFlux.from_mesh_and_L
+        <orpheus.transport.fields.harmonic_moment_flux.HarmonicMomentFlux.from_mesh_and_L>`
+        / ``zeros_for_mesh_and_L``), every admission guard's reference
+        (``space_on``) and the sweep's iterate wrap read THIS method, so
+        they hold the same object — identity is ``is``, not a content
+        comparison — and nothing is re-minted per call. `[M]` until 6.2b
+        the moment family minted its own space on every read: 113 of the
+        118 ``*`` products per 2-D windowed SI solve (58 from the boundary
+        leaf's carrier guard, 55 from the sweep's iterate wrap; the count
+        grew as ``2·max_inner + 6``). With the hub owning it the count is
+        INVARIANT in the iteration budget — gated in
+        ``tests/sn/mesh/test_hub_owns_the_moment_space.py``. The cache is
+        keyed, not a bare property, because ``L`` and the width are the
+        posing's truncation orders, chosen per binding.
+
+        ``spatial_moments`` is the CALLER's selection (construct-general /
+        select-narrow, #240 D5b-S3-A0): the seams that FILL the moment
+        axis pass the scheme's ``spatial_basis_per_axis``; width-1
+        consumers pass nothing.
+        """
+        key = (int(L), int(spatial_moments))
+        cached = self._moment_spaces.get(key)
+        if cached is not None:
+            return cached
+        from orpheus.numerics.moment_layout import cell_moment_count
+        from orpheus.numerics.spaces.spatial_moment_space import (
+            SpatialMomentSpace,
+            spatial_moment_tail,
+        )
+
+        head = self.quad.angular_frame(L).basis.space
+        space = head * self.bulk_space
+        n_moments = cell_moment_count(spatial_moments, self.ndim)
+        if spatial_moment_tail(n_moments) != ():
+            space = space * SpatialMomentSpace.from_per_axis(
+                spatial_moments, self.ndim,
+            )
+        self._moment_spaces[key] = space
+        return space
+
+    @cached_property
+    def _moment_spaces(self) -> "dict[tuple[int, int], FunctionSpace]":
+        """The per-``(L, spatial_moments)`` cache behind :meth:`moment_space`."""
+        return {}
+
     @cached_property
     def full_field_space(self) -> "FullFieldSpace":
         r"""The composite carrier :math:`V_{\rm bulk} \oplus V_{\rm trace}` (Wave O / O.2b).

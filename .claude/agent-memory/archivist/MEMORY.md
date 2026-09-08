@@ -41,6 +41,9 @@ means merged). **No owed Sphinx pass on merged work.** Landed SN milestones live
 
 **One line per pass. The evidence is in the lesson; `git log --oneline -- docs/` is the index.**
 
+- **CS4c step 6 item 6.2b** — the hub owns the moment space (2026-09-07; 3 `.rst`, +179/−14). A
+  table's CAPTION owned the column the brief told me to edit; a "retired" Protocol was
+  RE-SURFACED → [[lessons-L98]]
 - **CS4c step 6 item 6.2a** — `*` stops densifying (2026-09-07; 3 `.rst`, +282/−51). The carve
   landed BETWEEN two of my reads; the surplus finding was a paragraph **CS4b** falsified, found
   by proximity → [[lessons-L97]]

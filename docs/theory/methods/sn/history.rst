@@ -44,6 +44,92 @@ them.  Trust ``git``, not this column.
      - Where
    * - in dev
        (2026-09-07)
+     - **The carrier owns the harmonic-moment space — ONE object per
+       (L, width), and the moment family becomes a set of readers**
+       (campaign 1 residue, CS4c step 6 item 6.2b).
+       **(1) What the tree did until this change.**  #429 tracker 2.5
+       (2026-09-02) had already made the moment field's angular HEAD a
+       READ of the quadrature's frame —
+       ``quad.angular_frame(L).basis.space``, never a mint from the
+       integer :math:`L`.  What it did not move was the **product**:
+       ``MomentField._space_for_mesh_and_L`` still formed
+       ``<head> * bulk_space`` — plus the within-cell spatial-moment tail
+       when the width exceeds 1 — on *every call*, and every consumer
+       called it: the two keyed factories, the ``space_on`` admission
+       reference each carrier guard compares against, and the sweep's
+       wrap of its moment iterate.  So the space a guard tested and the
+       space the sweep had just built were content-equal and never the
+       same object, and the mint count grew with the iteration budget.
+       ``[M]`` 2026-09-07, one 2-D Cartesian windowed SI solve: **113 of
+       the 118** ``*`` products on the harmonic-moment path were
+       field-side re-mints — 58 from the boundary leaf's carrier guard,
+       55 from the sweep's iterate wrap — growing as
+       :math:`2\cdot\texttt{max\_inner} + 6` (18 / 30 / 54 at
+       ``max_inner`` = 6 / 12 / 24).
+       **(2) What landed.**  :meth:`SNMesh.moment_space
+       <orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>`: a cache
+       keyed on ``(L, spatial_moments)`` holding ONE
+       :class:`~orpheus.numerics.space.FunctionSpace` per key, minted the
+       way the carrier already mints
+       :attr:`~orpheus.sn.mesh.augmented_mesh.SNMesh.angular_bulk_space`
+       — the angular head READ off the quadrature's frame at :math:`L`,
+       the cell group the carrier's own
+       :attr:`~orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space`
+       (the same instance the scalar family holds), and the
+       :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
+       tail appended iff the width exceeds 1.  The moment family is now
+       entirely CONSUMERS: both factories, ``space_on`` and the admission
+       reference resolve through ``_space_for_mesh_and_L``, whose whole
+       body is a read of the carrier behind a typed refusal for a carrier
+       that owns no moment space.  This is the carrier-owns-its-mints
+       rule the Angular and Scalar families have followed since campaign
+       1 CS4b, applied to the one family that had kept its own mint.
+       **(3) What the solver sees, and what it does not.**  Every value is
+       bit-identical *by construction* — same head, same bulk space, same
+       metric, same ``(name, shape)``; there is no re-baseline here and no
+       ULP band to state.  What moves is object IDENTITY and mint COUNT:
+       the space a guard compares against and the space the sweep wraps
+       its iterate in are now the SAME object (``is``, not merely ``==``),
+       and the ``*`` count per windowed solve becomes **invariant** in
+       ``max_inner`` instead of linear in it: the carrier mints once per
+       key, and the products that remain are the frame's own codomain
+       mints, which the iteration does not multiply.  Gated in
+       ``tests/sn/mesh/test_hub_owns_the_moment_space.py`` — four
+       ``@pytest.mark.foundation`` rows (one object per key read by the
+       factory AND by ``space_on``; the typed refusal; the boundary
+       guard holding the hub's object on a real windowed solve; the
+       count equal at ``max_inner`` 3 and 12, with the pre-carve law at
+       12 refused as a positive control on the spy itself).  Read the
+       counts there rather than from this row.
+       **(4) The leg of the memory assertion this completes.**  The
+       charter's assertion — *"no state-sized weights tensor is allocated
+       per windowed solve"* — has two legs.  Item 6.2a discharged the
+       STRUCTURAL one (the product carries a factored metric, so there is
+       no dense slot to allocate); this item discharges the **rate** leg
+       (there is no per-call mint left for anything to be allocated on).
+       Read the two rows together — neither is the assertion by itself.
+       **(5) What did NOT change: the metric-blind seam survives, by
+       design.**  The frame's own moment codomain
+       (:meth:`HarmonicFrame.moment_space_on
+       <orpheus.transport.frames.harmonic_frame.HarmonicFrame.moment_space_on>`
+       — ``basis_space`` dressed with the Parseval inverse) stays a
+       SEPARATE object, ``(name, shape)``-equal to the carrier's and
+       carrying a different metric.  The two-space / two-metric design of
+       #429 Landing A is untouched, and the METRIC-IDENTITY gate still
+       pins the continuum metric on the field's space with the dressed
+       space as its negative control.  What this item sharpens is the
+       seam's *arity*: it now separates ONE hub-owned field space from the
+       frame's codomain, where before it separated a population of
+       per-call mints from it.  ⚠ Do **not** read this row as having
+       resolved the seam — item **6.2c**, which makes the head axis-built
+       and so promotes its weights into the identity, is where that
+       ruling is taken.  Full account:
+       :ref:`frame-moment-space-single-home`.
+     - —
+     - the CS4c step-6 carve on ``main`` (uncommitted at the time of
+       writing — trust ``git``)
+   * - in dev
+       (2026-09-07)
      - **The tensor product stops densifying — a measure is applied
        factor-by-factor on BOTH composition paths** (campaign 1 residue,
        CS4c step 6 item 6.2a).
@@ -132,7 +218,8 @@ them.  Trust ``git``, not this column.
        per windowed solve (12 at ``max_inner = 3``, 54 at 24).  Item
        **6.2b** gives the mint to the hub, ``is``-identical, and ships
        the count-invariance gate; do not read this row as having
-       discharged that.
+       discharged that — 6.2b landed later the same day and is the row
+       above.
      - —
      - the CS4c step-6 carve on ``main`` (uncommitted at the time of
        writing — trust ``git``)

@@ -706,8 +706,10 @@ class TestZerosForMeshAndL:
         # Independent allocations.
         assert phi1.values is not phi2.values
         phi1.values.flags.writeable
-        # One space identity (the carrier's mint, per (name, shape)).
+        # One space identity — the carrier's cached mint (SNMesh.moment_space,
+        # CS4c step 6 item 6.2b): the SAME object, not merely content-equal.
         assert phi1.space == phi2.space
+        assert phi1.space is phi2.space
 
     def test_copy_creates_independent(self) -> None:
         m = _slab_mesh()

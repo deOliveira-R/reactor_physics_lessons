@@ -31,7 +31,7 @@ provides the *locus + family* axes as ABCs; the *role* leaves
      │   ├─ ScalarField (ABC)     + the carrier's cached space via _space_for_mesh (space_on)
      │   │   ├─ ScalarFlux            role leaf  (flux)
      │   │   └─ ScalarSourceSink       role leaf  (source; renamed from IsotropicSource in B.2)
-     │   └─ MomentField (ABC)     family marker; the moment shape is leaf-specific
+     │   └─ MomentField (ABC)     + L + the carrier's cached space via SNMesh.moment_space(L, width) (space_on)
      │       └─ HarmonicMomentFlux   role leaf  (flux-only for now)
      └─ FaceField[K] (ABC)        codim-1 (faces/edges): flat single-buffer + FaceLayout[K]
          │                        slice-views + layout guards + space_on via _face_space_of. STRUCTURE only — the metric descends PER LEAF
@@ -118,7 +118,6 @@ from orpheus.numerics.spaces.radial_characteristic_space import (
 
 if TYPE_CHECKING:
     from orpheus.numerics.spaces.moment_head import MomentHead
-    from orpheus.numerics.quadrature.directional import Quadrature
     from orpheus.diffusion.augmented_mesh import DiffusionMesh
     from orpheus.numerics.face_layout import FaceLayout
     from orpheus.sn.mesh.augmented_mesh import SNMesh
@@ -369,12 +368,14 @@ class BulkField(RolePair, Field):
           scheme binds at transport-method augmentation).
         * **Axes-less base** (the harmonic family's
           ``<angular head> * cell_group`` — until CS4c step 6 item 6.2c
-          axis-ifies the angular head factor; since item 6.2a the product
-          carries a factored metric, never a densified one): a
+          axis-ifies the angular head factor): NOT composed here. Since
+          item 6.2b the carrier composes that product's tail itself —
+          :meth:`~orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space`
+          appends a
           :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
-          factor via the tensor-product ``*``, exactly as
-          :meth:`HarmonicMomentFlux.from_mesh_and_L` composes the angular
-          moment factor.
+          factor via the tensor-product ``*`` (a factored metric, never a
+          densified one, since item 6.2a) — and an axes-less input here is
+          refused by name, so the tail rule for that product has one home.
 
         The factor is the Linear-Discontinuous closure's spatial-slope
         carrier that travels between source-iteration sweeps (the
@@ -433,8 +434,15 @@ class BulkField(RolePair, Field):
                     "scheme's basis, so only its own width is mintable."
                 )
             return FunctionSpace.of_axes(*space.axes, axis)
-        return space * SpatialMomentSpace.from_per_axis(
-            spatial_moments_per_axis, mesh.ndim,
+        # An axes-less space composes its tail where it is minted — the
+        # carrier's ``SNMesh.moment_space`` for the (still axes-less until
+        # item 6.2c) harmonic-moment product (CS4c step 6 item 6.2b); this
+        # family-side composer serves the axis-built angular/scalar mints
+        # only, so an axes-less input here is a caller error, not a case.
+        raise TypeError(
+            f"the within-cell moment tail is appended to an AXIS-BUILT "
+            f"space; {space!r} declares no axes — the harmonic-moment "
+            f"product composes its tail at the carrier (SNMesh.moment_space)."
         )
 
     @staticmethod
@@ -539,13 +547,15 @@ class BulkField(RolePair, Field):
         r"""The family's space mint for ``mesh`` — the per-family hook.
 
         Implemented by :class:`AngularField` / :class:`ScalarField` (the
-        carrier-cached reads); :class:`MomentField` keys on ``(mesh, L)``
-        instead and overrides :meth:`space_on` directly.
+        carrier-cached reads); :class:`MomentField` keys on ``(mesh, L,
+        width)`` instead and overrides :meth:`space_on` directly — since
+        CS4c step 6 item 6.2b also a carrier-cached read
+        (:meth:`~orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space`).
         """
         raise NotImplementedError(
             f"{cls.__name__} declares no per-mesh space mint — instantiate "
             "a concrete family (AngularField/ScalarField subclasses), or "
-            "use the family's own keyed mint (MomentField)."
+            "the moment family's keyed read (MomentField.space_on)."
         )
 
     def space_on(self, mesh: "MaterialMesh") -> FunctionSpace:
@@ -715,38 +725,16 @@ class ScalarField(BulkField):
 
 
 @runtime_checkable
-class _CarriesQuadrature(Protocol):
-    """A mesh that carries an angular quadrature — the SN phase-space carrier's surface."""
+class _CarriesMomentSpace(Protocol):
+    """A carrier that OWNS its harmonic-moment spaces — the SN hub's surface
+    (:meth:`orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space`, CS4c step 6
+    item 6.2b): one cached space per ``(L, spatial_moments)``, the angular
+    head READ off the carrier's quadrature frame (#429 tracker 2.5), the
+    cell group its own ``bulk_space``."""
 
-    @property
-    def quad(self) -> "Quadrature": ...
-
-
-def _angular_head_space(mesh: "MaterialMesh", L: int) -> FunctionSpace:
-    r"""The moment family's angular HEAD at order ``L`` — READ off the mesh's
-    quadrature frame, never minted from ``L``.
-
-    ``mesh.quad.angular_frame(L).basis.space``: the coefficient space of
-    the basis the quadrature bound — the spherical-harmonic space on a
-    full-sphere rule, the Legendre space on a 1-D rule once the quotient
-    basis lands (#429 tracker 3.4). Until tracker 2.5 (2026-09-02) this
-    site minted ``SphericalHarmonicSpace.from_L(L)`` — one of seven
-    production copies of a space the frame already carried, and the one a
-    flat 1-D basis would have mismatched at every moment field's
-    values-vs-space check. The continuum-metric space (``basis.space``),
-    content-equal to the frame's Parseval-dressed ``basis_space`` that the
-    minted faces bind, exactly as before.
-
-    A mesh without a quadrature has no angular head to read — a transport
-    ``MaterialMesh`` alone cannot host a moment field, and says so.
-    """
-    if not isinstance(mesh, _CarriesQuadrature):
-        raise TypeError(
-            f"a moment field's angular head is READ off the mesh's quadrature "
-            f"frame, and {type(mesh).__name__} carries no quadrature; build "
-            f"the moment field on the SN phase-space carrier (an SNMesh)."
-        )
-    return mesh.quad.angular_frame(L).basis.space
+    def moment_space(
+        self, L: int, *, spatial_moments: int = 1,
+    ) -> FunctionSpace: ...
 
 
 @dataclass(frozen=True, eq=False, kw_only=True, repr=False)
@@ -770,12 +758,17 @@ class MomentField(BulkField):
 
     A moment field is a moment field on the spherical-harmonic ⊗
     scalar-bulk phase space, keyed on the truncation order ``L``; its
-    space is a TensorProductSpace whose cell-group factor IS the
+    space is the CARRIER's cached
+    :meth:`~orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space` at
+    ``(L, width)`` — a TensorProductSpace whose angular head is read off
+    the carrier's quadrature frame and whose cell-group factor IS the
     carrier's cached
     :attr:`~orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space`
-    (campaign 1 CS4b — one mint; the two role leaves share one space,
-    and role is class identity, exactly as in the Angular/Scalar
-    families). Abstract — instantiate a concrete role leaf.
+    (campaign 1 CS4b — one mint; CS4c step 6 item 6.2b — one OBJECT per
+    key, so the two role leaves, the admission guards and the sweep's
+    iterate wrap all hold the same instance; role is class identity,
+    exactly as in the Angular/Scalar families). Abstract — instantiate a
+    concrete role leaf.
 
     This lift happened when the second moment representation arrived
     (``feedback_unify_after_two_instances``): the machinery used to live on
@@ -870,17 +863,20 @@ class MomentField(BulkField):
     def from_mesh_and_L(
         cls, values: NDArray, mesh: "SNMesh", L: int, *, spatial_moments: int = 1,
     ):
-        r"""Construct from raw values + mesh + L, deriving the
-        :class:`TensorProductSpace`.
+        r"""Construct from raw values + mesh + L on the carrier's own
+        moment space.
 
-        Builds the space as ``<angular head> * mesh.bulk_space`` — the
-        angular head READ off the mesh's quadrature frame at ``L``
+        The space is READ off the carrier —
+        :meth:`~orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space`
+        (CS4c step 6 item 6.2b): ``<angular head> * mesh.bulk_space``, the
+        angular head read off the carrier's quadrature frame at ``L``
         (``mesh.quad.angular_frame(L).basis.space``; the spherical-harmonic
         space on a full-sphere rule — #429 tracker 2.5, never minted from
-        ``L``), the cell-group factor IS the carrier's cached scalar bulk
-        (campaign 1 CS4b: one mint, metric-carrying), and the moment-axis
-        structure is type-visible through the composition tree (queryable
-        via ``space.find_factor(...)`` per Issue #207).
+        ``L``), the cell-group factor the carrier's cached scalar bulk
+        (campaign 1 CS4b: one mint, metric-carrying), ONE object per
+        ``(L, width)`` per carrier; the moment-axis structure is
+        type-visible through the composition tree (queryable via
+        ``space.find_factor(...)`` per Issue #207).
 
         ``spatial_moments`` (default ``1``, byte-identical #240 D5b-S3-A0)
         optionally composes a within-cell
@@ -902,19 +898,35 @@ class MomentField(BulkField):
     def _space_for_mesh_and_L(
         cls, mesh: "MaterialMesh", L: int, *, spatial_moments: int = 1,
     ) -> FunctionSpace:
-        r"""The moment family's space for ``(mesh, L, width)`` — one mint.
+        r"""The moment family's space for ``(mesh, L, width)`` — READ off the
+        carrier, which owns it (CS4c step 6 item 6.2b, 2026-09-07).
 
-        Single source shared by :meth:`from_mesh_and_L` and
-        :meth:`space_on` (the admission-guard reference), so the factory
-        and the guards cannot drift.
+        The carrier's :meth:`~orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space`
+        is a keyed cache: every read of one ``(carrier, L, width)`` returns
+        the SAME object, so the factory (:meth:`from_mesh_and_L`), the
+        admission-guard reference (:meth:`space_on`) and the sweep's
+        iterate wrap share one instance — ``is``, not merely ``==`` — and
+        nothing is re-minted per call (`[M]` until 6.2b this method
+        minted ``<head> * bulk_space`` on every call: 113 of the 118
+        ``*`` products per 2-D windowed solve, 58 from the boundary
+        leaf's guard and 55 from the sweep's iterate wrap).
+
+        A carrier that owns no moment space (a transport ``MaterialMesh``
+        alone — no quadrature, no angular head to read) cannot host a
+        moment field, and says so.
         """
-        head = _angular_head_space(mesh, L)
-        return cls._compose_spatial_moments(
-            head * mesh.bulk_space, mesh, spatial_moments,
-        )
+        if not isinstance(mesh, _CarriesMomentSpace):
+            raise TypeError(
+                f"a moment field's space is READ off the SN carrier that "
+                f"owns it (SNMesh.moment_space), and {type(mesh).__name__} "
+                f"carries no quadrature and owns no moment space; build the "
+                f"moment field on the SN phase-space carrier (an SNMesh)."
+            )
+        return mesh.moment_space(L, spatial_moments=spatial_moments)
 
     def space_on(self, mesh: "MaterialMesh") -> FunctionSpace:
-        r"""The moment family's mint on ``mesh`` (see BulkField.space_on)."""
+        r"""The moment family's space on ``mesh`` (see BulkField.space_on) —
+        the carrier's own cached object, never a re-mint."""
         return type(self)._space_for_mesh_and_L(
             mesh, self.L, spatial_moments=self.spatial_moments,
         )
@@ -936,14 +948,14 @@ class MomentField(BulkField):
         sizes the optional within-cell spatial-moment axis to match
         :meth:`from_mesh_and_L`.
         """
-        n_moments = cell_moment_count(spatial_moments, mesh.ndim)
-        head = _angular_head_space(mesh, L)
-        values = np.zeros(
-            (*head.shape, mesh.ng, *mesh.spatial_shape,
-             *spatial_moment_tail(n_moments)),
+        space = cls._space_for_mesh_and_L(
+            mesh, L, spatial_moments=spatial_moments,
         )
-        return cls.from_mesh_and_L(
-            values, mesh, L, spatial_moments=spatial_moments,
+        return cls(
+            values=np.zeros(space.shape),
+            space=space,
+            L=L,
+            spatial_moments=spatial_moments,
         )
 
 

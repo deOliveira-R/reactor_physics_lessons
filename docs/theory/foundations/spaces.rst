@@ -388,16 +388,38 @@ reach.
    sites: the angular head :math:`\otimes` the axis-built cell group, in
    :meth:`HarmonicFrame.moment_space_on
    <orpheus.transport.frames.harmonic_frame.HarmonicFrame.moment_space_on>`
-   and in its content-equal field-side twin
-   :meth:`MomentField._space_for_mesh_and_L
-   <orpheus.transport.fields._bases.MomentField._space_for_mesh_and_L>`,
-   each of which then appends a
+   and in the SN carrier's content-equal field-side twin
+   :meth:`SNMesh.moment_space
+   <orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>`, each of which
+   then appends a
    :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
    factor for a widened angular space (that factor's inner product is
    Euclidean, so it contributes a ``None`` entry). Item **6.2c**
    axis-ifies the head; until then see
    :ref:`spaces-metric-propagation`, where dropping a factor's metric is
    measured as a value bug rather than a representation choice.
+
+   ⚠ **The field-side member of those four MOVED later the same day
+   (2026-09-07, CS4c step 6 item 6.2b), and the count did not.** Until
+   that item the field-side twin was
+   :meth:`MomentField._space_for_mesh_and_L
+   <orpheus.transport.fields._bases.MomentField._space_for_mesh_and_L>`,
+   which formed the product on **every call**; the item gives the mint to
+   the carrier as a cache keyed on ``(L, spatial_moments)``, and the field
+   method survives as a pure READ of it. So the census is the same four —
+   the hub's head-:math:`\otimes`-cell and its tail, the frame's
+   head-:math:`\otimes`-cell and its tail — while the number of ``*``
+   *evaluations* per windowed solve falls from `[M]`
+   :math:`2\cdot\texttt{max\_inner} + 6` to a constant in the iteration
+   budget (gated in
+   ``tests/sn/mesh/test_hub_owns_the_moment_space.py``). The fields' own
+   composer,
+   :meth:`BulkField._compose_spatial_moments
+   <orpheus.transport.fields._bases.BulkField._compose_spatial_moments>`,
+   is left serving the **axis-built** angular/scalar mints only — with
+   the harmonic product gone from it, its axes-less arm refuses by name
+   and points the caller at the carrier, so a ``*`` can no longer be
+   reached through it at all.
 
 Canonical storage: one measure, one spelling, one identity
 -----------------------------------------------------------

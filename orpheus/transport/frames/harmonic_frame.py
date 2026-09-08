@@ -65,9 +65,14 @@ spherical-harmonic factor is the frame's OWN F-0-dressed
 :attr:`~orpheus.numerics.frame.FrameBase.basis_space`, so the Parseval metric
 rides into the product codomain with a single source: the frame's codomain IS
 the SH factor. (``dataclasses.replace`` preserves ``(name, shape)``, so the
-derived product still content-equals the carrier mint's own
-``MomentField._space_for_mesh_and_L`` space — the admission seam is
-metric-blind.)
+derived product still content-equals the carrier's own cached moment space
+— :meth:`SNMesh.moment_space <orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>`
+since CS4c step 6 item 6.2b, the object every moment field and admission
+guard on that carrier holds — the admission seam is metric-blind: the two
+are one ``(name, shape)`` and two metrics, the frame's Parseval-dressed and
+the carrier's continuum one (#429 tracker 2.5, Landing A). Item 6.2c, which
+makes the head axis-built and its weights part of the identity, is where
+that seam is decided.)
 """
 
 from __future__ import annotations
@@ -456,8 +461,9 @@ class HarmonicFrame(GalerkinFrame):
         the spherical-harmonic space on a full-sphere rule; single source:
         the Parseval metric rides into the product), the cell group is the
         angular space's own energy/spatial axes (the same instances the
-        carrier's mints share, so the product content-equals
-        ``MomentField._space_for_mesh_and_L``'s, which since #429 tracker
+        carrier's mints share, so the product content-equals the carrier's
+        cached ``SNMesh.moment_space(L, width)`` — the object the moment
+        fields hold since CS4c step 6 item 6.2b — which since #429 tracker
         2.5 reads the SAME basis through the mesh's quadrature) — with the
         ``SpatialMomentSpace`` factor appended for a widened angular space.
         Runs once per mint: the derivation direction is moment = f(angular,

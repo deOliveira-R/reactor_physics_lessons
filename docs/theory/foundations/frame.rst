@@ -4037,10 +4037,33 @@ consumers re-minting it from the integer :math:`L`:
      - ``self.frame.basis.space``
    * - ``MomentField._space_for_mesh_and_L``
      - the moment field's angular HEAD factor
-     - ``mesh.quad.angular_frame(L).basis.space``
+     - ``SNMesh.moment_space(L)`` — the hub, which reads
+       ``mesh.quad.angular_frame(L).basis.space``
    * - ``HarmonicMomentFlux.truncate``
      - the head of the truncated space
      - ``head.truncated(L_new)`` — the head's OWN family
+
+.. note:: **2026-09-07, CS4c step 6 item 6.2b — the field row's "now reads"
+   is one hop longer, because the PRODUCT moved to the hub.** Tracker 2.5
+   made the moment field's angular *head* a read of the frame; it left the
+   *product* — head :math:`\otimes` cell group — being re-minted on every
+   call. Item 6.2b gives that product to the carrier:
+   :meth:`SNMesh.moment_space
+   <orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>` is a cache keyed
+   on ``(L, spatial_moments)`` holding **one object per key**, and the
+   moment family is now entirely a set of CONSUMERS of it — the factories
+   (``from_mesh_and_L``, ``zeros_for_mesh_and_L``), the ``space_on``
+   admission reference, and the sweep's iterate wrap all hold the SAME
+   instance (``is``, not merely ``==``). The head is still read off the
+   frame at ``quad.angular_frame(L).basis.space``, so the row's third
+   column stays true one hop in; what changed is *who owns the product*.
+   `[M]` until 6.2b the field-side mint ran **113 of the 118** ``*``
+   products per 2-D windowed solve — 58 from the boundary leaf's guard, 55
+   from the sweep's iterate wrap. The refusal survives the move and changes
+   its reason: a carrier that owns no moment space (a bare
+   :class:`~orpheus.transport.mesh.material_mesh.MaterialMesh`, which has
+   no quadrature) is refused by name at the same typed door, now spelled
+   against the hub's surface rather than against ``quad``.
 
 Two further narrowings guarded the frame itself: both
 :class:`~orpheus.transport.frames.harmonic_frame.HarmonicFrame`
@@ -4304,14 +4327,28 @@ The field's head, and truncation inside the family
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A moment field is not built from a frame, it is built from a mesh and an
-order — so its head factor has to be *found*. It is found the same way:
-``mesh.quad.angular_frame(L).basis.space``, behind a small
-``_CarriesQuadrature`` Protocol so that a bare material mesh, which has no
-angular quadrature and therefore no angular head to read, is refused with
-a message that says so instead of failing later on a shape. The public
-factory keeps its ``(values, mesh, L)`` signature: the mesh carries the
-quadrature, so the head is frame-derived even though the caller passes an
-integer.
+order — so its space has to be *found*. It is found on the carrier:
+:meth:`SNMesh.moment_space
+<orpheus.sn.mesh.augmented_mesh.SNMesh.moment_space>`, behind a small
+``_CarriesMomentSpace`` Protocol so that a bare material mesh, which owns
+no moment space (it has no quadrature, so there is no angular head to
+read), is refused with a message that says so instead of failing later on
+a shape. The public factory keeps its ``(values, mesh, L)`` signature: the
+mesh carries the quadrature, so the head is frame-derived even though the
+caller passes an integer.
+
+.. note:: **Dated 2026-09-07, CS4c step 6 item 6.2b.** Until this item the
+   paragraph above read *"It is found the same way:*
+   ``mesh.quad.angular_frame(L).basis.space``\ *, behind a small*
+   ``_CarriesQuadrature`` *Protocol"* — accurate for tracker 2.5's tree,
+   where each consumer re-derived the product from the head it had just
+   read. The head is still read exactly there; the difference is that the
+   read now happens **once per key on the carrier** and the field asks the
+   carrier, not the quadrature. The Protocol moved with it: the surface
+   demanded is ``moment_space``, not ``quad``, so the refusal is keyed on
+   *owning the space* rather than on *carrying a quadrature* — which is
+   the honest predicate, because a carrier could in principle carry a
+   quadrature and still not own a moment space.
 
 ⚠ **Gotcha, and it is older than this step: the FACE's moment codomain
 and the FIELD's space are metric-different and compare EQUAL.**
@@ -4333,6 +4370,25 @@ asymmetry is **unchanged** by tracker 2.5: before it the field's head was
 space does. It is recorded here because a reader who has just been told
 *"the space is read off the frame"* will otherwise assume the field
 inherits the face's metric, and it does not.
+
+⛔ **And it is unchanged by CS4c step 6 item 6.2b (2026-09-07), which is
+worth saying because that item looks like it should have closed it.**
+Giving the product to the hub changes *which object* the field side holds
+— one cached space per ``(L, spatial_moments)`` instead of one fresh mint
+per call, `[M]` 113 field-side re-mints in a single 2-D windowed solve
+before the item — and changes nothing about its **metric**: the hub reads
+the same ``quad.angular_frame(L).basis.space``, so the head still carries
+the continuum Gram. The seam therefore sharpens rather than closes: it now
+separates **one hub-owned field space** from the frame's Parseval-dressed
+codomain, two objects that are ``(name, shape)``-equal and
+metric-different, where before it separated a *population* of
+content-identical field mints from that codomain. The two-space /
+two-metric design of #429 Landing A survives intact, and the
+METRIC-IDENTITY gate keeps pinning the continuum metric on the field's
+space with the dressed space as its negative control. Item **6.2c**, which
+makes the head axis-built and so promotes its weights into the identity
+(:ref:`spaces-identity-bridge`), is where that seam is decided — 6.2b
+deliberately leaves the ruling open.
 
 Truncation is the same rule applied to a *lower* order.
 :meth:`HarmonicMomentFlux.truncate

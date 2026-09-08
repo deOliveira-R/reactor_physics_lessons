@@ -99,9 +99,10 @@ class TestTruncate:
     @pytest.mark.parametrize("family", _FAMILIES)
     @pytest.mark.parametrize("sm", [1, 2])
     def test_truncate_matches_the_factory_mint_at_both_widths(self, sm, family):
-        """The truncated field's space content-equals the factory's OWN
-        mint at (mesh, L_new, spatial_moments) — the single-source
-        done-when of the space-derived rebuild. The sm=2 row is #399's
+        """The truncated field's space content-equals the carrier's OWN
+        mint at (mesh, L_new, spatial_moments) — ``SNMesh.moment_space``
+        since CS4c step 6 item 6.2b, the cached object the factory reads
+        — the single-source done-when of the space-derived rebuild. The sm=2 row is #399's
         FLIPPED witness (pre-S6.1 it raised the widened defer; pre-S4 it
         was the census's broadcast ValueError). Reddened by dropping the
         tail factor from the rebuild (the pre-S6.1 factors[1]-only

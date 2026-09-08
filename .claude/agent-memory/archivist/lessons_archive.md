@@ -11570,3 +11570,129 @@ independence ARGUMENT it makes is intact (and stronger post-6.2a) — only the s
 | Failed approaches | 5 | 3 tombstones + a refuted roadmap MECHANISM + 2 surplus retractions |
 | Code traceability | 5 | every claim measured against the live working tree, incl. `git show HEAD:` |
 | Derivation source | n/a | no `derivations/` content in scope |
+
+---
+
+## L-098 — CS4c step 6 item 6.2b: a TABLE'S CAPTION owns its columns, and a brief's site-ordinal can point at a non-sequitur
+
+**Task.** `docs/**/*.rst` only, for the item that gives the harmonic-moment space to
+the SN carrier (`SNMesh.moment_space(L, *, spatial_moments=1)`, a keyed cache) while
+the moment field family becomes readers. Four briefed sites, three files touched
+(`frame.rst`, `spaces.rst`, `history.rst`; +179/−14). Every gate clean; two
+deliberate deviations from the brief, both on correctness/exposition grounds.
+
+### (a) ⭐⭐ A `.. list-table::` CAPTION fixes what each column MEANS — so "update column X" can be an instruction to falsify the caption
+
+The brief said: *"the SITE column now reads `SNMesh.moment_space(L)` (the hub)"*.
+The table is captioned **"`[M]` The seven re-mint sites, at the pre-2.5 tree"**, and
+its columns are `Site | What it was minting | Now reads`. Putting the hub in **Site**
+would have made the caption false — the hub did not exist at the pre-2.5 tree.
+
+⟹ **In a historical table, exactly ONE column is present-tense, and it is the only
+one that can rot.** Find it by reading the caption, not the brief. Here the honest
+edit was the third column: `` `SNMesh.moment_space(L)` — the hub, which reads
+`mesh.quad.angular_frame(L).basis.space` `` — same information, caption still true,
+and the historical row still answers *"which site used to re-mint?"*.
+
+⚠ The generalisation, and it is cheap: **before editing a table cell, read the
+caption and the column header as a CONJUNCTION.** A cell's meaning is
+`caption × header`, and a brief written from the cell's *content* cannot see either.
+
+### (b) ⭐ A brief's SITE-ORDINAL ("the first site") is a position; place by CONTENT and report the gap
+
+The brief listed a three-site "metric-blind cluster" (`:4142-4153` / `:4326-4332` /
+`:4380-4386`) and said *"add ONE dated sentence at the first site"*. The sentence it
+asked for is about the **field-vs-face** metric fork; the first site is the
+frame-internal `basis_space`-vs-`basis.space` measurement table, ~180 lines earlier,
+where the reader has not yet met a field space at all. Written there it is a
+non-sequitur that also front-runs its own exposition.
+
+⟹ Place by CONTENT (here: the ⚠ **Gotcha** paragraph, the corpus's only statement of
+the field-vs-face asymmetry), leave all three sites' claims untouched as instructed,
+and **write the deviation into the report with the reason**. A silent relocation
+reads as sloppiness; a stated one is a finding about the brief.
+
+### (c) ⭐⭐ "Protocol X retires" can mean RENAMED ONTO A DIFFERENT SURFACE — and the new surface's predicate is the honest one, which is a publishable sentence
+
+Brief: *"`_angular_head_space` and the `_CarriesQuadrature` protocol retire"*. `[M]`
+at the landing: `_angular_head_space` genuinely retires (`hasattr` **False**);
+`_CarriesQuadrature` is **replaced** by `_CarriesMomentSpace`, demanding
+`moment_space` instead of `quad`. Not a rename — a different *question*.
+
+The prose gain is real and would have been lost by a mechanical past-tensing: the
+refusal used to be keyed on *carrying a quadrature* and is now keyed on *owning the
+space*, **which is the honest predicate** — a carrier could in principle carry a
+quadrature and still own no moment space. That sentence exists only because I
+compared the two Protocols' surfaces instead of accepting "retires".
+
+⟹ For every briefed retirement, ask **"retired, or re-surfaced?"** and diff the OLD
+surface against the NEW one. `hasattr` on the module answers the first half in one
+line; the second half is a read.
+
+⚠ And the residual-census reading that goes with it: after the pass,
+`_CarriesQuadrature` still has **1** hit in `docs/` — my own past-tense quotation of
+the superseded sentence. That is the retirement rule working, not a miss. A census
+that reports 0 for a retired name whose history you were supposed to preserve means
+you deleted the history.
+
+### (d) ⭐ A brief's "now spelled ONCE as `<new_name>`" is a PREDICTION about a carve still being written — and it did not ship
+
+Brief: the append-iff->1 rule *"now spelled ONCE as `compose_spatial_moments` in
+`_bases.py`"*. `[M]` at the end of the pass: `BulkField._compose_spatial_moments` is
+**unchanged and still private**; `compose_spatial_moments` module-level is **False**;
+the hub inlines its own `spatial_moment_tail` check, so the shared single source is
+`spatial_moment_tail`, not a shared composer.
+
+⟹ Consequence for the docs: the **three** `:meth:`BulkField._compose_spatial_moments``
+refs (`operator_algebra.rst`, `cartesian_multid.rst` ×2) are LIVE and must NOT be
+re-pointed on a brief's say-so. But a hoist later WOULD kill them silently
+(Python-domain xref, no warning at any severity), so the report hands the renaming
+commit an explicit *"grep `docs/`"*. **A brief describing code that is still being
+typed is a forecast; verify the symbol exists before re-pointing anything at it, and
+say in the report what breaks if the forecast comes true later.**
+
+### (e) ⭐ The `*`-count census is an AST question, and a name-filtered `BinOp(Mult)` walk answers it exactly
+
+`spaces.rst` carried *"`[M]` … four production sites"* for the `*` tensor product.
+Re-run mine (all `ast.BinOp` with `Mult` whose `ast.unparse` mentions `space` /
+`of_axes` / `from_per_axis`, positive control = the frame's two known sites): **4**,
+and the SAME four post-carve — `augmented_mesh.py:1306, :1309`,
+`harmonic_frame.py:490, :497`. So the census *count did not move* and its
+**field-side member did**. That is the publishable sentence, and it needed the census
+to be re-run rather than reasoned: the natural guess ("the hub adds a site") is wrong,
+because the field-side site MOVED rather than being added.
+
+⚠ The corroborating structural find: `_compose_spatial_moments`'s axes-less arm is
+now a `raise TypeError`, so a `*` can no longer be reached through the fields'
+composer at all — which is *why* the count stayed at 4.
+
+### (f) ⚠ Two code-side findings, reported upward (I do not edit `orpheus/`)
+
+1. `SNMesh.moment_space`'s own new docstring cites
+   ``:func:`~orpheus.numerics.moment_layout.spatial_moment_tail``` — `[M]` **False**
+   on `hasattr`; the function is in `numerics.spaces.spatial_moment_space`
+   (`moment_layout` owns `face_moment_tail`). A **plausible sibling module** is the
+   dangerous shape: it reads correct, resolves to nothing, warns at no severity.
+   (L-095's *"a carve's own docstring edits are unverified claims"*, with a `:func:`
+   target instead of a consumer claim.)
+2. `BulkField._compose_spatial_moments`'s docstring bullet 2 still describes the
+   axes-less arm as *composing a `SpatialMomentSpace` via `*`* — the body now
+   **refuses** it. A docstring advertising a capability the body raises on.
+
+### Gates, for the record
+
+docutils error-SET diff pre-vs-post: `frame.rst` 515→515, `spaces.rst` 137→137,
+`history.rst` 0→0, NEW set empty. Added-lines markup gates (3+ backticks /
+`**``lit``**` / role-abutting-`**` / role inside an open `**…**` run with `re.S` /
+`**` parity on literal-and-math-stripped text): **0**. `:ref:` against 881 harvested
+labels: 2/2 resolve. Python xrefs import-resolved: 12 roles, 9 distinct targets,
+**0 dead** — including the not-yet-committed `SNMesh.moment_space`, which resolves
+against the working tree. `nexus dead_references` 0/68 — **corroborating only**, the
+graph is a pre-carve snapshot.
+
+⭐ One extra gate worth keeping: when quoting a superseded sentence that mixes
+emphasis and inline literals, **render the note through `publish_string(...,
+writer_name="pseudoxml")` and read the `<emphasis>`/`<literal>` alternation**. The
+`\ ` null-whitespace escape between a literal and a following `*` is correct RST and
+docutils is silent either way, so the render is the only proof the quote is not
+leaking markers.
