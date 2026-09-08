@@ -711,18 +711,18 @@ class SNBoundaryOperator(LinearOperator):
         from orpheus.transport.full_field import FullField
 
         mesh = self.sn_mesh
-        if psi.interior.space != psi.interior.space_on(mesh):
-            raise ValueError(
-                # ``_apply_faces`` serves BOTH ``apply`` and
-                # ``apply_transpose``; the prefix names the caller rather than
-                # hard-coding ``apply``, which mis-attributed every failure on
-                # the transpose path. The ``space-content invariant`` substring
-                # is the greppable guard vocabulary (CS4b S3 — the pins in
-                # test_psi_half_coupling.py re-keyed with it).
-                f"SNBoundaryOperator.{method}: input field and operator must "
-                "agree in space content (space-content invariant); "
-                f"got field space {psi.interior.space!r} on operator mesh {mesh!r}."
-            )
+        # The shared System-A matvec input parse (CS4c step 6 item 6.3 — the
+        # R6 row of the monomorphic-leaves ledger: ONE body, the five
+        # consumers L/LC × apply/transpose + this): a foreign carrier is a
+        # typed TypeError naming this operator and the carrier it wanted, a
+        # space-content mismatch a ValueError carrying the greppable
+        # ``space-content invariant`` vocabulary. ``_apply_faces`` serves
+        # BOTH ``apply`` and ``apply_transpose``; the context names the
+        # caller rather than hard-coding ``apply``, which mis-attributed
+        # every failure on the transpose path.
+        FullField.require_member(
+            psi, mesh=mesh, context=f"SNBoundaryOperator.{method}",
+        )
         # Role parse at the composite boundary: ``B_a`` reads a FLUX trace
         # (``_reflect_trace`` applies the boundary law to outflow flux), but
         # the ``FullField.boundary`` slot erases the role (the F2-sibling

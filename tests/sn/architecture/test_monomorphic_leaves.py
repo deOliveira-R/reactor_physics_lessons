@@ -61,12 +61,12 @@ G1.1 value   **GREEN** on the SN ladder       all 5 leaves × 4 geometries decla
 G1.1 ann.    **RED** (R1's static face)        every leaf annotates
                                               ``FunctionSpace | None`` /
                                               ``Optional[FunctionSpace]``
-G1.3         **RED on ``B`` only** (**R6**)    ``L``/``C``/``S``/``F`` raise a
-                                              ``TypeError`` naming themselves;
-                                              ``SNBoundaryOperator`` raises
-                                              ``AttributeError: 'CoupledField'
-                                              object has no attribute
-                                              'interior'`` (``boundary.py:714``)
+G1.3         **GREEN** (R6 flipped 2026-09-07)  all five leaves refuse a foreign
+                                              carrier with a ``TypeError``
+                                              naming themselves; ``B`` reads
+                                              ``FullField.require_member``
+                                              (CS4c step 6 item 6.3 — until
+                                              then a raw ``AttributeError``)
 G1.4         **GREEN**                         residual ≤ 4.5e-14 across every
                                               leaf × geometry (rtol 1e-12 ⟹ 22×
                                               headroom)
@@ -260,20 +260,6 @@ _R1_XFAIL = pytest.mark.xfail(
         "CS4 has landed — delete this marker."
     ),
 )
-
-_R6_XFAIL = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "R6 — the carrier guard is NON-UNIFORM across leaves: L/C/S/F raise a "
-        "typed TypeError naming themselves and the carrier they wanted, while "
-        "SNBoundaryOperator leaks a raw `AttributeError: 'X' object has no "
-        "attribute 'interior'` from the unguarded read at "
-        "sn/operators/boundary.py:714 (inside `_apply_faces` — the :343 the marker used to cite is the `_face_laws` docstring; re-pointed per plan §8.2). Flipped by campaign P1/P2 (the leaf "
-        "declares its arrow and refuses uniformly). WHEN THIS XPASSES: the "
-        "guard has been unified — delete this marker."
-    ),
-)
-
 
 # ═════════════════════════════════════════════════════════════════════════
 # Materials — a DIRECT Mixture build (lessons L1: `make_mixture` nulls
@@ -780,7 +766,6 @@ def test_leaf_space_annotation_is_not_optional(leaf):
 _G13_ROWS = [
     pytest.param(
         leaf, geometry, carrier,
-        marks=[_R6_XFAIL] if leaf == "B" else [],
         id=f"{leaf}-{geometry}-{carrier}",
     )
     for leaf in _LEAVES
@@ -804,16 +789,24 @@ def test_wrong_carrier_refusal_is_typed_and_names_the_operator(
     3. the message names the expected carrier (``FullField``), so the reader
        learns what to hand it instead.
 
-    **RED on ``B``, GREEN on the other four** — and shipping the sixteen
-    green rows is the point, not padding: they are the **control leg** that
-    makes the ``B`` red *attributable*. Without them a reviewer cannot tell
-    "one leaf is non-conforming" from "the contract is aspirational".
+    **GREEN on all five since CS4c step 6 item 6.3 (2026-09-07)** — until
+    then RED on ``B`` only (the R6 row): ``SNBoundaryOperator._apply_faces``
+    read ``psi.interior`` unguarded and leaked a raw ``AttributeError``,
+    while ``L``/``C``/``S``/``F`` refused with a typed ``TypeError``. The
+    sixteen rows that were green throughout are the **control leg** that
+    made the ``B`` red *attributable*: without them a reviewer could not
+    tell "one leaf is non-conforming" from "the contract is aspirational".
 
-    ``streaming.py:153`` is the shape the other four already have and the one
-    ``B`` must reach — it names the method, the expected carrier, the carrier
-    received, AND the remediation. The gate is satisfied by any dispatch
-    spelling (``singledispatchmethod``, ``match``, a registry); #261 parks
-    that ruling and no assertion here reads the mechanism.
+    The uniform shape is now ONE body —
+    ``FullField.require_member(x, mesh=…, context=…)`` — that names the
+    method, the expected carrier, the carrier received, AND the remediation,
+    consumed by ``L``/``LC`` (both directions) and ``B``; ``C``/``S``/``F``
+    refuse through the lift's bound-end admission. The gate is satisfied by
+    any dispatch spelling; #261 parks that ruling and no assertion here reads
+    the mechanism. ⚠ That body is a runtime GUARD, tagged
+    ``ELEGANCE-DEBT[guard] #457``: it retires when ``B`` is bound on its own
+    trace end (R18), and these rows must then stay green with the refusal
+    coming from the bound-end admission.
 
     **Scope note (a deliberate narrowing of the written spec).** §2.1 asks
     for the message to name "the expected SPACE". MEASURED: not one leaf's
@@ -854,7 +847,8 @@ def test_wrong_carrier_refusal_is_typed_and_names_the_operator(
             f"{type(op).__name__} refused a {carrier} carrier with a raw "
             f"{type(exc).__name__}: {str(exc)[:120]!r}. The refusal must be a "
             f"typed TypeError naming the operator and the expected carrier "
-            f"(R6 — boundary.py:714 reads `psi.interior` unguarded)."
+            f"(the R6 row: until CS4c step 6 item 6.3 SNBoundaryOperator "
+            f"read `psi.interior` unguarded)."
         )
     else:
         pytest.fail(

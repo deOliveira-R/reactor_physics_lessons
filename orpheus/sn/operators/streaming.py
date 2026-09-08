@@ -86,6 +86,7 @@ from orpheus.numerics.operator import (
 )
 
 from orpheus.numerics.quadrature import Quadrature
+from orpheus.transport.full_field import FullField
 from orpheus.transport.operators.multiplication_operator import MultiplicationOperator
 
 if TYPE_CHECKING:
@@ -94,7 +95,6 @@ if TYPE_CHECKING:
     from orpheus.transport.fields.angular_flux import AngularFlux
     from orpheus.transport.fields.angular_boundary_flux import AngularBoundaryFlux
     from orpheus.transport.fields.cross_section_field import CrossSectionField
-    from orpheus.transport.full_field import FullField
     from orpheus.transport.timed_full_field import TimedFullField
     from orpheus.numerics.space import FunctionSpace
     from ..mesh.augmented_mesh import SNMesh
@@ -116,58 +116,6 @@ if TYPE_CHECKING:
 __all__ = [
     "StreamingOperator",
 ]
-
-
-def _require_typed_composite(
-    method: str, sn_mesh: "SNMesh", field: "FullField",
-) -> None:
-    r"""The shared matvec input contract — timeless composite + space content.
-
-    Two guards, consumed by EVERY SN matvec entry that takes a
-    :class:`FullField` (:meth:`StreamingOperator.apply` /
-    :meth:`apply_transpose` AND the :class:`StreamingCollisionOperator` overrides):
-    (1) the input is a :class:`~orpheus.transport.full_field.FullField`;
-    (2) ``field.interior``'s space CONTENT-equals the operator's own mint
-    on ``sn_mesh`` (the S3 re-key; the pre-S3 arm compared mesh
-    identity).
-    Single source of the contract (``coding-elegance`` Pattern 2 / Pattern 4 —
-    illegal inputs unrepresentable at one place, not re-validated per leaf).
-
-    The input contract is the TIMELESS
-    :class:`~orpheus.transport.full_field.FullField` (the matvec leaves are
-    base arrows ``FullField -> FullField``; only the iteration driver carries
-    the history-bearing :class:`TimedFullField` comonad).  A
-    :class:`TimedFullField` IS a :class:`FullField`, so the SI / Krylov drivers
-    that pass a timed iterate satisfy the guard; a bare ndarray does not.
-
-    Parameters
-    ----------
-    method : str
-        Qualified method name for the error message (e.g.
-        ``"StreamingOperator.apply"``).
-    sn_mesh : SNMesh
-        The operator's mesh — the interior's space must content-equal
-        its mint on this carrier.
-    field : FullField
-        The matvec input (``psi`` for apply, ``phi`` for the transpose).
-        A timeless :class:`FullField` or its timed subclass.
-    """
-    from orpheus.transport.full_field import FullField
-
-    if not isinstance(field, FullField):
-        raise TypeError(
-            f"{method}: expected FullField, got "
-            f"{type(field).__name__}.  D-I.3d (2026-05-29) retired the "
-            "bare-ndarray packed-vector contract; construct a timeless "
-            "composite via ``FullField(interior=AngularFlux(...), "
-            "boundary=AngularBoundaryFlux(...))`` (or the timed "
-            "``TimedFullField(interior=..., boundary=...)`` for an iterate)."
-        )
-    if field.interior.space != field.interior.space_on(sn_mesh):
-        raise ValueError(
-            f"{method}: operator and composite must agree in space "
-            "content (space-content invariant)."
-        )
 
 
 @dataclass
@@ -402,7 +350,9 @@ class StreamingOperator(LinearOperator["FullField"]):
             History-free (#257 S8a — the matvec leaf is a base arrow
             ``FullField -> FullField``; the comonad lives on the driver).
         """
-        _require_typed_composite("StreamingOperator.apply", self.sn_mesh, psi)
+        FullField.require_member(
+            psi, mesh=self.sn_mesh, context="StreamingOperator.apply",
+        )
         return self.loss_representation.streaming_action(psi)
 
     def apply_transpose(self, phi: "FullField") -> "FullField":
@@ -431,8 +381,8 @@ class StreamingOperator(LinearOperator["FullField"]):
         ``test_g_adjoint_reciprocity`` (slab / sphere / cylinder, -O-firing) +
         its L11 wrong-trace-metric negative control.
         """
-        _require_typed_composite(
-            "StreamingOperator.apply_transpose", self.sn_mesh, phi,
+        FullField.require_member(
+            phi, mesh=self.sn_mesh, context="StreamingOperator.apply_transpose",
         )
         return self.loss_representation.streaming_action_transpose(phi)
 
@@ -738,7 +688,9 @@ class StreamingCollisionOperator(
         within-group grid's :meth:`~orpheus.numerics.coupled_system.CoupledOperator.apply`,
         never a kwarg channel on this surface.
         """
-        _require_typed_composite("StreamingCollisionOperator.apply", self.sn_mesh, psi)
+        FullField.require_member(
+            psi, mesh=self.sn_mesh, context="StreamingCollisionOperator.apply",
+        )
         return self.loss_representation.loss_action(self.sigma, psi)
 
     def apply_transpose(self, phi: "FullField") -> "FullField":
@@ -761,8 +713,8 @@ class StreamingCollisionOperator(
         transpose (step 6): the joint ``Mᵀ`` action is the grid's
         :meth:`~orpheus.numerics.coupled_system.CoupledOperator.apply_transpose`.
         """
-        _require_typed_composite(
-            "StreamingCollisionOperator.apply_transpose", self.sn_mesh, phi,
+        FullField.require_member(
+            phi, mesh=self.sn_mesh, context="StreamingCollisionOperator.apply_transpose",
         )
         return self.loss_representation.loss_action_transpose(self.sigma, phi)
 

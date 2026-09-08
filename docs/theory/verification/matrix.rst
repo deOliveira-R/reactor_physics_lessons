@@ -9,7 +9,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **11661**
+Total tests collected: **11665**
 
 V&V level distribution
 ----------------------
@@ -19,10 +19,10 @@ V&V level distribution
    :widths: 15, 10, 10
 
    L0, 1304, 11.2%
-   L1, 1755, 15.1%
+   L1, 1755, 15.0%
    L2, 71, 0.6%
    L3, 0, 0.0%
-   foundation, 8505, 72.9%
+   foundation, 8509, 72.9%
    unmarked, 26, 0.2%
 
 Tagging source
@@ -34,7 +34,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 11556
+   explicit, 11560
    class-name, 46
    func-name, 0
    case, 33
@@ -414,7 +414,7 @@ Module × level grid
    operators/test_b3_domain_narrowing, 0, 0, 0, 0, 31, 0
    operators/test_bc_extraction_2d, 2, 3, 0, 0, 3, 0
    operators/test_bc_extraction_matvec, 3, 0, 0, 0, 30, 0
-   operators/test_boundary_carrier_admission, 0, 0, 0, 0, 16, 0
+   operators/test_boundary_carrier_admission, 0, 0, 0, 0, 18, 0
    operators/test_boundary_conditions, 0, 0, 0, 0, 13, 0
    operators/test_capability_survival, 0, 0, 0, 0, 12, 0
    operators/test_collision_operator, 0, 0, 0, 0, 54, 0
@@ -535,6 +535,7 @@ Module × level grid
    sweep/test_tau_arc_wellposedness, 0, 0, 0, 0, 10, 0
    test_convergence, 0, 0, 1, 0, 0, 0
    test_docstring_xrefs, 0, 0, 0, 0, 46, 0
+   test_elegance_debt_is_tagged, 0, 0, 0, 0, 2, 0
    test_error_catalogue_reconciles, 0, 0, 0, 0, 4, 0
    test_layer_imports, 0, 0, 0, 0, 360, 0
    test_pending_ports, 5, 0, 0, 0, 0, 0

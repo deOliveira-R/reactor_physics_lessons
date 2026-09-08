@@ -194,32 +194,110 @@ def test_g3_1b_b_a_accepts_the_angular_interior_composite(geometry):
 
 
 # ═════════════════════════════════════════════════════════════════════════
-# G3.1c — today's refusal SHAPE, recorded so the carve's delta is visible
+# G3.2 — the two clauses of the landed parse are ORDERED (post-carve rows;
+#        item 6.3 landed 2026-09-07 — the R6 RECORD row this file carried,
+#        test_g3_1c, was deleted with the ledger's _R6_XFAIL in that commit)
 # ═════════════════════════════════════════════════════════════════════════
 
 class _AlienCarrier:
     """A carrier no leaf's arrow accepts, and that is all it is."""
 
 
+_CARRIER_FRAGMENT = "expected FullField"
+_CONTENT_FRAGMENT = "space-content"
+
+
 @pytest.mark.parametrize("geometry", list(_GEOMETRIES), ids=list(_GEOMETRIES))
-def test_g3_1c_todays_alien_carrier_refusal_is_an_untyped_attributeerror(geometry):
-    r"""RECORD of the R6 defect itself, at the tier the carve changes.
+def test_g3_2a_an_alien_carrier_is_refused_by_the_carrier_clause_alone(geometry):
+    r"""``B_a.apply(<alien>)`` raises a ``TypeError`` naming the operator and
+    the carrier it wanted — and NOT the content fragment: the carrier clause
+    fires FIRST, before any ``.interior`` read (until item 6.3 this leaked a
+    raw ``AttributeError: 'X' object has no attribute 'interior'``).
 
-    Today ``_apply_faces`` dereferences ``psi.interior`` before any guard, so
-    an alien carrier leaks a raw ``AttributeError`` instead of the typed
-    ``TypeError`` naming the operator and the expected carrier that
-    ``L``/``C``/``S``/``F`` all raise.  The ledger
-    (``tests/sn/architecture/test_monomorphic_leaves.py``) carries this as 8
-    strict-xfail rows; this row states the SAME fact positively, so the file
-    that ships the acceptance witness also carries the red-before it is paired
-    with.
-
-    ⚠ RECORD, not THEOREM: it says *what is*, and item 6.3 is expected to
-    FLIP it.  When it does, delete this row in the same commit as the ledger's
-    ``_R6_XFAIL`` — a RECORD kept past its repeal pins the defect as the
-    contract.
+    Asserting the ABSENT fragment is what pins the clause ORDER (`L43c`): a
+    parse that read the content first would raise its own error, or the
+    old AttributeError, before naming the carrier.
     """
     sn_mesh = _GEOMETRIES[geometry]()
     operator = SNBoundaryOperator(sn_mesh)
-    with pytest.raises(AttributeError, match="has no attribute 'interior'"):
+    with pytest.raises(TypeError) as excinfo:
         operator.apply(_AlienCarrier())  # type: ignore[arg-type]
+    message = str(excinfo.value)
+    if "SNBoundaryOperator.apply" not in message:
+        pytest.fail(f"[{geometry}] the refusal does not name the refusing surface: {message!r}")
+    if _CARRIER_FRAGMENT not in message:
+        pytest.fail(f"[{geometry}] the refusal does not name the expected carrier: {message!r}")
+    if _CONTENT_FRAGMENT in message:
+        pytest.fail(
+            f"[{geometry}] the CONTENT clause fired on an alien carrier — the "
+            f"clause order is wrong: {message!r}"
+        )
+
+
+def test_g3_2b_a_content_mismatch_is_refused_by_the_content_clause_alone():
+    r"""On the width-stretched slab composite ``TestO13BoundaryOperator`` uses
+    (the ONE pre-existing pin of ``B_a``'s content refusal), the parse raises
+    a ``ValueError`` carrying the ``space-content`` vocabulary and NOT the
+    carrier fragment — the operand IS a ``FullField``, so the carrier clause
+    must pass it through to the content clause.
+    """
+    from tests.sn.operators.test_space_content_witnesses import _composite, _slab as _slab_of_width
+
+    sn_mesh = _slab_of_width()
+    stretched = _slab_of_width(width=2.0)
+    operator = SNBoundaryOperator(sn_mesh)
+    with pytest.raises(ValueError) as excinfo:
+        operator.apply(_composite(stretched))
+    message = str(excinfo.value)
+    if _CONTENT_FRAGMENT not in message:
+        pytest.fail(f"the content refusal lost its vocabulary: {message!r}")
+    if _CARRIER_FRAGMENT in message:
+        pytest.fail(f"the CARRIER clause fired on a genuine FullField: {message!r}")
+    if "SNBoundaryOperator.apply" not in message:
+        pytest.fail(f"the content refusal does not name the refusing surface: {message!r}")
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# G3.4 — the parse is ONE body with FIVE call sites (RECORD: a census)
+# ═════════════════════════════════════════════════════════════════════════
+
+_EXPECTED_CALL_SITES = 5     # L apply/transpose, LC apply/transpose, B_a _apply_faces
+
+
+def test_g3_4_the_carrier_parse_has_one_body_and_five_call_sites():
+    r"""RECORD (`L55i`): ``FullField.require_member(`` is called at exactly
+    five sites under ``orpheus/`` and the retired ``_require_typed_composite``
+    at none — the §6b set of the parse, made mechanical so a sixth consumer
+    (or a re-hand-rolled clause) shows up here rather than in a review.
+
+    Per ``vv-principles`` #17's Pattern-2-hoist clause the body is one
+    but the WIRING is five: each site passes its own ``context`` and its own
+    carrier, so a per-site mutation battery is the teeth; this row is the
+    denominator that battery needs.
+    """
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parents[3] / "orpheus"
+    call = re.compile(r"FullField\.require_member\(")
+    retired = re.compile(r"_require_typed_composite\(")
+    calls: list[str] = []
+    dead: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        rel = path.relative_to(root.parent).as_posix()
+        for i, line in enumerate(text.splitlines()):
+            if line.lstrip().startswith("#"):
+                continue
+            if call.search(line):
+                calls.append(f"{rel}:{i + 1}")
+            if retired.search(line):
+                dead.append(f"{rel}:{i + 1}")
+    if dead:
+        pytest.fail(f"the retired guard is still spelled at: {dead}")
+    if len(calls) != _EXPECTED_CALL_SITES:
+        pytest.fail(
+            f"FullField.require_member has {len(calls)} call sites, expected "
+            f"{_EXPECTED_CALL_SITES}: {calls} — a consumer joined or left the "
+            f"parse; re-baseline this record WITH the per-site battery"
+        )

@@ -150,6 +150,7 @@ from orpheus.transport.fields._bases import (
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
+    from orpheus.transport.mesh.material_mesh import MaterialMesh
 
 
 __all__ = ["Composite", "FullField"]
@@ -567,3 +568,75 @@ class FullField(Composite[BulkField, BoundaryField]):
                 f"got {type(self.boundary).__name__}"
             )
         super().__post_init__()
+
+    # ── The shared System-A matvec input parse ─────────────────────────
+    @classmethod
+    def require_member(
+        cls, x: object, *, mesh: "MaterialMesh", context: str,
+    ) -> "FullField":
+        r"""Parse ``x`` as a System-A composite on the carrier ``mesh`` — the
+        ONE matvec input contract of the SN leaves (CS4c step 6 item 6.3).
+
+        Five consumers, one body (``coding-elegance`` Pattern 2 / Pattern 4
+        — illegal inputs unrepresentable at one place, not re-validated per
+        leaf): ``StreamingOperator.apply`` / ``apply_transpose``,
+        ``StreamingCollisionOperator.apply`` / ``apply_transpose`` and
+        ``SNBoundaryOperator._apply_faces`` (the R6 row of the
+        monomorphic-leaves ledger, which until this item read
+        ``psi.interior`` unguarded and leaked a raw ``AttributeError``).
+        Mirrors the SHAPE of
+        :meth:`~orpheus.transport.radial_characteristic_field.RadialCharacteristicField.require_member`
+        — a ``TypeError`` for a foreign carrier that names the refusing
+        surface and the carrier it wanted, a ``ValueError`` for a content
+        mismatch carrying the greppable ``space-content invariant``
+        vocabulary — but NOT its signature: System B's parse is keyed on a
+        caller-supplied bound space, this one on the CARRIER, because the
+        reference is derived from the operand itself
+        (``x.interior.space_on(mesh)`` — *"does your space agree with what
+        your family would be on MY carrier?"*): ``B_a`` is fed the moment
+        iterate (`[M]` 59/58/47 ``HarmonicMomentFlux``-interior composites
+        per 2-D windowed solve) as well as the angular composite its bound
+        end names, and a bound-end comparison would refuse them.
+
+        The input contract is the TIMELESS composite (the matvec leaves
+        are base arrows ``FullField -> FullField``; only the iteration
+        driver carries the history-bearing ``TimedFullField`` comonad). A
+        ``TimedFullField`` IS a ``FullField``, so the SI / Krylov drivers
+        that pass a timed iterate satisfy the parse; a bare ndarray does
+        not.
+
+        **ELEGANCE-DEBT[guard] #457** — a runtime guard is a protection,
+        not the target state: it retires when every leaf is bound on the
+        end it acts on (R18's ``B`` reshape — ``B`` bound on its own trace
+        end, a moment-bound sibling for the windowed iterate, ``L``'s ends
+        typed ``FullFieldSpace``), at which point the admission is the
+        ordinary composability guard on the BOUND end and an alien carrier
+        cannot be typed at all.
+
+        Parameters
+        ----------
+        x : object
+            The matvec input (``psi`` for apply, ``phi`` for the transpose).
+        mesh : MaterialMesh
+            The operator's carrier — the interior's space must content-equal
+            (today: BE) its family's cached mint on it.
+        context : str
+            The refusing surface, e.g. ``"StreamingOperator.apply"`` —
+            ``_apply_faces`` serves both directions, so the caller names
+            the method rather than the parse guessing it.
+        """
+        if not isinstance(x, cls):
+            raise TypeError(
+                f"{context}: expected FullField, got "
+                f"{type(x).__name__}.  D-I.3d (2026-05-29) retired the "
+                "bare-ndarray packed-vector contract; construct a timeless "
+                "composite via ``FullField(interior=AngularFlux(...), "
+                "boundary=AngularBoundaryFlux(...))`` (or the timed "
+                "``TimedFullField(interior=..., boundary=...)`` for an iterate)."
+            )
+        if x.interior.space != x.interior.space_on(mesh):
+            raise ValueError(
+                f"{context}: operator and composite must agree in space "
+                "content (space-content invariant)."
+            )
+        return x
