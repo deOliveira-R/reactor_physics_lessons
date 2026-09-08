@@ -130,7 +130,7 @@ them.  Trust ``git``, not this column.
        :ref:`spaces-moment-head-axis-built`; the defect-catalogue view is
        ERR-039 chapter 4.
      - —
-     - landing hash pending, on ``main``
+     - ``6586fcd3``, on ``main``
    * - 2026-09-08
      - **A space's metric is DERIVED from its axes, and a dense Gram is a
        FORM positioned on it** (campaign 1 residue, CS4c step 6 item
