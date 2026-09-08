@@ -43,6 +43,77 @@ them.  Trust ``git``, not this column.
      - Issue
      - Where
    * - in dev
+       (2026-09-07)
+     - **A space IS its axis tuple — the identity flip lands** (campaign
+       1 residue, CS4c step 6; the structural ``__eq__``).
+       **(1) What was chartered, and how it was realized until this
+       change.**
+       The doctrine ruled 2026-08-19/20 is *a space's identity is the
+       structural content of its axes*, and — since the measure lives on
+       the axes — *metric differences imply space differences*.  Its
+       realization was a **bridge**: identity was ``(name, shape)`` for
+       every space, and
+       :meth:`FunctionSpace.of_axes
+       <orpheus.numerics.space.FunctionSpace.of_axes>` derived the name
+       injectively from the axes' content, so different axes minted
+       different names and therefore different spaces.  That is what made
+       the doctrine true with no flag day; it is also why the doctrine
+       could not be read off ``__eq__``, and why a hand-built space that
+       merely spelled the derived string WAS that space.
+       **(2) What landed.** ``FunctionSpace.__eq__`` and ``__hash__``
+       became per-class: both sides axis-built → compare the ``axes``
+       tuple (:class:`~orpheus.numerics.axis.Axis` equality is
+       ``(type, label, shape, kind, measure bytes)``, with ``generator``
+       deliberately excluded — provenance is never identity); both sides
+       axes-less → ``(name, shape)`` exactly as before; one of each →
+       **unequal**, because an axis-built space is not the same space as a
+       hand-named one wearing its label.
+       **(3) What flipped, measured.** ``[M]`` 2026-09-07 on the carve,
+       over two mints of ``energy(2,)*spatial(1,)`` differing only in the
+       cell measure: the two mints stay UNEQUAL (the doctrine, now
+       direct) and two independent mints of the same axes stay EQUAL with
+       equal hashes — but an axis-built space against a hand-named
+       :class:`~orpheus.numerics.space.FunctionSpace` carrying its exact
+       ``name`` and ``shape`` goes ``True`` → ``False`` (**flipped**),
+       and ``A * B`` against ``FunctionSpace.of_axes(*A.axes, *B.axes)``
+       goes ``False`` → ``True`` (**flipped**) even though the two derive
+       DIFFERENT names.  The second is Q-T4 realized: an axis product is not a
+       different *kind* of space.  Full table:
+       :ref:`spaces-identity-bridge`.  The laws are anchored in
+       ``tests/numerics/test_space_identity_is_structural.py``, written
+       PRE-carve so the flip inherits a measured baseline rather than a
+       hoped-for one; its row count is regenerated in
+       :doc:`the V&V matrix </theory/verification/matrix>`.
+       **(4) What did NOT change — and why the moment-path seam
+       survives.**  Every axes-less space keeps ``(name, shape)``.  For
+       the content-digest-named classes —
+       :class:`~orpheus.numerics.spaces.full_field_space.FullFieldSpace`,
+       :class:`~orpheus.numerics.spaces.angular_trace_space.AngularTraceSpace`,
+       :class:`~orpheus.numerics.spaces.scalar_trace_space.ScalarTraceSpace`
+       and the two radial-characteristic sub-spaces (``[M]`` five
+       classes, four digest-minting factories) — that IS content
+       identity, because their factories fold their content into the name
+       (the landed **CS4b S3** re-key, a different step).  For the moment
+       heads it is not: ``[M]`` ``SphericalHarmonicSpace.from_L(2).name``
+       is ``'spherical_harmonic_space'``,
+       ``LegendreSpace.from_L(2).name`` is
+       ``'legendre_space(S^2/O2_x)'`` and ``SpatialMomentSpace``'s is
+       ``'spatial_moment_space'`` — FAMILY tags, whose only identifying
+       content is the truncation order carried in ``shape``.  So the
+       metric-blind seam between the frame's Parseval-dressed head and
+       the field's continuum head is **untouched** by this change and
+       stands exactly as :doc:`/theory/foundations/frame` records it: the
+       flip makes identity structural where the structure is DECLARED, and
+       those heads declare none.
+       **(5) The consequence the solver sees** is a refusal that used
+       to be unspellable: a carrier's axis-built mint can no longer
+       be impersonated by a hand-built space carrying its name, so an
+       operator posed on a look-alike is refused at the composition guard
+       instead of composing silently.
+     - —
+     - the CS4c step-6 carve on ``main`` (uncommitted at the time of
+       writing — trust ``git``)
+   * - in dev
        (2026-09-06)
      - **The eigenvalue finalize is ONE step of the iteration it
        finalizes — the returned flux now solves the equation the solve
@@ -833,8 +904,9 @@ them.  Trust ``git``, not this column.
        <orpheus.numerics.space.FunctionSpace.of_axes>` composes a space as
        the ordered product of its axes, with a per-axis metric path (no
        densification) and a deterministic, injective derived name — the
-       **identity bridge** that makes *"metric differences imply space
-       differences"* true today rather than aspirationally.  The
+       **identity bridge** that made *"metric differences imply space
+       differences"* true from that day rather than aspirationally —
+       until the identity flip of 2026-09-07 made it direct.  The
        S\ :sub:`N`-facing consequence is the operator slot: :math:`S` and
        :math:`F` stop carrying a ``full_field_space`` and carry a
        ``space`` of the family type, so an operator can be posed on the

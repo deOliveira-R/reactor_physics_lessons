@@ -163,7 +163,7 @@ def test_d1_an_energy_space_and_a_spatial_space_are_not_the_same_space() -> None
 
     assert energy.shape == spatial.shape == (2,)     # the collision's precondition
     assert energy != spatial
-    assert hash(energy) != hash(spatial)
+    assert len({energy, spatial}) == 2   # separation through the container
 
     # negative control: inequality is decided by the MANIFOLD, and shape still
     # separates two partitions of the SAME manifold.

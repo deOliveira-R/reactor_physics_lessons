@@ -76,11 +76,14 @@ def test_of_axes_shape_is_the_concatenation() -> None:
 def test_of_axes_name_is_INJECTIVE_on_structural_content() -> None:
     r"""B2 ⭐ — distinct axis tuples ⟹ distinct names.
 
-    Load-bearing because space identity is ``(name, shape)`` until S3 (Q2):
-    a NAME COLLISION between different axis tuples makes two different
-    spaces compare EQUAL, so the composition guard passes an ill-posed sum
-    — the exact defect CS1 exists to make unspellable, reintroduced one
-    layer down.
+    Load-bearing until the identity flip (CS4c step 6, 2026-09-07) because
+    space identity was ``(name, shape)`` (Q2): a NAME COLLISION between
+    different axis tuples made two different spaces compare EQUAL, so the
+    composition guard passed an ill-posed sum — the exact defect CS1 exists
+    to make unspellable, reintroduced one layer down. Since the flip an
+    axis-built space compares by its axes tuple; the name's injectivity is
+    what keeps an axes-less composite's folded digest content-keyed and the
+    label diagnostic, so the gate stays.
 
     The population deliberately contains two SAME-SHAPE pairs, where shape
     carries no information and only the name can discriminate:
@@ -113,8 +116,11 @@ def test_of_axes_name_is_INJECTIVE_on_structural_content() -> None:
 def test_of_axes_name_is_BLIND_to_the_generator() -> None:
     """B12 (CS5) — provenance never perturbs the identity bridge.
 
-    Space identity is ``(name, shape)`` until the S3 flip, so the derived
-    name is load-bearing. ``_structural_bytes`` iterates ``_identity_key``,
+    Until the identity flip (CS4c step 6) space identity was ``(name,
+    shape)`` and the derived name WAS the identity; since the flip
+    ``__eq__`` reads ``_identity_key`` directly through ``Axis.__eq__``, so
+    provenance stays out of the identity at both tiers for one reason.
+    ``_structural_bytes`` iterates ``_identity_key``,
     which excludes ``Axis.generator``; this gate is the observable
     statement of that, at the tier where an inclusion would do damage.
     Mutation: append ``self.generator`` to ``_identity_key`` → the digest

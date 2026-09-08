@@ -37,6 +37,18 @@ history" changelog at `docs/theory/methods/sn/history.rst` (⚠ NOT the pre-spli
 grep must `test -f` the SOURCE). Active track = **#231** (§3); main agent commits, I
 stage + gate.
 
+- **#—/CS4c step 6.1 — the theory pages state the identity flip instead of promising it**
+  (2026-09-07; 6 `docs/**/*.rst`, 0 `orpheus/`, 0 `tests/`, 0 new eq-labels; the `spaces-identity-bridge`
+  LABEL kept, its citers 7 → 11). ⭐⭐ **The brief's class list and the LANDING CODE'S OWN docstring
+  were wrong together** — *"the digest-named leaf classes"* is `[M]` right for 5 and wrong for 3
+  (`SphericalHarmonicSpace.from_L(2).name` = `'spherical_harmonic_space'`), and the error would have
+  made a ⛔-reserved metric-blind seam read as closed; the tell was the brief CONTRADICTING ITS OWN
+  carve-out. ⭐ `operator_adjoint.rst:360` was already false since the CS4b S3 digest re-key, invisible
+  to `-W`. Gates without a build: docutils error-SET diff **0/0 on 6 files**, added-lines nesting gate
+  caught **2** real `**``literal``**`, xrefs 7/7 import-live; promissory prose `[M]` **7 → 0** in `docs/` over three stated predicates (`S3 flip|seam|until S3` 4, bare `**S3.**` 1, `bridge … true today` 2).
+  ⚠ I published my own count/list mismatch (*"four classes — A, B, C and the two D"*) and caught it on
+  the final read → [[lessons-L96]]
+
 **In flight — ONE line each. The STATE is in git (`git status --porcelain -- docs/`), never in
 this list; the evidence is in the lesson.** Branch `docs/425-within-group-algebra`, docs
 UNCOMMITTED (I stage + gate; the main agent commits).

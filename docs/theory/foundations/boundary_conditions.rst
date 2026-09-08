@@ -4135,7 +4135,12 @@ carries the per-face :math:`\Omega\cdot\hat n` masks as
 ``Optional[np.ndarray]`` fields excluded from
 :meth:`__eq__` and :meth:`__hash__` — preserving the
 :class:`~orpheus.numerics.space.FunctionSpace` identity convention
-``(name, shape)``. Construction goes through the classmethod factory
+``(name, shape)``, which for this axes-less class IS content identity
+(its factory folds the quadrature and layout into an
+``angular_trace#<digest>`` name) and which the 2026-09-07 identity flip
+therefore leaves unchanged: the flip made identity structural only for
+spaces that declare their ``axes``. Construction goes through the
+classmethod factory
 :meth:`AngularTraceSpace.from_quadrature_and_layout
 <orpheus.numerics.spaces.angular_trace_space.AngularTraceSpace.from_quadrature_and_layout>`;
 the bare dataclass constructor is reserved for trace spaces whose mask

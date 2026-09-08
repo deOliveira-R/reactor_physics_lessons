@@ -162,9 +162,10 @@ def test_synthetic_and_from_grid_at_the_same_ng_are_UNEQUAL() -> None:
     ``synthetic(2)`` and ``from_grid(<2-group edges>)`` describe the same
     INDEX SET and different PARTITIONS. Q2 rules identity = ``ng`` + edges
     CONTENT, so they must differ; if identity collapsed to ``ng`` the
-    derived space NAME would collide and — since ``(name, shape)`` IS the
-    space identity until S3 — two physically different spaces would
-    compare equal and compose silently.
+    derived space NAME would collide and the axes tuples would compare
+    equal — since the identity flip (CS4c step 6) the axes tuple IS the
+    space identity, and until it the derived name was — so two physically
+    different spaces would compare equal and compose silently either way.
     """
     synthetic = EnergyAxis.synthetic(2)
     gridded = EnergyAxis.from_grid(EnergyGrid(_EDGES_2G))

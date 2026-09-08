@@ -11294,3 +11294,111 @@ its own control (the two entries' **φ** agreed at 1.67e-11 while their **ψ** d
 and `_reflect_outflow_into_inflow` 5. `SNSolver._boundary_flux`: **0** doc sites — a narrowed
 grep, because the bare token matches 32 lines of `ScalarBoundaryFlux` / `angular_boundary_flux`.
 Post-edit: **36 surviving mentions, 0 xref roles**, every one a dated literal.
+
+---
+
+## L-096 — CS4c step 6.1: the identity flip, and the CLASS LIST that three surfaces got wrong together
+
+**Task.** The `FunctionSpace.__eq__` identity flip (structural equality for axis-built spaces)
+landed while I wrote; my job was to make 6 `docs/**/*.rst` stop promising it. Files:
+`spaces.rst` (Key-Facts bullet, the `spaces-identity-bridge` section, the CS5 generator
+argument, the roadmap row, the CS1 quadrant table, a dated changelog row), `history.rst` (a
+dated row + a NEW changelog entry), `api/numerics.rst`, `operator_adjoint.rst` ×2,
+`manifolds.rst`, `boundary_conditions.rst`. No build (one at a time is a hard rule here); no
+commits.
+
+### (a) ⭐⭐ The carve was IN THE WORKING TREE — so the code's own docstrings were the spec
+
+`git status --porcelain -- orpheus/` at pick-up read `M orpheus/numerics/{axis,space}.py`
+(+99 −49) even though `git status` in my dispatch snapshot showed nothing: **the main agent
+started writing between the brief and my first command.** Reading `git diff -- orpheus/` in
+full beat paraphrasing the brief — I adopted the code's own spelling (*"an axis-built space
+compares and hashes by its `axes` tuple directly"*, *"the derived name survives as the readable
+label"*), which is internal consistency for free. ⟹ **on a live branch, `git diff -- orpheus/`
+is the FIRST command of a docs pass about an in-flight carve, not `git show HEAD:`.**
+
+### (b) ⭐⭐ THE FINDING: a class LIST shared by the brief, the landed code docstring and my draft was wrong for 3 of 7 — and the error made a ⛔-reserved seam look closed
+
+All three surfaces said *"the digest-named leaf classes — `FullFieldSpace`, the trace spaces,
+`SphericalHarmonicSpace`, `LegendreSpace`, `SpatialMomentSpace`, `RadialCharacteristicSpace`"*.
+`[M]` by CONSTRUCTING each one:
+
+| class | `.name` on a real mint | digest? |
+|---|---|---|
+| `FullFieldSpace.from_blocks` | `full_field#4bbf8616c6f95085` | ✅ |
+| `AngularTraceSpace` / `ScalarTraceSpace` | `angular_trace#…` / `scalar_trace#…` | ✅ |
+| `RadialCharacteristic{Interior,Boundary}Space` | `{_SPACE_NAME}#…` | ✅ |
+| `SphericalHarmonicSpace.from_L(2)` | **`'spherical_harmonic_space'`** | ⛔ |
+| `LegendreSpace.from_L(2)` | **`'legendre_space(S^2/O2_x)'`** | ⛔ |
+| `SpatialMomentSpace` | **`'spatial_moment_space'`** | ⛔ |
+
+⭐ **Why it is load-bearing rather than pedantic:** the brief ALSO said (correctly) *"leave the
+metric-blind seam statements untouched — the SH head is still metric-blind after this commit"*.
+Those two claims are **inconsistent**: if the SH head were digest-named, its `(name, shape)`
+WOULD be content identity and the seam would look closed. Publishing the list as given would
+have made the corpus contradict its own ⛔. The corrected law — *"axes-less spaces keep
+`(name, shape)`; for the five content-digest-named classes (four digest-folding factories) that
+IS content identity; for the moment heads the name is a FAMILY tag whose only identifying
+content is the order carried in `shape`"* — is what makes both true at once, and it EXPLAINS
+the seam instead of merely reserving it. ⟹ **when a brief hands you a class list AND a
+carve-out, check the list against the carve-out: a list that contradicts its own exception is
+the finding.** Reported the same wrong list in the landing code docstring upward (docs-only
+scope; I do not edit `orpheus/`).
+
+The cheap instrument: don't grep for `#` in the factories — **construct each class and print
+`.name`.** A grep for `hashlib` found 4 of the 4 factories but says nothing about the 3 that
+have none, which is the half that mattered.
+
+### (c) ⭐ A pre-existing false sentence surfaced by the triage, invisible to every gate
+
+`operator_adjoint.rst:360` claimed *"``name = "full_field"`` … so two composites over meshes of
+the same total dimension compare equal"* — false since the **CS4b S3/S4** digest re-key (that
+bare name IS the R2 block-blindness the re-key retired). `-W` cannot see it: it is prose, and
+every xref in it resolves. Found only because item 6 said *"triage each"* and I built the
+object. ⟹ a triage item whose expected answer is *"still true, leave it"* is where the
+pre-existing falsehoods live — build the object anyway.
+
+### (d) ⭐ The two rows that ARE a flip, and the one that is DERIVABLE
+
+For an `__eq__` change, the publishable evidence is not "the doctrine still holds" but the
+rows that MOVED. `[M]` on the carve: axis-built vs a hand-named twin carrying its exact
+`(name, shape)` went `True` → **`False`** (a label stopped being a *credential*), and
+`A * B` vs `of_axes(*A.axes, *B.axes)` went `False` → **`True`** even though the two derive
+DIFFERENT names (a name stopped being the *identity* — Q-T4 realized). The two UNCHANGED rows
+were published beside them so the table cannot read as "everything moved".
+⭐ **The "before" column cost nothing and needed no worktree**: the pre-flip body is exactly
+`self.name == other.name and self.shape == other.shape` (`git show <HEAD>:…`), so it is
+DECIDED by the names the probe printed — publish it as `[R]`, with the derivation stated. When
+the old law is a pure function of quantities you already measured, a pinned worktree (L-095) is
+over-engineering.
+
+### (e) ⚠ MY OWN quantifier defect, caught on the final read
+
+I published *"the ``[M]`` **four** content-digest-named classes — A, B, C **and the two**
+D"* — a list of FIVE under the word *four*. The number counted digest *factories*; the list
+counts *classes*, and two share a factory. ⟹ **when a count and a list sit in one sentence,
+check they count the same objects** — the slip survived three re-reads because both halves were
+individually right. Corrected to *"(five classes, four digest-minting factories)"*.
+
+### (f) ⛔ Ambiguous-name discipline, applied AT THE BANNER
+
+"S3" is a 3-way homonym here (CS4b S3 re-key LANDED · #240 D5b-S3 LANDED · this flip). Every
+new sentence says *"the identity flip (structural ``__eq__``), CS4c step 6, 2026-09-07"*. The
+retired roadmap row is preserved VERBATIM inside a ⛔ tombstone, and the tombstone itself carries
+the disambiguation (*"the 'S3' of that retired sentence is this plan-internal step, NOT the
+landed CS4b S3 re-key"*) — `plan-authoring` §3's ambiguous-name clause says disambiguate at the
+BANNER, because the banner is what gets read. Post-pass census: **0** promissory `S3` left in
+`docs/`; the 6 survivors are all landed homonyms.
+
+### (g) ⭐ Gates without a build (Sphinx unavailable — one build at a time)
+
+The instrument set that worked, and its readings: a **pre-edit vs post-edit docutils error-SET
+diff** (`git show HEAD:<file>` vs the working tree, Sphinx-only roles/directives filtered as
+noise) — **0 before / 0 after on all 6, 0 NEW, 0 GONE**; a nested-markup gate over my 246 ADDED
+lines (`**``literal``**`, `**:role:`, 3+ backtick runs) which caught **2 real hazards**
+(`**``False``**`, `**``True``**`) nothing else would have; `:ref:` targets against the corpus
+label set (1, live); python xrefs **import-resolved** (7 of 7 live, plus the bare
+`:meth:`__eq__`` corpus idiom with 38 precedents); `:doc:` targets against the filesystem; and a
+79-column check on added lines. ⟹ this set is now my default when a build is unavailable — the
+error-SET diff is the honest substitute for a warning count, and the added-lines gates find what
+a build never would.

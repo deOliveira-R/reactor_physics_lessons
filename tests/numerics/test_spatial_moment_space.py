@@ -254,7 +254,7 @@ def test_equality_by_size_identity():
     _check(a == b, "size-identity: (pa=2,d=2) == (pa=4,d=1) (both shape (4,))")
     np.testing.assert_equal(hash(a), hash(b))
     _check(a != c, "distinct size → not equal")
-    _check(hash(a) != hash(c), "distinct size → distinct hash")
+    _check(len({a, c}) == 2, "distinct size → distinct spaces (container separation; hash inequality is not a law)")
     # cross-class equality with a bare FunctionSpace of the same (name, shape)
     bare = FunctionSpace(name="spatial_moment_space", shape=(4,))
     _check(a == bare, "equal-(name,shape) bare FunctionSpace compares equal")

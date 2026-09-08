@@ -43,7 +43,10 @@ is a law.
 MEASURED today: a hand-built ``DualSpace(name="X", shape=(4,), primal=…)``
 compares EQUAL to ``FunctionSpace("X", (4,))``, and so does a
 ``TensorProductSpace`` with the same derived name.  That is a behaviour the
-carve *introduces*; asserting it here would ship a red.
+carve *introduces*; asserting it here would ship a red. (The flip landed
+without that tightening — ruling O-3, 2026-09-07: 134 test sites mint by
+literal name and compare across classes — so it stays absent. What the flip
+DID introduce is the G1.6 pair below, added in the landing commit.)
 """
 
 from __future__ import annotations
@@ -302,6 +305,60 @@ def test_g1_5_a_discrete_measure_cannot_be_compared_but_an_axis_can():
             "compared unequal — provenance has leaked into identity"
         )
     assert hash(a) == hash(b)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# G1.6 — what the identity flip INTRODUCED (added when it landed, CS4c
+#        step 6, 2026-09-07; both rows were RED on the pre-carve tree)
+# ═════════════════════════════════════════════════════════════════════════
+
+def test_g1_6a_an_axis_built_space_is_not_a_hand_named_space_wearing_its_label():
+    """An axis-built space and a hand-built space carrying the SAME
+    ``(name, shape)`` are different spaces.
+
+    Before the flip they compared EQUAL (identity was the label); since it
+    the axis-built side compares by its axes and an axes-less other has
+    none to offer. This is the discrimination the flip introduced — the
+    row was RED on the pre-carve tree, which is what makes it evidence
+    (``vv`` #19: a reading that could not change is not evidence).
+    """
+    built = FunctionSpace.of_axes(_energy(), _spatial(_W))
+    labelled = FunctionSpace(name=built.name, shape=built.shape)
+    if built == labelled or labelled == built:
+        pytest.fail(
+            "a hand-named space wearing an of_axes label compared equal to "
+            "the axis-built space — identity has fallen back onto the label"
+        )
+    if len({built, labelled}) != 2:
+        pytest.fail("the axis-built space and its label-twin collapsed in a set")
+
+
+def test_g1_6b_an_all_axes_product_is_the_of_axes_mint_of_the_same_axes():
+    """``A * B`` with both factors axis-built and ``of_axes(*A.axes, *B.axes)``
+    are ONE space (ruling Q-T4: an axis product is not a different kind of
+    space). Their NAMES differ (``⊗``-joined vs digest), so this is exactly
+    the row the nominal identity could not state — and the reason
+    ``__hash__`` rides the axes tuple too (``a == b ⟹ hash(a) == hash(b)``
+    would otherwise fail across the two mints).
+    """
+    a = FunctionSpace.of_axes(_energy())
+    b = FunctionSpace.of_axes(_spatial(_W))
+    product = a * b
+    mint = FunctionSpace.of_axes(_energy(), _spatial(_W))
+    if product.axes is None:
+        pytest.fail("CONTROL INVALID: the all-axes product did not thread its axes")
+    if product.name == mint.name:
+        pytest.fail(
+            "CONTROL INVALID: the two mints share a name, so the row does not "
+            "test structure over label"
+        )
+    if not (product == mint and mint == product):
+        pytest.fail(
+            f"an all-axes product and the of_axes mint of its axes compared "
+            f"unequal: {product!r} vs {mint!r}"
+        )
+    if hash(product) != hash(mint) or len({product, mint}) != 1:
+        pytest.fail("two equal spaces did not share a hash / did not dedupe in a set")
 
 
 # ═════════════════════════════════════════════════════════════════════════

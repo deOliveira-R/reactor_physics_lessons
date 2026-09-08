@@ -71,9 +71,9 @@ measure are **different axes** (the collapse doctrine's "a genuine
 one-cell slab keeps its axis with weight V ≠ 1, distinguished from the
 quotient point by measure"); an :class:`EnergyAxis` never equals a
 generic :class:`Axis` carrying the same field tuple. This identity is
-what ``FunctionSpace.of_axes`` derives *space names* from, and — because
-space identity is ``(name, shape)`` until the S3 flip — axis identity is
-load-bearing for space identity today.
+what ``FunctionSpace.of_axes`` derives *space names* from, and — since the
+identity flip (CS4c step 6, 2026-09-07) — what ``FunctionSpace.__eq__`` reads
+DIRECTLY on an axis-built space: axis identity IS space identity there.
 
 Layering note: this module is model-independent numerics. It consumes an
 :class:`~orpheus.data.energy_grid.EnergyGrid` only through its surface
@@ -269,10 +269,13 @@ class Axis:
         """An INJECTIVE byte encoding of the structural identity.
 
         Consumed by ``FunctionSpace.of_axes``'s derived-name digest.
-        Injectivity is load-bearing there (space identity is ``(name,
-        shape)`` until the S3 flip, so a name collision between different
-        axis tuples would collapse two different spaces into one), hence
-        the belt-and-braces encoding: every chunk is TYPE-TAGGED
+        Injectivity was load-bearing for space identity until the identity
+        flip (CS4c step 6, 2026-09-07 — space identity was ``(name,
+        shape)``, so a name collision between different axis tuples would
+        have collapsed two different spaces into one); it stays
+        load-bearing where a derived name is folded into an axes-less
+        composite's own digest (``FullFieldSpace.from_blocks``) and for the
+        label's diagnostic value, hence the belt-and-braces encoding: every chunk is TYPE-TAGGED
         (``T``/``N``/``B``/``R``) and LENGTH-PREFIXED, so no
         concatenation of different identity keys can share a byte
         stream. Deterministic across processes by construction — no

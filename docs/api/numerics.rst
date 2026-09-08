@@ -582,9 +582,19 @@ modules themselves and are accessible via the standard
 Function spaces — trace and interior face cochains
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`~orpheus.numerics.space.FunctionSpace` ABC carries the
-``(name, shape, inner_product_weights)`` identity for every typed
-field. Two **face** spaces specialise it for the SN sweep's
+The :class:`~orpheus.numerics.space.FunctionSpace` base class carries
+the identity of every typed field's space, and since the identity flip
+(structural ``__eq__``, CS4c step 6, 2026-09-07) that identity is **per
+class**: an axis-built space compares and hashes by its ``axes`` tuple,
+an axes-less one by ``(name, shape)``, and one of each is never the same
+space (:ref:`spaces-identity-bridge`).
+⛔ This paragraph said *"carries the (name, shape, inner_product_weights)
+identity"* until 2026-09-07 — a third spelling that was already wrong
+before the flip: ``inner_product_weights`` is declared ``compare=False``
+and has never entered ``==``.  On an axis-built space the measure DOES
+reach identity, but through the axes, which is the doctrine *metric
+differences imply space differences*. Two **face** spaces specialise it
+for the SN sweep's
 codim-1 (face) quantities, both re-homing their
 :class:`~orpheus.numerics.face_layout.FaceLayout` onto the space as
 ``compare=False`` leaf-data (the A.5 "layout-on-space" pattern):

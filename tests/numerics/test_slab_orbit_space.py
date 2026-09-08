@@ -93,7 +93,7 @@ def test_a1_a_slab_angular_space_is_not_a_spatial_space_on_its_chart(
 
     assert angular.space.shape == spatial.space.shape == (n,)
     assert angular.space != spatial.space
-    assert hash(angular.space) != hash(spatial.space)
+    assert len({angular.space, spatial.space}) == 2   # separation through the container
     assert angular.space.name == f"L2[S^2/O2_x]"
     assert spatial.space.name == "L2[[-1,1]]"
 

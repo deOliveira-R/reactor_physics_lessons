@@ -165,8 +165,11 @@ class FunctionSpace(Generic[Carrier]):
         through ``*``); when present, the factor measures live PER AXIS
         (``inner_product_weights`` stays ``None`` — never both, enforced
         at construction) and the metric machinery routes through the
-        per-axis path. ``compare=False``: identity stays ``(name,
-        shape)`` until the S3 flip (see the identity paragraph below).
+        per-axis path. Since the identity flip (CS4c step 6,
+        2026-09-07) it IS the identity of an axis-built space —
+        ``__eq__``/``__hash__`` read it directly; the dataclass field
+        stays ``compare=False`` only so a subclass's generated ``__eq__``
+        never reaches an ndarray (see the identity paragraph below).
 
     Notes
     -----
@@ -184,31 +187,54 @@ class FunctionSpace(Generic[Carrier]):
     ``ratedensity_space`` duplication) and lets ``L`` / ``L⁻¹`` type as
     geometric endomorphisms on the bulk grid with a dimensional gain.
 
-    **Identity — the chartered doctrine, and the current realization
-    (campaign 1, item 0.8 — a MIGRATION statement, both halves true).**
-    The *chartered* doctrine (ruled 2026-08-19/20): a space's identity is
-    the **structural content of its axes** plus its tags — and since the
-    metric lives on the axes, *metric differences imply space
-    differences* (a quotient point with unit weight and a genuine
-    one-cell mesh with :math:`V \neq 1` are DIFFERENT spaces; the old
-    reading "two copies of :math:`\mathbb{R}^n` are 'the same' space
-    regardless of which inner product is installed" is OVERTURNED). The
-    *current nominal realization*: equality and hashing still compare
-    ``(name, shape)`` — unchanged until the S3 identity flip, so legacy
-    hand-named spaces behave exactly as before. The **bridge** between
-    the two is :meth:`of_axes`: it derives ``name`` deterministically and
-    injectively from the axes' structural content, so for axis-built
-    spaces the chartered identity already flows through the nominal
-    ``(name, shape)`` comparison today — different measures mint
-    different names, hence different spaces, with no flag day. S3
-    retires the bridge by comparing the axes tuple directly.
+    **Identity — the chartered doctrine, realized (campaign 1, item 0.8;
+    the identity flip landed at CS4c step 6, 2026-09-07).** The doctrine
+    (ruled 2026-08-19/20): a space's identity is the **structural content
+    of its axes** plus its tags — and since the metric lives on the axes,
+    *metric differences imply space differences* (a quotient point with
+    unit weight and a genuine one-cell mesh with :math:`V \neq 1` are
+    DIFFERENT spaces; the old reading "two copies of :math:`\mathbb{R}^n`
+    are 'the same' space regardless of which inner product is installed"
+    is OVERTURNED). The realization, per class: an **axis-built** space
+    compares and hashes by its ``axes`` tuple directly (``Axis.__eq__``
+    is structural and excludes provenance), so an all-axes ``*`` product
+    and the :meth:`of_axes` mint of the same axes are one space, and an
+    axis-built space is never equal to a hand-named space wearing its
+    label. An **axes-less** space keeps the nominal ``(name, shape)``
+    identity, and what that means depends on the name: the digest-named
+    composites and traces
+    (:class:`~orpheus.numerics.spaces.full_field_space.FullFieldSpace`,
+    the two trace spaces, the two radial-characteristic sub-spaces —
+    five classes, four digest-folding factories) fold their content into
+    the name, so ``(name, shape)`` IS content identity there (CS4b S3);
+    the family-tagged heads
+    (:class:`~orpheus.numerics.spaces.spherical_harmonic_space.SphericalHarmonicSpace`
+    — ``'spherical_harmonic_space'`` is a tag, not a digest —
+    :class:`~orpheus.numerics.spaces.legendre_space.LegendreSpace`,
+    :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`)
+    carry only their family and, through ``shape``, their truncation
+    order — deliberately metric-blind, which is what lets a frame's
+    Parseval-dressed head still equal the field's continuum head (the
+    admission seam that CS4c step 6 items 6.2b/6.2c re-pose when the
+    heads become axis-built); a hand-built legacy space carries whatever
+    its author wrote.
+    Until the flip the same doctrine flowed through a BRIDGE: identity
+    was ``(name, shape)`` for every space and :meth:`of_axes` derived the
+    name injectively from the axes' content. The derived name survives
+    as the readable label, as what keeps ``repr`` and guard messages
+    content-distinguishing, and as the identity carrier of the axes-less
+    composites that fold member names; its injectivity is no longer
+    load-bearing for ``==`` on axis-built spaces.
     """
 
     name: str
     shape: tuple[int, ...]
-    # Metadata, NOT identity (see class docstring): two spaces with the same
-    # (name, shape) are equal regardless of the installed metric, and hashing
-    # is on (name, shape). ``compare=False`` keeps the weights out of the
+    # Metadata, NOT identity (see class docstring): on an axes-less space
+    # identity is (name, shape) — two such spaces with the same (name, shape)
+    # are equal regardless of the installed dense metric (the leaf classes
+    # derive their names from content); on an axis-built space the measures
+    # live ON the axes, so they enter the identity through ``axes`` and this
+    # slot is ``None``. ``compare=False`` keeps the weights out of the
     # dataclass-generated ``__eq__``/``__hash__`` of subclasses (e.g.
     # ``AngularTraceSpace``, ``SphericalHarmonicSpace``) that regenerate them — an
     # array-valued metric would otherwise make ``==`` raise on the ambiguous
@@ -217,11 +243,14 @@ class FunctionSpace(Generic[Carrier]):
     inner_product_weights: Optional[NDArray] = field(
         default=None, repr=False, compare=False,
     )
-    # The axis-composition generator record (campaign 1, CS1). Metadata
-    # for identity purposes until the S3 flip (``compare=False``, same
-    # rationale as the weights above) — but LOAD-BEARING for the metric:
-    # when present, the factor measures live per axis and the metric
-    # machinery routes through the per-axis path (never densified).
+    # The axis-composition generator record (campaign 1, CS1) — THE
+    # identity of an axis-built space since the identity flip (CS4c step
+    # 6): ``__eq__``/``__hash__`` read it directly (``compare=False`` only
+    # keeps a subclass's generated ``__eq__`` from re-deriving equality
+    # over every field, same rationale as the weights above) — and
+    # LOAD-BEARING for the metric: when present, the factor measures live
+    # per axis and the metric machinery routes through the per-axis path
+    # (never densified).
     axes: Optional[tuple[Axis, ...]] = field(
         default=None, repr=False, compare=False,
     )
@@ -284,9 +313,30 @@ class FunctionSpace(Generic[Carrier]):
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, FunctionSpace):
             return NotImplemented
+        if other is self:
+            return True
+        # The identity flip (structural ``__eq__``, CS4c step 6, 2026-09-07):
+        # an axis-built space IS its axis tuple. ``Axis.__eq__`` compares
+        # (type, label, shape, kind, weights bytes) — never ``generator`` —
+        # so two mints agree iff their axes' content agrees, and the derived
+        # name stops being the carrier of that fact. An axis-built space is
+        # never the same space as a hand-named one wearing its label; two
+        # axes-less spaces keep the nominal ``(name, shape)`` identity —
+        # content identity where the factory folds content into the name
+        # (the composites and traces, CS4b S3), family + dimension on the
+        # family-tagged heads (SH / Legendre / SpatialMomentSpace —
+        # metric-blind by design until they become axis-built, item 6.2c).
+        if self.axes is not None or other.axes is not None:
+            if self.axes is None or other.axes is None:
+                return False
+            return self.axes == other.axes
         return self.name == other.name and self.shape == other.shape
 
     def __hash__(self) -> int:
+        # Consistent with ``__eq__`` by construction: the structural arm
+        # hashes the axes tuple it compares, the nominal arm ``(name, shape)``.
+        if self.axes is not None:
+            return hash(self.axes)
         return hash((self.name, self.shape))
 
     def __repr__(self) -> str:
@@ -308,17 +358,25 @@ class FunctionSpace(Generic[Carrier]):
         4 000 000-entry outer product); the metric machinery routes
         through the per-axis path.
 
-        **The derived name is the identity bridge (S3 seam).** Space
-        identity is ``(name, shape)`` until the S3 flip, so the name is
-        derived DETERMINISTICALLY and INJECTIVELY from the axes'
-        structural content (label, shape, kind, measure bytes, subclass
-        identity — via a content digest, never ``hash()``, so it is
-        stable across processes): different axis tuples mint different
-        names, hence different spaces, TODAY. Two same-``ng`` energy
-        axes with different partitions, or two same-shape spatial axes
-        with different measures, compose into UNEQUAL spaces — the
-        chartered "metric differences imply space differences" doctrine
-        flowing through the nominal identity.
+        **The derived name — the readable label, and the carrier the
+        axes-less composites fold.** The name is derived
+        DETERMINISTICALLY and INJECTIVELY from the axes' structural
+        content (label, shape, kind, measure bytes, subclass identity —
+        via a content digest, never ``hash()``, so it is stable across
+        processes). Until the identity flip (CS4c step 6, 2026-09-07)
+        that injectivity was the identity BRIDGE: space identity was
+        ``(name, shape)`` for every space, so different axis tuples had
+        to mint different names to be different spaces. Since the flip
+        an axis-built space compares by its ``axes`` tuple directly
+        (:meth:`__eq__`), and the digest's injectivity is load-bearing
+        only where a derived name is folded into an axes-less composite's
+        own digest
+        (:meth:`~orpheus.numerics.spaces.full_field_space.FullFieldSpace.from_blocks`)
+        and for what ``repr`` and the guard messages can tell apart. Two
+        same-``ng`` energy axes with different partitions, or two
+        same-shape spatial axes with different measures, compose into
+        UNEQUAL spaces either way — the chartered "metric differences
+        imply space differences" doctrine, now directly.
 
         Always returns a plain :class:`FunctionSpace` — an axis product
         is not a different *kind* of space (ruled Q-T4); invoking
@@ -1005,9 +1063,10 @@ class TensorProductSpace(FunctionSpace):
     # The @dataclass(frozen=True) decorator would otherwise auto-generate
     # __eq__ that compares every field — including the ndarray
     # ``inner_product_weights`` which raises "truth value ambiguous" at
-    # use time. Explicit delegation restores the (name, shape, units)
-    # identity convention from :class:`FunctionSpace`. ``factors`` is
-    # already excluded from compare via the field-level ``compare=False``.
+    # use time. Explicit delegation restores the base identity (the ``axes``
+    # tuple when axis-built, ``(name, shape)`` otherwise — one body, eight
+    # delegating names across the space family). ``factors`` is already
+    # excluded from compare via the field-level ``compare=False``.
 
     def __eq__(self, other: object) -> bool:
         return FunctionSpace.__eq__(self, other)

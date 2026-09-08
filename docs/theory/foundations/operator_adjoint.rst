@@ -358,9 +358,19 @@ ndarray; rebuilt via :func:`dataclasses.replace`) so that the
 ``numerics`` layer never imports the ``transport`` layer — an
 architectural firewall that keeps the operator-algebra primitives
 domain-agnostic. The identity is the inherited ``(name, shape)`` tuple
-(``name = "full_field"``, ``shape = (n_bulk + n_trace,)``), with the
-block spaces as ``compare=False`` leaf metadata — so two composites over
-meshes of the same total dimension compare equal and the
+(``shape = (n_bulk + n_trace,)``), with the block spaces as
+``compare=False`` leaf metadata. The composite is **axes-less**, so the
+identity flip (structural ``__eq__``, CS4c step 6, 2026-09-07) leaves it
+exactly as it was — and ``(name, shape)`` here IS content identity,
+because :meth:`FullFieldSpace.from_blocks
+<orpheus.numerics.spaces.full_field_space.FullFieldSpace.from_blocks>`
+derives ``name = "full_field#<digest>"`` by folding each member's
+``(name, shape)`` pair. ⛔ This sentence read *"``name = "full_field"``
+… so two composites over meshes of the same total dimension compare
+equal"* until 2026-09-07: that bare name is what made any two composites
+of equal flat dimension identical — the R2 block-blindness the landed
+**CS4b S3** re-key retired. Two composites compare equal iff their
+MEMBERS do, and the
 :class:`~orpheus.numerics.operator.OperatorSum` composition guard
 accepts the full within-group loss ``L + C - S - N_2n - B`` (every
 operand — :math:`L`, :math:`C`, :math:`S`, :math:`N_{2n}` and :math:`B`
@@ -680,8 +690,9 @@ These results are pinned by two foundation-tagged test files:
 * ``tests/numerics/test_full_field_space.py`` — pins the
   :class:`FullFieldSpace` identity semantics (flat direct-sum ``shape``,
   ``(name, shape)``-only identity with ``compare=False`` block
-  metadata, dict-key usability, the composite's own
-  ``inner_product_weights`` staying ``None``).
+  metadata — the composite carries no ``axes``, so the 2026-09-07
+  identity flip leaves this arm untouched — dict-key usability, the
+  composite's own ``inner_product_weights`` staying ``None``).
 
 Both files are ``@pytest.mark.foundation`` (software invariants over the
 operator-algebra ground truth — they carry **no** ``verifies()`` label

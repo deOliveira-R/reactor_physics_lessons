@@ -9,7 +9,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **11593**
+Total tests collected: **11650**
 
 V&V level distribution
 ----------------------
@@ -22,7 +22,7 @@ V&V level distribution
    L1, 1755, 15.1%
    L2, 71, 0.6%
    L3, 0, 0.0%
-   foundation, 8437, 72.8%
+   foundation, 8494, 72.9%
    unmarked, 26, 0.2%
 
 Tagging source
@@ -34,7 +34,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 11488
+   explicit, 11545
    class-name, 46
    func-name, 0
    case, 33
@@ -395,6 +395,7 @@ Module × level grid
    numerics/test_slab_orbit_space, 0, 0, 0, 0, 17, 0
    numerics/test_space, 0, 0, 0, 0, 15, 0
    numerics/test_space_algebra, 0, 0, 0, 0, 18, 0
+   numerics/test_space_identity_is_structural, 0, 0, 0, 0, 15, 0
    numerics/test_space_of_axes, 0, 0, 0, 0, 26, 0
    numerics/test_spatial_moment_field_space, 0, 0, 0, 0, 12, 0
    numerics/test_spatial_moment_space, 0, 0, 0, 0, 22, 0
@@ -402,6 +403,7 @@ Module × level grid
    numerics/test_spherical_harmonic_space, 0, 8, 0, 0, 6, 0
    numerics/test_symmetry, 0, 0, 0, 0, 215, 2
    numerics/test_symmetry_exactness, 0, 0, 0, 0, 30, 0
+   numerics/test_tensor_product_metric_is_factored, 0, 0, 0, 0, 10, 0
    numerics/test_tensor_product_operator, 35, 0, 0, 0, 0, 0
    numerics/test_trace_restriction_operator, 0, 0, 0, 0, 16, 0
    numerics/test_vector_protocol, 0, 0, 0, 0, 8, 0
@@ -411,6 +413,7 @@ Module × level grid
    operators/test_b3_domain_narrowing, 0, 0, 0, 0, 31, 0
    operators/test_bc_extraction_2d, 2, 3, 0, 0, 3, 0
    operators/test_bc_extraction_matvec, 3, 0, 0, 0, 30, 0
+   operators/test_boundary_carrier_admission, 0, 0, 0, 0, 16, 0
    operators/test_boundary_conditions, 0, 0, 0, 0, 13, 0
    operators/test_capability_survival, 0, 0, 0, 0, 12, 0
    operators/test_collision_operator, 0, 0, 0, 0, 54, 0
@@ -448,6 +451,7 @@ Module × level grid
    operators/test_radial_characteristic_cylinder_arm, 5, 0, 0, 0, 0, 0
    operators/test_radial_characteristic_metric, 0, 0, 0, 0, 19, 0
    operators/test_ray_operator, 0, 6, 0, 0, 0, 0
+   operators/test_reflect_helper_reexpression, 0, 0, 0, 0, 16, 0
    operators/test_removal_form_matvec_sweep, 0, 0, 0, 0, 21, 0
    operators/test_scattering_adjoint, 0, 0, 0, 0, 18, 0
    operators/test_scattering_kernel_crosscheck, 0, 0, 0, 0, 6, 0

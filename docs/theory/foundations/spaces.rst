@@ -218,15 +218,27 @@ the same space" is a claim this corpus has **overturned**.
      <orpheus.numerics.field.Field.cone_violations>` consults it,
      REFUSING on ``False`` rather than manufacturing violations out of a
      basis choice.
-   - ⚠ **Identity is a MIGRATION statement, both halves true.** The
-     chartered doctrine is *identity = the axes' structural content*, so
-     **metric differences imply space differences**. The current
-     realization still compares ``(name, shape)``. The bridge is
-     :meth:`of_axes <orpheus.numerics.space.FunctionSpace.of_axes>`,
-     which derives the name deterministically and injectively from the
-     axes — so for axis-built spaces the chartered identity already
-     flows through the nominal comparison TODAY. The S3 flip retires the
-     bridge.
+   - **Identity is STRUCTURAL for an axis-built space** — the identity
+     flip (structural ``__eq__``), CS4c step 6, 2026-09-07. The chartered
+     doctrine is *identity = the axes' structural content*, so **metric
+     differences imply space differences**, and since the flip that holds
+     DIRECTLY rather than through a bridge: an axis-built space compares
+     and hashes by its ``axes`` tuple, and
+     :class:`~orpheus.numerics.axis.Axis` equality is structural content
+     (type, label, shape, kind, measure bytes) with ``generator``
+     deliberately excluded. An **axes-less** space keeps the nominal
+     ``(name, shape)`` identity: for the digest-named composites and
+     traces (five classes, four digest-folding factories) that IS
+     content identity because the factory folds content into the name
+     (CS4b S3); for the family-tagged moment heads
+     (``'spherical_harmonic_space'``, ``'legendre_space(…)'``,
+     ``'spatial_moment_space'``) it is family + dimension, deliberately
+     metric-blind until the heads become axis-built (step 6 items
+     6.2b/6.2c); a hand-built legacy space carries whatever its author
+     wrote. An axis-built space is never equal to a hand-named one
+     wearing its label. Until the flip the doctrine flowed through a
+     BRIDGE — the injectively derived name
+     (:ref:`spaces-identity-bridge`).
 
 
 .. _spaces-the-axis:
@@ -392,32 +404,100 @@ load-bearing and both are gated:
 
 .. _spaces-identity-bridge:
 
-The derived name is the identity bridge (the S3 seam)
-------------------------------------------------------
+The derived name — once the identity bridge, now the readable label
+-------------------------------------------------------------------
 
-Space identity is nominally ``(name, shape)`` and stays that way until
-the S3 flip. The bridge that makes the chartered doctrine *already true
-for axis-built spaces* is the name derivation: ``of_axes`` computes the
-name deterministically and injectively from the axes' structural content
-— a length-prefixed, type-tagged content digest, never Python's
-``hash()``, so it is stable across processes. Different axis tuples mint
-different names, hence different spaces, **today**.
+⛔ **The bridge reading was retired on 2026-09-07** by the identity flip
+(structural ``__eq__``, CS4c step 6). The section keeps its label and its
+history, because the bridge is why the chartered doctrine was already
+true for axis-built spaces between CS1 (2026-08-20) and the flip, and
+because the name derivation it describes still ships — what changed is
+what that derivation is FOR.
 
-The mechanism is visible in one measurement. The homogeneous carrier's
-quotient point and a genuine one-cell mesh with :math:`V_{\rm cell} = 2` have the
-same shape :math:`(2, 1)` and the same readable prefix, and are
+:meth:`of_axes <orpheus.numerics.space.FunctionSpace.of_axes>` computes
+the name deterministically and injectively from the axes' structural
+content — a length-prefixed, type-tagged content digest, never Python's
+``hash()``, so it is stable across processes.
+
+**Until the flip that injectivity WAS the identity.** Space identity was
+``(name, shape)`` for every space, so the only way an axis-built space
+could carry *metric differences imply space differences* was to mint a
+different NAME for every different axis tuple: different axes → different
+names → different spaces, with no flag day. That is the bridge.
+
+**Since the flip the axes are read directly.**
+:class:`~orpheus.numerics.space.FunctionSpace`'s :meth:`__eq__` compares
+the ``axes`` tuple when both sides carry one, so the doctrine holds
+without passing through a string. The derived name survives as three
+other things, each load-bearing: the readable LABEL a human reads in a
+traceback; what keeps ``repr`` and the space-content guard messages
+content-distinguishing; and the identity carrier of the axes-less
+COMPOSITES that fold member names —
+:meth:`FullFieldSpace.from_blocks
+<orpheus.numerics.spaces.full_field_space.FullFieldSpace.from_blocks>`
+folds each member's ``(name, shape)`` pair into its own
+``full_field#<digest>``, so an injective member name is still what makes
+the composite content-keyed.
+
+The mechanism is visible in one construction. The homogeneous carrier's
+quotient point and a genuine one-cell mesh with :math:`V_{\rm cell} = 2`
+have the same shape :math:`(2, 1)` and the same readable prefix, and are
 **unequal** spaces:
 
 .. code-block:: text
 
    quotient point (volumes = [1.0])  ->  energy(2,)*spatial(1,)#<digest A>
    one-cell mesh  (volumes = [2.0])  ->  energy(2,)*spatial(1,)#<digest B>
-   digest A != digest B   ->   the two spaces compare UNEQUAL
+   before the flip:  digest A != digest B  ->  UNEQUAL  (via the names)
+   after  the flip:  axes differ in measure bytes  ->  UNEQUAL  (directly)
 
-That is the "metric differences imply space differences" doctrine
-flowing through the nominal identity with no flag day. The readable
-prefix is for humans; the digest is the identity. S3 retires the bridge
-by comparing the axes tuple directly.
+`[M]` 2026-09-07 on the landed carve, building both spaces as
+``FunctionSpace.of_axes(EnergyAxis.synthetic(2), Axis("spatial", (1,),
+weights=w, kind=BasisKind.NODAL))`` with ``w = [1.0]`` and ``w = [2.0]``
+(the all-ones measure canonicalizes to ``None``, so the two axes differ
+in their measure bytes):
+
+.. list-table:: What the flip changed, on one pair of mints
+   :header-rows: 1
+   :widths: 46 18 18 18
+
+   * - comparison
+     - before
+     - after
+     - reads
+   * - the two mints above (different measures)
+     - ``False``
+     - ``False``
+     - unchanged — the doctrine held through the bridge, and now holds
+       directly
+   * - two independent mints of the SAME axes
+     - ``True``
+     - ``True``
+     - unchanged; the hashes agree too
+   * - an axis-built space vs a hand-named
+       :class:`~orpheus.numerics.space.FunctionSpace` carrying its exact
+       ``name`` and ``shape``
+     - ``True``
+     - ``False``
+     - **flipped** — a label is no longer a way to spell somebody
+       else's space
+   * - ``A * B`` (both factors axis-built) vs
+       ``FunctionSpace.of_axes(*A.axes, *B.axes)``
+     - ``False``
+     - ``True``
+     - **flipped** — Q-T4 realized: an axis product is not a different
+       *kind* of space, and the two mints derive DIFFERENT names
+       (``…#a ⊗ …#b`` against one concatenated digest) while carrying
+       the same axes
+
+The last two rows are the whole content of the flip. The third says the
+derived name stopped being a *credential* — before, anything that could
+spell the string was that space. The fourth says the name stopped being
+the *identity* — two spellings of one axis tuple were two spaces, and are
+now one. `[R]` the "before" column is derivable rather than re-run: the
+pre-flip body is exactly ``self.name == other.name and self.shape ==
+other.shape`` (``git show 823f97dd:orpheus/numerics/space.py``), so it is
+decided by the names printed above.
 
 .. note::
 
@@ -780,12 +860,20 @@ Three consequences follow, and each is separately load-bearing:
    ``False``. That is the same row the field algebra's fiber table
    reports (:doc:`/theory/foundations/field_algebra`), and it is
    unmoved by CS5 **because** of the exclusion.
-#. **The derived space NAME cannot drift.** ``_structural_bytes``
-   iterates ``_identity_key``, so any field admitted to the key enters
-   every derived space name (:ref:`spaces-identity-bridge`). Space
-   identity is ``(name, shape)`` until the S3 flip, so an inclusion
-   would not just perturb a digest — it would split one space into as
-   many spaces as there are rule instances in the process.
+#. **The derived space NAME cannot drift — and since the identity flip
+   the exclusion carries space identity directly.**
+   ``_structural_bytes`` iterates ``_identity_key``, so any field
+   admitted to the key enters every derived space name
+   (:ref:`spaces-identity-bridge`). Until the identity flip (structural
+   ``__eq__``, CS4c step 6, 2026-09-07) that name WAS the identity, so an
+   inclusion would not merely perturb a digest — it would split one space
+   into as many spaces as there are rule instances in the process. Since
+   the flip an axis-built space compares its ``axes`` tuple directly, and
+   ``Axis`` equality IS ``_identity_key``: the exclusion of ``generator``
+   is now what keeps provenance out of SPACE identity, with no digest in
+   between. The conclusion is unchanged, and the argument for it got
+   one link shorter — which is why consequence 1 above is still measured
+   the same way.
 #. **The three CS5 consumer re-points are bit-identical by
    construction.** `[M]`
    :attr:`SNMesh.angular_bulk_space
@@ -2594,10 +2682,13 @@ otherwise catches in plans.
 The fourth row is the one worth pausing on, because it is where the
 doctrine becomes *mechanically* enforced rather than merely stated. A
 quotient point and a genuine one-cell mesh have the same shape and
-differ only in measure — and since the measure is part of axis identity
-and axis identity derives the space name, they are **unequal spaces**
-(:ref:`spaces-identity-bridge`). Nothing else in the tree can see the
-difference: `[M]` a scalar metric commutes with every operator, so
+differ only in measure — the measure is part of axis identity, and since
+the identity flip (structural ``__eq__``, CS4c step 6, 2026-09-07) an
+axis-built space IS its axis tuple, so they are **unequal spaces**.
+Until the flip the same conclusion arrived one step later, through the
+axis-derived name (:ref:`spaces-identity-bridge`). Nothing else in the
+tree can see the difference: `[M]` a scalar metric commutes with every
+operator, so
 :math:`A^\dagger = G^{-1}A^{\mathsf T}G = A^{\mathsf T}` whenever
 :math:`G = cI` — the quotient-vs-one-cell distinction is provably
 invisible to ``.H``, to every norm and to every value gate. **Space
@@ -3729,10 +3820,23 @@ taken.
        2026-09-01: true when written, and repealed hours later by 2.0c,
        which is the campaign's own step. The level-1 view of this seam,
        and the rest of that migration, is at :ref:`manifold-seams`.
-   * - The identity flip (compare the axes tuple, not the name)
-     - **S3.** Until then the derived name is the bridge
-       (:ref:`spaces-identity-bridge`), and ``axes`` is declared
-       ``compare=False``.
+   * - The identity flip (an axis-built space IS its axis tuple)
+     - ✅ **LANDED 2026-09-07 — the identity flip, CS4c step 6**
+       (structural ``__eq__``). ``__eq__`` and ``__hash__`` read
+       ``axes`` directly when both sides carry one; an axes-less space
+       keeps ``(name, shape)``, which for the digest-named leaf classes
+       IS content identity; one of each is never the same space.
+       ⛔ This row read *"S3. Until then the derived name is the bridge,
+       and axes is declared compare=False"* until 2026-09-07. Its first
+       half is now history
+       (:ref:`spaces-identity-bridge`); its second was never the whole
+       mechanism — the field stays ``compare=False`` so a subclass's
+       dataclass-generated ``__eq__`` never reaches an ndarray, while the
+       manual ``__eq__`` reads it. ⚠ The "S3" of that retired sentence is
+       this plan-internal step, NOT the landed **CS4b S3** content-digest
+       re-key that gave the composites and trace spaces their names —
+       which is why the landed thing is named *the identity flip* here
+       and everywhere after it.
    * - Retiring the densifying ``__mul__``
      - **CS2.** The legacy ``*`` path is documented above and kept
        working; its own gates live in a separate test module so the
@@ -3991,8 +4095,9 @@ status.
        <orpheus.numerics.space.FunctionSpace.of_axes>` composes a space
        as the ordered product of its axes with a **per-axis metric
        path** (no densification) and a deterministic, injective
-       **derived name** — the identity bridge that makes "metric
-       differences imply space differences" true today
+       **derived name** — the identity bridge that made "metric
+       differences imply space differences" true from that day, three
+       weeks before the identity flip made it direct
        (:ref:`spaces-identity-bridge`).
        :attr:`FunctionSpace.has_coordinate_cone
        <orpheus.numerics.space.FunctionSpace.has_coordinate_cone>` makes

@@ -729,10 +729,13 @@ with. `[M]` reproduced 2026-08-31 on a two-group grid, and again
    True
 
 The two compared ``==`` **and hash-equal**, so a 2-group energy space and
-a 2-cell spatial space were one value:
-:class:`~orpheus.numerics.space.FunctionSpace` identity is
-``(name, shape)``, and a false name is therefore not cosmetic but an
-illegal state that IS representable.
+a 2-cell spatial space were one value: both are hand-named, axes-less
+:class:`~orpheus.numerics.space.FunctionSpace` mints, whose identity is
+``(name, shape)`` — before AND after the 2026-09-07 identity flip, which
+made identity structural only where a space declares its ``axes``
+(:ref:`spaces-identity-bridge`). A false name is therefore not cosmetic
+but an illegal state that IS representable, and staying axes-less is
+exactly why the flip could not have repaired this one.
 
 ✅ **REMEDIED 2026-09-01 by #429 tracker 2.1.** The
 :class:`~orpheus.numerics.basis.base.Basis` ABC now asks every basis what

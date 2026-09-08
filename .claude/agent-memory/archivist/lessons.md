@@ -28,6 +28,27 @@ Verify, then write, then FLAG every scope-expansion the verification forced.
   only the RATIO down the budget compares — publishing the raw rows would have shipped a
   regression narrative inside a repair entry. The tell that you need that line: the CONTROL
   column moved. → L-095, L-050
+- **⭐⭐ A CLASS LIST HANDED BY A BRIEF *AND* BY THE LANDING CODE'S OWN DOCSTRING CAN BE
+  WRONG TOGETHER — CONSTRUCT EACH MEMBER AND PRINT THE PROPERTY.** `[M]` *"the digest-named
+  leaf classes"* was right for 5 and wrong for 3 (`SphericalHarmonicSpace.from_L(2).name` is
+  `'spherical_harmonic_space'`, a FAMILY tag, not a digest). ⭐ The tell was already in the
+  brief: it ALSO said *"leave the metric-blind seam — that head is still metric-blind"*, which
+  the list CONTRADICTS. ⟹ **check a briefed list against the brief's own carve-out; a list
+  that contradicts its own exception IS the finding.** A `grep hashlib` finds the members that
+  have it and is silent on the ones that do not — that half is the one that matters. → L-096
+- **⭐ AN `__eq__`/IDENTITY CHANGE IS PUBLISHED AS THE ROWS THAT MOVED, and the "before"
+  column is usually DERIVABLE — no pinned worktree.** `[M]` axis-built vs a hand-named twin
+  `True`→**`False`** (a label stopped being a credential); `A*B` vs `of_axes(*A.axes,*B.axes)`
+  `False`→**`True`** though the two derive DIFFERENT names (a name stopped being the identity).
+  Publish the UNCHANGED rows beside them. The old law being a pure function of quantities you
+  already measured (`name`, `shape`) makes the before-column `[R]`, stated. → L-096, L-095
+- **⭐ WHEN SPHINX IS UNAVAILABLE, the substitute is a pre-edit-vs-post-edit docutils
+  error-SET diff plus three gates over your ADDED LINES ONLY** (bold-abuts-literal /
+  role-after-`**` / 3+ backticks · `:ref:` against the corpus label set · python xrefs
+  IMPORT-resolved · `:doc:` against the filesystem · 79 columns). `[M]` 0/0 on 6 files, and the
+  added-lines gate caught **2** real `**``literal``**` nestings no build would have flagged.
+  ⚠ And check a count against the LIST beside it: I wrote *"**four** classes — A, B, C and the
+  two D"* (four = FACTORIES, five = classes) and caught it only on the final read. → L-096
 - **⭐⭐ A CARVE'S OWN DOCSTRING EDITS ARE UNVERIFIED CLAIMS — AST-census the callee it says
   still has a consumer.** `[M]` the carve wrote *"its production consumer is the G-S
   resolvent"* onto a verb with **0 Call sites and 0 attribute refs** tree-wide, four lines
