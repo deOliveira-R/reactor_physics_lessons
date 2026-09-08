@@ -680,13 +680,17 @@ class LinearOperator(Protocol[Domain, Codomain]):
           operand's space at operation time, discriminated by type);
         * **a documented Optional** — an explicit override returning
           ``FunctionSpace | None`` whose docstring names the campaign
-          that owns its mandatory flip (S/C/iso → CS4c, L/B → CS2).
+          that owns its mandatory flip. ⛔ This arm is EMPTY since CS4c
+          step 6 item 6.4 (2026-09-07): S/C/iso flipped at CS4c K2b /
+          steps 2–5 (``BoundOperator``'s mandatory kw-only ends), L and
+          the three boundary leaves at item 6.4 — the last documented
+          Optionals in the tree. It stays listed so a future leaf that
+          reaches for it knows the answer is "bind or derive", never a
+          new Optional.
 
-        While the chartered migrations run, ``None`` remains legal in
-        VALUE (the annotation stays Optional and the composability check
-        skips a ``None`` end); what is no longer legal is SILENCE — the
-        terminal narrowing to ``FunctionSpace`` and the skip's retirement
-        land when those campaigns finish.
+        The post-flip law: a BOUND leaf's ends are never ``None`` — only
+        the pointwise-law members answer ``None``, BY LAW. What was never
+        legal is SILENCE.
         """
         ...
 

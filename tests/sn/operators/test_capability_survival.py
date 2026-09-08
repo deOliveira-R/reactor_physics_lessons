@@ -314,9 +314,11 @@ class TestPredicateFaithfulness:
         # capability survey space-agnostic (its subject is predicates,
         # not posing). The iso pair + S are BOUND to the same synthetic
         # space since the S4-amendment: the adjoint leg takes .H, which
-        # refuses an unbound non-multiplier (their Optional-space ctor
-        # survives until CS4c's mandatory flip — the survey just no
-        # longer exercises the unbound state on adjointable rows).
+        # refuses an unbound non-multiplier (their constructors have been
+        # mandatory since CS4c steps 2/3/5 — this comment said "their
+        # Optional-space ctor survives until CS4c's mandatory flip" until
+        # 2026-09-07; the survey simply never exercises an unbound state
+        # on adjointable rows).
         survey_space = FunctionSpace("capability_survey", (2, 4, 1))
         # S's tier-2 mint needs a real posed composite since CS4c step 3
         # (the faces bind the interior); the survey reads predicates

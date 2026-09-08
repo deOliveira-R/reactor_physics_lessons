@@ -58,9 +58,9 @@ G1.1 value   **GREEN** on the SN ladder       all 5 leaves × 4 geometries decla
                                               model-generic construction
                                               (``homogeneous/solver.py:193``)
                                               reports ``domain is None``
-G1.1 ann.    **RED** (R1's static face)        every leaf annotates
-                                              ``FunctionSpace | None`` /
-                                              ``Optional[FunctionSpace]``
+G1.1 ann.    **GREEN** (R1 flipped 2026-09-07)  every leaf annotates
+                                              ``FunctionSpace``; L/B were the
+                                              last (CS4c step 6 item 6.4)
 G1.3         **GREEN** (R6 flipped 2026-09-07)  all five leaves refuse a foreign
                                               carrier with a ``TypeError``
                                               naming themselves; ``B`` reads
@@ -247,19 +247,6 @@ _MUTATION_FLOOR = 1e-3
 
 _SEED_X = 20260729
 _SEED_Y = 20260730
-
-_R1_XFAIL = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "R1 (annotation face) — a leaf's `domain`/`codomain` are still "
-        "ANNOTATED `FunctionSpace | None`; the Optional stays legal until "
-        "campaign 1's CS4 flips it to mandatory. (The VALUE rows this "
-        "constant used to guard were deleted at CS1 step 3b: the "
-        "model-generic path now threads a real space — the successor floor "
-        "is tests/homogeneous/test_operator_spaces.py.) WHEN THIS XPASSES: "
-        "CS4 has landed — delete this marker."
-    ),
-)
 
 # ═════════════════════════════════════════════════════════════════════════
 # Materials — a DIRECT Mixture build (lessons L1: `make_mixture` nulls
@@ -457,7 +444,7 @@ _LEAVES = ("L", "C", "S", "F", "B")
 #: The R2 population: the leaves whose constructor HISTORICALLY admitted
 #: an anonymous build (an optional space defaulting to ``None``) — each
 #: flip converts its row from strict-xfail to a permanent refusal floor
-#: (``C``/``F`` flipped; ``S`` pending step 3). ``L`` and ``B`` derive
+#: (``C``/``F`` flipped; ``S`` at step 3, 2026-08-30). ``L`` and ``B`` derive
 #: their space from the ``SNMesh`` they are handed and were never
 #: anonymous-capable — pinned by
 #: :func:`test_mesh_derived_leaves_carry_no_anonymous_construction_surface`.
@@ -717,32 +704,38 @@ def _domain_annotation(
 #: CS4c step 2 (2026-08-30) deleted ``C``'s (the BoundOperator base:
 #: mandatory kw-only ends, write-once, non-Optional by construction);
 #: step 3 (2026-08-30) deleted ``S``'s (the kernel-shell rebind — same
-#: base); ``L``/``B`` stay red until CS2.
-_R1_ROWS = [
-    pytest.param(leaf, marks=[] if leaf in ("C", "F", "S") else [_R1_XFAIL], id=leaf)
-    for leaf in _LEAVES
-]
+#: base); CS4c step 6 item 6.4 (2026-09-07) flipped ``L``/``B``'s
+#: property annotations (typing-only: ``AdjointOperator`` has refused an
+#: unbound inner since step 1, so no value moved) — the ledger's last
+#: strict xfails went with it.
+_R1_ROWS = [pytest.param(leaf, id=leaf) for leaf in _LEAVES]
 
 
 @pytest.mark.parametrize("leaf", _R1_ROWS)
 def test_leaf_space_annotation_is_not_optional(leaf):
     r"""**G1.1 / R1**, static face — ``domain`` is not typed ``Optional``.
 
-    RED today for all five leaves. MEASURED annotations::
+    GREEN on all five since CS4c step 6 item 6.4 (2026-09-07). The
+    annotations, as MEASURED when this row was written (pre-CS4c) and as
+    they read now::
 
-        L  StreamingOperator       Optional['FunctionSpace']
-        C  MultiplicationOperator  'FunctionSpace | None'
-        S  ScatteringOperator      'FunctionSpace | None'
-        F  FissionOperator         'FunctionSpace | None'
-        B  SNBoundaryOperator      Optional['FunctionSpace']
+        L  StreamingOperator       Optional['FunctionSpace']  -> 'FunctionSpace'  (step 6 item 6.4)
+        C  MultiplicationOperator  'FunctionSpace | None'     -> 'FunctionSpace'  (CS4c K2b, BoundOperator kw-only ends)
+        S  ScatteringOperator      'FunctionSpace | None'     -> 'FunctionSpace'  (CS4c step 3)
+        F  FissionOperator         'FunctionSpace | None'     -> 'FunctionSpace'  (CS4c step 2)
+        B  SNBoundaryOperator      Optional['FunctionSpace']  -> 'FunctionSpace'  (step 6 item 6.4)
 
     The value leg and the annotation leg are genuinely different claims and
-    both are needed. A value that *happens* to be set is a runtime accident:
-    the ``| None`` is what makes the composability guard *skippable*
-    (``OperatorSum`` skips the domain check when either side is ``None`` —
-    ``operator.py:582``) and what makes the ``.H`` metric branch
-    *conditional*. P1 removes the Optional, which turns "the space is set"
-    from a fact about one call site into a fact about the type.
+    both are needed. A value that *happens* to be set is a runtime accident;
+    the type makes "the space is set" a fact about the leaf rather than
+    about one call site. ⛔ This docstring said the ``| None`` was what made
+    the composability guard *skippable* and the ``.H`` metric branch
+    *conditional* — the first was true of an OperatorSum arm that has since
+    moved (the skip lives on ``OperatorProduct``, keyed on the VALUE, never
+    ``None`` for a bound leaf), the second was REMEDIED at CS4c step 1
+    (``68a9c9f3``): ``AdjointOperator`` REFUSES an unbound inner
+    (``MissingAdjoint``). The L/B flip was therefore typing-only, and this
+    row's only runtime-observable is ``npx pyright``.
     """
     sn_mesh = _sphere()
     leaf_cls = type(_leaf_set(sn_mesh)[leaf])
@@ -751,9 +744,9 @@ def test_leaf_space_annotation_is_not_optional(leaf):
         if "None" in annotation or "Optional" in annotation:
             pytest.fail(
                 f"{owner}.{prop_name} is annotated {annotation} — an "
-                f"OPTIONAL space. While it is optional the composability "
-                f"guard is skippable and the `.H` metric application is "
-                f"conditional (R1/R2). Both properties are read (QA-F5): a "
+                f"OPTIONAL space. A bound leaf's ends are never None (the "
+                f"post-flip law, CS4c step 6 item 6.4); the annotation must "
+                f"say so. Both properties are read (QA-F5): a "
                 f"domain-only flip must not retire this row with codomain "
                 f"still Optional."
             )

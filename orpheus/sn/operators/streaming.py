@@ -73,7 +73,7 @@ Three geometries are supported:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional, overload
+from typing import TYPE_CHECKING, overload
 
 import numpy as np
 
@@ -281,7 +281,7 @@ class StreamingOperator(LinearOperator["FullField"]):
         )
 
     @property
-    def domain(self) -> Optional["FunctionSpace"]:
+    def domain(self) -> "FunctionSpace":
         r"""The composite carrier :math:`V_{\rm bulk}\oplus V_{\rm trace}` (Wave O / O.2b).
 
         :math:`L` is the sole FULL operator — it couples bulk :math:`\leftrightarrow`
@@ -310,7 +310,7 @@ class StreamingOperator(LinearOperator["FullField"]):
         return self.sn_mesh.full_field_space
 
     @property
-    def codomain(self) -> Optional["FunctionSpace"]:
+    def codomain(self) -> "FunctionSpace":
         # Endomorphism on the composite (see :meth:`domain`).
         return self.sn_mesh.full_field_space
 

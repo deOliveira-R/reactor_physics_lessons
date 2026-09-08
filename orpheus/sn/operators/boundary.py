@@ -63,7 +63,7 @@ derivation and design rationale.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NamedTuple, Optional
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 
@@ -441,7 +441,7 @@ class SNBoundaryOperator(LinearOperator):
         return bool(laws) and all(law.is_adjointable for law in laws)
 
     @property
-    def domain(self) -> Optional["FunctionSpace"]:
+    def domain(self) -> "FunctionSpace":
         # The composite carrier (NOT the bare trace): ``B.apply`` consumes /
         # emits a full FullField (zero bulk + reflected trace), so the
         # advertised space must be the bulk ⊕ trace composite — matching the
@@ -451,7 +451,7 @@ class SNBoundaryOperator(LinearOperator):
         return self.sn_mesh.full_field_space
 
     @property
-    def codomain(self) -> Optional["FunctionSpace"]:
+    def codomain(self) -> "FunctionSpace":
         return self.sn_mesh.full_field_space
 
     def _reflect_trace(
@@ -990,7 +990,7 @@ class RadialCharacteristicBoundaryOperator(LinearOperator):
         return _has_ruled_corner_action(self._outer_law)
 
     @property
-    def domain(self) -> Optional["FunctionSpace"]:
+    def domain(self) -> "FunctionSpace":
         # System B's own member space (B.2b DP1; non-None by the ctor guard).
         # The B.2c CoupledOperator grid type-checks the (B, B) placement
         # against it: ``build_within_group_system`` composes ``A_BB = march −
@@ -1001,7 +1001,7 @@ class RadialCharacteristicBoundaryOperator(LinearOperator):
         return self._field_space
 
     @property
-    def codomain(self) -> Optional["FunctionSpace"]:
+    def codomain(self) -> "FunctionSpace":
         return self._field_space
 
     def _reflect_corner(
@@ -1188,11 +1188,11 @@ class SNMaskedBoundaryOperator(LinearOperator["FullField", "FullField"]):
         return self.inner.sn_mesh
 
     @property
-    def domain(self) -> Optional["FunctionSpace"]:
+    def domain(self) -> "FunctionSpace":
         return self.inner.domain
 
     @property
-    def codomain(self) -> Optional["FunctionSpace"]:
+    def codomain(self) -> "FunctionSpace":
         return self.inner.codomain
 
     def apply(self, psi: "FullField") -> "FullField":
