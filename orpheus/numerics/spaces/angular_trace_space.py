@@ -614,7 +614,8 @@ class AngularTraceSpace(FunctionSpace):
             # (ordinate) axis: `[M]` it is constant across the trailing group /
             # codim-1 spatial axes by construction (`_build_trace_metric_weights`
             # broadcasts one per-ordinate vector across the slot), and
-            # `_broadcast_metric` re-expands a leading vector on application.
+            # the resolved DiagonalMetric (`metric._broadcast_leading`)
+            # re-expands a leading vector on application.
             # Storing the 1-D vector rather than the full slot keeps ONE
             # source of truth for the weight and matches the base's
             # broadcast convention.
@@ -852,7 +853,8 @@ class AngularFaceTraceSpace(FunctionSpace):
     **The metric.** :attr:`inner_product_weights` is
     :math:`|\Omega\cdot\hat n_f|\odot w_n` restricted to
     :attr:`ordinate_indices` — a 1-D vector along the leading axis, which the
-    base's :meth:`~FunctionSpace._broadcast_metric` re-expands across the
+    resolved :class:`~orpheus.numerics.metric.DiagonalMetric`
+    (:func:`~orpheus.numerics.metric._broadcast_leading`) re-expands across the
     trailing group / codim-1 spatial axes on application. It is **never**
     Euclidean: a half-trace pairing that dropped it would be the ERR-067
     family, and it is exactly what makes ``.H`` the Hilbert adjoint

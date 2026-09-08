@@ -44,6 +44,100 @@ them.  Trust ``git``, not this column.
      - Where
    * - in dev
        (2026-09-07)
+     - **The tensor product stops densifying — a measure is applied
+       factor-by-factor on BOTH composition paths** (campaign 1 residue,
+       CS4c step 6 item 6.2a).
+       **(1) What the tree did until this change.**  ``V * W`` (the
+       ``*`` dunder →
+       :class:`~orpheus.numerics.space.TensorProductSpace`) built the
+       product's metric by forming the outer product
+       :math:`w_V \otimes w_W` ONCE and storing it as a dense
+       ``inner_product_weights`` tensor.  That forced a *second*
+       mechanism: on a MIXED product — one axis-built factor, one not —
+       the axis-borne per-axis measure had to be BRIDGED into the dense
+       slot, because a weighted axis-built factor read through that slot
+       alone would have been treated as Euclidean, a value bug wearing a
+       representation label.  So the axis doctrine's *"the measure lives
+       per axis and is never densified"* held on
+       :meth:`FunctionSpace.of_axes
+       <orpheus.numerics.space.FunctionSpace.of_axes>` and was reversed
+       by the very next composition — and the reversal was not
+       hypothetical: ``[M]`` 2026-09-07, one 2-D Cartesian windowed SI
+       solve (``level_symmetric(4)``, :math:`4\times3` cells,
+       ``ng = 2``, ``scattering_order = 1``, ``max_inner = 6``,
+       ``inner_schedule="jacobi"``) allocated **18** dense
+       :math:`(L{+}1, 2L{+}1, n_g, n_x, n_y)` weight tensors, one per
+       ``*`` mint, on the harmonic-moment path.
+       **(2) What landed.**  :meth:`TensorProductSpace.from_factors
+       <orpheus.numerics.space.TensorProductSpace.from_factors>` keeps
+       its axis-threading arm untouched (every factor axis-built ⟹ the
+       product's ``axes`` is the concatenation, no metric object at all)
+       and replaces BOTH other arms with ONE factored builder.  A
+       product now carries a lazy
+       :class:`~orpheus.numerics.metric.FactoredMetric` with one
+       positioned entry per **axis** of an axis-built factor (a
+       :class:`~orpheus.numerics.metric.DiagonalMetric` on that axis's
+       block, or ``None`` for a counting-measure axis), one entry per
+       dense-slot leaf factor, and a factor's own metric object riding
+       verbatim; every block Euclidean ⟹ no metric at all.
+       **A product never populates** ``inner_product_weights``
+       **again.**  Retired with the dense slot: the mixed-product bridge
+       (``FunctionSpace._dense_axes_weights``), the outer-product
+       weights builder (``_tensor_product_inner_weights``) and the
+       ``FunctionSpace._broadcast_metric`` shim, whose arithmetic has
+       had exactly one home — ``orpheus.numerics.metric._broadcast_leading``,
+       applied by ``DiagonalMetric`` — since P7.
+       **(3) Why this is bit-identity's THIRD criterion and not a
+       re-baseline.**  ``DiagonalMetric.apply_block`` is
+       operation-for-operation the per-axis arithmetic it replaces
+       (explicit reshape: leading ones, the block shape, trailing ones),
+       so on an axis block the factored arm is bit-identical by
+       construction.  Against the *retired* dense arm it is not, and the
+       reason is structural rather than numerical: the dense arm formed
+       :math:`w_{\rm head}\otimes w_{\rm bulk}` once and multiplied,
+       while the factored arm multiplies per block — one extra rounding,
+       reduction depth :math:`+1`.  ``[M]`` the ULP distance is the
+       draw-stable statistic and it is exactly **2** on every row and
+       every draw (200 seeds :math:`\times` 8 (geometry
+       :math:`\times\ L`) rows = 1600 draws), so the shipped band is
+       ``nulp = 4``; ⛔ ``np.array_equal`` would be a **false red** —
+       **0 of 8** rows are bit-equal over a full seed sweep.  The ladder
+       re-measures itself in
+       ``tests/numerics/test_tensor_product_metric_is_factored.py``;
+       read it there rather than from this row.
+       **(4) What the SOLVER sees, measured.**  ``[M]`` on the 2-D
+       windowed SI driver at ``max_inner = 12``, today versus the
+       post-carve spelling installed in-process:
+       :attr:`Solution.scalar_flux
+       <orpheus.sn.solution.Solution.scalar_flux>` is **bit-identical**
+       (``array_equal`` True, :math:`\max|\Delta| = 0`), the outer flux
+       residuals are bit-identical, the iteration count is unchanged,
+       and the ONLY moving observable is the SI increment-norm
+       trajectory at relative :math:`4.3\times10^{-17}` — five orders
+       inside the CS3 trajectory pin's ``rtol = 1e-12``.  A traffic
+       census on the same solve says why it is the only one: the moment
+       product's metric is read **6 times, all through** ``norm`` →
+       ``inner_product`` (once per SI iterate), and ``apply_metric`` is
+       called **zero** times on it.
+       **(5) What did NOT change, and the half of the memory assertion
+       this does not buy.**  ``*`` itself survives, and so do
+       :class:`~orpheus.numerics.space.TensorProductSpace`'s ``factors``
+       metadata and ``find_factor`` (item 6.2c re-poses those as axis
+       queries).  ⚠ The charter's memory assertion — *"no state-sized
+       weights tensor is allocated per windowed solve"* — has two legs,
+       and **only the structural one is now true**: the moment product
+       carries no dense slot, so there is nothing to allocate.  The
+       *rate* leg is not this item's: the space is still re-minted on
+       every call, ``[M]`` :math:`2\cdot\texttt{max\_inner} + 6` times
+       per windowed solve (12 at ``max_inner = 3``, 54 at 24).  Item
+       **6.2b** gives the mint to the hub, ``is``-identical, and ships
+       the count-invariance gate; do not read this row as having
+       discharged that.
+     - —
+     - the CS4c step-6 carve on ``main`` (uncommitted at the time of
+       writing — trust ``git``)
+   * - in dev
+       (2026-09-07)
      - **A space IS its axis tuple — the identity flip lands** (campaign
        1 residue, CS4c step 6; the structural ``__eq__``).
        **(1) What was chartered, and how it was realized until this

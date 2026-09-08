@@ -18,6 +18,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from orpheus.numerics.metric import FactoredMetric
 from orpheus.numerics.space import (
     DualSpace,
     FunctionSpace,
@@ -142,11 +143,13 @@ def test_inner_product_factorises_weighted():
     a = FunctionSpace(name="X", shape=(3,), inner_product_weights=w_a)
     b = FunctionSpace(name="G", shape=(2,), inner_product_weights=w_b)
     tp = a * b
-    # TP weights = outer product.
-    assert tp.inner_product_weights is not None
-    assert tp.inner_product_weights.shape == (3, 2)
+    # The product carries its metric FACTORED (CS4c step 6 item 6.2a) —
+    # never the outer product as a stored tensor; the VALUES it applies
+    # are that outer product.
+    assert tp.inner_product_weights is None
+    assert isinstance(tp.metric, FactoredMetric)
     np.testing.assert_array_almost_equal(
-        tp.inner_product_weights, np.outer(w_a, w_b),
+        tp.apply_metric(np.ones((3, 2))), np.outer(w_a, w_b),
     )
     # Factorisation identity.
     x = np.array([1.0, 1.0, 1.0])
@@ -166,13 +169,12 @@ def test_inner_product_mixed_euclidean_and_weighted():
     w_b = np.array([1.0, 2.0])
     b = FunctionSpace(name="G", shape=(2,), inner_product_weights=w_b)
     tp = a * b
-    assert tp.inner_product_weights is not None
-    assert tp.inner_product_weights.shape == (3, 2)
-    # Each row equals w_b (since Euclidean factor contributes 1).
+    assert tp.inner_product_weights is None
+    assert isinstance(tp.metric, FactoredMetric)
+    applied = tp.apply_metric(np.ones((3, 2)))
+    # Each row equals w_b (since the Euclidean factor contributes 1).
     for i in range(3):
-        np.testing.assert_array_almost_equal(
-            tp.inner_product_weights[i], w_b,
-        )
+        np.testing.assert_array_almost_equal(applied[i], w_b)
 
 
 # ─────────────────────────────────────────────────────────────────────

@@ -19,6 +19,38 @@ every retired symbol leaves no present-tense-false mention · the build's WARNIN
 retirement shim, scanner finding, plan line and "MEASURED" block are point-in-time snapshots.
 Verify, then write, then FLAG every scope-expansion the verification forced.
 
+- **⭐⭐ ON A SAME-COMMIT DOCS+CODE TASK, RE-RUN `git status` AFTER EVERY FILE, NOT EVERY
+  BUILD — the carve can land BETWEEN two reads.** `[M]` dispatched at an empty
+  `git status` with all four retiring symbols present; two reads later 6 `orpheus/` +
+  3 `tests/` files were modified and my §0 "the code has not landed" was a snapshot of a
+  tree that no longer existed. The tell: a docstring that already NARRATES the change you
+  were sent to document. ⭐ And the landing is a GIFT — it turns the brief's design rule
+  from relayed to witnessed: construct the product and print `metric.entries`
+  (`[((3,5), DiagonalMetric), ((2,), None), ((4,), DiagonalMetric)]` = one entry for the
+  dense-slot leaf, one PER AXIS of the axis-built factor, `None` for a counting measure).
+  → L-097, L-089
+- **⭐⭐ A DOCS PASS FOR ITEM N IS WHERE ITEM N−k's UN-SWEPT ROT SURFACES, and the trigger
+  is PROXIMITY, not predicate.** `[M]` *"the refusal has no production witness yet … the
+  only axis mint in `orpheus/` is `MaterialMesh.bulk_space`"* — both halves false, and
+  neither by my item: `of_axes` has **7** AST CALL sites (a textual grep over-counts — one
+  hit is a docstring), and `SNMesh.angular_trial_space` appends a `BasisKind.MODAL`
+  `moment_axis` to an axis-built base whenever `LinearDiscontinuous.is_multi_moment`
+  (`True`; `DiamondDifference` `False`). Found only because I went to align vocabulary with
+  an adjacent sentence. ⚠ Repair the OCCUPANT, not the FIRING: "such a space exists in
+  production" is measured, "the refusal fires" is a different census — say so in a clause
+  rather than upgrading the claim. → L-097, L-075, L-072
+- **⭐ A ✅ LANDED ROW IS NOT A TENSE FLIP WHEN THE ROW ALSO PREDICTED A MECHANISM.** A
+  roadmap row promised the retirement would be *"a file-level move — its gates live in a
+  separate test module"*; `[M]` `git diff -- tests/` shows nothing moved, the behavioural
+  rows were **re-keyed in place** (same outer product, now via `apply_metric`). Publish the
+  refutation: *"a gate that pins behaviour migrates with the behaviour, not with a file"* is
+  the sentence a reader needs, and it exists only because the landing contradicted the plan.
+  → L-097
+- **⭐ STRIP LITERALS AND MATH BEFORE ANY MARKUP-PARITY CHECK.** Raw `**` count went even →
+  **odd** and the culprit was `` ``orpheus/**/*.py`` `` — a `**` inside an inline literal.
+  Sibling, re-confirmed: naive `\*\*(.+?)\*\*` + `re.S` "role inside bold" is USELESS
+  (pairs one run's closing with the next's opening — **132** hits on a clean file); the
+  gate that works is `\*\*:[a-z]+:``, `` \*\*`` ``/`` ``\*\* ``, and `` `{3,} ``. → L-097, L-094
 - **⭐⭐ WHEN THE CARVE IS UNCOMMITTED, HEAD *IS* THE PRE-CARVE TREE — a before/after
   table costs 20 s.** `git worktree add /tmp/x HEAD --detach`, run the SAME probe on both.
   ⚠ strip the venv's editable `sys.meta_path` finder and PRINT `orpheus.__file__` as proof.

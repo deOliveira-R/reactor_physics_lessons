@@ -6,11 +6,14 @@ Gate ids B1–B8 refer to the CS1 battery of record
 same module.
 
 ⚠ Deliberately NOT hosted in ``test_space.py`` / ``test_space_algebra.py``:
-those pin the LEGACY densifying ``__mul__`` path
-(``test_space_algebra.py`` asserts ``inner_product_weights`` IS the dense
-``np.outer``), which CS1 keeps and CS2 retires. Two doctrines, two files,
-so the CS2 retirement is a file-level move rather than a diff nobody can
-read.
+those pinned the densifying ``__mul__`` path (``test_space_algebra.py``
+asserted ``inner_product_weights`` IS the dense ``np.outer``) until CS4c
+step 6 item 6.2a (2026-09-07) retired it — their dense-slot rows were
+re-keyed in place onto the factored metric's VALUES (a behavioural row
+migrates, it is not deleted). Two composition mechanisms, two files —
+``of_axes`` (the pure axis path) and ``*`` (axis threading, else a
+factored metric) stay two until item 6.2c makes the angular head
+axis-built.
 """
 
 from __future__ import annotations
@@ -241,7 +244,9 @@ def test_per_axis_metric_equals_an_INDEPENDENT_broadcast_reference() -> None:
     built in this test.
 
     ⚠ The reference is written HERE from an explicit reshape, NOT from
-    ``FunctionSpace._broadcast_metric`` — routing both sides through the
+    ``orpheus.numerics.metric._broadcast_leading`` (the one home of the
+    leading broadcast since ``FunctionSpace._broadcast_metric`` retired at
+    CS4c step 6 item 6.2a) — routing both sides through the
     production helper would make this a tautology on the very convention
     (LEADING vs trailing padding) that has already shipped a bug once.
     Non-square ``(3, 4)``, because a square toy cannot see an axis swap.
@@ -316,10 +321,11 @@ def test_mul_threads_axes_and_does_not_fabricate_them() -> None:
     spaces that have not been migrated (a false True, in the direction
     that silently ENABLES the step-4 cone consult).
 
-    Third leg — the mixed-product BRIDGE: an axis-built factor's measure
-    must ride the legacy product's dense slot, never be silently dropped
-    (treating a weighted axis-built factor as Euclidean would be a value
-    bug wearing a representation label).
+    Third leg — the mixed product: an axis-built factor's measure must
+    survive, positioned in the product's factored metric (until CS4c step
+    6 item 6.2a it rode a dense slot through a densifier bridge), never
+    be silently dropped (treating a weighted axis-built factor as
+    Euclidean would be a value bug wearing a representation label).
     """
     a = FunctionSpace.of_axes(EnergyAxis.synthetic(2), _point())
     b = FunctionSpace.of_axes(Axis("x", (3,), kind=BasisKind.NODAL))
@@ -336,18 +342,23 @@ def test_mul_threads_axes_and_does_not_fabricate_them() -> None:
     _require((a * legacy).axes is None, "axes fabricated for a legacy right factor")
     _require((legacy * a).axes is None, "axes fabricated for a legacy left factor")
 
-    # The bridge: weighted axis-built x legacy — the measure survives densely.
+    # The mixed product: weighted axis-built x legacy — the measure survives,
+    # FACTORED (CS4c step 6 item 6.2a): no dense slot, and the applied metric
+    # is the outer product it never stores.
     weighted = FunctionSpace.of_axes(
         Axis("w", (2,), weights=np.array([2.0, 4.0]), kind=BasisKind.NODAL)
     )
     mixed = weighted * legacy
     _require(mixed.axes is None, "mixed product must not carry a partial axes record")
-    dense = mixed.inner_product_weights
-    assert dense is not None
+    _require(mixed.inner_product_weights is None, "a mixed product must not densify")
+    _require(
+        mixed.metric is not None,
+        "the axis-borne measure was dropped by the mixed product",
+    )
     expected = np.multiply.outer(np.array([2.0, 4.0]), np.ones(5))
     _require(
-        bool(np.array_equal(dense, expected)),
-        "the axis-borne measure was dropped (or distorted) by the mixed product",
+        bool(np.array_equal(mixed.apply_metric(np.ones((2, 5))), expected)),
+        "the axis-borne measure was distorted by the mixed product",
     )
 
 

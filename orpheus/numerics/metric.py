@@ -19,7 +19,8 @@ the diagonal special case it always was:
 
 * :class:`DiagonalMetric` — the Hadamard realization: a weight array
   broadcast against the **leading** axes of the element (the tree's metric
-  convention; see ``FunctionSpace._broadcast_metric``).
+  convention — :func:`_broadcast_leading`, the one home since
+  ``FunctionSpace._broadcast_metric`` retired at CS4c step 6 item 6.2a).
 * :class:`DenseMetric` — a dense symmetric matrix acting on the flattened
   leading block (row-major — the same flattening as
   :attr:`~orpheus.numerics.frame.FrameBase.discrete_gram`, whose
@@ -223,9 +224,10 @@ def _broadcast_leading(w: NDArray, target_ndim: int) -> NDArray:
 
     The tree's metric convention is **leading-aligned**: a metric spanning
     the first axes of an element acts on the full tensor by broadcasting
-    over the trailing (element) axes. This is the arithmetic that used to
-    live in ``FunctionSpace._broadcast_metric`` (which now delegates here —
-    one home, two doors); a no-op whenever ``w`` already spans every axis.
+    over the trailing (element) axes. This is the arithmetic that lived in
+    ``FunctionSpace._broadcast_metric`` until P7, which delegated here until
+    it retired at CS4c step 6 item 6.2a (2026-09-07) — one home, one door;
+    a no-op whenever ``w`` already spans every axis.
     """
     w = np.asarray(w)
     if w.ndim >= target_ndim:
@@ -482,8 +484,9 @@ class FactoredMetric(HilbertMetric):
     The occupant this realization exists for: a tensor product with a
     dense-metric factor — e.g. the harmonic frame's moment space, the
     Parseval-dressed spherical-harmonic coefficient block ⊗ the spatial
-    cell measure — where the legacy densified weights array cannot carry
-    the off-diagonal block and dropping it would silently revert the
+    cell measure — where the dense weights array ``*`` carried until CS4c
+    step 6 item 6.2a could not carry the off-diagonal block and dropping
+    it would silently revert the
     product to Euclidean on that factor (`[M]` 2026-08-30, the
     pre-repair behaviour: the probe pairing read 33.0 where
     :math:`G \otimes w` gives 109.0 — a value bug wearing a

@@ -458,7 +458,7 @@ class HarmonicFrame(GalerkinFrame):
         angular space's own energy/spatial axes (the same instances the
         carrier's mints share, so the product content-equals
         ``MomentField._space_for_mesh_and_L``'s, which since #429 tracker
-        2.5 reads the SAME basis through the mesh's quadrature) — with the densified
+        2.5 reads the SAME basis through the mesh's quadrature) — with the
         ``SpatialMomentSpace`` factor appended for a widened angular space.
         Runs once per mint: the derivation direction is moment = f(angular,
         L), never the reverse.

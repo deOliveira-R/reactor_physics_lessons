@@ -367,9 +367,10 @@ class BulkField(RolePair, Field):
           mass single-sourced at the scheme (``θ`` enters the mass, so a
           carrier that binds no scheme cannot host a moment tail; the
           scheme binds at transport-method augmentation).
-        * **Densified base** (the harmonic family's
-          ``<angular head> * cell_group`` — until CS2 axis-ifies
-          the angular head factor): a
+        * **Axes-less base** (the harmonic family's
+          ``<angular head> * cell_group`` — until CS4c step 6 item 6.2c
+          axis-ifies the angular head factor; since item 6.2a the product
+          carries a factored metric, never a densified one): a
           :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
           factor via the tensor-product ``*``, exactly as
           :meth:`HarmonicMomentFlux.from_mesh_and_L` composes the angular
@@ -457,7 +458,7 @@ class BulkField(RolePair, Field):
         a moment factor is present — as the
         :data:`~orpheus.numerics.moment_layout.SPATIAL_MOMENT_AXIS_LABEL`
         axis on an axis-built space (CS4b), or as a
-        :class:`SpatialMomentSpace` factor on a densified one.
+        :class:`SpatialMomentSpace` factor on an axes-less one.
         """
         if space.axes is not None:
             for ax in space.axes:
@@ -569,8 +570,8 @@ class BulkField(RolePair, Field):
 
         CS4b S3: the space answers every structural question (sizing is
         space data — XD-10); the mesh delegation retired with the reads
-        S4 deleted. The moment family (axes-less TensorProduct until CS2)
-        overrides with its own read.
+        S4 deleted. The moment family (axes-less TensorProduct until CS4c
+        step 6 item 6.2c) overrides with its own read.
         """
         axes = self.space.axes
         if axes is not None:
@@ -834,7 +835,8 @@ class MomentField(BulkField):
         r"""Number of energy groups — the axis right after the angular head's.
 
         The moment family's space is a TensorProductSpace (axes-less until
-        CS2 axis-ifies the angular factor), so the base's EnergyAxis read has
+        CS4c step 6 item 6.2c axis-ifies the angular factor), so the base's
+        EnergyAxis read has
         nothing to find; the family's OWN shape contract
         ``(<head>, ng, *spatial[, …])`` locates ``ng`` right after the
         head's axes — index 2 for the rectangular harmonics, 1 for a flat

@@ -31,105 +31,38 @@ rots; `grep -c '^## L-0'` answers it).
 
 ## 2. Active / doc-debt state — git-true
 
-**No owed Sphinx pass on merged work.** Landed SN milestones live in the "Development
-history" changelog at `docs/theory/methods/sn/history.rst` (⚠ NOT the pre-split
-`discrete_ordinates.rst`, and orphaned July HTML survives in `_build`, so a stale-ref
-grep must `test -f` the SOURCE). Active track = **#231** (§3); main agent commits, I
-stage + gate.
+⚠ **This list is a SNAPSHOT and it has frozen on landed work EIGHT times. Reconcile with
+git BEFORE reading it** — `git status --porcelain -- docs/`,
+`git merge-base --is-ancestor <hash> HEAD`, `git branch --list <branch>` (a vanished branch
+means merged). **No owed Sphinx pass on merged work.** Landed SN milestones live in the
+"Development history" changelog at `docs/theory/methods/sn/history.rst` (⚠ NOT the pre-split
+`discrete_ordinates.rst`; orphaned July HTML survives in `_build`, so a stale-ref grep must
+`test -f` the SOURCE). Active track = **#231** (§3); main agent commits, I stage + gate.
 
-- **#—/CS4c step 6.1 — the theory pages state the identity flip instead of promising it**
-  (2026-09-07; 6 `docs/**/*.rst`, 0 `orpheus/`, 0 `tests/`, 0 new eq-labels; the `spaces-identity-bridge`
-  LABEL kept, its citers 7 → 11). ⭐⭐ **The brief's class list and the LANDING CODE'S OWN docstring
-  were wrong together** — *"the digest-named leaf classes"* is `[M]` right for 5 and wrong for 3
-  (`SphericalHarmonicSpace.from_L(2).name` = `'spherical_harmonic_space'`), and the error would have
-  made a ⛔-reserved metric-blind seam read as closed; the tell was the brief CONTRADICTING ITS OWN
-  carve-out. ⭐ `operator_adjoint.rst:360` was already false since the CS4b S3 digest re-key, invisible
-  to `-W`. Gates without a build: docutils error-SET diff **0/0 on 6 files**, added-lines nesting gate
-  caught **2** real `**``literal``**`, xrefs 7/7 import-live; promissory prose `[M]` **7 → 0** in `docs/` over three stated predicates (`S3 flip|seam|until S3` 4, bare `**S3.**` 1, `bridge … true today` 2).
-  ⚠ I published my own count/list mismatch (*"four classes — A, B, C and the two D"*) and caught it on
-  the final read → [[lessons-L96]]
+**One line per pass. The evidence is in the lesson; `git log --oneline -- docs/` is the index.**
 
-**In flight — ONE line each. The STATE is in git (`git status --porcelain -- docs/`), never in
-this list; the evidence is in the lesson.** Branch `docs/425-within-group-algebra`, docs
-UNCOMMITTED (I stage + gate; the main agent commits).
-
-- **#425 — the SN chapter states the algebra the tree COMPOSES, not the one it taught**
-  (2026-09-07; 13 of 15 `docs/theory/methods/sn/*.rst`, 0 `orpheus/`/`tests/`, 0 new eq-labels).
-  Concurrent with a second archivist on the rest of `docs/theory/` — we converged independently
-  on `verification/sn.rst` and `diffusion_1d.rst`, which is the check worth running. ⭐⭐ **A
-  spelling census is a POPULATION FLOOR**: the SPLITTING (`(L+C)^{-1}(S+B)`), two section
-  HEADINGS and a `(vv-status rationale)` comment carry no matched substring and were each
-  load-bearing. ⛔ I published *"every fixture in this chapter is Σ₂ₙ ≡ 0"* three times and
-  retracted all three — the honest form is `[M]` **12 of 12** `xs_library` mixtures + the 5 MMS
-  `Sig2 = zeros` mints, and a claim about the PASS ("changed no measured value") not the chapter.
-  ⭐ With Sphinx unavailable (one build at a time), a permissive standalone `docutils` parse
-  caught a real `-W` failure (a `.. note::` that swallowed the next paragraph) and a
-  label-set membership test caught a `:ref:` I had invented → [[425-sn-chapter-within-group-algebra]]
-
-- **#425 — the corpus OUTSIDE the SN chapter states the algebra the tree COMPOSES**
-  (2026-09-07; 17 of 66 `docs/theory/**` pages excluding `methods/sn/`, 0 `orpheus/`/`tests/`,
-  **0 new eq-labels**, +352/−157). Concurrent with the SN-chapter instance; no file collision
-  (`git status` disjoint). Gate: residual **81 → 2**, both HISTORY (a 2026-06-05 changelog row,
-  a Wave-O close-out line); 5-term **9 → 80**; docutils 0, backtick parity 0, dead `:ref:`/`:eq:`
-  0, dead python-xref 0/12. ⭐⭐ **A standalone permissive `docutils` parse IS a usable `-W`
-  substitute and found 2 real breakages of mine NOTHING else saw** (a comment abutting prose =
-  `ERROR/3`; a col-0 continuation inside a bullet) — the SN instance converged on the same
-  instrument independently. ⛔ **A continuation line starting with `-`/`+` inside a list-table
-  cell is a BULLET**: break AFTER the operator. ⭐⭐ **A term-count in PROSE is the member-list
-  claim the census cannot see** (9 sites: "five-operator algebra", "all five operators", "a sixth
-  leaf") — and *"the four operator families"* counted nothing on its page, so re-derive, never
-  bump. ⭐ Three stale CODE QUOTES (`A_AA = LC - S - B_a`, `explicit_gains (S, B_a)`,
-  `KEigenvalue((L+C).H, (S+B).H, F.H)`) — all `-W`-silent, all found only against the live def.
-  ⛔ The brief's *"ZERO mentions of N_{2n}"* on `operator_algebra.rst` was `[M]` **5** — the page
-  contradicted ITSELF, which re-shaped the repair. ⛔ `diffusion_1d.rst`'s *"S_N poses (n,2n)
-  production-side instead"* was present-tense-FALSE, retired by **ERR-065** two months earlier
-  → [[425-outside-chapter]]
-
-⏹ **#448 MERGED `6379e9ab` (2026-09-06), branch `fix/sn-eigenvalue-finalize-448` is gone —
-`[M]` `git merge-base --is-ancestor 6379e9ab HEAD` passes.** Kept one line below for its lesson
-only; it is landed work, not in flight (the EIGHTH time this list froze on merged work — reconcile
-with git BEFORE reading it).
-
-- **#448 — a solver's RETURN is a claim, and the two guards' complements did not cover the exit**
-  (2026-09-06; 16 `.rst`, 0 `orpheus/`/`tests/`). The eigenvalue finalize hand-built a **P0-only**
-  reconstruction source, so at every `scattering_order ≥ 1` the returned ψ solved a different
-  equation from the one the power iteration converged. Landed: **ERR-083** (minted, all numbers
-  MINE on both trees — `git worktree add HEAD --detach` IS the pre-carve tree while the carve is
-  uncommitted); a new H2 `sn-finalize-one-step` in `solver.rst` + eq-label `sn-finalize-map`
-  (sentinels 597→**598**, predicted) + the `sn-exit-balance-projection` label and its ⛔ warning;
-  the SN changelog row; 30 retired-symbol sites re-pointed across 16 files. Gate: **EXIT=1 / 1
-  WARNING + 4 nexus `catches` lines → EXIT=0, 102-byte log**; `dead_references` **0/67**; my role
-  probe **0/7056**; `:by:` **0/416**; HTML backtick gate **0** in all 8 new slices. ⚠ Three brief
-  claims refuted (26 sites → 30; Protocol "3 members" → **5**; "7 arms" → **8**, the module grew
-  45→86 rows mid-task). ⛔ 4 `orpheus/` docstring lies reported, NOT fixed (report §6)
-  → [[lessons-L95]]
-
-⏹ **MERGED 2026-09-03 — branch `fix/angular-phantom-support` is gone (`[M]` its commits are
-ancestors of HEAD); every entry that used to sit here is landed.** #428, #434 R1–R4, #432 and
-#429 (2.5 / 3.1 / 2.3 / 2.1b / 2.0a / the fused commit) are archived as
-[[lessons-L80]]…[[lessons-L92]], each naming its own commits. `git log --oneline -- docs/` is
-the index. ⚠ This list had frozen "in flight" on landed work **seven** times before this
-collapse — reconcile with git BEFORE reading it, every time.
+- **CS4c step 6 item 6.2a** — `*` stops densifying (2026-09-07; 3 `.rst`, +282/−51). The carve
+  landed BETWEEN two of my reads; the surplus finding was a paragraph **CS4b** falsified, found
+  by proximity → [[lessons-L97]]
+- **CS4c step 6.1** — the identity flip stated, not promised (2026-09-07; 6 `.rst`). A class list
+  the brief and the landing code's own docstring got wrong TOGETHER → [[lessons-L96]]
+- **#425** — the SN chapter states the algebra the tree COMPOSES (2026-09-07; 13 `.rst`). A
+  spelling census is a POPULATION FLOOR → [[425-sn-chapter-within-group-algebra]]
+- **#425** — the corpus OUTSIDE the SN chapter, same law (2026-09-07; 17 `.rst`, +352/−157).
+  A standalone `docutils` parse IS a usable `-W` substitute → [[425-outside-chapter]]
+- **#448** — a solver's RETURN is a claim; ERR-083 minted (2026-09-06; 16 `.rst`, MERGED
+  `6379e9ab`) → [[lessons-L95]]
+- **Everything older** — #428, #434 R1–R4, #432, #429, and every pass from 2026-08 back to the
+  Boundary/DSA work — is archived as [[lessons-L39]]…[[lessons-L94]], one `## L-0NN` section
+  each, naming its own commits. Their CODE-side reports are GitHub's; the corpus-wide
+  RST-nested-markup finding lives on **#379**.
 
 ⚠ **ERR-026 history block — status CHANGED, not confirmed.** Its branch
-`docs/err026-history-is-not-a-crossref` no longer exists locally or on the remote, so the
-2026-08-24 "still OPEN, unlanded" claim is void. `[M]` the gate's guard now reads
-`bare_module_guess = "." not in target and role != "mod" and …`
-(`tools/check_docstring_xrefs.py:549`), i.e. it keys on the TARGET being undotted — so the
-L-062/L-067 dotted-target blindness **appears repaired**. NOT directly re-probed (a standalone
-import of the gate module raises inside `dataclasses`); corroborating evidence only: the stock
-gate and my own import probe, two independently-vocabularied instruments, both read 0 dead.
-
-⚠ **Every entry above is a snapshot.** Reconcile with git FIRST — this list has frozen
-"in flight" on landed work SIX times. `git merge-base --is-ancestor <hash> HEAD`, and
-`git branch --list <branch>` (a vanished branch means merged).
-
-**⏹ MERGED — the durable record is the lesson + the tree; this is only a pointer.**
-Every docs pass from 2026-08 back to the Boundary/DSA work is archived as
-[[lessons-L39]]…[[lessons-L79]] (one `## L-0NN` section each, with its commits).
-Nothing here needs re-listing: `git log --oneline -- docs/` is the index, and each
-lesson names its own hashes. Their CODE-side reports are GitHub's to track; the
-corpus-wide RST-nested-markup finding lives on **#379**.
+`docs/err026-history-is-not-a-crossref` is gone locally and remotely, so the 2026-08-24
+"still OPEN, unlanded" claim is void. `[M]` the gate's guard now keys on the TARGET being
+undotted (`tools/check_docstring_xrefs.py:549`), so the L-062/L-067 dotted-target blindness
+**appears repaired** — corroborating evidence only (two independently-vocabularied instruments
+read 0 dead); not directly re-probed.
 
 ## 3. Durable reference (reusable doc-architecture)
 

@@ -88,7 +88,6 @@ from .metric import (
     DiagonalMetric,
     FactoredMetric,
     HilbertMetric,
-    _broadcast_leading,
 )
 
 if TYPE_CHECKING:
@@ -382,16 +381,20 @@ class FunctionSpace(Generic[Carrier]):
         is not a different *kind* of space (ruled Q-T4); invoking
         through a subclass does not change the return type.
 
-        ⚠ **The legacy twin (CS2 retires it).** ``V * W`` (the ``*``
-        dunder → :class:`TensorProductSpace`) is the PRE-axis composition
-        mechanism: it DENSIFIES the metric (outer-product
-        ``inner_product_weights``) and derives its name by joining the
-        factors' names. CS1 keeps it (it threads ``axes`` when both
-        sides carry them, and bridges axis-borne measures into its dense
-        weights on mixed products, so no value is ever lost) and CS2
-        collapses the live mints onto axis concatenation and retires the
-        densifier. Until then: new axis-aware code composes with
-        ``of_axes``; ``*`` is the legacy surface.
+        **The second composition, ``V * W``** (the ``*`` dunder →
+        :class:`TensorProductSpace`), threads ``axes`` when every factor
+        is axis-built — then it IS this composition, with ``factors``
+        metadata on top — and otherwise positions the factor measures in
+        a lazy :class:`~orpheus.numerics.metric.FactoredMetric`, per
+        axis for an axis-built factor. ⚠ Until CS4c step 6 item 6.2a
+        (2026-09-07) that second arm DENSIFIED the metric into an
+        outer-product ``inner_product_weights`` tensor, bridging
+        axis-borne measures through a densifier so no value was lost —
+        `[M]` 18 state-sized tensors per 2-D windowed solve. The
+        densifier retired with the dense arm; what keeps ``*`` alive is
+        the axes-less angular head of the moment products, which item
+        6.2c makes axis-built. New axis-aware code composes with
+        ``of_axes``.
         """
         if not axes:
             raise ValueError(
@@ -606,9 +609,11 @@ class FunctionSpace(Generic[Carrier]):
         With diagonal weights ``w`` the inner product is the weighted
         sum :math:`\sum_i w_i \, x_i \, y_i`. Without weights it
         reduces to the Euclidean :math:`\sum_i x_i \, y_i`. The
-        weights array is broadcast against ``x * y`` through
-        :meth:`_broadcast_metric` — the SAME leading-axis convention
-        :meth:`_diagonal_apply_metric` uses — so a 1-D weight vector
+        weights array is broadcast against ``x * y`` through the resolved
+        :class:`~orpheus.numerics.metric.DiagonalMetric`
+        (:func:`orpheus.numerics.metric._broadcast_leading` — the SAME
+        leading-axis convention :meth:`_diagonal_apply_metric` uses, one
+        home) — so a 1-D weight vector
         along (say) the ordinate axis acts on the full
         ``(n_ordinates, n_groups, *spatial)`` tensor without manual
         reshaping. Valid only for an ``NDArray``-carried space — the
@@ -621,7 +626,7 @@ class FunctionSpace(Generic[Carrier]):
         until 2026-08-04, while :meth:`_diagonal_apply_metric` used the
         LEADING convention — the same metric applied along different
         axes by two methods of one space.** The divergence is invisible
-        whenever ``w.ndim >= x.ndim`` (``_broadcast_metric`` is then a
+        whenever ``w.ndim >= x.ndim`` (the leading broadcast is then a
         no-op), which is every case the tree exercised, so it shipped.
         It bites the moment a space carries a leading-axis metric over
         an element with trailing axes:
@@ -671,19 +676,6 @@ class FunctionSpace(Generic[Carrier]):
     # ------------------------------------------------------------------
     # Metric application (Hilbert adjoint building blocks, Wave O / O.2b)
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _broadcast_metric(w: NDArray, target_ndim: int) -> NDArray:
-        """Pad ``w`` with trailing 1s so it broadcasts against the LEADING
-        axes of a ``target_ndim`` tensor (the metric-broadcast convention
-        shared by the ``(L+1, 2L+1)`` spherical-harmonic metric and the
-        leading-axis volume / partial-current metrics); no-op when ``w``
-        already spans every axis. The arithmetic lives in
-        :func:`orpheus.numerics.metric._broadcast_leading` (one home —
-        the :class:`~orpheus.numerics.metric.DiagonalMetric` realization
-        is the other door); this method survives as the space-side
-        spelling the trace-space subclasses and their prose cite."""
-        return _broadcast_leading(w, target_ndim)
 
     def apply_metric(self, x: Carrier) -> Carrier:
         r"""Apply the Hilbert metric :math:`G\odot x` (identity if Euclidean).
@@ -776,10 +768,13 @@ class FunctionSpace(Generic[Carrier]):
         leading 1s for the preceding axes' ranks, the axis shape, trailing
         1s for the remaining ranks (plus any extra trailing element axes,
         matching the tree's leading-aligned metric convention). Exact for
-        interior axes — a position the legacy prefix-only
-        :meth:`_broadcast_metric` cannot even express — and never
-        materializes the outer product (the ERR-067-family divergence and
-        the dense twin are both unspellable on this path). Counting-
+        interior axes — a position the prefix-only leading broadcast of a
+        dense-slot space cannot even express — and never materializes the
+        outer product (the ERR-067-family divergence is unspellable on
+        this path; the dense twin ``*`` once carried retired at CS4c step
+        6 item 6.2a, and the factored arm positions the same per-axis
+        arithmetic through
+        :meth:`~orpheus.numerics.metric.DiagonalMetric.apply_block`). Counting-
         measure axes (``weights is None``, the canonical spelling) are
         skipped; an all-counting space returns ``x`` unchanged.
 
@@ -806,28 +801,6 @@ class FunctionSpace(Generic[Carrier]):
             start += rank
         return out
 
-    def _dense_axes_weights(self) -> Optional[NDArray]:
-        r"""Densify this space's per-axis measures into one weights tensor.
-
-        ⚠ The LEGACY BRIDGE, consumed only by
-        :func:`_tensor_product_inner_weights` when an axis-built space
-        enters a ``*`` product beside a legacy space (the mixed product
-        cannot thread axes, so the measure must ride the dense slot or be
-        silently DROPPED — a value bug, not a representation choice).
-        Never called on the pure axis path; retired with the densifier in
-        CS2. Returns ``None`` when every axis carries the counting
-        measure (no allocation, matching the dense path's convention).
-        """
-        axes = self.axes
-        assert axes is not None  # caller-gated; narrowing only
-        if all(ax.weights is None for ax in axes):
-            return None
-        result: Optional[NDArray] = None
-        for ax in axes:
-            w = ax.weights if ax.weights is not None else np.ones(ax.shape)
-            result = w if result is None else np.multiply.outer(result, w)
-        return result
-
     # ------------------------------------------------------------------
     # Space algebra (Depth B step D-B)
     # ------------------------------------------------------------------
@@ -838,8 +811,11 @@ class FunctionSpace(Generic[Carrier]):
 
         Implements ``V * W`` per grand-report §6.1: the resulting
         :class:`TensorProductSpace` carries the concatenated shape
-        ``self.shape + other.shape``, the outer-product inner-product
-        weights, and the multiplied units. Associative on its inputs:
+        ``self.shape + other.shape``, the factor measures positioned per
+        block (concatenated axes when every factor is axis-built, a lazy
+        :class:`~orpheus.numerics.metric.FactoredMetric` otherwise —
+        never a stored outer product, since CS4c step 6 item 6.2a), and
+        the multiplied units. Associative on its inputs:
         ``(A * B) * C`` and ``A * (B * C)`` both produce a flat
         3-factor :class:`TensorProductSpace`.
 
@@ -924,55 +900,48 @@ class FunctionSpace(Generic[Carrier]):
 # ---------------------------------------------------------------------------
 
 
-def _tensor_product_inner_weights(
-    factors: tuple["FunctionSpace", ...],
-) -> Optional[NDArray]:
-    r"""Compute the outer-product inner-product weights of a tensor product.
-
-    For factors with weights :math:`w_1, w_2, \ldots, w_k`, the tensor-
-    product weights tensor has shape ``factors[0].shape + factors[1].shape
-    + ...`` with entries
-    :math:`W[i_1, i_2, \ldots, i_k] = w_1[i_1] \cdot w_2[i_2] \cdots w_k[i_k]`.
-    Factor weights ``None`` (Euclidean) contribute identity (ones broadcast
-    to the factor shape). If ALL factors are Euclidean, the result is
-    ``None`` (preserving the Euclidean default — no allocation).
-    """
-    def _factor_dense_weights(f: "FunctionSpace") -> Optional[NDArray]:
-        # The mixed-product BRIDGE (CS1): an axis-built factor stores its
-        # measure per axis with ``inner_product_weights=None``, so
-        # reading only the dense slot would silently treat a weighted
-        # axis-built factor as Euclidean — a value bug. Densify its
-        # axis-borne measure here instead. Retired with this whole
-        # densifier in CS2.
-        if f.axes is not None:
-            return f._dense_axes_weights()
-        return f.inner_product_weights
-
-    dense = [_factor_dense_weights(f) for f in factors]
-    if all(w is None for w in dense):
-        return None
-    result: Optional[NDArray] = None
-    for f, w_f in zip(factors, dense):
-        w = w_f if w_f is not None else np.ones(f.shape)
-        w = np.broadcast_to(w, f.shape)
-        result = w if result is None else np.multiply.outer(result, w)
-    return result
-
-
 def _tensor_product_factored_metric(
     factors: tuple["FunctionSpace", ...],
-) -> FactoredMetric:
-    r"""Assemble a tensor product's metric when a factor carries a metric
-    OBJECT — the lazy per-block counterpart of
-    :func:`_tensor_product_inner_weights` (P7 S2).
+) -> Optional[FactoredMetric]:
+    r"""Assemble a tensor product's metric as a lazy per-BLOCK product —
+    the one non-axis arm of ``*`` (CS4c step 6 item 6.2a, 2026-09-07).
 
-    One positioned entry per factor: a factor's metric object rides
-    verbatim (a nested :class:`~orpheus.numerics.metric.FactoredMetric`
-    flattens — a product of products is one product); a diagonal-source
-    factor (dense slot, or axis-borne through the same densifier bridge
-    the legacy arm uses) becomes a
-    :class:`~orpheus.numerics.metric.DiagonalMetric` on its block; a
-    Euclidean factor contributes ``None`` (no pass over its block).
+    One positioned entry per block, and the Kronecker product is never
+    materialized:
+
+    * an **axis-built** factor contributes one entry per AXIS — a
+      :class:`~orpheus.numerics.metric.DiagonalMetric` carrying the
+      axis measure on that axis's block, ``None`` for a counting-measure
+      axis — so the product applies exactly the arithmetic
+      :meth:`FunctionSpace._apply_axes_weights` applies on the factor
+      itself (:meth:`~orpheus.numerics.metric.DiagonalMetric.apply_block`
+      is operation-for-operation that reshape-and-multiply: bit-identical
+      on an axis block by construction);
+    * a factor carrying a metric **object** rides verbatim — a nested
+      :class:`~orpheus.numerics.metric.FactoredMetric` flattens (a
+      product of products is one product), a
+      :class:`~orpheus.numerics.metric.DenseMetric` positions on the
+      factor's block (the Parseval-dressed head of a dense-Gram frame);
+    * a **dense-slot leaf** (``inner_product_weights`` set, no axes — the
+      spherical-harmonic / Legendre heads, the trace spaces, hand-built
+      legacy spaces) becomes a ``DiagonalMetric`` on its block;
+    * a **Euclidean** factor contributes ``None`` (no pass over its block).
+
+    Returns ``None`` when every block is Euclidean, preserving the
+    Euclidean default (no object, no allocation).
+
+    **History.** Until 6.2a ``*`` had a DENSE arm that formed
+    :math:`w_1 \otimes w_2 \otimes \cdots` as one weights tensor on every
+    mint with an axes-less factor — `[M]` 18 ``(L+1, 2L+1, ng, nx, ny)``
+    tensors per 2-D windowed solve at ``max_inner = 6``,
+    ``2·max_inner + 6`` in general — and this builder (the P7
+    dense-factor arm) was unreachable on every SN path (no shipped factor
+    carried a metric object) *and* itself densified an axis-built factor's
+    measure. The factored application agrees with the retired outer
+    product to `[M]` 2 ULP worst over 1600 draws (200 seeds × 8
+    (geometry × L) rows — one extra rounding, reduction depth +1; the
+    ``vv-principles`` bit-identity criterion 3), gated at ``nulp = 4`` in
+    ``tests/numerics/test_tensor_product_metric_is_factored.py``.
     """
     entries: list[
         tuple[tuple[int, ...], DiagonalMetric | DenseMetric | None]
@@ -992,22 +961,31 @@ def _tensor_product_factored_metric(
                     f"a tensor product can position only diagonal/dense "
                     f"factor metrics, got {type(m).__name__}"
                 )
-        else:
-            w = (
-                f._dense_axes_weights()
-                if f.axes is not None
-                else f.inner_product_weights
-            )
+        elif f.axes is not None:
+            # Per AXIS, never per factor: an axis-built factor's measure
+            # stays exactly where the axis doctrine put it.
+            for ax in f.axes:
+                entries.append(
+                    (
+                        ax.shape,
+                        None if ax.weights is None else DiagonalMetric(ax.weights),
+                    )
+                )
+        elif f.inner_product_weights is not None:
             entries.append(
                 (
                     f.shape,
                     DiagonalMetric(
-                        np.ascontiguousarray(np.broadcast_to(w, f.shape))
-                    )
-                    if w is not None
-                    else None,
+                        np.ascontiguousarray(
+                            np.broadcast_to(f.inner_product_weights, f.shape)
+                        )
+                    ),
                 )
             )
+        else:
+            entries.append((f.shape, None))
+    if all(entry is None for _, entry in entries):
+        return None
     return FactoredMetric(tuple(entries))
 
 
@@ -1130,8 +1108,11 @@ class TensorProductSpace(FunctionSpace):
         Derives:
         * ``name`` from ``" ⊗ ".join(f.name for f in factors)``
         * ``shape`` from concatenated factor shapes
-        * ``inner_product_weights`` from the outer product of factor
-          weights (``None`` if all factors are Euclidean)
+        * the metric: concatenated ``axes`` when every factor is
+          axis-built, else a lazy
+          :class:`~orpheus.numerics.metric.FactoredMetric` positioned
+          per block (``None`` if every block is Euclidean) —
+          ``inner_product_weights`` is never populated by a product
         """
         if len(factors) < 2:
             raise ValueError(
@@ -1142,39 +1123,34 @@ class TensorProductSpace(FunctionSpace):
         shape: tuple[int, ...] = ()
         for f in factors:
             shape = shape + f.shape
-        # Axis threading (CS1, gate B7): when EVERY factor carries an
-        # axes record, the product's record is the concatenation and the
-        # measure rides the per-axis path (no dense weights). A legacy
-        # factor on either side leaves ``axes=None`` — never fabricate an
-        # axis for a space that did not declare one — and the measure
-        # rides the legacy dense slot (with axis-borne factor measures
-        # bridged in by ``_tensor_product_inner_weights``).
+        # Two arms, and neither materializes a weights tensor (CS4c step
+        # 6 item 6.2a retired the dense arm and its densifier bridge):
+        # * axis threading (CS1, gate B7) — when EVERY factor carries an
+        #   axes record, the product's record is the concatenation and
+        #   the measure rides the per-axis path (a factor carrying axes
+        #   never carries a metric object — the construction guard);
+        # * the factored arm — an axes-less factor on either side leaves
+        #   ``axes=None`` (never fabricate an axis for a space that did
+        #   not declare one) and the product carries a lazy
+        #   FactoredMetric positioned per block: per AXIS for an
+        #   axis-built factor, per factor for a dense-slot leaf, verbatim
+        #   for a metric object (P7 S2: dropping an object would silently
+        #   revert the product to Euclidean on that factor, a VALUE bug —
+        #   [M] 33.0 where G ⊗ w gives 109.0, on the harmonic-frame mint
+        #   path).
         factor_axes = [f.axes for f in factors]
         metric: Optional[HilbertMetric] = None
-        if any(f.metric is not None for f in factors):
-            # Dense-factor arm (P7 S2): a metric OBJECT has no Hadamard
-            # form, so it cannot ride the densified weights array — and
-            # dropping it would silently revert the product to Euclidean
-            # on that factor, a VALUE bug ([M] 33.0 where G ⊗ w gives
-            # 109.0, on the harmonic-frame mint path). The product
-            # carries a lazy FactoredMetric: one positioned entry per
-            # factor, axis-borne and dense-array factor measures bridged
-            # through the same densifier the legacy arm uses.
-            axes: Optional[tuple[Axis, ...]] = None
-            weights = None
-            metric = _tensor_product_factored_metric(factors)
-        elif all(fa is not None for fa in factor_axes):
-            axes = tuple(
+        if all(fa is not None for fa in factor_axes):
+            axes: Optional[tuple[Axis, ...]] = tuple(
                 ax for fa in factor_axes if fa is not None for ax in fa
             )
-            weights = None
         else:
             axes = None
-            weights = _tensor_product_inner_weights(factors)
+            metric = _tensor_product_factored_metric(factors)
         return cls(
             name=name,
             shape=shape,
-            inner_product_weights=weights,
+            inner_product_weights=None,
             axes=axes,
             metric=metric,
             factors=factors,

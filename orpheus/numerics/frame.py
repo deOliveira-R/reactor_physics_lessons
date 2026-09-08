@@ -738,8 +738,9 @@ def _collapse_pair(space: FunctionSpace, axis_label: str) -> _AxisCollapsePair:
     :meth:`FunctionSpace.retraction` / :meth:`FunctionSpace.section`,
     which memoize this mint per axis label):
 
-    * the space must be **axis-built** (``axes is not None``) — a
-      densified/legacy product has no named factors to marginalise over;
+    * the space must be **axis-built** (``axes is not None``) — an
+      axes-less space (a hand-named legacy space, or a product with an
+      axes-less head) has no named factors to marginalise over;
     * ``axis_label`` must name **exactly one** axis;
     * the axis must be **NODAL**: a "marginal" over a MODAL axis would
       contract expansion COEFFICIENTS with the basis mass, which is not

@@ -272,8 +272,13 @@ it is built as
 ordinate's solid angle). The singleton broadcasts over the energy axis
 of the ``(N, ng, nx, ny)`` bulk tensor at metric-application time, so
 the same :math:`(N,1,nx,ny)` weight serves every group with no
-duplication. This is exactly the leading-axis broadcast convention of
-:meth:`FunctionSpace._broadcast_metric <orpheus.numerics.space.FunctionSpace>`.
+duplication. This is exactly the tree's **leading-aligned** metric
+convention, and since CS4c step 6 item 6.2a (2026-09-07) it has exactly
+one home: :func:`~orpheus.numerics.metric._broadcast_leading`, the pad
+that :class:`~orpheus.numerics.metric.DiagonalMetric` applies. (This
+sentence named ``FunctionSpace._broadcast_metric`` until then; that
+helper delegated to ``_broadcast_leading`` from P7 onward and retired
+with the densifier — one home, one door.)
 
 **The trace block** :math:`G_{\rm trace} = |\Omega\cdot\hat n_f|\,w_n`.
 The boundary inner product is the discretization of the **partial-current

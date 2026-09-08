@@ -25,7 +25,7 @@ Function Spaces: Axes, Measure, and the Collapse Doctrine
       role: "the space layer — a function space as the ordered product of its AXES (index shape, factor measure, basis kind, the generator that minted it, and the structural identity that deliberately excludes that generator), the counting-measure theorem on the energy axis, and the collapse doctrine that decides which axes survive a degeneracy and why"
       depends_on: [field_algebra, frame]
       related: [manifolds, discrete_measures, operator_algebra, operator_adjoint]
-      status: "seeded at campaign-1 CS1 (the Energy axis); the generator slot landed at CS5 (2026-08-29); the Spatial / Quadrature / Harmonic axis SUBCLASSES are CS2"
+      status: "seeded at campaign-1 CS1 (the Energy axis); the generator slot landed at CS5 (2026-08-29); the densifying half of the `*` product retired at CS4c step 6 item 6.2a (2026-09-07); the Harmonic axis subclass (with the Legendre / spatial-moment ones) is CS4c step 6 item 6.2c, ruled 2026-09-07 and sequenced after 6.2b; the Spatial / Quadrature subclasses stay CS2 and unscheduled"
 
 
 This page develops the **space layer**: what a discrete function space
@@ -337,23 +337,67 @@ reach.
 
 .. warning::
 
-   **The legacy twin is still live, and CS2 retires it.** ``V * W`` (the
-   ``*`` dunder →
-   :class:`~orpheus.numerics.space.TensorProductSpace`) is the PRE-axis
-   composition mechanism: on all-diagonal factors it DENSIFIES the
-   metric into an outer-product ``inner_product_weights`` and derives
-   its name by joining the factors' names. CS1 keeps it — it threads the
-   ``axes`` record when both sides carry one, and bridges axis-borne
-   measures into its dense weights on mixed products, so no value is
-   ever lost — and CS2 collapses the live mints onto axis concatenation
-   and retires the densifier. Until then the rule is: **new axis-aware
-   code composes with** ``of_axes``; ``*`` **is the legacy surface.**
-   ⚠ Since campaign 1 P7 the densifier is only ONE of its two arms: a
-   factor carrying a metric OBJECT has no Hadamard form, so the product
-   builds a lazy :class:`~orpheus.numerics.metric.FactoredMetric`
-   instead — see :ref:`spaces-metric-propagation`, where dropping that
-   factor is measured as a value bug rather than a representation
-   choice.
+   **The legacy twin survives; its DENSIFYING half retired 2026-09-07**
+   (CS4c step 6 item 6.2a). ``V * W`` (the ``*`` dunder →
+   :class:`~orpheus.numerics.space.TensorProductSpace`) is still the
+   PRE-axis composition mechanism — it takes whole *spaces* as factors
+   and derives its name by joining theirs — but it no longer builds a
+   dense weight array. It never populates ``inner_product_weights`` at
+   all. Two arms:
+
+   * **Every factor axis-built** → the product's ``axes`` is the
+     concatenation of the factors' axes, and there is no metric object:
+     the per-axis path of :eq:`spaces-axis-product` applies unchanged.
+     (This arm is untouched by 6.2a.)
+   * **Any factor axes-less** → the product's ``axes`` stays ``None``
+     (an axis is never fabricated for a space that did not declare one)
+     and the metric is a lazy
+     :class:`~orpheus.numerics.metric.FactoredMetric` carrying ONE
+     positioned entry per **axis** of an axis-built factor (a
+     :class:`~orpheus.numerics.metric.DiagonalMetric` on that axis's
+     block, or ``None`` for a counting-measure axis), one entry per
+     dense-slot leaf factor, and a factor's own metric object riding
+     verbatim — a nested ``FactoredMetric`` flattens, a
+     :class:`~orpheus.numerics.metric.DenseMetric` positions on its
+     block. Every block Euclidean ⟹ no metric at all.
+
+   ⛔ **This block read** *"The legacy twin is still live, and CS2
+   retires it … on all-diagonal factors it DENSIFIES the metric into an
+   outer-product* ``inner_product_weights`` *… CS1 keeps it — it threads
+   the* ``axes`` *record when both sides carry one, and bridges
+   axis-borne measures into its dense weights on mixed products … and
+   CS2 collapses the live mints onto axis concatenation and retires the
+   densifier"* **until 2026-09-07**, and that was an accurate
+   description of the tree until item 6.2a. The product formed
+   :math:`w_V \otimes w_W` once and stored it; a *mixed* product (one
+   axis-built factor, one not) therefore had to BRIDGE the axis-borne
+   measure into that dense slot, because a weighted axis-built factor
+   read through the dense slot alone would have been treated as
+   Euclidean — a value bug, not a representation choice. The bridge and
+   the outer-product builder retired together with the slot they fed.
+
+   What survives of the old rule is the half that was never about the
+   densifier: **new axis-aware code composes with** ``of_axes``, because
+   ``of_axes`` is the only ROOT producer of an ``axes`` record — ``*``
+   and :meth:`dual <orpheus.numerics.space.FunctionSpace.dual>` merely
+   thread one through, so both need an axis-built ancestor (the same
+   closure argument the nodal/modal refusal rests on, below).
+   ``*`` is for a product whose factors are **not** all
+   axis-built. `[M]` 2026-09-07, by AST over ``orpheus/**/*.py``, that is
+   the harmonic/moment family and nothing else — **four** production
+   sites: the angular head :math:`\otimes` the axis-built cell group, in
+   :meth:`HarmonicFrame.moment_space_on
+   <orpheus.transport.frames.harmonic_frame.HarmonicFrame.moment_space_on>`
+   and in its content-equal field-side twin
+   :meth:`MomentField._space_for_mesh_and_L
+   <orpheus.transport.fields._bases.MomentField._space_for_mesh_and_L>`,
+   each of which then appends a
+   :class:`~orpheus.numerics.spaces.spatial_moment_space.SpatialMomentSpace`
+   factor for a widened angular space (that factor's inner product is
+   Euclidean, so it contributes a ``None`` entry). Item **6.2c**
+   axis-ifies the head; until then see
+   :ref:`spaces-metric-propagation`, where dropping a factor's metric is
+   measured as a value bug rather than a representation choice.
 
 Canonical storage: one measure, one spelling, one identity
 -----------------------------------------------------------
@@ -564,22 +608,45 @@ basis has both.
        structurally, and collapsing ``None`` into ``False`` would fire
        the refusal on every legacy space in the tree.
 
-`[M]` **the refusal has no production witness yet, deliberately.** The
-only axis mint in ``orpheus/`` today is
-:attr:`MaterialMesh.bulk_space
-<orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space>`, whose
-factors are both ``NODAL``. Since :meth:`of_axes
-<orpheus.numerics.space.FunctionSpace.of_axes>` is the only ROOT
-producer of an ``axes`` record (``*`` and
-:meth:`dual <orpheus.numerics.space.FunctionSpace.dual>` merely thread
-one through, so both need an axis-built ancestor), it follows that
-every harmonic-moment space in the tree is still legacy
-(``axes is None``) and therefore takes the ``None`` arm.
-The ``False`` arm's witness is test-constructed
+⛔ **This paragraph claimed** *"`[M]` the refusal has no production
+witness yet, deliberately. The only axis mint in* ``orpheus/`` *today is*
+``MaterialMesh.bulk_space``\ *, whose factors are both* ``NODAL``\ *…
+The arm becomes production-reachable when CS2 mints the harmonic axis"*
+**until 2026-09-07**, and both halves had gone false — not by item
+6.2a, which touches no axis declaration, but by the CS4b axis migration
+that preceded it and was never reconciled here.
+
+`[M]` re-measured 2026-09-07, by AST over ``orpheus/**/*.py``:
+:meth:`of_axes <orpheus.numerics.space.FunctionSpace.of_axes>` has
+**seven** production call sites, not one. And the ``False`` row now has
+a production occupant: :attr:`SNMesh.angular_trial_space
+<orpheus.sn.mesh.augmented_mesh.SNMesh.angular_trial_space>` appends the
+scheme-owned ``moment_axis`` — declared ``BasisKind.MODAL``, because a
+DG cell moment is an expansion coefficient — to an axis-built base
+whenever the bound scheme is multi-moment, and `[M]`
+``LinearDiscontinuous.is_multi_moment`` is ``True`` while
+``DiamondDifference``'s is ``False``. So an LD carrier's trial space is
+an axis-built space with a MODAL factor. ⚠ Scope: that measures the
+*occupant*, not the *firing* — whether any consumer asks
+``has_coordinate_cone`` of that space is a separate census this page
+does not carry. The named test witness stands either way
 (``tests/numerics/test_field.py``, gates E1/E2 — the refusal and the
 same values answered on an all-nodal space, the positive-and-negative
-pair ``vv-principles`` anti-pattern #11 requires). The arm becomes
-production-reachable when CS2 mints the harmonic axis.
+pair ``vv-principles`` anti-pattern #11 requires).
+
+What survived intact is the CLOSURE ARGUMENT and its consequence for
+the harmonic family. Since ``of_axes`` is the only ROOT producer of an
+``axes`` record (``*`` and :meth:`dual
+<orpheus.numerics.space.FunctionSpace.dual>` merely thread one through,
+so both need an axis-built ancestor), and the angular head declares no
+axes, every harmonic-moment space in the tree is still legacy
+(``axes is None``) and therefore takes the ``None`` arm — `[M]`
+2026-09-07 the moment product's metric is a
+:class:`~orpheus.numerics.metric.FactoredMetric` while its ``axes`` is
+``None``. Item **6.2a** did not move that: retiring the densifier
+changed how a product carries its measure, not whether its factors
+declare axes. Item **6.2c** does, by minting the harmonic axis (this
+sentence said "CS2" until the 2026-09-07 ruling).
 
 
 .. _spaces-axis-generator:
@@ -1772,12 +1839,24 @@ carries its own gate in ``tests/numerics/test_space_of_axes.py``.
    real, non-Euclidean metric.
    Read the space's behaviour through
    :meth:`~orpheus.numerics.space.FunctionSpace.inner_product`, never
-   through the slot. `[M]` the production exposure is small and worth
-   stating so the hazard is not over-read: of the 198 lines across
-   52 files in ``orpheus/`` + ``tests/`` that name the slot, 20 are
-   ``is None`` / ``is not None`` branches and only **three** are
-   production — all three inside ``space.py`` itself (two arms of the
-   exclusivity guard, and the resolution in ``_resolved_metric``).
+   through the slot. `[M]` re-measured 2026-09-07 after item 6.2a, and
+   the production exposure is still small — worth stating so the hazard
+   is not over-read: of the **221** lines across **57** files in
+   ``orpheus/`` + ``tests/`` that name the slot, **28** carry an
+   ``is None`` / ``is not None`` spelling (prose included) and only
+   **four** are production BRANCHES — all four inside ``space.py``
+   itself: the two arms of the exclusivity guard, the resolution in
+   ``_resolved_metric``, and — fourth since 6.2a — the dense-slot-leaf
+   arm of the tensor product's factored builder, which positions a
+   hand-built factor's weights as a
+   :class:`~orpheus.numerics.metric.DiagonalMetric` on that factor's
+   block. (This paragraph read *"198 lines across 52 files … 20 are*
+   ``is None`` / ``is not None`` *branches and only three are
+   production"* until then. The fourth is a change of SPELLING, not of
+   exposure: the pre-6.2a builder funnelled both a dense-slot leaf and
+   an axis-built factor through one local ``w is not None`` test — the
+   latter via the densifier — where the arms are now separate and the
+   densifier is gone.)
 
 .. _spaces-metric-moore-penrose:
 
@@ -1959,9 +2038,23 @@ to a plausible-looking value, with no error and no warning):
      - densified the factor measures into one outer-product weight
        array — which has no slot for a matrix factor, so the dense
        factor was **dropped** and its block went Euclidean
-     - grows a dense-factor arm: a lazy
-       :class:`~orpheus.numerics.metric.FactoredMetric`, one positioned
-       entry per factor, Kronecker never materialized
+     - **since 2026-09-07 (CS4c step 6 item 6.2a) the factored arm is
+       the ONLY non-axis arm**: a lazy
+       :class:`~orpheus.numerics.metric.FactoredMetric` positioned per
+       **axis** of an axis-built factor and per dense-slot leaf factor,
+       Kronecker never materialized, and ``inner_product_weights`` never
+       populated by a product at all.
+       ⛔ This cell read *"grows a dense-factor arm: a lazy*
+       ``FactoredMetric``\ *, one positioned entry per factor"* until
+       then. That was true of P7 and it described an arm that was
+       **inert**: `[M]` the step-6 activation census counted **0**
+       entries across 11 SN runs (~450 product mints), because no factor
+       reaching ``*`` on an SN path carried a metric OBJECT — the only
+       production installs are the frame's
+       ``DenseMetric.inverse_of(discrete_gram)`` and the two ψ½ ray
+       spaces, none of which enters a product. What 6.2a changed is the
+       arm's REACHABILITY, not its existence: the dense arm it shared the
+       dispatch with is gone, so every axes-less product now takes it
    * - :attr:`FrameBase.gram
        <orpheus.numerics.frame.FrameBase.gram>`
      - ``replace(test_space, inner_product_weights=diagonal)`` on a
@@ -2015,8 +2108,17 @@ produced a 162 % value error is now a state that cannot be built.
    remains exactly true — see :ref:`spaces-metric-not-on-the-axis`. The
    :class:`~orpheus.numerics.metric.FactoredMetric` arm belongs to the
    **legacy** ``*`` composition, which takes whole *spaces* as factors
-   and therefore can meet one that carries a metric object. The two
-   paths were not unified by P7 and CS2 still retires the second.
+   and therefore can meet one that carries a metric object. ⛔ This
+   paragraph closed *"The two paths were not unified by P7 and CS2 still
+   retires the second"* until **2026-09-07**. The retirement it promised
+   landed as **CS4c step 6 item 6.2a** — and what retired is the
+   *densifier*, not ``*``: the product's dense weights array and the
+   bridge that fed it are gone, so both paths now apply their measure
+   factor-by-factor. They are still not one path, and the residue is
+   narrow and named: an axes-less factor makes the product axes-less, so
+   ``*`` cannot answer an axis query. `[M]` 2026-09-07 the only production
+   occupants are the four harmonic/moment mints; item **6.2c** axis-ifies
+   the angular head and closes it.
 
 .. _spaces-metric-dressing-evidence:
 
@@ -3345,8 +3447,12 @@ than described, so it is worth reading the admission table against
        the space's inner product instead.
    * - a space with ``axes is None``
      - —
-     - **REFUSE.** A densified legacy product has no named factors to
-       marginalise over.
+     - **REFUSE.** An axes-less space — a hand-named legacy space, or a
+       product with an axes-less factor — has no named factors to
+       marginalise over. (This row read *"a densified legacy product"*
+       until 2026-09-07; item 6.2a retired the densification, not the
+       refusal, which stays reachable for every space that declares no
+       axes.)
 
 The energy row is the load-bearing one, and it is the doctrine's
 Version-1 refutation cashed out in code
@@ -3733,7 +3839,14 @@ taken.
    * - Not built
      - Where it lands, and what stands in for it today
    * - ``SpatialAxis`` / ``QuadratureAxis`` / ``HarmonicAxis``
-     - **CS2.** There are no axis subclasses beyond
+     - **Split owners since 2026-09-07.** ``HarmonicAxis`` (rank-2
+       :math:`(L+1, 2L+1)`, MODAL) and the Legendre / spatial-moment
+       subclasses are **CS4c step 6 item 6.2c**, the step that makes the
+       angular head axis-built — ruled 2026-09-07, sequenced after
+       6.2b, and owing its own verification round before code because
+       the identity and adjoint metrics move across frame, fields and
+       operators. ``SpatialAxis`` / ``QuadratureAxis`` remain **CS2**
+       and unscheduled. Today there are still no axis subclasses beyond
        :class:`~orpheus.numerics.axis.EnergyAxis`; the spatial factor of
        :attr:`MaterialMesh.bulk_space
        <orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space>`
@@ -3838,9 +3951,28 @@ taken.
        which is why the landed thing is named *the identity flip* here
        and everywhere after it.
    * - Retiring the densifying ``__mul__``
-     - **CS2.** The legacy ``*`` path is documented above and kept
-       working; its own gates live in a separate test module so the
-       retirement is a file-level move.
+     - ✅ **LANDED 2026-09-07 — CS4c step 6 item 6.2a.** ``*`` survives
+       and stopped densifying: the dense outer-product weights builder
+       and the mixed-product bridge that fed it are gone, and a product
+       never populates ``inner_product_weights``. What remains of the
+       twin is *axes-lessness*, not densification — item **6.2c**
+       axis-ifies the angular head and closes that.
+       ⛔ This row read *"CS2. The legacy* ``*`` *path is documented
+       above and kept working; its own gates live in a separate test
+       module so the retirement is a file-level move"* until then. The
+       first clause is now history; the **second was wrong about the
+       mechanism**, and the landing says so. A gate that pins
+       *behaviour* migrates with the behaviour, it does not travel with
+       a file: ``test_space_algebra.py``'s two dense-slot rows
+       (``test_inner_product_factorises_weighted``,
+       ``test_inner_product_mixed_euclidean_and_weighted``) and
+       ``test_space_of_axes.py``'s mixed-product third leg were
+       **re-keyed in place** onto the factored metric's applied VALUES —
+       each still asserts the same outer product, now as
+       ``tp.apply_metric(...)`` rather than as a stored tensor — and the
+       new arm-agreement band lives in
+       ``tests/numerics/test_tensor_product_metric_is_factored.py``. No
+       file moved.
    * - The condensation morphisms on :math:`V` / :math:`V^*`
      - **Campaign 2.** Declared at
        :ref:`spaces-vv-collapse-hook`; the axis records the group

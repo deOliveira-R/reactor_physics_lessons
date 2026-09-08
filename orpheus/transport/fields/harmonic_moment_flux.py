@@ -245,7 +245,7 @@ class HarmonicMomentFlux(MomentField):
             product's cell-group factor IS the carrier's cached
             ``bulk_space`` instance. A WIDENED (``spatial_moments > 1``)
             extraction cannot self-derive (its target carries the
-            scheme's mass-bearing moment axis, which the densified
+            scheme's mass-bearing moment axis, which the appended
             ``SpatialMomentSpace`` factor does not hold), so the caller
             holding the pose supplies it (the windowed moment arm passes
             its composite interior's marginal).
@@ -263,7 +263,7 @@ class HarmonicMomentFlux(MomentField):
         # scalar rides the same mint every scalar leaf shares. The widened
         # (spatial_moments > 1) self-derive stays REFUSED by CONTRACT (S4,
         # gated): the widened target carries the scheme's mass-bearing
-        # moment axis, which this field's densified SpatialMomentSpace
+        # moment axis, which this field's appended SpatialMomentSpace
         # factor does not hold — the caller holding the pose passes space=.
         iso = self.head.isotropic_slot
         if space is not None:

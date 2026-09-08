@@ -1165,9 +1165,12 @@ class SNMesh(MaterialMesh):
         to one instance.
 
         Carries the physical Hilbert metric per axis (``w_n``, ``V_cell``)
-        — the same Gram :attr:`full_field_space`'s dense interior stores
-        densified (``G_bulk = V·w_n``), so norms and inner products agree
-        between the two spellings (gated at ≤ 1 ULP). Cached: every
+        — and :attr:`full_field_space`'s interior IS this mint (or the
+        widened trial mint, ``is``-shared since CS4b S5), so ``G_bulk =
+        V·w_n`` has one spelling in production; the ≤ 1 ULP gate that
+        reproduces it is against a HAND-densified oracle
+        (``tests/sn/mesh/test_angular_bulk_space.py``), not a second
+        production copy. Cached: every
         consumer of one carrier reads the SAME instance; equal carriers
         mint ``==`` spaces through the derived name.
         """

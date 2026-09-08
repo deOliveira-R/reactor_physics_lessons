@@ -1,14 +1,17 @@
 r"""Pre-carve anchors for the CS4c step-6 tensor-product metric carve (§7.3 / F2).
 
-**What this file is.** Step 6 item 6.2 stops ``FunctionSpace.__mul__`` from
-DENSIFYING a tensor product's metric into one ``(L+1, 2L+1, ng, nx[, ny])``
-weights tensor and has it carry the per-factor
-:class:`~orpheus.numerics.metric.FactoredMetric` instead.  Both arms exist in
-production TODAY (``space.py``'s ``_tensor_product_inner_weights`` — the live
-one — and ``_tensor_product_factored_metric`` — the P7 arm, which fires 0× on
-every measured SN path), so the equivalence they must satisfy is measurable
-BEFORE the carve.  That is the whole point: the carve then inherits a measured
-band instead of adopting one.
+**What this file is.** Step 6 item 6.2a (LANDED 2026-09-07) stopped
+``FunctionSpace.__mul__`` from DENSIFYING a tensor product's metric into one
+``(L+1, 2L+1, ng, nx[, ny])`` weights tensor and has it carry a per-BLOCK
+:class:`~orpheus.numerics.metric.FactoredMetric` instead (per axis for an
+axis-built factor).  Pre-carve, both arms existed in production (the dense
+``_tensor_product_inner_weights`` — the live one — and the P7
+``_tensor_product_factored_metric``, which fired 0× on every measured SN path
+because no shipped factor carried a metric object), so the equivalence was
+measured BEFORE the carve and the carve inherited a measured band instead of
+adopting one.  Post-carve the dense arm is gone from production; its oracle is
+hand-built here (``_dense_arm``) so the band stays measured against an
+INDEPENDENT spelling of the outer product.
 
 **The band is 2 ULP, and it is DRAW-STABLE.**  `[M]` 2026-09-07, 200 seeds ×
 8 (geometry × L) rows = 1600 draws, dense arm vs factored arm on the SAME
@@ -58,6 +61,7 @@ import numpy as np
 import pytest
 
 import orpheus.numerics.space as _spacemod
+from orpheus.numerics.metric import DiagonalMetric, FactoredMetric, _broadcast_leading
 from orpheus.numerics.space import FunctionSpace, TensorProductSpace
 from tests.sn.architecture.test_monomorphic_leaves import (
     _cart2d,
@@ -115,7 +119,32 @@ def _capture_production_factor_tuples(sn_mesh, L: int) -> "list[tuple[FunctionSp
 
 
 def _dense_arm(factors) -> "np.ndarray | None":
-    return _spacemod._tensor_product_inner_weights(factors)
+    """The RETIRED dense arm, hand-built: the outer product of every block's
+    weights (ones for a counting-measure block), positioned exactly as the
+    factored realization positions its entries — the ORACLE the factored
+    metric is measured against, independent of production now that
+    production no longer forms it (CS4c step 6 item 6.2a, 2026-09-07).
+    """
+    blocks: "list[np.ndarray | None]" = []
+    shapes: "list[tuple[int, ...]]" = []
+    for f in factors:
+        if f.axes is not None:
+            for ax in f.axes:
+                blocks.append(
+                    None if ax.weights is None else np.asarray(ax.weights, dtype=float)
+                )
+                shapes.append(tuple(ax.shape))
+        else:
+            w = f.inner_product_weights
+            blocks.append(None if w is None else np.asarray(w, dtype=float))
+            shapes.append(tuple(f.shape))
+    if all(b is None for b in blocks):
+        return None
+    result: "np.ndarray | None" = None
+    for b, shape in zip(blocks, shapes):
+        w = np.ones(shape) if b is None else np.broadcast_to(b, shape)
+        result = w if result is None else np.multiply.outer(result, w)
+    return result
 
 
 def _factored_arm(factors):
@@ -162,55 +191,86 @@ def test_g2_1_dense_and_factored_metric_arms_agree_to_the_measured_band(geometry
         dense = _dense_arm(factors)
         assert dense is not None                       # narrowing; `weighted` filtered
         metric = _factored_arm(factors)
+        if metric is None:
+            pytest.fail(
+                f"[{geometry} L={L}] the factored builder returned None on a "
+                f"factor tuple whose hand-built oracle is weighted — the "
+                f"measure was DROPPED"
+            )
         shape = tuple(int(n) for f in factors for n in f.shape)
         for seed in _SEEDS:
             x = np.random.default_rng(seed).standard_normal(shape)
-            via_dense = x * _spacemod._broadcast_leading(dense, x.ndim)
+            via_dense = x * _broadcast_leading(dense, x.ndim)
             via_factored = metric.apply(x)
             np.testing.assert_array_almost_equal_nulp(
                 via_dense, via_factored, nulp=_ARM_AGREEMENT_NULP,
             )
 
 
-def test_g2_1b_the_arm_that_actually_fires_on_an_sn_path_is_the_DENSE_one():
-    r"""The dispatch PREMISE of item 6.2, pinned.
+def test_g2_2_the_moment_product_carries_a_factored_metric_and_no_dense_slot():
+    r"""Item 6.2a LANDED (2026-09-07): on every shipped SN mint the product
+    of the angular head with the axis-built bulk carries a
+    :class:`FactoredMetric` positioned per block and NO dense weights.
 
-    ``TensorProductSpace.from_factors`` chooses between three arms:
-    a ``FactoredMetric`` when any factor carries a metric OBJECT; per-axis
-    threading when EVERY factor carries ``axes``; else the dense outer
-    product.  `[M]` on every shipped SN mint the angular head is
-    ``axes=None`` with a dense ``inner_product_weights`` slot and NO metric
-    object, so **the dense arm is the only reachable one** — which is why the
-    P7 factored arm fired 0× across 11 measured SN runs and why item 6.2
-    cannot be executed by re-pointing ``__mul__``'s body alone.
+    Until 6.2a this row (then ``test_g2_1b``) pinned the OPPOSITE premise:
+    ``from_factors`` took the DENSE arm on every shipped mint, because the
+    head is ``axes=None`` with a dense ``inner_product_weights`` slot and
+    no metric object, so the P7 factored arm fired 0 times across 11
+    measured SN runs. The head is STILL axes-less here — item 6.2c makes
+    it axis-built — which is why the product's ``axes`` is ``None``; the
+    row keeps the two facts apart so the day 6.2c lands the suite says
+    which claim moved (lessons L61a / L73a: gate the premise).
 
-    This row is the honest statement of that premise, and it is what the
-    carve must FLIP (lessons L61a / L73a: gate the premise, so the day it
-    stops holding the suite says WHICH claim it lost).
+    Block structure asserted: one entry for the head (its dense slot as a
+    ``DiagonalMetric``) plus one entry per BULK AXIS — per axis, never per
+    factor, so no ``(ng, nx[, ny])`` tensor is formed for the bulk either.
     """
     findings: list[str] = []
     for geometry, factory in _GEOMETRIES.items():
         sn_mesh = factory()
+        bulk_axes = sn_mesh.bulk_space.axes
+        assert bulk_axes is not None, "the carrier's bulk space is of_axes-built"
         for L in _ORDERS:
             head = sn_mesh.quad.angular_frame(L).basis.space
             product = head * sn_mesh.bulk_space
             findings.append(
                 f"{geometry} L={L}: head.axes={head.axes is not None} "
-                f"head.metric={head.metric is not None} "
+                f"product.axes={product.axes is not None} "
                 f"product.ipw={product.inner_product_weights is not None} "
-                f"product.metric={product.metric is not None}"
+                f"product.metric={type(product.metric).__name__}"
             )
-            if head.axes is not None or head.metric is not None:
+            if head.axes is not None:
                 pytest.fail(
-                    "the angular head now carries axes or a metric object — "
-                    "the product no longer takes the DENSE arm, so item 6.2's "
-                    f"premise has moved.\n  " + "\n  ".join(findings)
-                )
-            if product.inner_product_weights is None or product.metric is not None:
-                pytest.fail(
-                    "the moment product no longer densifies — item 6.2 has "
-                    f"landed and this premise row must be re-posed.\n  "
+                    "the angular head is axis-built — item 6.2c has landed; "
+                    "re-pose this row on the all-axes arm.\n  "
                     + "\n  ".join(findings)
+                )
+            if product.inner_product_weights is not None:
+                pytest.fail(
+                    f"[{geometry} L={L}] the moment product still DENSIFIES "
+                    f"({product.inner_product_weights.nbytes} B).\n  "
+                    + "\n  ".join(findings)
+                )
+            if not isinstance(product.metric, FactoredMetric):
+                pytest.fail(
+                    f"[{geometry} L={L}] the moment product carries "
+                    f"{type(product.metric).__name__}, not a FactoredMetric.\n  "
+                    + "\n  ".join(findings)
+                )
+            expected_blocks = 1 + len(bulk_axes)
+            if len(product.metric.entries) != expected_blocks:
+                pytest.fail(
+                    f"[{geometry} L={L}] the factored metric has "
+                    f"{len(product.metric.entries)} blocks; expected "
+                    f"{expected_blocks} (the head + one per bulk axis) — the "
+                    f"bulk factor is being positioned per FACTOR, i.e. densified"
+                )
+            head_block, head_metric = product.metric.entries[0]
+            if head_block != head.shape or not isinstance(head_metric, DiagonalMetric):
+                pytest.fail(
+                    f"[{geometry} L={L}] the head's block is {head_block} with "
+                    f"{type(head_metric).__name__}; expected {head.shape} with a "
+                    f"DiagonalMetric carrying its dense slot"
                 )
 
 

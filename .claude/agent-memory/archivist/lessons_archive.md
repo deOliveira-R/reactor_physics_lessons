@@ -11402,3 +11402,171 @@ label set (1, live); python xrefs **import-resolved** (7 of 7 live, plus the bar
 79-column check on added lines. ⟹ this set is now my default when a build is unavailable — the
 error-SET diff is the honest substitute for a warning count, and the added-lines gates find what
 a build never would.
+
+---
+
+## L-097 — CS4c step 6 item 6.2a: the carve landed MID-TASK, and the surplus was a claim CS4b falsified two weeks earlier
+
+**Task.** 2026-09-07, dispatched at `main` @ `77a12286`. Brief: 8 sites, `docs/**/*.rst`
+only, no build, no commit. `*` (`TensorProductSpace.from_factors`) stops densifying; the
+dense outer-product weights builder, the mixed-product bridge (`_dense_axes_weights`) and
+the `FunctionSpace._broadcast_metric` shim retire. Delivered: 3 files
+(`foundations/spaces.rst`, `foundations/operator_adjoint.rst`, `methods/sn/history.rst`),
++282/−51, 0 new eq-labels.
+
+### ⭐⭐ (1) `git status` was EMPTY at dispatch and the code landed while I read — the §0 measurement was stale within one tool call
+
+`[M]` at dispatch `git status --porcelain -- docs/ orpheus/ tests/` was empty and
+`grep` over `orpheus/numerics/space.py` still found all four retiring symbols. I wrote
+that into the report as §0. Two reads later, `space.py`'s `_tensor_product_factored_metric`
+docstring began *"**History.** Until 6.2a ``*`` had a DENSE arm…"* — the carve had landed
+in the working tree (6 `orpheus/` files, +141/−157, plus 3 `tests/` files).
+
+⟹ **the L-089 loop is not "re-read after every build" — on a same-commit docs+code task
+it is "re-read after every FILE".** The tell that caught it was a docstring that already
+narrated the change I was about to document; had I not re-run `git status` I would have
+published a §0 that reads as a measurement and is a snapshot of a tree that no longer
+existed.
+
+⭐ **And the landing was a GIFT, not a hazard: it turned every design claim from relayed
+to verifiable.** The brief's entry rule (*"one positioned entry per AXIS of an axis-built
+factor, one per dense-slot leaf, a metric object verbatim"*) stopped being something I had
+to take on faith. Three lines:
+
+```
+h = SphericalHarmonicSpace.from_L(2)                  # the dense-slot leaf head
+b = FunctionSpace.of_axes(energy(2,), spatial(4,) weighted)
+(h * b).metric.entries
+→ [((3,5), DiagonalMetric), ((2,), None), ((4,), DiagonalMetric)]
+```
+
+— the head as ONE entry, then one entry PER AXIS of the axis-built factor, `None` for the
+counting-measure energy axis. `axes` is `None`, `inner_product_weights` is `None`. The
+published rule is now witnessed by construction rather than relayed.
+
+### ⭐⭐ (2) TWO of the brief's own premises were superseded by the landing — and one of them was the CENSUS's stated reason, not its conclusion
+
+(a) The brief and the code census (`explorer_boundary_recensus.md:159`) both said the P7
+factored arm *"itself densifies — it calls `f._dense_axes_weights()` at `:939` and wraps
+the DENSIFIED array in a `DiagonalMetric`"*. `[M]` on the landed tree the builder positions
+per axis (`for ax in f.axes: entries.append((ax.shape, … DiagonalMetric(ax.weights)))`,
+with the comment *"Per AXIS, never per factor"*). The census's CONCLUSION (re-point per
+axis) was right; its stated MECHANISM was already history. I published the conclusion and
+not the reason.
+
+(b) The brief named the surviving `*` occupants as *"the head ⊗ bulk moment product until
+6.2c; the trace/spatial-moment products"*. `[M]` mine, AST `BinOp(Mult)` over
+`orpheus/**/*.py` whose unparsed source names a space/head/basis: **7 hits, 4 space
+products, ALL harmonic/moment** — `harmonic_frame.py:484` and `:491`, `_bases.py:436` and
+`:913`; the other three are `derivations/` arithmetic. **There is no trace-space `*`
+product.** I published the measured set and dropped the brief's phrase.
+
+⟹ same shape as L-096: a brief's list is a classification and it can be wrong. The cheap
+instrument here was an AST census, not a grep — `*` is unspellable as a symbol.
+
+### ⭐⭐ (3) THE FINDING: the surplus was a paragraph CS4b falsified, sitting in the section I had to edit
+
+`spaces.rst` carried, on the nodal/modal `has_coordinate_cone` table:
+
+> `[M]` **the refusal has no production witness yet, deliberately.** The only axis mint in
+> `orpheus/` today is `MaterialMesh.bulk_space`, whose factors are both `NODAL`. … The arm
+> becomes production-reachable when CS2 mints the harmonic axis.
+
+**Both halves false**, and *neither by 6.2a*:
+
+* `[M]` AST CALL sites (not textual mentions — `material_mesh.py:412` is a docstring) of
+  `of_axes` in `orpheus/`: **7**, not 1.
+* `[M]` the `False` row HAS a production occupant: `SNMesh.angular_trial_space`
+  (`augmented_mesh.py:1247`) appends `scheme.moment_axis(...)` — `kind=BasisKind.MODAL` at
+  `transport/spatial/scheme.py:1726` — to an axis-built base when the scheme is
+  multi-moment, and (walking `DiscretizationSchemeBase.__subclasses__()` recursively)
+  `LinearDiscontinuous.is_multi_moment` is `True`, `DiamondDifference`'s `False`.
+
+⟹ **a docs pass for item N is where item N−k's un-swept rot surfaces, and the trigger is
+proximity, not predicate** — I found it only because my `of_axes`-closure sentence was a
+near-twin of that paragraph's and I went to align vocabulary. (L-072/L-075's "a phase that
+lands with no docs pass leaves its rot for the NEXT phase's sweep", now with the mechanism
+named: the *next* sweep discovers it when it edits an ADJACENT sentence.)
+
+⚠ **And the discipline that kept the repair honest: I measured the OCCUPANT, not the
+FIRING.** An axis-built space with a MODAL factor exists in production; whether any
+consumer asks `has_coordinate_cone` of it is a *different* census. The page now says that
+in one clause instead of upgrading the claim — vv #29's not-run/no-consumer distinction,
+applied to prose.
+
+### ⭐ (4) A `[M]` exposure COUNT the carve moved, and the predicate that makes it reproducible
+
+`spaces.rst`'s *"an empty weights slot no longer means Euclidean"* block carried
+*"198 lines across 52 files … 20 are `is None`/`is not None` branches and only **three**
+are production — all three inside `space.py`"*. `[M]` re-measured: **221 / 57 / 28 /
+four**. I published mine WITH the filter (the 28 *includes prose lines*; the four are
+*branches*), because my own first grep counted a docstring line as a branch.
+
+⭐ The honest gloss took one extra check: the fourth branch is a change of **SPELLING**,
+not of exposure — `[M]` at `77a12286` the builder funnelled a dense-slot leaf and an
+axis-built factor through ONE local `w is not None` test (the latter via the densifier),
+where the arms are now separate. I had first written "the fourth branch is genuinely new"
+and retracted it against `git show HEAD:` before publishing.
+
+### ⭐ (5) A roadmap row's PREDICTED MECHANISM was refuted by its own landing — and that is the row's best content
+
+The row read *"CS2. The legacy `*` path … its own gates live in a separate test module so
+the retirement is a **file-level move**."* `[M]` from `git diff -- tests/`: nothing moved.
+`test_space_algebra.py`'s two dense-slot rows and `test_space_of_axes.py`'s mixed-product
+third leg were **re-keyed in place** — each still asserts the same outer product, now as
+`tp.apply_metric(...)` instead of as a stored tensor — and the new band lives in a third
+module. ⟹ **a ✅ LANDED row is not a tense flip when the row also predicted a MECHANISM:
+say which half landed and which was refuted.** *"A gate that pins behaviour migrates with
+the behaviour; it does not travel with a file"* is the sentence a future reader needs, and
+it only exists because the landing contradicted the plan.
+
+### ⭐ (6) The xref bug only the IMPORT gate could see, and the `hasattr` trap under it
+
+I wrote `:attr:`Solution.scalar_flux <orpheus.numerics.solution.Solution.scalar_flux>``.
+`[M]` there is no `orpheus.numerics.solution` — it is `orpheus.sn.solution`. `-W` renders a
+dead Python-domain role as plain text, silently. ⚠ And the corrected target ALSO fails a
+naive check: `hasattr(Solution, "scalar_flux")` is **False**, because it is a dataclass
+FIELD with no default — the L-076 ladder (`hasattr` → `dataclasses.fields` → `self.x=`
+across `__mro__` → construct) is what resolves it, and the corpus's own
+`solver.rst:649` confirms the spelling.
+
+### ⭐ (7) `**` PARITY is a usable no-build gate — once you strip literals
+
+Raw `**` count on `spaces.rst` went 960 (even) → 999 (**odd**), which reads as an
+unbalanced bold run. `[M]` the culprit is `` ``orpheus/**/*.py`` `` — a `**` inside an
+inline literal, not a markup token. Stripping ``…`` and `:math:`…`` first gives EVEN → EVEN
+on all three files. ⟹ **strip literals and math before any markup-parity check**, or the
+gate cries wolf on the one construction a docs pass about globs is guaranteed to add.
+
+⚠ Sibling, re-confirmed: the naive `\*\*(.+?)\*\*` + `re.S` "role inside bold" probe is
+**useless** — it pairs one run's CLOSING `**` with the next run's OPENING one and reports
+**132** hits on a clean file. The gate that works is L-094's precise one: `\*\*:[a-z]+:`` (a
+role opening with NO separator after `**`), plus `` \*\*`` `` / `` ``\*\* `` and `` `{3,} ``.
+All three read **0** here.
+
+### Gates (no Sphinx build — the main agent runs the single pre-commit build)
+
+| gate | result |
+|---|---|
+| docutils permissive parse, error-SET diff pre-vs-post, 3 files | **0 / 0** each |
+| role-after-`**` · bold-abuts-literal · 3+ backticks (ADDED lines) | **0** |
+| `**` parity outside literals/math, pre-vs-post | EVEN → EVEN ×3 |
+| `:ref:` / `:eq:` vs corpus label set; `:doc:` vs filesystem (ADDED) | **0** dead |
+| python xrefs IMPORT-resolved (ADDED) | **23 live / 0 dead** |
+
+### Reported, not edited
+
+`tests/numerics/test_space_of_axes.py:244` still names `FunctionSpace._broadcast_metric` in
+a docstring; the carve updated three other docstrings in that same file and missed it. The
+independence ARGUMENT it makes is intact (and stronger post-6.2a) — only the symbol died.
+
+### Score
+
+| dimension | score | why |
+|---|---|---|
+| Derivation depth | 4 | the entry rule is stated AND witnessed by construction; no new math |
+| Cross-references | 5 | 23 xrefs, all import-resolved; one dead one caught pre-publication |
+| Numerical evidence | 5 | every number carries its configuration; the ladder is CITED, not copied |
+| Failed approaches | 5 | 3 tombstones + a refuted roadmap MECHANISM + 2 surplus retractions |
+| Code traceability | 5 | every claim measured against the live working tree, incl. `git show HEAD:` |
+| Derivation source | n/a | no `derivations/` content in scope |
