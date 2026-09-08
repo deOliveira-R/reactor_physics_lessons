@@ -2861,3 +2861,74 @@ patching the `ClassVar` alone reports MC inert. → `L76h`
   — `[M]` `B.split(SweepSchedule.jacobi(...)).upper.rows` IS the full-inflow mask
   on 4 of 4 geometries (jacobi has `reflect_faces=()` ⟹ `lower_inflow_rows`
   returns `{}` ⟹ every inflow row lands in `upper`). → `L79g`
+
+## CS4c step-6 item 6.2c additions (2026-09-07/08, the axis-built moment head — pre-carve) → `L80`
+
+**§1 (gates that cannot red) / §4 (reference & claim layer).**
+
+- **⭐⭐ Measure an ADJOINT/metric objection on the RANGE OF THE PRODUCER, not on
+  `randn(space.shape)` — a claim about inputs the producer cannot emit is not a
+  claim.** `[M]` the recorded reason for #429 Landing A ("the Parseval end moves
+  Λ's Hilbert adjoint on 10 of 33 rows, the dense-Gram rows") is **5 of 33**,
+  **3 of them DIAGONAL-Gram**, and **0 of 33** on a covariant moment `φ = Mψ`.
+  Mechanism: on a folded rule the σ-odd harmonics are identically zero at every
+  node, so `diag(G) = 0` and the Moore–Penrose `G⁺` PROJECTS them out — slots
+  whose moment is identically zero for every field the rule can analyse. ⟹ for
+  any `.H` claim on a space that is a producer's CODOMAIN, the fixture is
+  `producer(x)`. → `L80a`
+- **⛔ An inherited `[M]` PERCENTAGE with no statistic is unreproducible — replace
+  it with the DRAW-FREE one rather than hunting for the original.** `[M]` "the
+  dressed metric would move `apply_metric` by 96–161 %" matches NO statistic over
+  60 rows (L2 63.5–99.7 %, per-element 0.5–222 %); the `96` is identifiable as one
+  ELEMENT (`|1/(8π) − 1|`). The honest, draw-free statistic for a diagonal-metric
+  swap is the per-element ratio `|p_i/g_i − 1|`; an L2 residual is draw-dependent.
+  Same sentence, second defect: "the per-ℓ ratio is exactly `[(2ℓ+1)/4π]²`" is
+  FAMILY-dependent (the 1-D rules bind a flat Legendre head: `(2ℓ+1)²/(8π)`).
+  → `L80b`
+- **⭐ When a carve only RELOCATES where a measure is stored, simulate it with
+  `dataclasses.replace` pre-carve and claim `array_equal` — but MEASURE it.**
+  `[M]` an axis-built head is constructible today with no production edit, and its
+  `apply_metric`/`inner_product` AND the whole `head * bulk` product (which flips
+  from the `FactoredMetric` arm to axis-threading) are **bit-identical, 0 ULP** —
+  a stronger tier than the sibling item one commit earlier, which honestly
+  measured 2 ULP. → `L80d`
+- **⛔⛔ When an identity flip moves a space's identity from its NAME to its AXES,
+  every fact the NAME was carrying must be re-homed onto the axis — enumerate the
+  class's FIELDS, not the concept.** `[M]` `LegendreSpace.spent_axis` (WHICH `O(2)`
+  axis the fold spent) is today carried only by the name: `from_L(1,"x")` vs
+  `from_L(1,"z")` have `array_equal` weights and go `!=` → **`==`** under a
+  family-generic axis label, and back to `!=` under `harmonic_x`/`harmonic_z`.
+  `Axis._identity_key` excludes `generator`, so provenance cannot rescue it.
+  → `L80e`
+- **⛔ A GUARD can lose its subject to an identity flip.** `HarmonicFrame
+  .moment_space_on` refuses an axes-less space, which is exactly how it refuses a
+  MOMENT space; `[M]` an axis-built moment space is **ACCEPTED**. Its sibling
+  `for_space` still refuses but via a different exception and message. Grep every
+  `axes is None` guard before an axis-building carve. → `L80f`
+
+**§2 (harness discipline).**
+
+- **⛔ Write a battery arm's log with `> file 2>&1`, never `out=$(...); echo "$out"
+  > file`.** `[M]` two of ten arms came back TRUNCATED mid-traceback with a false
+  `FAILED=0`; re-run with direct redirection they read **148** and **73**.
+- **⛔ A `nohup … &` chained AFTER an `until` loop in one tool call never launches
+  when the call is killed at its timeout** — and `pgrep -f <script>` then matches
+  the dead shell's own command line (the heredoc), printing RUNNING. Launch long
+  jobs with `run_in_background: true` and ONE command.
+- **⚠ `vv`#17's control clause, met again:** the intended positive control
+  (doubling the SH convention) reddened **4** while three ordinary arms reddened
+  **148 / 55 / 43**. Name the ordinary arm as the effective control in the table.
+- **⭐ A BRANCH census is the honest retirement instrument.** `[M]` over 4501 rows,
+  452 of the 458 dense-slot-leaf hits in `_tensor_product_factored_metric` ARE the
+  moment head (98.7 %); the residual 6 are hand-built test spaces. ⟹ "the branch
+  dies" is FALSE, "its production traffic goes to zero" is TRUE, and the 6 are the
+  work item. → `L80h`
+
+**§3 (config blindness) — a new shape: the gate that refuses the ARM you are about to change.**
+
+- **⛔⛔ Before pricing a change to a diagnostic, check whether the tree's pin of
+  that diagnostic EXCLUDES the arm the change lives on.** `[M]` the SI-trajectory
+  pin refuses a WINDOWED fixture by construction (`:245-247`), and the moment
+  metric is read ONLY on the windowed arm (6 `norm` calls/solve, `apply_metric`
+  **0**) — so a change moving `‖Δφ‖` by 91.6 % and ρ by 3.85 % reddened **4 of
+  4501** rows, all four in the file written to close the gap. → `L80c`

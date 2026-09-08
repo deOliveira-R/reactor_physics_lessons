@@ -10,7 +10,7 @@ here — it is merged archaeology.
 
 ## 1. Lessons — a HOT digest over a COLD archive (READ the digest at START)
 
-- **[Lessons — hot digest](lessons.md)** — ~1700 lines. One imperative rule per
+- **[Lessons — hot digest](lessons.md)** — ~2900 lines. One imperative rule per
   entry, grouped by behavioral family (gates that cannot red · harness discipline ·
   config blindness · reference & claim layer · tolerance · carve archetypes ·
   snapshots & exactness · pure-math primitives). **Read this file whole, every
@@ -19,10 +19,10 @@ here — it is merged archaeology.
   closes** — `L3`'s "no SN MMS exercises `q.boundary ≠ 0`" was true when written,
   the §4.6 fix landed, and the stale entry then generated a whole phase brief for
   work already done (`L40a`).
-- **[Lessons — cold archive](lessons_archive.md)** — ~8300 lines, sections L1–L72,
+- **[Lessons — cold archive](lessons_archive.md)** — ~9900 lines, sections L1–L80,
   append-ordered. The war stories, measured numbers, `file:line` detail and
   per-fixture tables. **Open ONE section at a time, only when the digest's pointer
-  says the detail matters.** Never read it whole — that is ~48K tokens.
+  says the detail matters.** Never read it whole — that is ~55K tokens.
 - NO lesson content is inlined here. The digest is the index over the archive;
   this file is the index over everything else. New lessons: add the RULE to the
   digest (with its `→ LNN`) and the war story as a new archive section.
@@ -33,7 +33,8 @@ here — it is merged archaeology.
 each here — name, terminal status, pointer. Reconcile every "unmerged" claim against git
 first. Cross-transferable rulings are already in `lessons.md`; nothing else belongs here.
 
-- **CS4c step 6 — the CS2 residue: identity, metric, carrier guard, reflect verbs** — ⏹ PLAN + 4 ANCHOR FILES DELIVERED 2026-09-07, PRE-carve (`scratch/_step6/test_architect_verification_plan.md`, 1077 lines; **55 rows landed green**, pyright 0; 10-arm battery over 5550 rows). ⛔⛔ TWO BLOCKING rulings: the F1 `require_member` ruling names a SHAPE and a SEMANTICS no one signature satisfies; the factored-metric arm is UNREACHABLE from the factors (`axes=None` + dense slot + `metric=None` on 8 of 8 rows). 10 hazards, 6 open rulings. → **`L79`**
+- **CS4c step 6 item 6.2c — the angular moment head becomes AXIS-BUILT (and the metric FORK)** — ⏹ PLAN + 3 ANCHOR FILES DELIVERED 2026-09-08, PRE-carve (`scratch/_step6/test_architect_verification_plan_6_2c.md`, 736 lines; **183 rows landed green / 2 skipped**, pyright 0; 19 probes, 10-arm battery over 4501 rows). ⭐⭐ THE FORK measured for the user's ruling: continuum breaks Parseval **0 of 33** (ratio 3.41–158) vs dressed **33 of 33**; `Λ.H = Λᵀ` on a PHYSICAL moment **33/33 under BOTH** (the "10 of 33 dense-Gram" reason is REFUTED — 5, 3 of them DIAGONAL, 0 on-range); the converged flux is **bit-identical either way** and only the SI diagnostic moves (91.6 % / ρ 3.85 %) — and it was **UNGATED** (the fork's battery arm reds 4 of 4501, all in the new pin). ⛔⛔ THREE blocking facts the brief lacked: a dense Gram cannot live on an axis-built space (17/75 rows DENSE); `truncated()` loses the axes; a family-generic axis LABEL collapses `LegendreSpace(x)`≡`(z)`. 10 hazards, 6 open rulings. → **`L80`**
+- **CS4c step 6 (items 6.1–6.5) — the CS2 residue: identity, metric, carrier guard, reflect verbs** — ⏹ PLAN + 4 ANCHOR FILES DELIVERED 2026-09-07, PRE-carve (`scratch/_step6/test_architect_verification_plan.md`, 1077 lines; **55 rows landed green**, pyright 0; 10-arm battery over 5550 rows). ⛔⛔ TWO BLOCKING rulings: the F1 `require_member` ruling names a SHAPE and a SEMANTICS no one signature satisfies; the factored-metric arm is UNREACHABLE from the factors (`axes=None` + dense slot + `metric=None` on 8 of 8 rows). 10 hazards, 6 open rulings. → **`L79`**
 - **#448 — the eigenvalue finalize returns a flux that solves the equation it reports** — ⏹ **R2 COMPLETE 2026-09-06, POST-carve** (carve landed as option B, uncommitted on `f75a9e59`). Gates: `tests/sn/solve/test_eigenvalue_finalize_reconstruction.py` **86 rows** (+`cart2d_gs` G-S arm, +`TestTheReturnedTrace` = R1's owed gate, +the G-S splitting class) and **NEW** `tests/numerics/test_fixed_point_step.py` (8 rows) — `[M]` **94 passed / 52.9 s**, pyright 0; 32 anchors in `tests/sn/_data/finalize_reconstruction_448/` (28 pre-carve + 4 post-carve) ⚠ **STILL UNTRACKED**. Battery `scratch/_448/battery_r2.{py,sh}` 12 arms RUN; memo `scratch/_448_verification_plan.md` §12. ERR-083 MINTED. ⭐⭐ `φ = ∫ψ dΩ` is the DEFINITION — a claim layer that needs no reference. ⛔⛔ Four R2 findings: the phase hook LEAKED (its own positive control caught it); a declared blindness named the wrong symbol AND its mutation diverged the solve; a two-ended defect needs two arms; `dead_references` on an uncommitted tree reports graph staleness. OPEN: R3 (G3c) with the user; System-B ψ½ still ungated. → **`L78`**
 - **CS4c step 5 — each binding acts through the body its ends select** — ⏹ PLAN DELIVERED 2026-09-04, PRE-carve (`scratch/cs4c_step5_verification_plan.md`; extends the older plan's §11.6 3-arm skeleton into **11 gate classes + 18 battery arms**; scopes `[M]` core **92.75 s** / +windowed **153.77 s** / adjoint+ERR-082 **86.2 s**; predicted **11142 → ≈11206**, xf 66 unchanged). ⛔⛔ **BLOCKING O-1**: the moment composite's interior has `axes is None`, so the flagship moment-domain sibling is UNCONSTRUCTIBLE as designed (`_scalar_interior_space` raises; read it off the CODOMAIN). ⛔⛔ **O-2/F-2**: the done-when AST predicate is LEXICAL and 3 carrier parses live one frame out. 6 open rulings, 8 findings. → **`L77`**
 - **#426 — the (n,2n) channel keeps its angular distribution** — ⏹ PLAN + 5 DRAFTS DELIVERED, PRE-carve (`scratch/_426_{verification_plan.md,draft_test_be_reflected.py,draft_test_tape_pin.py,draft_test_h5_roundtrip.py,draft_test_role_ast.py,draft_test_diffusion_n2n.py}`; **41 rows, 22 RED today** = the §6c red-before, pyright 0; predicted +89 → 11096, 54 MEASURED / 34 design / 1 corpus-coupled). ⛔⛔ **BLOCKING ruling O-1**: 2 of 13 isotopes have `sig2.nnz = 0`, so a two-list clamp forces P0 on every water-bearing solve (`[M]` +5787 pcm-relative). 5 open rulings, 17 hazards. → **`L76`**

@@ -9718,3 +9718,153 @@ an absolute `atol` tracks the data magnitude and is not draw-stable.
   `.tobytes()`, so a structural `__eq__` through `Axis` never reaches
   `DiscreteMeasure.__eq__` (which still RAISES) — the CS2 hazard is NOT on
   step 6's path.
+
+---
+
+## L80 — CS4c step 6 item 6.2c, "the angular moment head becomes axis-built" (plan + 3 anchor files DELIVERED 2026-09-07/08, PRE-carve; `main` @ `79d2944a`, tree clean)
+
+Memo `scratch/_step6_2c/../_step6/test_architect_verification_plan_6_2c.md` (736 lines);
+19 probes + 5 plugins + a 10-arm battery over 4501 rows; three NEW test files landed green
+(**183 passed / 2 skipped**, pyright 0).
+
+### L80a — the FORK, and the discriminating measurement nobody had taken
+
+Two moment-head spaces exist in the tree and are metric-different: the hub's
+(`SNMesh.moment_space` → `frame.basis.space`, the CONTINUUM Gram `4π/(2ℓ+1)`) and the
+frame's face codomain (`HarmonicFrame.moment_space_on` → `frame.basis_space`, the PARSEVAL
+`G⁻¹`/`G⁺`). They coexist because `(name, shape)` identity is metric-BLIND, and the
+analysis face STAMPS the returned moment field with the DRESSED space while the sweep and
+the boundary guard compare against the CONTINUUM one. Making the head axis-built puts the
+measure into the identity ⟹ the two separate ⟹ `_admit` refuses the windowed arm.
+
+`[M]` 33 (rule, L) rows:
+
+| | continuum | dressed |
+|---|---|---|
+| Parseval `‖Mψ‖² = ‖ψ‖²_W` | **0 of 33** (3.41 … 157.91) | **33 of 33** |
+| `Λ.H = Λᵀ` on a PHYSICAL `φ = Mψ` | 33/33 | **33/33** |
+| `Λ.H = Λᵀ` on an arbitrary head draw | 33/33 | 28/33 |
+| converged flux / residual / `n_inner` | — | **bit-identical** |
+| the SI increment norm | — | moves **91.6 %**; ρ **3.85 %** |
+
+⭐⭐ **The move that settled it: re-run the adjoint objection on the RANGE OF THE PRODUCER
+instead of on a raw draw.** The recorded reason for #429 Landing A ("the dressed end would
+move Λ's adjoint on 10 of 33 rows, the dense-Gram rows") is `[M]` **5 of 33**, **3 of them
+DIAGONAL-Gram**, and **0 of 33** on any covariant moment `φ = Mψ`. The mechanism is a
+PROJECTION: on a folded rule the σ-odd harmonics are identically zero at every node, so
+`diag(G) = 0` there and `G⁺` zeroes them — slots whose moment is identically zero for every
+field the rule can analyse. ⟹ *an objection to a metric measured on inputs the producer
+cannot emit is not an objection.* Generalise: for any `.H`/adjoint claim on a space that is
+the CODOMAIN of a producer, measure on `producer(x)`, not on `randn(space.shape)`.
+
+### L80b — an inherited `[M]` percentage with no statistic is unreproducible, and the honest replacement is the DRAW-FREE one
+
+The same docstring carries *"the dressed metric would move `apply_metric` by 96–161 %"* —
+no statistic, no fixture, no denominator. `[M]` **no statistic reproduces 161 %**: the L2
+movement spans 63.5 … 99.4 % over the 33 rows and tops out at 99.7 % over 60 rows at
+`L ≤ 4`; the per-element movement spans 0.5 … 100.0 % (0.5 … 222 % at `L ≤ 4`). The `96 %`
+half is identifiable — it is the ℓ = 0 slab-Legendre element, `|1/(8π) − 1|`. ⟹ publish the
+**per-element ratio `|p_ℓ/g_ℓ − 1|`**, which is EXACT and draw-free, never an L2 residual.
+And a second inherited half-truth in the same sentence: *"the per-ℓ ratio is exactly
+`[(2ℓ+1)/4π]²`"* is FAMILY-dependent — on the 1-D rules the frame binds the flat Legendre
+head and the ratio is `(2ℓ+1)²/(8π)`. The claim predates the #429 family split.
+
+### L80c — the fork's whole movement was UNGATED, and the battery proved it in one arm
+
+`[M]` the tree's only SI-diagnostic pin (`tests/numerics/test_si_diagnostic_trajectory.py`)
+REFUSES a windowed fixture by construction (`:245-247`), and `apply_metric` is called
+**0** times on a moment space (vv#29 census; the only reader is `norm`, 6×/solve, via
+`solver.py:3823 ← iteration.py:801 ← field.py:379`, and it is DIAGNOSTICS ONLY — the stop
+rides the residual). So the battery arm that models the fork's dressed ruling reddens
+**4 of 4501 rows and all four are the file this dispatch wrote**. ⚠ Read that through
+`vv`#17's red-set-by-IDENTITY clause: it is NOT "a mirror, not a gate", because the consumer
+EXISTS and every other gate is blind **for a measured reason**. The pre-carve consumer
+census is the evidence; the count alone cannot tell the two readings apart (`L73l`).
+
+### L80d — an axis-built head is CONSTRUCTIBLE today, and the whole carve is BIT-IDENTICAL
+
+`replace(head, inner_product_weights=None, axes=(Axis(label, head.shape, w, kind=MODAL),))`
+builds exactly what 6.2c will mint — same class, name, shape, `L` — with **no production
+edit**, so the equivalence is measurable pre-carve. `[M]` head `apply_metric` /
+`apply_inverse_metric` / `inner_product`: **bit-identical**; `head * bulk` flips from the
+`FactoredMetric` arm to the AXIS-threading arm (3 axes, `metric is None`) and its
+`apply_metric` is **bit-identical, 0 ULP**. ⟹ the acceptance tier is `array_equal`, not a
+`nulp` band (contrast 6.2a's dense→factored move, which measured 2 ULP). ⭐ The move:
+*when a carve relocates WHERE a measure is stored without changing the arithmetic's
+association, simulate it with `dataclasses.replace` and claim bit-identity — but MEASURE it,
+because the sibling item one commit earlier legitimately could not.*
+
+### L80e — ⛔⛔ THREE blocking structural facts the brief did not name
+
+1. **A dense Gram cannot live on an axis-built space.** `__post_init__` refuses
+   `axes` + `metric`; a DENSE-Gram frame's dressed head is exactly `weights=None` +
+   `DenseMetric`. `[M]` **17 of 75** shipped (rule, L) rows are DENSE, **2 at `L ≤ 2`**
+   (`gauss_legendre(2)` L=2, `folded_product(2,4)` L=2 — both registered, constructible
+   rules). The "obvious" workaround (a counting axis, object dropped) moves `apply_metric`
+   by **68.7 %** / **1784 %**. ⚠ And the brief's framing (*"axes win would silently IGNORE
+   a DenseMetric"*) is half-refuted: the CONSTRUCTION guard makes it unspellable today; the
+   silent-ignore is what a RELAXED guard would create (`[M]` `max|Δ| = 1.460e+01` on a
+   bypassed probe).
+2. **`truncated()` re-mints through `from_L` and LOSES the axes.** `[M]`
+   `axis_head.truncated(L−1).axes is None`; it is `==` the NAME mint and `!=` the axis
+   mint. It is a §6b member no construction census returns — its call line names no head
+   class. And it must RE-MINT, not slice: `[M]` the dressed head at `L` restricted to the
+   `L−1` block is `array_equal` to the `L−1` head on every DIAGONAL row, but the Gram
+   VERDICT can flip with `L` (`folded_product(2,4)`: DENSE at 2, DIAGONAL at 1), where a
+   slice is undefined.
+3. ⭐⭐ **A family-generic axis LABEL collapses two physically different spaces.**
+   `LegendreSpace` carries `spent_axis` (WHICH `O(2)` axis the fold spent) and today the
+   two are separated by their NAMES. `Axis._identity_key` is
+   `(label, shape, kind, weights bytes)` and EXCLUDES the generator, so `[M]`
+   `from_L(1,"x")` and `from_L(1,"z")` — weights `array_equal` **True** — go from `!=`
+   today to **`==`** axis-built under the label `"harmonic"`, and back to `!=` under
+   `harmonic_x`/`harmonic_z`. ⟹ **when an identity flip moves a space's identity from its
+   NAME to its AXES, every fact the NAME was carrying must be re-homed onto the axis** —
+   enumerate the head classes' non-inherited FIELDS (`dataclasses.fields`) and ask, per
+   field, whether it was in the name.
+
+### L80f — two guards whose SUBJECT the carve removes
+
+* `HarmonicFrame.moment_space_on` refuses an axes-less space, which is exactly how it
+  refuses a MOMENT space. `[M]` an axis-built moment space is **ACCEPTED** and returns a
+  plausible-looking product. `for_space` still refuses — but via a DIFFERENT exception and
+  message (`generator_as`: "needs the generating Quadrature"), so its witness moves too
+  (`L60f`'s family).
+* `has_coordinate_cone` flips `None → False` on the moment space. `[M]` **0 production
+  call sites** of `cone_violations` (47 sites, 12 in `orpheus/` all definitions/prose, 35
+  test calls, none on a moment field) ⟹ inert, and the battery's `C1` arm measured it (5
+  reds, 4 pre-existing) rather than the plan asserting it.
+
+### L80g — battery + harness notes
+
+* Arms and reds over 4501 rows (`tests/numerics tests/transport tests/sn/mesh` + the new
+  windowed pin, ≈ 48 s/arm): `none` 0 · `A1` head-measure-dropped 11 · `A2`
+  head-measure-is-Parseval 55 · **`A3` frame-dressing-reverted 148** · `A4`
+  axis-identity-drops-weights 18 · `A5` per-axis-metric-skips-an-axis 43 · **`B1` the
+  fork's dressed hub 4** · `B2` `*`-factors-reversed 73 (+4 err) · `C1` cone-claimed 5 ·
+  `PC` `metric_per_ell` doubled **4**.
+* ⚠ **`PC` reddened FEWER than three ordinary arms** ⟹ `vv`#17's control clause: the
+  effective positive control is **`A3` (148)**. Say so in the table rather than lowering
+  the bar.
+* ⚠ **Two arms came back with TRUNCATED logs and a false `FAILED=0`** because the driver
+  captured through `$( … )`; re-run with direct file redirection they read 148 and 73.
+  The `lessons` §2 rule ("read arm output from a FILE") was met again — write the log with
+  `> file 2>&1`, never `out=$(...); echo "$out" > file`.
+* ⚠ A `nohup … &` chained after an `until` loop inside ONE tool call **never launches** if
+  the call is killed at its timeout: the loop ran, the launch line did not, and
+  `pgrep -f battery.sh` matched the dead shell's own command line (the heredoc), reporting
+  RUNNING. Launch long jobs with `run_in_background: true` and ONE command.
+
+### L80h — the retirement list, measured by branch census
+
+`[M]` `plug_branch.py` over 4501 rows: **481** calls to `_tensor_product_factored_metric`;
+factor branches `axes:FunctionSpace` 453 · `DENSE-SLOT-LEAF:LegendreSpace` **317** ·
+`DENSE-SLOT-LEAF:SphericalHarmonicSpace` **135** · `euclid` 87 ·
+`DENSE-SLOT-LEAF:FunctionSpace` **6** · `metric-object` **2**. ⟹ **452 of the 458
+dense-slot-leaf hits ARE the moment head (98.7 %)**; after 6.2c the branch survives only
+for 6 hand-built test spaces, and on a 2-D windowed solve the builder drops **5 → 0** calls.
+`MomentHead`, `find_factor` and `factors[0]` all **survive** (the head keeps its class, and
+`from_factors` stores `factors` on both arms) — they die only under an `of_axes` mint,
+which `[M]` also changes the product's NAME (`spherical_harmonic_space ⊗ …#18588b58` →
+`harmonic(2, 3)*…#9e2c57a1`) and therefore the `FullFieldSpace` digest that folds it
+(`[M]` 3 of 4 `from_blocks` calls on a windowed solve carry a moment interior).
