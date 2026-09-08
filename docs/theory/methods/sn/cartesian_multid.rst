@@ -3932,10 +3932,20 @@ are the **same** uniform sweep-and-reflect loop — there is *no*
        (:class:`~orpheus.sn.loss_representation.sweep_graph.OctantLabel`), in quadrature
        sweep order.
      - After each group, its reflective **outgoing** faces are
-       re-reflected (the face-restricted :math:`-B`,
-       :meth:`SNBoundaryOperator.reflect_into_inflow`), so a *later*
-       group reads the **fresh** current-iterate inflow — the
-       :math:`(L+C-B_{\rm lower})^{-1}` forward substitution.
+       re-reflected (the row-restricted :math:`-B`,
+       :meth:`SNMaskedBoundaryOperator.reflect_rows_inplace
+       <orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace>`),
+       so a *later* group reads the **fresh** current-iterate inflow —
+       the :math:`(L+C-B_{\rm lower})^{-1}` forward substitution.
+       ⛔ This cell named ``SNBoundaryOperator.reflect_into_inflow``
+       until 2026-09-07, and that was **already wrong when it was
+       written**: the reified :math:`M` has bound
+       ``reflect=self.lower.reflect_rows_inplace`` since the #226
+       taxonomy step-2 carve (``cc293ef3``, 2026-07-01 —
+       :ref:`si-gauss-seidel-reification`), which is also when the
+       ADDITIVE semantics replaced the dissolved resolvent's whole-face
+       assignment.  The verb the cell named retired at CS4c step 6
+       item 6.5 (2026-09-07) with zero production callers.
 
 In the Gauss-Seidel schedule, octants swept **before** their
 specular partner keep the lagged seed (the cyclic :math:`B_{\rm
@@ -4075,39 +4085,82 @@ subspace), and it leaves the upper (lagged) rows carrying the seed the
 splitting :math:`\psi_{k+1}=M^{-1}(q+B_{\rm upper}\psi_k)` says they carry
 — the returned trace **is** the splitting's honest iterate.
 
+.. _gs-whole-face-overwrite-rejected:
+
 .. admonition:: What was tried and rejected — the whole-face-overwrite reflect
    :class: warning
 
    The dissolved resolvent used a whole-face **ASSIGNMENT**
-   (:math:`\psi.{\rm inflow} \leftarrow B\cdot\psi.{\rm outflow}`, the
-   verb now named
-   :meth:`SNBoundaryOperator.reflect_inflow_inplace <orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_inflow_inplace>`).
+   (:math:`\psi.{\rm inflow} \leftarrow B\cdot\psi.{\rm outflow}`, carried
+   until 2026-09-07 by the verb ``SNBoundaryOperator.reflect_inflow_inplace``).
    As the in-sweep row update it is **wrong**: it *dropped*
    :math:`y_{\rm row}` and stamped fresh values onto rows the splitting
    defines as **lagged**.  It was benign in production only because a
    reflective inflow row's seed is zero there — but O(1)-wrong as a
    general inverse, which is precisely the round-trip defect the old
-   pairing masked.  The whole-face assignment verb is **retained** (single
-   source of truth via ``_reflect_trace``) for callers whose inflow is
-   *wholly recomputed* each sweep and is not a solved unknown of a linear
-   row.
+   pairing masked.
+
+   ⛔ **Until 2026-09-07 this paragraph closed with a retention ruling,
+   and the block below it with that ruling's rationale.**  Both are quoted
+   verbatim here, because the reasoning they record is sound and is what a
+   future reader must not re-derive from scratch:
+
+      "The whole-face assignment verb is retained (single source of truth
+      via ``_reflect_trace``) for callers whose inflow is wholly recomputed
+      each sweep and is not a solved unknown of a linear row."
+
+      "The verb stays because the argument above is about what a whole-face
+      assignment *means*, not about who happens to call it — and because a
+      sweep-tier gate that reflects between sweeps needs exactly this
+      semantics."
+
+   What follows is why CS4c step 6 item 6.5 overrode them.
 
    ⛔ **Both of the production callers it was retained for are gone**, and
    the last one went at #448 (2026-09-06): the direct fixed-source SI loop
    routes through the variadic driver (Wave O O.2a), and the eigenvalue
    finalize is now one step of that same driven map, in which :math:`B` is
    a gain (:ref:`sn-finalize-one-step`).  ``[M]`` by AST,
-   :meth:`SNBoundaryOperator.reflect_inflow_inplace
-   <orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_inflow_inplace>`
-   has **zero** call sites in ``orpheus/`` (its ψ½ sibling
-   ``reflect_corner_inplace`` retired outright at #448 — no consumer
-   anywhere); the surviving consumer is the sweep-tier gates'
-   inter-sweep helper (``tests/sn/_test_helpers.py::reflect_outflow_into_inflow``),
-   which is where the module-level ``_reflect_outflow_into_inflow`` moved.
-   The verb stays because the argument above is about what a whole-face
-   assignment *means*, not about who happens to call it — and because a
-   sweep-tier gate that reflects between sweeps needs exactly this
-   semantics.
+   ``SNBoundaryOperator.reflect_inflow_inplace`` had **zero** call sites in
+   ``orpheus/`` (its ψ½ sibling ``reflect_corner_inplace`` retired outright
+   at #448 — no consumer anywhere); its last consumer was the sweep-tier
+   gates' inter-sweep helper
+   (``tests/sn/_test_helpers.py::reflect_outflow_into_inflow``), which is
+   where the module-level ``_reflect_outflow_into_inflow`` had moved.
+
+   ⛔ **CS4c step 6 item 6.5 (2026-09-07) retired the verb — and its
+   trace-only leaf** ``reflect_into_inflow`` **with it**, since the façade's
+   body *was* the leaf.  The retained-for-semantics argument above is
+   correct about the **semantics** and wrong about the **surface**: it
+   treated the two as one thing.  The assignment semantics do not need a
+   second verb, because *zero the inflow rows, then reflect ADDITIVELY on
+   the full-inflow mask* is the same map.  The Jacobi split's ``upper``
+   half IS that mask (``[M]`` 4/4 geometries — a Jacobi schedule reflects
+   no face in-sweep, so ``lower`` is empty and ``upper`` carries every
+   inflow row of every face), and the pair reproduces the retired
+   assignment **bit-for-bit** on a NON-zero-inflow buffer (``[M]``
+   ``np.array_equal`` on **40/40 seeds × 4/4 geometries**; *dropping* the
+   zeroing moves the answer by :math:`O(1)`, which is the positive
+   control that the assignment-vs-additive difference is real and not a
+   zero-inflow artefact — its magnitude is draw-dependent, so the gate
+   asserts a floor rather than a value).
+   The inter-sweep reflect therefore still exists, spelled on production's
+   own live verb, at
+   ``tests/sn/_test_helpers.py::reflect_outflow_into_inflow`` — no
+   production surface was added, and one was removed.
+
+   ⚠ One behaviour moved with the retirement rather than dying with it.
+   ``reflect_rows_inplace`` used to filter its ``faces`` argument against
+   its own rows *before* calling the trace core, so a face that is not a
+   boundary face of the mesh was silently dropped (4/4 geometries), while
+   the retiring trace-only verb raised through ``_reflect_trace``'s guard.
+   That guard was reachable from no other public surface, so item 6.5 moved
+   the refusal INTO
+   :meth:`SNMaskedBoundaryOperator.reflect_rows_inplace
+   <orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace>`,
+   ahead of the row filter and with a public witness: an unknown face is
+   now a ``ValueError`` naming the mesh's available faces on the verb
+   production actually binds.
 
 The source-subspace domain honesty note
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -871,35 +871,64 @@ class TestScheduleSplitPartition2D:
 
 
 class TestFaceRestrictedReflect:
-    """Phase 3 sub-step 2: ``reflect_into_inflow(faces=...)`` restricts the
-    trace reflection to a face subset — the octant-group Gauss-Seidel schedule
-    reflects ONLY the just-swept group's reflective outgoing faces between
-    octant-group sweeps (the ``(L+C−B_lower)⁻¹`` forward substitution).
+    """The face-restricted reflect — since CS4c step 6 item 6.5 spelled on the
+    ONE live verb, ``SNMaskedBoundaryOperator.reflect_rows_inplace`` through
+    the Jacobi split's ``upper`` half (every inflow row of every face): the
+    octant-group Gauss-Seidel schedule reflects ONLY the just-swept group's
+    reflective outgoing faces between octant-group sweeps (the
+    ``(L+C−B_lower)⁻¹`` forward substitution), and a face subset must be the
+    EXACT restriction of the whole-trace reflect.
 
-    ``B`` is block-diagonal over faces, so the subset MUST be the EXACT
-    restriction: the per-face inflow output is identical whether reflected
-    alone or as part of the whole trace, and the per-face reflects PARTITION
-    the whole-trace reflect (no coupling dropped, no term double-counted).
+    The restriction is exact because the whole INPUT trace stays in scope —
+    NOT because ``B`` is block-diagonal over faces (since B3.4c it is not: a
+    quotient law reads its partner's half-trace). Until item 6.5 this class
+    read the retired trace-only ``reflect_into_inflow(faces=...)``; its
+    ``faces=None ≡ all faces`` claim died with that verb (the live verb has
+    no default), and its unknown-face refusal MOVED into the live verb.
     """
 
+    @staticmethod
+    def _full_inflow_mask(sn: SNMesh):
+        from orpheus.sn.loss_representation.sweep_schedule import SweepSchedule
+
+        return SNBoundaryOperator(sn).split(
+            SweepSchedule.jacobi(sn.ndim, sn.quad.octants),
+        ).upper
+
+    @staticmethod
+    def _inflow_zeroed(sn: SNMesh, boundary: AngularBoundaryFlux) -> AngularBoundaryFlux:
+        """A copy whose INFLOW rows are zero and whose OUTFLOW rows (the
+        reflect's input) are the original's — the additive reflect then reads
+        as the assignment."""
+        out = boundary.copy()
+        trace = sn.angular_trace
+        for face in out.layout.faces:
+            out.face_view(face)[trace.inflow_indices_for_face(face)] = 0.0
+        return out
+
     def test_subset_reflects_only_selected_faces(self) -> None:
-        """``faces=['xmax']`` emits reflected inflow on xmax and leaves the
-        unselected xmin face untouched (zero)."""
+        """``faces=("xmax",)`` emits reflected inflow on xmax and leaves the
+        unselected xmin face's inflow rows untouched (zero)."""
         sn = _sn("SLB", (BC.reflective, BC.reflective))
-        B = SNBoundaryOperator(sn)
         boundary = _random_state(sn).boundary
-        only_xmax = B.reflect_into_inflow(boundary, faces=["xmax"])
-        full = B.reflect_into_inflow(boundary)  # faces=None -> whole trace
-        xmax_inflow = sn.angular_trace.inflow_indices_for_face("xmax")
+        assert isinstance(boundary, AngularBoundaryFlux)
+        mask = self._full_inflow_mask(sn)
+        trace = sn.angular_trace
+        only_xmax = self._inflow_zeroed(sn, boundary)
+        mask.reflect_rows_inplace(only_xmax, ("xmax",))
+        full = self._inflow_zeroed(sn, boundary)
+        mask.reflect_rows_inplace(full, tuple(full.layout.faces))
+        xmax_inflow = trace.inflow_indices_for_face("xmax")
+        xmin_inflow = trace.inflow_indices_for_face("xmin")
         # Selected face: bit-identical to the whole-trace reflect (the exact
-        # restriction — face-block-diagonal, so xmax's output is independent
-        # of whether xmin was also reflected).
+        # restriction — each target row is written independently from the
+        # same input trace).
         np.testing.assert_array_equal(
-            only_xmax.face_view("xmax"), full.face_view("xmax"),
+            only_xmax.face_view("xmax")[xmax_inflow], full.face_view("xmax")[xmax_inflow],
         )
-        # Unselected face: untouched -> stays zero.
-        assert not only_xmax.face_view("xmin").any(), (
-            "reflect_into_inflow(faces=['xmax']) emitted on the unselected "
+        # Unselected face: its inflow rows stay at the zero they were set to.
+        assert not only_xmax.face_view("xmin")[xmin_inflow].any(), (
+            "reflect_rows_inplace(faces=('xmax',)) emitted on the unselected "
             "xmin face — the restriction is not clean."
         )
         # Sanity: the selected face actually carries non-zero reflected inflow
@@ -907,40 +936,39 @@ class TestFaceRestrictedReflect:
         assert only_xmax.face_view("xmax")[xmax_inflow].any()
 
     def test_subset_partitions_the_whole_trace_reflect(self) -> None:
-        """Single-face reflects sum EXACTLY to the whole-trace reflect — ``B``
-        never couples faces, so the per-face restrictions are a clean partition
+        """Single-face reflects sum EXACTLY (on the inflow rows) to the
+        whole-trace reflect — the per-face restrictions are a clean partition
         (vv L11: catches a face↔face coupling leak that the
         reflect-only-selected test alone would miss)."""
         sn = _sn("SLB", (BC.reflective, BC.reflective))
-        B = SNBoundaryOperator(sn)
         boundary = _random_state(sn).boundary
-        full = B.reflect_into_inflow(boundary)
-        xmin_only = B.reflect_into_inflow(boundary, faces=["xmin"])
-        xmax_only = B.reflect_into_inflow(boundary, faces=["xmax"])
-        np.testing.assert_array_equal(
-            full.values, xmin_only.values + xmax_only.values,
-        )
-
-    def test_faces_none_equals_explicit_all_faces(self) -> None:
-        """The default (``faces=None``) is the whole-trace reflect — identical
-        to passing every boundary face explicitly."""
-        sn = _sn("SLB", (BC.reflective, BC.reflective))
-        B = SNBoundaryOperator(sn)
-        boundary = _random_state(sn).boundary
-        all_faces = list(sn.angular_trace.layout.faces)
-        np.testing.assert_array_equal(
-            B.reflect_into_inflow(boundary).values,
-            B.reflect_into_inflow(boundary, faces=all_faces).values,
-        )
+        assert isinstance(boundary, AngularBoundaryFlux)
+        mask = self._full_inflow_mask(sn)
+        trace = sn.angular_trace
+        full = self._inflow_zeroed(sn, boundary)
+        mask.reflect_rows_inplace(full, tuple(full.layout.faces))
+        xmin_only = self._inflow_zeroed(sn, boundary)
+        mask.reflect_rows_inplace(xmin_only, ("xmin",))
+        xmax_only = self._inflow_zeroed(sn, boundary)
+        mask.reflect_rows_inplace(xmax_only, ("xmax",))
+        for face in full.layout.faces:
+            rows = trace.inflow_indices_for_face(face)
+            np.testing.assert_array_equal(
+                full.face_view(face)[rows],
+                xmin_only.face_view(face)[rows] + xmax_only.face_view(face)[rows],
+            )
 
     def test_unknown_face_raises(self) -> None:
         """A face not on the mesh boundary is a caller error — raise, do not
-        silently skip (illegal states unrepresentable)."""
+        silently skip (illegal states unrepresentable). The refusal moved
+        into the live verb at CS4c step 6 item 6.5: until then
+        ``reflect_rows_inplace`` filtered the face away silently while the
+        retired trace-only verb raised."""
         sn = _sn("SLB", (BC.reflective, BC.reflective))
-        B = SNBoundaryOperator(sn)
         boundary = _random_state(sn).boundary
+        assert isinstance(boundary, AngularBoundaryFlux)
         with pytest.raises(ValueError, match="boundary faces"):
-            B.reflect_into_inflow(boundary, faces=["bogus_face"])
+            self._full_inflow_mask(sn).reflect_rows_inplace(boundary, ("bogus_face",))
 
 
 # ─────────────────────────────────────────────────────────────────────

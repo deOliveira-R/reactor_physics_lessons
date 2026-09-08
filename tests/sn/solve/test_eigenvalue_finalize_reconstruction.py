@@ -345,7 +345,6 @@ from orpheus.numerics.convergence import ConvergenceWarning
 from orpheus.numerics.quadrature import Quadrature
 from orpheus.sn import solve_sn_fixed_source
 from orpheus.sn.solution import Solution
-from orpheus.sn.operators.boundary import SNBoundaryOperator
 from orpheus.sn.solver import (
     InnerSolve,
     SNSolver,
@@ -354,7 +353,11 @@ from orpheus.sn.solver import (
     solve_sn,
 )
 from orpheus.transport.fields.angular_flux import AngularFlux
-from tests.sn._test_helpers import SN_TESTS_ROOT, curvilinear_two_region_mesh
+from tests.sn._test_helpers import (
+    SN_TESTS_ROOT,
+    curvilinear_two_region_mesh,
+    reflect_outflow_into_inflow,
+)
 from tests.sn.regression._regression_assert import assert_regression
 
 # ── The ONE run configuration (the band reads off it; nothing hardcodes) ──
@@ -884,9 +887,13 @@ class TestTheReturnedTrace:
 
     ⚠ **DECLARED BLIND to a wrong reflective LAW — and MEASURED, not
     argued (vv #22, the shared-object axis).**  ``SNBoundaryOperator.apply``
-    (what the gain applies) and ``.reflect_inflow_inplace`` (what this
-    reference applies) are two routes into ONE body: ``_apply_faces`` merely
-    LIFTS the trace-only ``_reflect_trace`` onto the full field, and
+    (what the gain applies) and the sweep-tier helper
+    ``tests/sn/_test_helpers.py::reflect_outflow_into_inflow`` (what this
+    reference applies — since CS4c step 6 item 6.5 the Jacobi split's
+    ``upper`` mask's ``reflect_rows_inplace`` after zeroing the inflow rows;
+    until then the retired ``reflect_inflow_inplace``) are two routes into
+    ONE body: ``_apply_faces`` merely LIFTS the trace-only ``_reflect_trace``
+    onto the full field, the mask's verb calls it directly, and
     ``_reflect_trace`` is where both meet.  So a wrong law moves the gain and
     this reference together and both legs stay green.
 
@@ -941,9 +948,7 @@ class TestTheReturnedTrace:
         sol = _solve(arm_id, order)
         returned = sol.boundary_flux
         reflected = copy.deepcopy(returned)
-        SNBoundaryOperator(sol.mesh).reflect_inflow_inplace(
-            reflected, faces=None,
-        )
+        reflect_outflow_into_inflow(reflected, sol.mesh)
         got = _trace_values(returned)
         want = _trace_values(reflected)
         scale = float(np.max(np.abs(got)))
@@ -953,15 +958,21 @@ class TestTheReturnedTrace:
                 f"zero, so neither leg of this row can discriminate."
             )
         # ``|B·ψ|`` itself — the ACTIVATION datum the partition is asserted
-        # from.  ``reflect_into_inflow`` returns a boundary-only source whose
-        # inflow slots carry ``B·outflow`` and whose outflow rows are ZERO,
-        # so its magnitude is the boundary operator's action alone; reading
-        # ``max|reflected|`` instead would pick up the untouched outflow rows
-        # and read non-zero even where ``B`` is the zero morphism.
-        b_action = SNBoundaryOperator(sol.mesh).reflect_into_inflow(
-            returned, faces=None,
+        # from: the reflected buffer's INFLOW rows carry ``B·outflow`` and
+        # nothing else (the helper zeroes them before the additive reflect),
+        # so their magnitude is the boundary operator's action alone; reading
+        # ``max|reflected|`` over the whole trace would pick up the untouched
+        # outflow rows and read non-zero even where ``B`` is the zero
+        # morphism.  (Until CS4c step 6 item 6.5 this datum came from the
+        # retired boundary-only ``reflect_into_inflow`` source, whose outflow
+        # rows were zero by construction; the exclusion is by INDEX now.)
+        _trace = sol.mesh.angular_trace
+        b_magnitude = max(
+            float(np.max(np.abs(
+                reflected.face_view(face)[_trace.inflow_indices_for_face(face)]
+            )))
+            for face in reflected.layout.faces
         )
-        b_magnitude = float(np.max(np.abs(_trace_values(b_action))))
         residual = float(np.max(np.abs(got - want))) / scale
 
         declared_vacuum = arm_id in _VACUUM_ARM_IDS

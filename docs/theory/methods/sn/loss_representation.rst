@@ -623,11 +623,14 @@ and call ``loss_action(self.sigma, psi)`` directly:
 
    class StreamingCollisionOperator(OperatorSum):
        def apply(self, psi):                         # (L+C)ψ = M(σ)ψ
-           _require_typed_composite("StreamingCollisionOperator.apply", self.sn_mesh, psi)
+           FullField.require_member(
+               psi, mesh=self.sn_mesh,
+               context="StreamingCollisionOperator.apply",
+           )
            return self.loss_representation.loss_action(self.sigma, psi)
 
        def apply_transpose(self, phi):               # (L+C)ᵀφ = M(σ)ᵀφ
-           _require_typed_composite(..., self.sn_mesh, phi)
+           FullField.require_member(phi, mesh=self.sn_mesh, context=...)
            return self.loss_representation.loss_action_transpose(self.sigma, phi)
 
 This is ``coding-elegance`` Pattern 2 (single source of truth): **one**
@@ -635,9 +638,23 @@ This is ``coding-elegance`` Pattern 2 (single source of truth): **one**
 both directions. The composite never asks a leaf for a :math:`\sigma`-bearing
 action it must then undo. The input contract (typed composite + the
 **space-content** invariant — mesh-object identity until campaign 1
-CS4b S3) is itself single-sourced through the module-level
-``_require_typed_composite`` helper that :meth:`StreamingOperator.apply` now
-shares. The multi-D Cartesian *adjoint* rides the same discipline since
+CS4b S3) is itself single-sourced, and *where* it is single-sourced moved
+at **CS4c step 6 item 6.3** (2026-09-07, ``630301c2``): the module-level
+``_require_typed_composite`` helper this pair shared with
+:meth:`StreamingOperator.apply` was promoted onto the CARRIER as
+:meth:`FullField.require_member
+<orpheus.transport.full_field.FullField.require_member>`, so the parse now
+has **five** call sites and one body — :math:`L` and :math:`L+C` in both
+directions, plus :math:`B_a`'s ``_apply_faces``, which until then read
+``psi.interior`` unguarded and leaked a raw ``AttributeError`` on a foreign
+carrier.  Nothing about the contract changed: a ``TypeError`` still names
+the refusing surface and the carrier it wanted, a ``ValueError`` still
+carries the greppable *space-content invariant* vocabulary.  ⚠ The guard is
+tagged ``ELEGANCE-DEBT[guard]`` (`#457
+<https://github.com/deOliveira-R/ORPHEUS/issues/457>`_) — it protects
+today and is not the target state; it retires when every leaf is bound on
+the end it acts on and an alien carrier cannot be typed at all.
+The multi-D Cartesian *adjoint* rides the same discipline since
 #310 C4 (``ScanMarch.loss_action_transpose`` is the row-march reverse — one
 ``loss_action_transpose``, one :math:`\sigma` source, both directions), so
 :meth:`apply_transpose` is correct-by-construction on every registered

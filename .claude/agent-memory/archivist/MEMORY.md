@@ -41,6 +41,9 @@ means merged). **No owed Sphinx pass on merged work.** Landed SN milestones live
 
 **One line per pass. The evidence is in the lesson; `git log --oneline -- docs/` is the index.**
 
+- **CS4c step 6 items 6.3/6.4/6.5** — a promoted helper's old name lives in a doc `code-block`
+  (2026-09-07; 5 `.rst`). A retirement's brief listed the two dead VERBS and missed the helper that
+  MOVED; a published control band was one draw (40 seeds refuted it) → [[lessons-L99]]
 - **CS4c step 6 item 6.2b** — the hub owns the moment space (2026-09-07; 3 `.rst`, +179/−14). A
   table's CAPTION owned the column the brief told me to edit; a "retired" Protocol was
   RE-SURFACED → [[lessons-L98]]

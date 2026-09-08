@@ -44,6 +44,184 @@ them.  Trust ``git``, not this column.
      - Where
    * - in dev
        (2026-09-07)
+     - **A reflect verb with no production caller does not exist — the
+       sweep-tier helper rides the live one** (campaign 1 residue, CS4c
+       step 6 item 6.5).
+       **(1) What the tree carried until this change.**  ``B`` shipped
+       THREE public reflect surfaces over one
+       :meth:`SNBoundaryOperator._reflect_trace <orpheus.sn.operators.boundary.SNBoundaryOperator>`
+       core: the full-field ``apply`` / ``apply_transpose``, a trace-only
+       *leaf* ``reflect_into_inflow`` (bare trace in, boundary-only sink
+       out — no zero-bulk probe), and that leaf's mutating façade
+       ``reflect_inflow_inplace``, a whole-face **ASSIGNMENT**
+       :math:`\psi.{\rm inflow} \leftarrow B\,\psi.{\rm outflow}`.  The
+       last two had lost their production callers at #448 (2026-09-06),
+       when the eigenvalue finalize became one step of the driven
+       iteration — ``[M]`` **0** production call sites each, by AST — and
+       their only remaining consumer anywhere was the sweep-tier gates'
+       inter-sweep helper in ``tests/``.  Meanwhile the reflect
+       production actually binds is a different verb with different
+       semantics: the ADDITIVE, row-masked
+       :meth:`SNMaskedBoundaryOperator.reflect_rows_inplace
+       <orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace>`,
+       passed into the reified :math:`M`'s scheduled walk as
+       ``reflect=self.lower.reflect_rows_inplace`` since the #226
+       taxonomy step-2 carve (``cc293ef3``, 2026-07-01).
+       **(2) What landed.**  Both retire, and *together*: the façade's
+       body IS the leaf, so the plan's "retire the leaf, then the
+       façade" order was unlandable as two steps (the ``plan-authoring``
+       §6b hazard — a step boundary that cuts across a call-site set).
+       No production surface replaces them.
+       **(3) The fact that makes a second verb unnecessary — and that
+       the plan row did not state.**  An assignment is not an additive
+       update on a buffer whose inflow rows are non-zero, and the whole
+       of the difference is a zeroing.  ``[M]`` the **Jacobi** split's
+       ``upper`` half IS the full-inflow mask on **4/4** geometries (a
+       Jacobi schedule reflects no face in-sweep, so ``lower`` is empty
+       and ``upper`` carries every inflow row of every face), and *zero
+       the inflow rows, then* ``reflect_rows_inplace`` reproduces the
+       retired assignment **bit-for-bit** — ``[M]`` ``np.array_equal``
+       on **40/40 seeds × 4/4 geometries** against a deliberately
+       NON-zero-inflow buffer, with *dropping* the zeroing moving the
+       answer by :math:`O(1)` as the positive control that the reading
+       is not a zero-inflow artefact.  ⚠ Publish the bit-identity, not
+       the control's magnitude: bit-identity is **structural** (the two
+       bodies are the same arithmetic once the seed is removed) and
+       reproduces on every draw, whereas the control's
+       :math:`\max|\Delta|` is a property of the DRAW — ``[M]`` over 40
+       seeds it ranges 0.958–3.458 (slab), 0.515–3.056 (sphere),
+       1.222–2.979 (cylinder), 2.669–5.198 (cart2d), so any single
+       interval quoted for it is one fixture's reading.  The gate
+       asserts a **floor** (``delta >= 1e-3``) for exactly that reason.
+       That pair is how the sweep-tier helper
+       ``tests/sn/_test_helpers.py::reflect_outflow_into_inflow`` is now
+       spelled, on production's own live verb; the anchor gate is
+       ``tests/sn/operators/test_reflect_helper_reexpression.py``.
+       **(4) One behaviour MOVED rather than died.**  Until this item
+       ``reflect_rows_inplace`` filtered its ``faces`` argument against
+       its own rows *before* reaching the trace core, so a face that is
+       not a boundary face of the mesh was **silently dropped** (4/4
+       geometries), while the retiring trace-only verb raised through
+       ``_reflect_trace``'s guard.  That guard was reachable from no
+       other public surface and would have retired with its callers, so
+       the refusal moved INTO ``reflect_rows_inplace``, ahead of the row
+       filter: an unknown face is now a ``ValueError`` naming the mesh's
+       available faces, on the verb production binds, with a public
+       witness.
+       **(5) What the solver sees.**  Nothing — no production path
+       called either retired verb, and every value on every route is
+       unchanged.  What changes is the *count of ways to spell one
+       action*: three public reflect surfaces become two, and the one
+       that survives beside ``apply`` is the one a production consumer
+       binds.  Full account: :ref:`bc-extraction-reflect-trace` (the
+       core and its consumers) and :ref:`the rejected whole-face
+       overwrite <gs-whole-face-overwrite-rejected>` (why the assignment
+       was retained, and why that ruling was overridden).
+     - —
+     - the CS4c step-6 carve on ``main`` (uncommitted at the time of
+       writing — trust ``git``)
+   * - 2026-09-07
+     - **A bound leaf's ends are never** ``None`` **— the streaming and
+       boundary leaves declare their spaces without** ``Optional``
+       (campaign 1 residue, CS4c step 6 item 6.4).
+       **(1) What flipped.**  The eight ``domain`` / ``codomain``
+       properties on
+       :class:`~orpheus.sn.operators.streaming.StreamingOperator`,
+       :class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`,
+       :class:`~orpheus.sn.operators.boundary.RadialCharacteristicBoundaryOperator`
+       and
+       :class:`~orpheus.sn.operators.boundary.SNMaskedBoundaryOperator`
+       now annotate ``FunctionSpace`` rather than
+       ``Optional["FunctionSpace"]``; the two ``Optional`` imports they
+       were the last consumers of go with them.  This completes the
+       "mandatory ends" migration whose *carrier* half — a constructor
+       that will not build an unbound operator — landed for :math:`C`,
+       :math:`S`, :math:`F` and the energy bindings at CS4c K2b /
+       step 2 / step 3 / step 5.
+       **(2) It is TYPING-ONLY, and the commit says so because the
+       ledger's own prose did not.**  The monomorphic-leaves ledger's R1
+       marker justified the flip with two mechanisms, and BOTH had
+       already been repaired elsewhere.  An unbound end no longer makes
+       the ``.H`` metric branch conditional: since CS4c step 6 **step
+       1** (``68a9c9f3``)
+       :class:`~orpheus.numerics.operator.AdjointOperator` REFUSES an
+       unbound inner outright.  And the composability skip is keyed on
+       the runtime **value**, not on the annotation — it lives on
+       ``OperatorProduct`` — and no :math:`L` or :math:`B` binding has
+       ever answered ``None``, because their ends are mesh-derived
+       properties.  So no value moves here; what moves is that the type
+       system now states a law the runtime already enforced.  The honest
+       reading of a typing-only flip is worth recording, because a
+       future audit reading "R1 landed" would otherwise expect a
+       behaviour change and go looking for its gate.
+       **(3) The deliberate exception.**
+       :class:`~orpheus.sn.operators.boundary.RadialCharacteristicBoundaryOperator`\ 's
+       CONSTRUCTOR parameter stays ``FullFieldSpace | None``: the
+       constructor **is** the narrow, and its guard ("the pose carries no
+       ψ½ ray") has exactly two witnesses, both passing a runtime
+       ``None`` on the slab.  Flipping the parameter would have bought
+       two type-ignores on the guard's only witnesses and a statically
+       unreachable but runtime-reachable guard — the harmful-stub trap.
+       The migration is about the ENDS a leaf DECLARES, not about every
+       parameter that mentions a space.
+       **(4) The ledger.**  Its R1-L and R1-B rows XPASSed and their
+       strict-xfail marker was deleted — the last strict xfails the
+       monomorphic-leaves ledger carried.  Roadmap row:
+       :ref:`the standing-seams table <spaces-fences>` in
+       :doc:`/theory/foundations/spaces`.
+     - —
+     - ``550be030`` on ``main``
+   * - 2026-09-07
+     - **One matvec input parse for System A — and the guard names what
+       will retire it** (campaign 1 residue, CS4c step 6 item 6.3).
+       **(1) The hole.**  :math:`L` and :math:`L+C` parsed their matvec
+       input through a shared module-level helper
+       (``_require_typed_composite``); :math:`B_a`'s ``_apply_faces``
+       parsed nothing at all — it read ``psi.interior`` and leaked a raw
+       ``AttributeError`` on a foreign or wrongly-typed carrier, where
+       its siblings raised a sentence naming themselves.
+       **(2) What landed.**  The helper was promoted onto the CARRIER as
+       :meth:`FullField.require_member
+       <orpheus.transport.full_field.FullField.require_member>` — ONE
+       body, **five** call sites (:math:`L` and :math:`L+C` in both
+       directions, plus ``_apply_faces``, which serves ``apply`` and
+       ``apply_transpose`` and so passes the caller's name rather than
+       hard-coding ``apply``).  A foreign carrier is a ``TypeError``
+       naming the refusing surface and the carrier it wanted; a content
+       mismatch is a ``ValueError`` carrying the greppable *space-content
+       invariant* vocabulary the sibling guards already speak.
+       **(3) Why it is keyed on the CARRIER, not on the bound end.**  It
+       mirrors the SHAPE of System B's
+       :meth:`RadialCharacteristicField.require_member
+       <orpheus.transport.radial_characteristic_field.RadialCharacteristicField.require_member>`
+       and deliberately **not** its signature: System B's parse takes a
+       caller-supplied bound space, this one derives the reference from
+       the operand itself — *"does your space agree with what your family
+       would be on MY carrier?"*.  :math:`B_a` is fed the windowed
+       **moment** iterate as well as the angular composite its ends name
+       (``[M]`` 59 / 58 / 47 ``HarmonicMomentFlux``-interior composites
+       per 2-D windowed solve), and a bound-end comparison would refuse
+       every one of them.  No single ``(x, *, space, context)`` signature
+       expresses both, which is why the verification plan refuted the
+       first design and the parse is carrier-keyed.
+       **(4) The guard is elegance debt, and it says so.**  A runtime
+       guard is a signal that the architecture has not yet made the
+       mistake unspellable, so the docstring carries the token
+       ``ELEGANCE-DEBT[guard]``, the issue that prices it (`#457
+       <https://github.com/deOliveira-R/ORPHEUS/issues/457>`_) and one
+       sentence naming the structural change that retires it: ``B``
+       bound on its own trace end (R18), a moment-bound sibling for the
+       windowed iterate, and :math:`L`'s ends typed
+       ``FullFieldSpace`` — after which the admission is the ordinary
+       composability guard on the bound end and an alien carrier cannot
+       be typed at all.  The ledger of such tokens is itself a gate
+       (``tests/test_elegance_debt_is_tagged.py``): it requires the issue
+       number on the token's line and a retiring sentence within three
+       lines, and it REFUSES an empty ledger — a gate over an empty set
+       is vacuously green, so it had to land with the first token.
+     - `#457 <https://github.com/deOliveira-R/ORPHEUS/issues/457>`_
+     - ``630301c2`` on ``main``
+   * - 2026-09-07
      - **The carrier owns the harmonic-moment space — ONE object per
        (L, width), and the moment family becomes a set of readers**
        (campaign 1 residue, CS4c step 6 item 6.2b).
@@ -126,10 +304,8 @@ them.  Trust ``git``, not this column.
        ruling is taken.  Full account:
        :ref:`frame-moment-space-single-home`.
      - —
-     - the CS4c step-6 carve on ``main`` (uncommitted at the time of
-       writing — trust ``git``)
-   * - in dev
-       (2026-09-07)
+     - ``94e93b46`` on ``main``
+   * - 2026-09-07
      - **The tensor product stops densifying — a measure is applied
        factor-by-factor on BOTH composition paths** (campaign 1 residue,
        CS4c step 6 item 6.2a).
@@ -221,10 +397,8 @@ them.  Trust ``git``, not this column.
        discharged that — 6.2b landed later the same day and is the row
        above.
      - —
-     - the CS4c step-6 carve on ``main`` (uncommitted at the time of
-       writing — trust ``git``)
-   * - in dev
-       (2026-09-07)
+     - ``b5ef95ca`` on ``main``
+   * - 2026-09-07
      - **A space IS its axis tuple — the identity flip lands** (campaign
        1 residue, CS4c step 6; the structural ``__eq__``).
        **(1) What was chartered, and how it was realized until this
@@ -292,8 +466,7 @@ them.  Trust ``git``, not this column.
        operator posed on a look-alike is refused at the composition guard
        instead of composing silently.
      - —
-     - the CS4c step-6 carve on ``main`` (uncommitted at the time of
-       writing — trust ``git``)
+     - ``77a12286`` on ``main``
    * - in dev
        (2026-09-06)
      - **The eigenvalue finalize is ONE step of the iteration it

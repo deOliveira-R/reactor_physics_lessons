@@ -11696,3 +11696,135 @@ writer_name="pseudoxml")` and read the `<emphasis>`/`<literal>` alternation**. T
 `\ ` null-whitespace escape between a literal and a following `*` is correct RST and
 docutils is silent either way, so the render is the only proof the quote is not
 leaking markers.
+
+## L-099 — CS4c step 6 items 6.3/6.4/6.5: a PROMOTED helper's old name lives in a doc CODE-BLOCK, and a control's band is one draw
+
+**Task.** Three landed carves (6.3 `630301c2`, 6.4 `550be030`, 6.5 uncommitted),
+one docs pass, `docs/**/*.rst` only, no build (one was running in the
+background). 5 files edited. Brief:
+`scratch/_step6/brief_archivist_6_345.md`; report:
+`scratch/_step6/archivist_6_345_report.md`.
+
+### (a) ⭐⭐ A retirement that PROMOTES a helper onto a class leaves the OLD
+name in the one doc surface that must COMPILE — a `.. code-block:: python`
+
+6.3 promoted L's module-level `_require_typed_composite` onto the carrier as
+`FullField.require_member`. The brief's site list named the two RETIRED
+*verbs* (item 6.5's) and never the promoted *helper*, because the helper did
+not "retire" in the audit's vocabulary — it MOVED. `[M]`
+`docs/theory/methods/sn/loss_representation.rst:626/630/639` carried it three
+times, twice **inside a `.. code-block:: python`** showing
+`StreamingCollisionOperator.apply`, and `grep -rn "_require_typed_composite"
+orpheus/` reads **0** at HEAD (the only tree hits are a test asserting its
+ABSENCE). So the corpus was teaching a code block that does not compile.
+
+Found by PROXIMITY: item 5 of the brief sent me grepping `space-content`, and
+that page is the only one that names L's parse. ⟹ **when a carve promotes /
+renames / re-homes a helper, census the OLD NAME in `docs/` alongside the
+briefed symbols — and treat a doc `code-block` as the highest-decay surface
+on the page**, because it is the only prose a reader will paste and run.
+(L-089's "a paragraph QUOTING a code EXPRESSION is higher-decay than one
+naming a HELPER" — this is that lesson's other half: the code-block is the
+quoted expression, and it survives a symbol-keyed audit because the audit's
+symbol list came from the RETIREMENT, not from the diff.)
+
+### (b) ⭐⭐ A bit-identity and its positive control are DIFFERENT epistemic
+objects — the identity is structural, the control's magnitude is a DRAW
+
+The 6.5 commit draft published *"dropping the zeroing moves the answer by
+**1.1–2.6**, the positive control"* and the anchor gate's docstring
+independently recorded *"MEASURED spread: 1.078e+00 … 2.592e+00 across the
+four geometries"*. Two surfaces agreeing — and **one draw** (`seed=101`).
+
+`[M]` mine, 40 seeds × 4 geometries (160 rows), re-implementing the retired
+assignment from `_reflect_trace` and comparing against zero-then-
+`reflect_rows_inplace` on `split(SweepSchedule.jacobi(...)).upper`:
+
+| geometry | `np.array_equal` | control `max\|Δ\|`, 40 seeds |
+|---|---|---|
+| slab | 40/40 | 0.958 – 3.458 |
+| sphere | 40/40 | 0.515 – 3.056 |
+| cylinder | 40/40 | 1.222 – 2.979 |
+| cart2d | 40/40 | 2.669 – 5.198 |
+
+The **identity** is draw-free by construction (once the inflow rows are
+zeroed, assignment and accumulate are the same arithmetic) — publishable as
+bit-identity. The **control** spans 0.515–5.198, so `1.1–2.6` is not a band,
+it is one reading. ⭐ The gate itself was fine — it asserts `delta >= 1e-3`, a
+FLOOR — so the seed-fragility lives only in the docstring's "MEASURED spread".
+⟹ **publish the structural half and floor the control**; when a commit draft
+and a gate docstring agree on a number, ask whether they share a seed before
+counting that as corroboration (L-064: two agreeing surfaces are one surface).
+
+### (c) ⭐ A route survives its VERB — re-point the table row, do not
+past-tense the table
+
+`boundary_conditions.rst`'s *"The two `-B` delivery routes"* named
+`reflect_inflow_inplace` as route 2. The verb retired; the ROUTE did not — the
+live masked additive `SNMaskedBoundaryOperator.reflect_rows_inplace` is bound
+by the G-S resolvent (`scheduled_invertible.py:274`,
+`reflect=self.lower.reflect_rows_inplace`) and, through the Jacobi split's
+`upper`, serves the sweep-tier gates' inter-sweep reflect. The instinct
+("retire the row to history") would have left a one-route table titled *two*.
+⟹ **ask whether what retired is the ROUTE or its SPELLING.** Re-pointing the
+row also bought a strengthening the retirement made visible: under G-S the two
+routes are not alternatives but the two halves of ONE splitting
+`(L+C−B) = M − B_upper`.
+
+### (d) ⭐ A section titled by a retired symbol keeps its LABEL and changes
+its SUBJECT to the thing that survived
+
+`bc-extraction-reflect-trace` was titled *"The trace-only A_ss leaf —
+:meth:`reflect_into_inflow`"*. `[M]` 1 citer, same page. Re-titled to *"The
+trace-only A_ss **core** — ``_reflect_trace``"* — the CORE is what the label
+was always about, and the leaf was one of its consumers. The section's thesis
+paragraph then enumerates the routes by FAMILY (the `_apply_faces` lift
+serving `apply`/`apply_transpose`/the masked `apply`; the in-place additive
+verb calling the core directly), which is strictly more precise than the
+code's own `_reflect_trace` docstring (it names two consumers and omits
+`SNMaskedBoundaryOperator.apply`). ⟹ when a retirement empties a section's
+title, **re-title onto the invariant, not onto the successor** — the successor
+can retire too.
+
+### (e) ⭐⭐ A changelog's "uncommitted at the time of writing" is licensed by
+the page's OWN preamble — and the licence has a clause
+
+`history.rst` carried three step-6 entries as `in dev` / *"the CS4c step-6
+carve on `main` (uncommitted at the time of writing — trust `git`)"*, and
+~5 neighbours use the same idiom, so the convention argues for LEAVING them.
+The preamble says otherwise, verbatim: *"an entry lands with its merge hash,
+and the only exception is an entry whose Where column names an **unmerged
+branch explicitly**"*. These name `main`. `[M]` `git log --oneline` →
+`77a12286` / `b5ef95ca` / `94e93b46`; stamped and dated. 6.5's kept `in dev`
+because it genuinely is. ⟹ **before deferring to a convention you can see N
+neighbours following, read the page's own statement of that convention** — it
+usually carries the exception clause that decides your case, and "everyone
+else does it" is not evidence about which side of the clause you are on.
+
+### (f) ⚠ The import gate caught a dead xref I MINTED
+
+I wrote `:class:`~orpheus.numerics.operator.BoundOperator``; the class is
+`orpheus.transport.operators.bound_operator.BoundOperator`
+(`bound_operator.py:59`), which two other pages spell correctly. Renders as
+plain text, no warning at any severity — **only the import-resolution gate on
+added lines sees it.** 1 dead of 22 on the first pass, 0 of 24 after. The
+gate is not optional even when you are only touching prose.
+
+### Gates run (no build; one was running in the background)
+
+| gate | result |
+|---|---|
+| docutils permissive parse, WARNING/ERROR/SEVERE **set** diff pre-vs-post, 5 files | 0 new structural; every new message is `Unknown interpreted text role` (Sphinx roles docutils cannot know) |
+| added lines: `**``lit``**` / role-after-`**` / 3+ backticks | 0 / 0 / 0 over 435 lines |
+| added lines > 79 cols | 12, all unbreakable dotted role targets (`[M]` the two pages already carry 128 + 52 such lines) |
+| python xrefs on added lines, IMPORT-resolved | **0 dead of 24** (1 found + fixed) |
+| `:ref:` / `:doc:` I added | 6/6 and 1/1 resolve; the 1 new label defined once |
+| retired-verb census in `docs/` | 9 mentions, **0 as a role** |
+
+### Self-assessment (Directive 3)
+
+Derivation depth 4 · Cross-references 5 · Numerical evidence 5 (reproduced the
+Jacobi-upper identity 4/4 and ran a 40-seed sweep that refuted a published
+band) · Failed approaches 5 (the retention ruling preserved verbatim + why it
+was overridden) · Code traceability 5 · Derivation source n/a. Weakest:
+derivation depth — this was a retirement pass, not a math pass.

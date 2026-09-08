@@ -1263,13 +1263,22 @@ def reflect_outflow_into_inflow(boundary_flux, sn_mesh: "SNMesh") -> None:
     (the 2-D octant equivalence suite, the curvilinear sweep regressions,
     the ng=2 layout guard, the iteration primitive's SN fixture) still need
     the inter-sweep ``ψ.inflow = B·ψ.outflow``, which is what this helper is:
-    the whole-trace form of
-    :meth:`~orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_inflow_inplace`
-    (``B_a`` — the SAME core the matvec / SI driver consume as the boundary
-    gain, so the two routes cannot drift).  `[M]` its last production call
-    site — the pre-#448 finalize's reflect of the converged trace — was
-    inert on a converged exit (2.0e-13 / 2.3e-15 / bit-identical on a
-    vacuum arm), which is why moving it cost no gate.
+    spelled on production's live reflect (CS4c step 6 item 6.5): the Jacobi
+    split's ``upper`` half IS the full-inflow mask (`[M]` 4/4 geometries —
+    ``SweepSchedule.jacobi`` reflects no face in-sweep, so ``lower`` is empty
+    and ``upper`` carries every inflow row of every face), and *zero the
+    inflow rows, then*
+    :meth:`~orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace`
+    (ADDITIVE on the mask's rows) reproduces the whole-face ASSIGNMENT
+    ``ψ.inflow ← B·ψ.outflow`` bit-for-bit (`[M]` ``array_equal`` on 4/4
+    geometries on a non-zero-inflow buffer; dropping the zeroing moves the
+    answer by 1.1–2.6 — the assignment/additive difference is real). The
+    retired assignment verb ``reflect_inflow_inplace`` was this helper's
+    last consumer. ``B_a`` is the SAME core the matvec / SI driver consume
+    as the boundary gain, so the two routes cannot drift.  `[M]` its last
+    production call site — the pre-#448 finalize's reflect of the converged
+    trace — was inert on a converged exit (2.0e-13 / 2.3e-15 / bit-identical
+    on a vacuum arm), which is why moving it cost no gate.
 
     For vacuum ``B = 0`` so the inflow slots stay zero; for
     reflective/white/albedo it is the same ``R·G`` reflection the
@@ -1280,6 +1289,15 @@ def reflect_outflow_into_inflow(boundary_flux, sn_mesh: "SNMesh") -> None:
     only caller; on a carrying mesh the corner is the coupled gain grid's
     business.  The helper carries exactly the arm the gates drive.
     """
+    from orpheus.sn.loss_representation.sweep_schedule import SweepSchedule
     from orpheus.sn.operators.boundary import SNBoundaryOperator
 
-    SNBoundaryOperator(sn_mesh).reflect_inflow_inplace(boundary_flux)
+    operator = SNBoundaryOperator(sn_mesh)
+    full_inflow = operator.split(
+        SweepSchedule.jacobi(sn_mesh.ndim, sn_mesh.quad.octants),
+    ).upper
+    trace = sn_mesh.angular_trace
+    faces = tuple(boundary_flux.layout.faces)
+    for face in faces:
+        boundary_flux.face_view(face)[trace.inflow_indices_for_face(face)] = 0.0
+    full_inflow.reflect_rows_inplace(boundary_flux, faces)

@@ -554,10 +554,18 @@ class SNBoundaryOperator(LinearOperator):
         routing through it leaves this leg Euclidean exactly as before —
         which is why every value here is bit-identical across step 8.
 
-        This is the **single source of truth** for the boundary reflection: both
-        the full-field :meth:`apply` (lifted onto a zero-bulk carrier) and the
-        trace-only :meth:`reflect_into_inflow` (the bare-sweep inflow seed) route
-        through it, so the two cannot drift (Cardinal Rule 2).
+        This is the **single source of truth** for the boundary reflection: the
+        full-field :meth:`apply` / :meth:`apply_transpose` (lifted onto a
+        zero-bulk carrier through :meth:`_apply_faces` — the masked halves'
+        :meth:`SNMaskedBoundaryOperator.apply` rides the same lift with
+        ``rows``) and the masked additive
+        :meth:`SNMaskedBoundaryOperator.reflect_rows_inplace` (the octant-group
+        Gauss–Seidel forward substitution's row update — and, through the
+        Jacobi split's ``upper`` half, the sweep-tier gates' inter-sweep
+        reflect) both route through it, so the routes cannot drift (Cardinal
+        Rule 2). The trace-only verbs ``reflect_into_inflow`` /
+        ``reflect_inflow_inplace`` (the pre-#448 bare-sweep inflow seed, 0
+        production callers since) retired at CS4c step 6 item 6.5.
         """
         from orpheus.transport.source_sinks import AngularBoundarySourceSink
 
@@ -591,13 +599,10 @@ class SNBoundaryOperator(LinearOperator):
         # independently.
         face_laws = self._face_laws
         if faces is not None:
-            unknown = set(faces) - set(face_laws)
-            if unknown:
-                raise ValueError(
-                    f"_reflect_trace: face(s) {sorted(unknown)} are not "
-                    f"boundary faces of this mesh; available faces: "
-                    f"{sorted(face_laws)}."
-                )
+            # A face outside the layout is refused by the PUBLIC verb that
+            # takes a face subset (``SNMaskedBoundaryOperator.reflect_rows_
+            # inplace``, CS4c step 6 item 6.5); the refusal lived here until
+            # the two trace-only verbs that reached it retired.
             face_laws = {f: face_laws[f] for f in faces}
         if rows is not None:
             face_laws = {f: law for f, law in face_laws.items() if f in rows}
@@ -742,87 +747,6 @@ class SNBoundaryOperator(LinearOperator):
     def apply(self, psi: "FullField") -> "FullField":
         r"""Forward action ``B_a·ψ`` — per-face boundary law on the trace, zero bulk."""
         return self._apply_faces(psi, "apply")
-
-    def reflect_into_inflow(
-        self, boundary: "AngularBoundaryFlux",
-        faces: "Iterable[str] | None" = None,
-    ) -> "AngularBoundarySourceSink":
-        r"""Trace-only forward reflection ``B·ψ.outflow`` projected onto the
-        inflow row — the ``A_ss`` action expressed on the boundary trace ALONE.
-
-        Returns a boundary-only
-        :class:`~orpheus.transport.source_sinks.AngularBoundarySourceSink` whose
-        **inflow** ordinate slots carry the per-face reflected outflow (``R·G``
-        for reflective, the angular average for white, zero for vacuum) and whose
-        outflow slots are zero. It is :meth:`apply` without the zero-bulk carrier
-        — the trace-only entry for seeding ``ψ.inflow = B·ψ.outflow`` on a bare
-        boundary buffer without fabricating a throwaway zero-bulk field just to
-        reach the ``A_ss`` block.  No production driver seeds by hand any more
-        (every within-group solve — and, since #448, the eigenvalue finalize's
-        one reconstruction step — receives ``B·ψ.outflow`` as the ``B`` GAIN
-        through ``rhs.boundary``); its consumers are the sweep-tier gates that
-        drive bare sweeps in a loop, through :meth:`reflect_inflow_inplace`.
-
-        ``faces`` (Phase 3 Gauss-Seidel): ``None`` (default) reflects every
-        boundary face — the whole-trace Jacobi reflect.  A face subset restricts the
-        reflection to those faces: the octant-group G-S schedule reflects only
-        the just-swept group's reflective OUTGOING faces between octant-group
-        sweeps, so a later group reads the fresh reflected inflow (the
-        ``(L+C−B_lower)⁻¹`` forward substitution).  The subset restricts
-        ``B``'s block ROWS and is exact because the whole input trace stays in
-        scope — NOT because ``B`` is block-diagonal, which since B3.4c it is
-        not (see :meth:`_reflect_trace`).
-        """
-        return self._reflect_trace(boundary, "apply", faces=faces)
-
-    def reflect_inflow_inplace(
-        self, boundary_flux: "AngularBoundaryFlux",
-        faces: "Iterable[str] | None" = None,
-    ) -> None:
-        r"""In place: overwrite each face's inflow rows with the reflected
-        outflow — ``ψ.inflow ← (B_a·ψ)|_{\rm inflow}``, face-restrictable.
-
-        The MUTATING façade over :meth:`reflect_into_inflow` (single source —
-        both route through :meth:`_reflect_trace`), carrying the sweep
-        substrate's reflect signature
-        (``Callable[[AngularBoundaryFlux, tuple[str, ...]], None]``).
-        `[M]` #448: **no production caller** — the eigenvalue finalize's reflect
-        of the converged trace (its last one) retired when the finalize became
-        one step of the driven iteration, in which ``B`` is a gain; the
-        octant-group Gauss-Seidel resolvent never routed here (it binds
-        :meth:`SNMaskedBoundaryOperator.reflect_rows_inplace`, below).  It
-        stays as the operator's own MUTATING verb for the sweep-tier gates
-        that drive bare sweeps in a loop
-        (``tests/sn/_test_helpers.py::reflect_outflow_into_inflow`` and the
-        #448 trace gate) — the inflow-row selection is the operator's
-        knowledge, not a test's.
-
-        ⚠ NOT the reflect the reified ``M = (L+C−B_lower)`` supplies to
-        :func:`~orpheus.sn.loss_representation._sweep_scheduled`. That one is
-        :meth:`SNMaskedBoundaryOperator.reflect_rows_inplace` — ADDITIVE and
-        restricted to ``B_lower``'s rows, because a forward-substitution row
-        completes ``z_in = y_row + (Bz)_row`` on top of a seed. The two are
-        deliberately not interchangeable: a whole-face ASSIGNMENT there drops
-        ``y_row`` and stamps fresh values onto rows the splitting defines as
-        lagged — the dissolved ``_GaussSeidelResolvent``'s overwrite defect
-        (#226 §17 falsifier-3, round-trip O(1) at 2.667).
-
-        Trace-only: the ψ½ ray corner is System B's boundary ``B_b``
-        (:class:`RadialCharacteristicBoundaryOperator`), reflected by the
-        coupled gain grid on a carrying mesh — one operator per system (RULING
-        P1); its in-place ray sibling ``reflect_corner_inplace`` retired at
-        #448 with its last caller (the pre-#448 finalize).
-        """
-        reflected = self.reflect_into_inflow(boundary_flux, faces=faces)
-        trace = self.sn_mesh.angular_trace
-        selected = (
-            boundary_flux.layout.faces if faces is None else faces
-        )
-        for face in selected:
-            inflow = trace.inflow_indices_for_face(face)
-            boundary_flux.face_view(face)[inflow] = (
-                reflected.face_view(face)[inflow]
-            )
 
     def split(self, schedule: "SweepSchedule") -> "BoundarySplit":
         r"""Split ``B = B_lower + B_upper`` under ``schedule``'s octant order
@@ -1220,12 +1144,33 @@ class SNMaskedBoundaryOperator(LinearOperator["FullField", "FullField"]):
         production (zero on a reflective face) but O(1)-wrong as an inverse,
         and it stamped fresh values onto rows the iterate defines as lagged.
 
-        Contrast :meth:`SNBoundaryOperator.reflect_inflow_inplace` — the
-        whole-face ASSIGNMENT ``ψ.inflow ← B·ψ.outflow`` between BARE sweeps,
-        the right semantics where the inflow is wholly recomputed each sweep
-        rather than a solved unknown of a linear row (the sweep-tier gates;
-        no production driver since #448).
+        **The face subset is exact because the whole input trace stays in
+        scope** — NOT because ``B`` is block-diagonal over faces, which since
+        B3.4c it is not (a quotient law reads its partner's half-trace): the
+        restriction is of ``B``'s block ROWS, and each target row is written
+        independently. A face outside this mesh's boundary layout is a
+        caller error and is refused by name (CS4c step 6 item 6.5 — until
+        then it was silently dropped by the row filter below while the
+        retired trace-only verbs raised).
+
+        The whole-face ASSIGNMENT ``ψ.inflow ← B·ψ.outflow`` between BARE
+        sweeps — the right semantics where the inflow is wholly recomputed
+        each sweep rather than a solved unknown of a linear row — was a
+        separate verb (``reflect_inflow_inplace``) until CS4c step 6 item 6.5
+        retired it with 0 production callers: it is this verb through the
+        Jacobi split's ``upper`` half (every inflow row of every face) after
+        zeroing the inflow rows, which is how the sweep-tier gates' helper
+        ``tests/sn/_test_helpers.py::reflect_outflow_into_inflow`` spells it
+        (`[M]` bit-identical to the retired assignment on 4/4 geometries).
         """
+        faces = tuple(faces)
+        unknown = set(faces) - set(self.inner._face_laws)
+        if unknown:
+            raise ValueError(
+                f"SNMaskedBoundaryOperator.reflect_rows_inplace: face(s) "
+                f"{sorted(unknown)} are not boundary faces of this mesh; "
+                f"available faces: {sorted(self.inner._face_laws)}."
+            )
         selected = {
             face: self.rows[face]
             for face in faces

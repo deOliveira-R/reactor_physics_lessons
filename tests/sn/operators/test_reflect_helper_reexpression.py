@@ -1,9 +1,10 @@
 r"""Pre-carve anchor for the CS4c step-6 reflect-verb retirement (F4 / item 6.5).
 
-**What this file is.**  Step 6 retires
-:meth:`~orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_into_inflow`
-and its mutating façade ``reflect_inflow_inplace`` (`[M]` **0** production
-callers each), and re-expresses the sweep-tier helper
+**What this file is.**  CS4c step 6 item 6.5 (LANDED 2026-09-07) retired
+``SNBoundaryOperator.reflect_into_inflow`` (a literal, not a role — the
+symbol is gone) and its mutating façade ``reflect_inflow_inplace`` (`[M]`
+**0** production
+callers each), and re-expressed the sweep-tier helper
 ``tests/sn/_test_helpers.py::reflect_outflow_into_inflow`` on the live G-S
 verb :meth:`~orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace`.
 
@@ -57,6 +58,9 @@ import pytest
 from orpheus.sn.loss_representation.sweep_schedule import SweepSchedule
 from orpheus.sn.operators.boundary import SNBoundaryOperator
 from orpheus.transport.fields.angular_boundary_flux import AngularBoundaryFlux
+from orpheus.transport.fields.angular_flux import AngularFlux
+from orpheus.transport.full_field import FullField
+from tests.sn._test_helpers import reflect_outflow_into_inflow
 from tests.sn.architecture.test_monomorphic_leaves import (
     _cart2d,
     _cylinder,
@@ -150,14 +154,23 @@ def test_g5_2_the_jacobi_split_upper_is_the_full_inflow_mask(geometry):
 
 @pytest.mark.parametrize("geometry", list(_GEOMETRIES), ids=list(_GEOMETRIES))
 def test_g5_1_zero_then_add_reproduces_the_assignment_bit_for_bit(geometry):
-    r"""``reflect_inflow_inplace`` (assignment) ≡ *zero the inflow, then add
-    through the jacobi-upper mask*, ``np.array_equal`` on the WHOLE trace.
+    r"""The helper (*zero the inflow rows, then add through the jacobi-upper
+    mask*) ≡ the operator's PUBLIC forward action ``(B·ψ).boundary`` on the
+    inflow rows, ``np.array_equal`` per face — and it leaves the outflow rows
+    untouched.
 
+    Until CS4c step 6 item 6.5 the reference leg was the whole-face
+    ASSIGNMENT verb ``reflect_inflow_inplace`` (`[M]` bit-identical on 4/4
+    geometries); that verb retired with 0 production callers and the
+    reference is now ``apply`` on a zero-bulk composite — two routes into
+    ``_reflect_trace`` through DIFFERENT verbs (the lift and the masked
+    additive), so the row still discriminates the helper's wiring (the
+    zeroing, the mask, the face loop) even though the law is shared.
     Bit-identity is the right tier here and is EARNED, not assumed: neither
-    body reorders a reduction — both write ``(B·ψ)[f][inflow]`` computed by the
-    same ``_reflect_trace`` call — so a tolerance would admit exactly the class
-    of bug the row exists to catch (lessons §5: bit-exactness is earned per
-    law).
+    body reorders a reduction — both write ``(B·ψ)[f][inflow]`` computed by
+    the same ``_reflect_trace`` call — so a tolerance would admit exactly the
+    class of bug the row exists to catch (lessons §5: bit-exactness is earned
+    per law).
 
     ⛔ ACTIVATION, asserted in the row: the buffer's inflow slots must be
     NON-ZERO before the call.  On a zero-inflow buffer the two bodies are
@@ -165,7 +178,6 @@ def test_g5_1_zero_then_add_reproduces_the_assignment_bit_for_bit(geometry):
     """
     sn_mesh = _GEOMETRIES[geometry]()
     operator = SNBoundaryOperator(sn_mesh)
-    mask = _full_inflow_mask(operator).upper
     trace = sn_mesh.angular_trace
 
     old = _random_trace(sn_mesh, seed=101)
@@ -184,19 +196,33 @@ def test_g5_1_zero_then_add_reproduces_the_assignment_bit_for_bit(geometry):
             f"trivially there — {inflow_magnitudes}"
         )
 
-    # OLD body — the whole-face ASSIGNMENT the helper carries today.
-    operator.reflect_inflow_inplace(old)
+    # The INDEPENDENT spelling — the operator's public forward action on a
+    # zero-bulk composite: ``(B·ψ).boundary``'s inflow rows are ``B·ψ.outflow``
+    # (the retired assignment verb was ``apply`` without the zero-bulk
+    # carrier; since item 6.5 this is the reference leg).
+    probe = FullField(
+        interior=AngularFlux(
+            values=np.zeros(sn_mesh.angular_trial_space.shape),
+            space=sn_mesh.angular_trial_space,
+        ),
+        boundary=old,
+    )
+    via_apply = operator.apply(probe).boundary
 
-    # NEW body — zero the inflow slots, then ADD through the full-inflow mask.
+    # The helper — zero the inflow rows, then ADD through the full-inflow mask.
+    reflect_outflow_into_inflow(new, sn_mesh)
+
     for face in new.layout.faces:
-        new.face_view(face)[trace.inflow_indices_for_face(face)] = 0.0
-    mask.reflect_rows_inplace(new, tuple(new.layout.faces))
-
-    if not np.array_equal(old.values, new.values):
-        pytest.fail(
-            f"[{geometry}] the re-expressed helper body is not bit-identical: "
-            f"max|Δ| = {float(np.abs(old.values - new.values).max()):.6e}"
-        )
+        rows = trace.inflow_indices_for_face(face)
+        if not np.array_equal(via_apply.face_view(face)[rows], new.face_view(face)[rows]):
+            pytest.fail(
+                f"[{geometry}] face {face!r}: the helper's inflow rows are not "
+                f"bit-identical to the operator's forward action: max|Δ| = "
+                f"{float(np.abs(via_apply.face_view(face)[rows] - new.face_view(face)[rows]).max()):.6e}"
+            )
+        outflow = np.setdiff1d(np.arange(new.face_view(face).shape[0]), rows)
+        if outflow.size and not np.array_equal(new.face_view(face)[outflow], old.face_view(face)[outflow]):
+            pytest.fail(f"[{geometry}] face {face!r}: the helper touched OUTFLOW rows")
 
 
 @pytest.mark.parametrize("geometry", list(_GEOMETRIES), ids=list(_GEOMETRIES))
@@ -207,8 +233,11 @@ def test_g5_1b_dropping_the_zeroing_is_the_positive_control(geometry):
     Without this leg, ``test_g5_1`` is compatible with a buffer whose inflow
     happened to be zero, or with an accumulation that silently behaved like an
     assignment — a green reading alone cannot discriminate loaded from blind
-    (``vv`` #19).  MEASURED spread: 1.078e+00 … 2.592e+00 across the four
-    geometries.
+    (``vv`` #19).  MEASURED spread at seed 101: 1.078e+00 … 2.592e+00 across the four
+    geometries — ONE draw; `[M]` an archivist's 40-seed × 4-geometry sweep
+    (2026-09-07) reads 0.515 … 5.198, with the bit-identity row above at
+    40/40, so the floor asserted here (1e-3) is what is draw-stable, not the
+    spread.
     """
     sn_mesh = _GEOMETRIES[geometry]()
     operator = SNBoundaryOperator(sn_mesh)
@@ -216,10 +245,25 @@ def test_g5_1b_dropping_the_zeroing_is_the_positive_control(geometry):
 
     old = _random_trace(sn_mesh, seed=101)
     unzeroed = _random_trace(sn_mesh, seed=101)
-    operator.reflect_inflow_inplace(old)
+    via_apply = operator.apply(
+        FullField(
+            interior=AngularFlux(
+                values=np.zeros(sn_mesh.angular_trial_space.shape),
+                space=sn_mesh.angular_trial_space,
+            ),
+            boundary=old,
+        )
+    ).boundary
     mask.reflect_rows_inplace(unzeroed, tuple(unzeroed.layout.faces))
 
-    delta = float(np.abs(old.values - unzeroed.values).max())
+    trace = sn_mesh.angular_trace
+    delta = max(
+        float(np.abs(
+            via_apply.face_view(face)[trace.inflow_indices_for_face(face)]
+            - unzeroed.face_view(face)[trace.inflow_indices_for_face(face)]
+        ).max())
+        for face in unzeroed.layout.faces
+    )
     if delta < 1e-3:
         pytest.fail(
             f"[{geometry}] CONTROL FAILED: dropping the zeroing moved the "
@@ -229,43 +273,28 @@ def test_g5_1b_dropping_the_zeroing_is_the_positive_control(geometry):
 
 
 # ═════════════════════════════════════════════════════════════════════════
-# G5.4-pre — the guard the retirement ORPHANS, recorded before it happens
+# G5.4 — the unknown-face refusal, on the live verb (moved at item 6.5)
 # ═════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.parametrize("geometry", list(_GEOMETRIES), ids=list(_GEOMETRIES))
-def test_g5_4pre_the_unknown_face_refusal_lives_only_on_the_RETIRING_verb(geometry):
-    r"""RECORD: today a bogus face RAISES through ``reflect_into_inflow`` and is
-    SILENTLY DROPPED by ``reflect_rows_inplace``.
+def test_g5_4_the_unknown_face_refusal_lives_on_the_live_verb(geometry):
+    r"""A bogus face RAISES through ``reflect_rows_inplace`` — the refusal
+    MOVED into the live verb at CS4c step 6 item 6.5 (ruling O-5).
 
-    ``_reflect_trace`` refuses an unknown face (``boundary.py:596-601``,
-    message *"… are not boundary faces of this mesh"*), and its only public
-    route is the verb item 6.5 retires: ``reflect_rows_inplace`` filters
-    ``faces`` against ``self.rows`` BEFORE calling ``_reflect_trace``
-    (``:1252-1256``), and ``_apply_faces`` always passes ``faces=None``.
-
-    ⟹ retiring both verbs makes that ``ValueError`` **reachable from no public
-    surface**, and its sole witness
-    (``test_sn_boundary_operator.py::TestFaceRestrictedReflect::test_unknown_face_raises``)
-    has no successor.  The carve owes an explicit ruling — move the refusal
-    into ``reflect_rows_inplace``, or delete the guard with its witness and say
-    so (``lessons`` §1: retiring a guard makes the replacement's teeth
-    NET-NEW, never migrated).
-
-    ⚠ RECORD, not THEOREM.  When 6.5 lands, this row is expected to change
-    shape; do not "fix" it by relaxing the silent-drop half.
+    Until then this row was a RECORD of the opposite: ``reflect_rows_inplace``
+    filtered ``faces`` against its rows BEFORE calling ``_reflect_trace`` and
+    was SILENT on a bogus face (4/4 geometries), while the retired trace-only
+    ``reflect_into_inflow`` raised through ``_reflect_trace``'s guard — a
+    guard reachable from no other public surface, retired with its callers.
+    Its message vocabulary ("… are not boundary faces of this mesh") is kept
+    on the live verb, and the buffer is untouched when it raises.
     """
     sn_mesh = _GEOMETRIES[geometry]()
     operator = SNBoundaryOperator(sn_mesh)
     mask = _full_inflow_mask(operator).upper
     buffer = _random_trace(sn_mesh, seed=7)
-
-    with pytest.raises(ValueError, match="boundary faces"):
-        operator.reflect_into_inflow(buffer, faces=["bogus_face"])
-
     before = buffer.values.copy()
-    mask.reflect_rows_inplace(buffer, ("bogus_face",))
+    with pytest.raises(ValueError, match="boundary faces"):
+        mask.reflect_rows_inplace(buffer, ("bogus_face",))
     if not np.array_equal(before, buffer.values):
-        pytest.fail(
-            f"[{geometry}] reflect_rows_inplace acted on a bogus face — the "
-            f"recorded contrast (raise vs silent drop) has changed"
-        )
+        pytest.fail(f"[{geometry}] the refused call mutated the buffer")

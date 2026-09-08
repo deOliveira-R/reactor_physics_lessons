@@ -61,6 +61,39 @@ Verify, then write, then FLAG every scope-expansion the verification forced.
   "The hub adds a site" is the reasoned answer and it is false, because the composer's
   axes-less arm became a `raise`. Re-run the census; the *member moved, count didn't* is
   the sentence. → L-098
+- **⭐⭐ A CARVE THAT *PROMOTES* A HELPER LEAVES ITS OLD NAME IN A DOC
+  `code-block::` — the one prose surface that must COMPILE, and the one a
+  symbol-keyed audit misses because the helper MOVED rather than retired.**
+  `[M]` 6.3 promoted `_require_typed_composite` onto `FullField.require_member`;
+  the brief listed the two retired VERBS and never the helper, while
+  `loss_representation.rst` taught the dead name **3×, twice inside a
+  `.. code-block:: python`** (`grep orpheus/` = **0**; the only tree hits assert
+  its ABSENCE). ⟹ census the OLD name in `docs/` beside the briefed symbols, and
+  treat a code-block as the page's highest-decay line. → L-099, L-089
+- **⭐⭐ A BIT-IDENTITY AND ITS POSITIVE CONTROL ARE DIFFERENT EPISTEMIC OBJECTS
+  — publish the identity, FLOOR the control.** `[M]` a commit draft and a gate
+  docstring independently said the control moves the answer by *1.1–2.6*; both
+  were **one draw** (`seed=101`). Over 40 seeds × 4 geometries `array_equal` is
+  **40/40** everywhere (structural — once the rows are zeroed the two bodies are
+  the same arithmetic) while the control spans **0.515–5.198**, so the band was
+  never a band. ⭐ The GATE was fine (it asserts `delta >= 1e-3`, a floor); only
+  the docstring's "MEASURED spread" published a draw. Two surfaces agreeing on a
+  number is ONE surface until you check they do not share a seed. → L-099, L-071, L-064
+- **⭐ ASK WHETHER WHAT RETIRED IS THE ROUTE OR ITS SPELLING — a two-route table
+  whose route-2 VERB dies usually keeps its row.** `[M]` the retired
+  whole-trace assignment's route survives as the masked ADDITIVE verb the G-S
+  resolvent binds; past-tensing the row would have left a one-route table titled
+  *two*. Re-pointing bought a strengthening: under G-S the routes are not
+  alternatives but the two halves of ONE splitting. Sibling: a SECTION titled by
+  a retired symbol keeps its LABEL and is re-titled onto the **invariant** (the
+  core), never onto the successor — successors retire too. → L-099
+- **⭐⭐ BEFORE DEFERRING TO A CONVENTION N NEIGHBOURS FOLLOW, READ THE PAGE'S OWN
+  STATEMENT OF IT — the exception clause decides your case.** `[M]` 3 changelog
+  entries said *"uncommitted at the time of writing"* with ~5 neighbours doing the
+  same; the preamble says an entry lands with its hash and *"the only exception is
+  an entry whose Where names an unmerged BRANCH"* — these named `main`. Stamped.
+  "Everyone else does it" is not evidence about which side of the clause you are
+  on. → L-099
 - **⭐⭐ A DOCS PASS FOR ITEM N IS WHERE ITEM N−k's UN-SWEPT ROT SURFACES, and the trigger
   is PROXIMITY, not predicate.** `[M]` *"the refusal has no production witness yet … the
   only axis mint in `orpheus/` is `MaterialMesh.bulk_space`"* — both halves false, and

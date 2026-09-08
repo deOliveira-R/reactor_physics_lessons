@@ -3324,42 +3324,71 @@ source of truth, Cardinal Rule 2):
        (:func:`_solve_fixed_source_si <orpheus.sn.solver._solve_fixed_source_si>` /
        :func:`_solve_fixed_source_krylov <orpheus.sn.solver._solve_fixed_source_krylov>`)
        — every solve that routes through a driver.
-   * - **Direct helper**
-       (:meth:`SNBoundaryOperator.reflect_inflow_inplace
-       <orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_inflow_inplace>`,
-       whole-trace form)
-     - Fills each face's inflow slots with
-       :math:`B\,\psi.\text{outflow}` in place on the boundary buffer,
-       via the same :class:`SNBoundaryOperator`, before the bare
-       sweep.
-     - ⛔ **No production caller since 2026-09-06 (#448).**  This row
-       used to name two loops with *"no driver to route through"* — the
-       direct fixed-source SI loop, which moved onto the variadic driver
-       at Wave O O.2a, and the eigenvalue reconstruction sweep in
-       :func:`solve_sn <orpheus.sn.solver.solve_sn>`, which became one
-       step of that same driven map at #448
-       (:ref:`sn-finalize-one-step`).  ``[M]`` by AST the verb has zero
-       call sites in ``orpheus/``; its consumer is the sweep-tier gates'
-       inter-sweep helper
-       (``tests/sn/_test_helpers.py::reflect_outflow_into_inflow``, where
-       the module-level ``_reflect_outflow_into_inflow`` moved).  The
-       *face-restricted* form is a different question — see
-       :meth:`~orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace`
-       for the reflect the reified :math:`M` actually supplies to the
-       scheduled sweep.
+   * - **Masked additive reflect**
+       (:meth:`SNMaskedBoundaryOperator.reflect_rows_inplace
+       <orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace>`,
+       on the mask's rows)
+     - **Accumulates** :math:`B\,\psi.\text{outflow}` onto the mask's
+       inflow rows, in place on the boundary buffer
+       (``bf[f][rows] += (B·bf)[f][rows]``), through the same
+       :class:`SNBoundaryOperator` the mask wraps.  Additive, **not** a
+       whole-face assignment — the row it completes is the
+       inhomogeneous forward-substitution row :math:`z_{\rm in} =
+       y_{\rm row} + (Bz)_{\rm row}`, whose seed :math:`y_{\rm row}`
+       an overwrite would drop (:ref:`the rejected whole-face
+       overwrite <gs-whole-face-overwrite-rejected>`).
+     - The octant-group Gauss–Seidel forward substitution: the reified
+       :math:`M = (L+C-B_{\rm lower})` passes
+       ``reflect=self.lower.reflect_rows_inplace`` into its scheduled
+       walk (:class:`~orpheus.sn.operators.scheduled_invertible.ScheduledInvertibleOperator`),
+       so each just-swept octant group's reflective faces feed the next
+       one — the inter-group reflect of :ref:`the reified splitting
+       matrix <si-gauss-seidel-reification>`.
+       Through the **Jacobi** split's ``upper`` half — which IS the
+       full-inflow mask, because a Jacobi schedule reflects no face
+       in-sweep (``[M]`` 4/4 geometries: ``lower`` is empty and
+       ``upper`` carries every inflow row of every face) — the same
+       verb is also the sweep-tier gates' *inter-sweep* reflect
+       (``tests/sn/_test_helpers.py::reflect_outflow_into_inflow``).
 
-The direct helper is **not** a fold of :math:`B` into :math:`S`: it is
-the trace-only :math:`A_{ss}` action of the *same* :math:`B`, expressed
-on the boundary trace alone. Both routes therefore deliver the
-identical :math:`-B` coupling, and cannot drift, because both descend
-from :meth:`SNBoundaryOperator._reflect_trace <orpheus.sn.operators.boundary.SNBoundaryOperator>`
-(:ref:`bc-extraction-reflect-trace`).
+       ⛔ **Until 2026-09-07 this row named a whole-trace ASSIGNMENT
+       verb instead** — ``SNBoundaryOperator.reflect_inflow_inplace``,
+       which filled each face's inflow slots with
+       :math:`B\,\psi.\text{outflow}` outright before a bare sweep.  It
+       had lost its last production caller at #448 (2026-09-06): the
+       direct fixed-source SI loop moved onto the variadic driver at
+       Wave O O.2a, and the eigenvalue reconstruction sweep in
+       :func:`solve_sn <orpheus.sn.solver.solve_sn>` became one step of
+       that same driven map (:ref:`sn-finalize-one-step`).  CS4c step 6
+       item 6.5 retired it, with its trace-only leaf
+       ``reflect_into_inflow``, rather than keeping a second verb for a
+       test-tree consumer: *zero the inflow rows, then reflect
+       additively on the full-inflow mask* reproduces the assignment
+       **bit-for-bit** — ``[M]`` ``np.array_equal`` on 40/40 seeds ×
+       4/4 geometries against a NON-zero-inflow buffer, and dropping
+       the zeroing moves the answer by :math:`O(1)` (the positive
+       control that the reading is not a zero-inflow artefact).  So the
+       semantics survived without the surface; the gate is
+       ``tests/sn/operators/test_reflect_helper_reexpression.py``.
+
+The masked reflect is **not** a fold of :math:`B` into :math:`S`: it is
+the trace-only :math:`A_{ss}` action of the *same* :math:`B`, restricted
+to a subset of that operator's block ROWS and expressed on the boundary
+trace alone. Both routes therefore deliver the identical :math:`-B`
+coupling, and cannot drift, because both descend from
+:meth:`SNBoundaryOperator._reflect_trace <orpheus.sn.operators.boundary.SNBoundaryOperator>`
+(:ref:`bc-extraction-reflect-trace`).  Under the Gauss-Seidel schedule
+they are not even alternatives but the two halves of ONE splitting
+:math:`(L+C-B) = M - B_{\rm upper}`: the masked reflect carries
+:math:`B_{\rm lower}` *inside* the reified forward :math:`M`, the
+variadic gain carries :math:`B_{\rm upper}` lagged
+(:ref:`si-gauss-seidel-reification`).
 
 
 .. _bc-extraction-reflect-trace:
 
-The trace-only :math:`A_{ss}` leaf — :meth:`reflect_into_inflow`
-----------------------------------------------------------------
+The trace-only :math:`A_{ss}` core — ``_reflect_trace``
+-------------------------------------------------------
 
 :math:`B` is the :math:`A_{ss}` block :math:`V_{\rm outflow} \to
 V_{\rm inflow}`: it maps the *outflow* trace to the *inflow* trace.
@@ -3371,25 +3400,65 @@ law (a specular
 scatter the image back over :math:`\Gamma_-`. To guarantee
 they cannot drift, that action is the single
 :meth:`SNBoundaryOperator._reflect_trace <orpheus.sn.operators.boundary.SNBoundaryOperator>`
-core, and both the full-field forward action
-:meth:`B.apply <orpheus.sn.operators.boundary.SNBoundaryOperator.apply>`
-and the new trace-only leaf
-:meth:`B.reflect_into_inflow <orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_into_inflow>`
-route through it (Wave O step O.2a, commit ``8563f4b``).
+core, and **every** public route descends from it — there are exactly
+two families.  The ``_apply_faces`` lift onto a zero-bulk
+:class:`~orpheus.transport.full_field.FullField` carrier serves
+:meth:`B.apply <orpheus.sn.operators.boundary.SNBoundaryOperator.apply>`,
+its Euclidean transpose, and the masked operator's row-restricted
+``apply``; the in-place additive
+:meth:`SNMaskedBoundaryOperator.reflect_rows_inplace
+<orpheus.sn.operators.boundary.SNMaskedBoundaryOperator.reflect_rows_inplace>`
+calls the core directly, because it writes onto a caller's trace buffer
+rather than returning a field.
 
-The leaf exists because the direct helper does not need a full field.
+⛔ **Until 2026-09-07 the sentence above named a different second
+consumer** — the trace-only *leaf* ``B.reflect_into_inflow``, added at
+Wave O step O.2a (commit ``8563f4b``) with its mutating façade
+``reflect_inflow_inplace``, and retired together with it at CS4c step 6
+item 6.5.  The no-drift argument is unchanged in kind and stronger in
+reach: the second consumer is now the verb production actually binds
+(the Gauss-Seidel resolvent's row update), not a leaf whose only
+remaining caller was a test-tree helper.
+
+**Why the leaf existed, and why that reason expired.**
 :meth:`B.apply <orpheus.sn.operators.boundary.SNBoundaryOperator.apply>` operates on a :class:`~orpheus.transport.full_field.FullField`
 (zero bulk, trace populated) — the timeless, history-blind operator carrier
 (:meth:`SNBoundaryOperator.apply <orpheus.sn.operators.boundary.SNBoundaryOperator.apply>`
 is the base arrow ``FullField -> FullField``; the comonad lives on the
 driver), the bulk only a carrier to reach the :math:`A_{ss}` boundary block. The pre-extraction direct helper
 fabricated a throwaway zero-bulk field purely to call ``B.apply`` and
-then discarded the (zero) bulk output.
-:meth:`reflect_into_inflow <orpheus.sn.operators.boundary.SNBoundaryOperator.reflect_into_inflow>`
-takes a bare :class:`~orpheus.transport.fields.angular_boundary_flux.AngularBoundaryFlux`
-trace and returns the boundary-only
+then discarded the (zero) bulk output.  ``reflect_into_inflow`` removed
+that probe: it took a bare
+:class:`~orpheus.transport.fields.angular_boundary_flux.AngularBoundaryFlux`
+trace and returned the boundary-only
 :class:`~orpheus.transport.source_sinks.angular_boundary_source_sink.AngularBoundarySourceSink`
-directly — no zero-bulk probe.
+directly.  The saving was real for a *whole-trace* caller — and by 2026-09-07
+there was none: the only trace-shaped consumer left was the sweep-tier gates'
+inter-sweep reflect, which the masked verb serves through the Jacobi split's
+``upper`` half.  A verb whose whole justification is an ergonomic saving for
+callers that no longer exist is a second spelling of one action, so item 6.5
+retired it rather than keeping the two in step.
+
+**The full-field route's input contract** (CS4c step 6 item 6.3,
+2026-09-07).  Because ``B.apply`` is reached through a composite carrier,
+``_apply_faces`` parses that carrier before touching it, and it does so
+through the SAME body its :math:`L` and :math:`L+C` siblings use —
+:meth:`FullField.require_member
+<orpheus.transport.full_field.FullField.require_member>`: a ``TypeError``
+naming the refusing surface and the carrier it wanted for a foreign object
+(until this item ``_apply_faces`` read ``psi.interior`` unguarded and leaked
+a raw ``AttributeError``), a ``ValueError`` carrying the greppable
+*space-content invariant* vocabulary for a content mismatch.  The parse is
+keyed on the operator's **carrier mesh**, not on its bound end, and
+deliberately so: :math:`B_a` is fed the windowed *moment* iterate as well as
+the angular composite its ends name (``[M]`` 59 / 58 / 47
+``HarmonicMomentFlux``-interior composites per 2-D windowed solve), and a
+bound-end comparison would refuse every one of them.  ⚠ The guard is
+tagged ``ELEGANCE-DEBT[guard]`` (`#457
+<https://github.com/deOliveira-R/ORPHEUS/issues/457>`_) — it is a
+protection, not the target state.  It retires when every leaf is bound on
+the end it acts on, after which an alien carrier cannot be typed at all and
+the admission is the ordinary composability guard.
 
 Keeping :math:`B`'s emission off the outflow row is load-bearing: as
 the sibling :math:`-B` reading the *whole* boundary block, a non-zero

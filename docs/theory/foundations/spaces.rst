@@ -4004,9 +4004,48 @@ taken.
    * - ``Medium`` and the mesh-conformity guard
      - **CS1.5.** See :ref:`spaces-symmetry-monotonicity`.
    * - Making the operators' ``space`` slot mandatory
-     - **CS4.** Every operator's ``space`` is still
-       ``FunctionSpace | None``; a ``None`` operand makes the
-       composition guard skip rather than validate.
+     - ✅ **LANDED, in two halves.**  The *carrier* half — a
+       constructor that will not build an unbound operator — landed
+       for :math:`C` / :math:`S` / :math:`F` and the energy bindings
+       at CS4c K2b / step 2 / step 3 / step 5 (two mandatory
+       keyword-only ends on
+       :class:`~orpheus.transport.operators.bound_operator.BoundOperator`).
+       The
+       *declaration* half — the ends a leaf ANNOTATES — landed for the
+       :math:`L` and :math:`B` family at **CS4c step 6 item 6.4**
+       (2026-09-07, ``550be030``): the eight ``domain`` / ``codomain``
+       properties on
+       :class:`~orpheus.sn.operators.streaming.StreamingOperator`,
+       :class:`~orpheus.sn.operators.boundary.SNBoundaryOperator`,
+       :class:`~orpheus.sn.operators.boundary.RadialCharacteristicBoundaryOperator`
+       and
+       :class:`~orpheus.sn.operators.boundary.SNMaskedBoundaryOperator`
+       read ``FunctionSpace``, not ``Optional[FunctionSpace]``.  A
+       bound leaf's ends are never ``None``.
+       ⛔ This row read *"CS4. Every operator's* ``space`` *is still*
+       ``FunctionSpace | None``\ *; a* ``None`` *operand makes the
+       composition guard skip rather than validate"* until 2026-09-07.
+       Its first clause is now history.  Its second was a claim about a
+       mechanism that **had already been repaired elsewhere**: the
+       composition guard's skip is keyed on the runtime VALUE, not on
+       the annotation, and no L/B binding has answered ``None`` since
+       the ends became mesh-derived properties; the sibling story that
+       an unbound end made the ``.H`` metric branch conditional stopped
+       being true at CS4c **step 1**, when
+       :class:`~orpheus.numerics.operator.AdjointOperator` began
+       REFUSING an unbound inner outright.  Item 6.4 is therefore
+       TYPING-ONLY — no value moves — and the honest reading of the
+       flip is that it makes the type system state a law the runtime
+       already enforced.  ⚠ One deliberate exception survives, and it
+       is not an oversight:
+       :class:`~orpheus.sn.operators.boundary.RadialCharacteristicBoundaryOperator`\ 's
+       CONSTRUCTOR parameter stays ``FullFieldSpace | None``, because
+       the constructor **is** the narrow — its guard ("the pose carries
+       no ψ½ ray") has two witnesses that pass a runtime ``None`` on
+       the slab, and flipping the parameter would make a
+       runtime-reachable guard statically unreachable (the harmful-stub
+       trap).  The row is about the ENDS a leaf declares, not about
+       every parameter that mentions a space.
    * - A CHOSEN curvilinear moment mass
      - **Not scheduled here — and the reason is a split, not a delay.**
        P7 landed the *machinery* for a non-Hadamard metric; which
