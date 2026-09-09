@@ -1032,9 +1032,10 @@ def _tensor_product_factored_metric(
     * an **axis-built** factor contributes one entry per AXIS — a
       :class:`~orpheus.numerics.metric.DiagonalMetric` carrying the
       axis measure on that axis's block, ``None`` for a counting-measure
-      axis — so the product applies exactly the arithmetic
-      :meth:`FunctionSpace._apply_axes_weights` applies on the factor
-      itself (:meth:`~orpheus.numerics.metric.DiagonalMetric.apply_block`
+      axis — so the product applies exactly the entries the factor
+      DERIVES for itself (:func:`_axis_entries`, CS4c step 6 item 6.2c-i;
+      until then the factor's inline ``_apply_axes_weights`` loop spelled
+      the same arithmetic — :meth:`~orpheus.numerics.metric.DiagonalMetric.apply_block`
       is operation-for-operation that reshape-and-multiply: bit-identical
       on an axis block by construction);
     * a factor carrying a metric **object** rides verbatim — a nested

@@ -2544,6 +2544,7 @@ Main-agent evaluation (to be developed at the campaign opener, cross-domain-atta
 * **A patch script's self-check is a CENSUS and owes its population** — `count == 2 in solver.py` is not `count == 2 in the tree` (the exclusion family's third member, plan-authoring row 2026-09-05).
 * **A battery arm whose mutation breaks a solve's convergence needs a per-test cap** — the driver carries `pytest-timeout --timeout=240`; uncapped, B5.6 and B5.9 crawled to `max_inner` (30+ min at one row); capped, they finished (167 and 108 reds, 8 timeouts counted as reds).
 * **`pgrep -fl sphinx-build` before ANY Sphinx build** (L63), and the 13-tree driver TRUNCATES its log — copy a gate log aside before re-running the driver if its numbers are still owed anywhere.
+* ⛔ **The ROOT tree runs with every commit** (learned at step 6's exit, 2026-09-08): `tests/test_docstring_xrefs.py` and the harness gates live in `tests/` outside the 12 trees; `main` carried a dead docstring role for three commits because only the scope + wide trees gated each landing. The per-commit set is scope + wide + `tests/ --ignore=<the 12 trees>` (~20 s).
 * Residue issues from step 5 stay open and are NOT in this order: #452 (C6 static pins adjudicated by nothing), #451 ((n,2n) Legendre closed form), #449, #446, #444.
 
 ## 23. ⏸ COMPACTION POINT #8 (2026-09-07, written after the #448 merge, tree clean, no gate running) — #448 landed; the next act is #425
@@ -2583,7 +2584,7 @@ Main-agent evaluation (to be developed at the campaign opener, cross-domain-atta
 
 **✅ LANDED `2af8e451` 2026-09-07 — `docs(theory): the corpus states the within-group algebra the tree composes` (Closes #425).** 38 files, +953/−254: 13 SN-chapter pages (the SN archivist), 17 pages outside the chapter (the second archivist), 3 pages in `docs/api` + `docs/architecture` (main agent), the two archivist memory files + index, this plan, `plan-authoring.md`. No `orpheus/` or `tests/` edit. **Exit `[M]` on the final tree:** `sphinx -E -W` rc=0 (the FIRST exit build failed on exactly one `ref.ref` — a bare `:ref:` to a paragraph anchor without a title, `index.rst:138`; given explicit text, rebuilt clean); `dead_references` 0 dead / 68 checked; docs-coupled harness gates 380 passed / 5 xfailed = the pre-pass baseline (0 new equation labels ⟹ predicted delta 0, reconciled identical); `matrix.rst` unchanged. **Census (`scratch/_425/census.py all --annotation …`):** four-term 114 → 25, F-form 13 → 1, five-term control 20 → 128; the unannotated residual is EXACTLY the 5 listed history sites (`history.rst:858/2022/2049`, `foundations/boundary_conditions.rst:3950`, `operator_algebra.rst:6900`). Two agent forks taken by default and corroborated: `slab_one_group.rst` adjudicated GENERAL (verdict i) though its fixtures are Σ₂ₙ-free — the page names itself the slab instance of the foundations algebra, and the other instance independently made its cross-page citer five-term; the Wave-O boundary-extraction record was DATED in place rather than retro-fitted. Follow-up filed: **#456** (41 `orpheus/` + 30 `tests/` docstring sites; `diffusion/` legitimately four-term). ⭐ Two archivists on disjoint page sets with NO agent build and ONE main-agent exit build is a working shape for a corpus pass; their `-W` substitute (a permissive `docutils` parse) caught 3 real breakages between them.
 
-### 23.2 Then — step 6 of the ladder (§8, the CS2 residue) — as §22.3; opens with a design round + the explorer's re-census of the boundary leaf surfaces (every CS2 count dates 2026-08-20/21; #448 retired `reflect_corner_inplace` and moved the reflect helper, so the boundary surface has MOVED since).
+### 23.2 ✅ LANDED 2026-09-08 (eleven commits `823f97dd` … `336b6394`; the record is §25) — step 6 of the ladder (§8, the CS2 residue) — as §22.3; opens with a design round + the explorer's re-census of the boundary leaf surfaces (every CS2 count dates 2026-08-20/21; #448 retired `reflect_corner_inplace` and moved the reflect helper, so the boundary surface has MOVED since).
 
 **⏵ OPENER RAN 2026-09-07 at `85769f28` — explorer re-census, `scratch/_step6/explorer_boundary_recensus.md` (33-row re-measure table in its §6; 11 refutations in its §7; every count an AST census with a positive control; Nexus present).** The 11th consecutive opener to correct its own section. What a design round must take as ground:
 
@@ -2671,3 +2672,60 @@ Main-agent evaluation (to be developed at the campaign opener, cross-domain-atta
 * **Two sub-agents on disjoint page sets with NO agent build and ONE main-agent exit build** is a working shape; a permissive `docutils` parse is their `-W` substitute (it caught 3 real breakages). A bare `:ref:` to a paragraph anchor is a `-W` failure — always give it explicit text.
 * **A guard is elegance debt** (`[R]` user): tag it `ELEGANCE-DEBT[guard] #NNN` + the structural change that retires it (`coding-standards.md`). Read with the F1 ruling above.
 * Residue issues stay open and are NOT in the order: #456, #455, #453, #452, #451, #449, #446, #444.
+
+## 25. ⏸ COMPACTION POINT #10 (2026-09-08, written after step 6's exit gate; tree clean) — step 6 of the ladder LANDED; the next act is the coda (§22.4), then the consumers campaign (§22.5)
+
+**State `[M]`:** `main` = `origin/main` @ `3cb468d7` + THIS close-out commit (the two test-side repairs, this section, the rule's two surprise rows); working tree clean but for `scratch/` and the foreign `.claude/plans/harness_context_budget.md` (NOT ours to stage); no gate running; no agent holding the tree.
+
+### 25.1 Step 6 — the commit table (all ff-merged, each gated at its own tier before landing)
+
+| item | hash | what | gate at landing |
+|---|---|---|---|
+| pre-carve anchors | `823f97dd` | 55 rows: the boundary/identity premises step 6 re-poses | anchors green on the unmodified tree |
+| 6.1 | `77a12286` | the identity flip — `FunctionSpace.__eq__`/`__hash__` STRUCTURAL (the axes when both sides carry them; `(name, shape)` otherwise; axis-built ≠ hand-named) | scope 5607 |
+| 6.2a | `b5ef95ca` | the per-AXIS factored product: `from_factors` two arms, the dense arm + `_dense_axes_weights`/`_tensor_product_inner_weights`/`_broadcast_metric` retired | scope 5607 |
+| 6.2b | `94e93b46` | the hub owns the moment space: `SNMesh.moment_space(L, *, spatial_moments)` keyed, `is` within the carrier; `__mul__` 5 per windowed solve at every `max_inner` | wide 1825 → 1836 |
+| 6.3 | `630301c2` | `FullField.require_member(cls, x, *, mesh, context)` (ELEGANCE-DEBT[guard] #457), five call sites; the debt-ledger gate | scope 5617/8 |
+| 6.4 | `550be030` | the boundary `Optional` flips (properties only); `_R1_XFAIL` deleted | scope 5619/6 |
+| 6.5 | `79d2944a` | the reflect verbs retired; the refusal on `reflect_rows_inplace` | scope 5618/6; docs pass |
+| 6.2c anchors | `8b4e6f76` | 183 rows: the axis-built head's premises, the FORK measured on 33 rows, the windowed SI pin the tree lacked | anchors green |
+| 6.2c-i | `db5be2ec` | the metric doctrine — an axis-built space's metric is the axes-DERIVED `FactoredMetric` with the positioned OVERLAY of forms (R-6.2c-2) | scope 5806; battery 6 arms |
+| 6.2c-ii | `6586fcd3` | the head is axis-built (`HarmonicAxis`/`LegendreAxis`); the tree binds ONE moment space — the frame's Parseval-dressed head (R-6.2c-1); truncation through the generator; `moment_space_on` refuses a moment space; `FrameBase.gram` → the arrow `gram_inverse` | scope 5824; wide 1878; battery 8 arms |
+| 6.2c-iii | `336b6394` | the moment tail is the scheme's own axis; `SpatialMomentSpace` retired | scope 5814; wide 1878; battery 5 arms |
+| docs stamps | `2de7c8e8`, `3cb468d7` | landing hashes into history/plan | — |
+
+### 25.2 The exit gate `[M]`
+
+The 13-tree canonical gate (`python -O -m pytest -p no:randomly -m "not slow" -q`, SERIAL, detached, `scratch/_step6/exit_gate_driver.sh` → `scratch/_step6/exit_full_gate.log`, 60 min; HEAD `3cb468d7`): **11 of 13 trees rc=0 on the first pass, two rows red, both MINE and both test-side — repaired, the affected trees re-run green** (`scratch/_step6/exit_rerun_sn.log`, the root tree inline):
+
+| tree | baseline `6379e9ab` p/s/x | exit p/s/x | Δp | attribution |
+|---|---|---|---|---|
+| numerics | 3263/0/0 | 3379/2/0 | +116 | the identity/metric/axis gates (6.1–6.2c) |
+| transport | 841/1/0 | 946/1/0 | +105 | the frame/fork/refusal gates (6.2c) |
+| geometry, data, homogeneous, diffusion, cp, moc, mc, cross_method, derivations | unchanged | unchanged | 0 | untouched by the step |
+| sn | 3526/1/47 | 3622/1/37 | +96 | the hub/carrier/boundary gates (6.2b–6.5, 6.2c) and the 10 ledger xfails flipped (−10 xf) |
+| root + harness | 426/0/5 | 427/0/5 | +1 | the debt-ledger gate (6.3) |
+| **total** | **11 281/19/66** | **11 599/21/56** | **+318** | predicted `scratch/_step6/exit_prediction.md`: +315 / 21 / 56 — skips and xfails exact; +1 the root ledger gate (outside every per-commit gate); +2 in the four pre-carve anchor files (`[M]` 59 rows at HEAD vs 55 at `823f97dd`; 2 of the 4 are 6.3's counted net rows, 2 were added by later re-poses of those files and never entered a commit's delta) |
+
+The two reds, each a §6b spelling no gate I ran per commit could see: (1) `tests/sn/test_homogenization.py::test_homogenize_routes_through_the_petrov_galerkin_frame` — a Mode-11 counting spy on `FunctionSpace.apply_inverse_metric`, the method `project`'s normalisation stopped calling when 6.2c-ii spelled it as the `gram_inverse` arrow; the spy moved onto `CrossGramInverse.apply` (the file is in `tests/sn` outside the wide six). (2) `tests/test_docstring_xrefs.py::test_no_docstring_names_a_missing_object[orpheus]` — a historical mention of `_apply_axes_weights` in `space.py:1036` spelled as a live `:meth:` role (retired at 6.2c-i; the root tree was not in the per-commit gate set — `main` carried it for three commits). Both fixed in the close-out commit; sn re-run 3622 passed / 1 skipped / 37 xfailed rc=0 (`scratch/_step6/exit_rerun_sn.log`, 16:51); root 427 passed / 5 xfailed rc=0.
+
+### 25.3 Corrections that supersede older text in this plan
+
+* §8's row 6 read *"minimal by design"* — refuted at the opener (the guard is coupled three ways; §24) and REPLACED by the full principled path (R-6.2, user 2026-09-07: "special paths must be really special and earn their place"). Step 6 landed **eleven** commits, not the three the row implied.
+* #429 Landing A's metric binding (the continuum `basis.space` on the moment ends/fields) is **overturned** by R-6.2c-1 (user 2026-09-08) after its recorded reason failed re-measurement (5 of 33 / 3 diagonal / 0 on physical inputs; no statistic reproduces "96–161 %"). The Landing A gate's metric rows are flipped and its two refuted docstring claims rewritten WITH their statistics (H-4).
+* The 6.2c memo's §7.3 retirement list missed `SpatialMomentSpace` (retired at 6.2c-iii) and its §6b census missed the metric-twin `FrameBase.gram` (plan-authoring surprise row 2026-09-08).
+* R-6.2c-2's first spelling (an explicit object REPLACING the derived entries) was corrected at the carve to the OVERLAY (the ruling's own wording); recorded in §24.1a.
+
+### 25.4 Durable lessons (candidates for `lessons.md` / the rules; each carries its measurement)
+
+* **A metric that enters space identity turns every metric-twin ACCESSOR into a §6b member** (`FrameBase.gram`; the surprise-log row). Grep `replace(<end>, inner_product_weights=|metric=` on production spaces when a step makes the metric part of identity.
+* **Provenance is the object that SPANS the head, not a content-equal copy** — a `from_L` re-minting a fresh basis as generator broke `generator is frame.basis` on 48 rows; `for_basis(self)` is the mint, `from_L` its sugar.
+* **A refusal whose reason dissolves must go in the same commit** (`scalar_flux`'s widened self-derive, S4) — the gate pinning the refusal is the tell (it flips to a capability gate).
+* **A widened request on a slopeless carrier is refused by the SCHEME on every side** — the angular rule since CS4b S4 became the moment side's at 6.2c-iii; 14 widened test rows on a DD fixture were the seam's only witnesses of the old laxness.
+* ⛔ **The ROOT tree's gates are part of EVERY commit's gate set, not only the exit's** — `tests/test_docstring_xrefs.py` (resolves every docstring `:role:` in `orpheus/` by import; 20 s) was red on `main` from `db5be2ec` (6.2c-i) to the step's exit: a historical mention of the retired `_apply_axes_weights` spelled as a live `:meth:` role in `space.py`. Neither the scope gate, the wide trees, `sphinx -W` (Python-domain roles never warn) nor nexus `dead_references` (0/68 throughout — it reads a different surface) saw it. `main` was NOT green for three commits; the per-commit gate set is now scope + wide + the root tree (`tests/ --ignore=<the 12 trees>`, ~20 s).
+* **A Mode-11 counting spy is a call site written as a string** — the exit gate's other red (plan-authoring surprise row 2026-09-08); grep `setattr(.*"<method>"` when a carve re-routes a path.
+* **Battery arms must rebind what the code actually is** (a staticmethod is not a classmethod; a `__func__` read on a bare function killed a whole battery in 1 s — the control's `banner=0` is the tell).
+
+### 25.5 Then — the coda (§22.4) and the consumers campaign (§22.5)
+
+The coda opens with an explorer census of the homogeneous path (F5's re-point), the `from_materials` consumer, and O1's remaining items (their definitions are in §7/§8 — re-derive at the opener, per plan-authoring §7); then the consumers campaign opens on the `SNProblem` Problem → Solution split (§22.5's addendum) with a cross-domain-attacker + explorer round. Residue issues NOT in the order: #457 (the guard's debt, retires with R18), #456, #455, #453, #452, #451, #449, #446, #444.

@@ -322,7 +322,10 @@ def test_homogenize_routes_through_the_petrov_galerkin_frame(solution, monkeypat
     * ``WeightedIndicatorBasis.analyze`` — the **TEST-side** reader (the load-bearing
       re-point: φ now lives on the test basis, not folded into the metric);
     * ``FrameBase.project`` — the NEW coefficient-extraction verb G⁻¹M;
-    * ``FunctionSpace.apply_inverse_metric`` — the diagonal-Gram fast path inside it.
+    * ``CrossGramInverse.apply`` — the normalisation :math:`G^{-1}` inside it,
+      the frame's own arrow ``test_space → basis_space`` (CS4c step 6 item
+      6.2c-ii; until then ``project`` normalised through the probe SPACE's
+      ``FunctionSpace.apply_inverse_metric``, which this sentinel counted).
 
     A φ-never-moved mutation (keep ``GalerkinFrame`` + the metric-fold) leaves
     ``test_analyze`` at 0 → RED, while the rate gate stays green — the exact
@@ -330,8 +333,7 @@ def test_homogenize_routes_through_the_petrov_galerkin_frame(solution, monkeypat
     """
     from orpheus.numerics.basis.indicator_basis import IndicatorBasis
     from orpheus.numerics.basis.weighted_indicator_basis import WeightedIndicatorBasis
-    from orpheus.numerics.frame import FrameBase
-    from orpheus.numerics.space import FunctionSpace
+    from orpheus.numerics.frame import CrossGramInverse, FrameBase
 
     counts = {"evaluate": 0, "test_analyze": 0, "project": 0, "inverse_metric": 0}
 
@@ -352,8 +354,8 @@ def test_homogenize_routes_through_the_petrov_galerkin_frame(solution, monkeypat
         FrameBase, "project", _counting("project", FrameBase.project),
     )
     monkeypatch.setattr(
-        FunctionSpace, "apply_inverse_metric",
-        _counting("inverse_metric", FunctionSpace.apply_inverse_metric),
+        CrossGramInverse, "apply",
+        _counting("inverse_metric", CrossGramInverse.apply),
     )
 
     solution.homogenize(_coarse_two_region())
@@ -365,7 +367,7 @@ def test_homogenize_routes_through_the_petrov_galerkin_frame(solution, monkeypat
     )
     assert counts["project"] > 0, "homogenize did NOT use the FrameBase.project verb"
     assert counts["inverse_metric"] > 0, (
-        "homogenize did NOT normalise via apply_inverse_metric"
+        "homogenize did NOT normalise through the frame's gram_inverse arrow"
     )
 
 
