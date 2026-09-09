@@ -80,6 +80,22 @@ def test_H2_hubs_over_equal_mixtures_mint_equal_state_and_distinct_mixtures_do_n
     _require(a.loss.as_matrix().shape != c.loss.as_matrix().shape, "distinct mixtures, distinct operators")
 
 
+def test_H2b_the_hubs_identity_is_the_mixtures_and_never_raises() -> None:
+    """INTERIM identity (constituent tier; #459 rules the content tier): two
+    hubs over the SAME Mixture object are equal and hash equal, hubs over two
+    equal-data Mixture OBJECTS are not (the content tier is #459's), and
+    neither ``==`` nor ``hash`` raises — `[M]` 2026-09-08 the dataclass
+    default raised on both (``Mixture``'s generated ``__eq__`` compares
+    ndarray fields; a frozen dataclass over it is unhashable)."""
+    mix = get_mixture("A", "2g")
+    a, b = HomogeneousProblem(mix), HomogeneousProblem(mix)
+    _require(a == b and hash(a) == hash(b), "hubs over one Mixture object must compare equal and hash equal")
+    _require({a, b} == {a}, "a set of hubs over one Mixture holds one member")
+    twin_data = HomogeneousProblem(get_mixture("A", "2g"))
+    _require(a != twin_data, "the interim tier is constituent identity: equal DATA in two objects is two problems (#459)")
+    _require(a != object() and not (a == None), "a hub compares unequal to a non-hub without raising")
+
+
 @pytest.mark.parametrize("groups", ["1g", "2g", "4g"])
 def test_H3_every_field_is_born_on_the_pose_and_every_operator_ends_on_it(groups: str) -> None:
     problem = HomogeneousProblem(get_mixture("A", groups))

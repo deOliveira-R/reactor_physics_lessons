@@ -159,7 +159,7 @@ def _pose_space(mix: Mixture) -> FunctionSpace:
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class HomogeneousProblem:
     r"""The infinite-medium problem — the HUB the homogeneous family's consumed objects live on.
 
@@ -218,6 +218,26 @@ class HomogeneousProblem:
     def ng(self) -> int:
         """The group count — the mixture's."""
         return self.mixture.ng
+
+    # ── identity (INTERIM — the constituent tier; #459 rules the content tier) ──
+    def __eq__(self, other: object) -> bool:
+        """Two hubs pose the SAME problem iff they are generated from the same
+        :class:`~orpheus.data.macro_xs.mixture.Mixture` OBJECT — constituent
+        identity, the tier :meth:`SNMesh.is_same_phase_space
+        <orpheus.sn.mesh.augmented_mesh.SNMesh.is_same_phase_space>` uses for
+        its materials. Deliberately NOT the dataclass default: ``Mixture``'s
+        generated ``__eq__`` compares ndarray fields and RAISES
+        (``ValueError: truth value of an array``), and a frozen dataclass over
+        an unhashable datum is itself unhashable — `[M]` 2026-09-08 both
+        raised on the first hub. The honest CONTENT identity (equal generating
+        data ⟹ the same problem, so a saved-and-reloaded problem compares
+        equal) is the consumers campaign's first ruling — GitHub #459 — and
+        replaces this method together with the ``SNMesh`` predicate and
+        ``Mixture``'s equality, from ONE definition."""
+        return type(other) is type(self) and self.mixture is other.mixture  # type: ignore[attr-defined]
+
+    def __hash__(self) -> int:
+        return hash((type(self), id(self.mixture)))
 
     @cached_property
     def space(self) -> FunctionSpace:
