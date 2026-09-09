@@ -23,9 +23,11 @@ docstrings before touching a row:
   the row's own docstring. This is ``plan-authoring`` §6c's red-before
   made executable, not a landmine.
 * :class:`TestNoMaterialMeshIsBuiltOnTheHomogeneousPath` and
-  :class:`TestTheHubHasNotLandedYet` — the RULED post-carve gates, shipped
-  as ``xfail(strict=True)`` so their XPASS is a FAILURE and the landing
-  commit MUST delete the marker (a self-retiring todo list).
+  :class:`TestTheHubExists` — the RULED post-carve gates; shipped BEFORE C1
+  as ``xfail(strict=True)`` (a self-retiring todo list) and turned green
+  in the C1 commit, which deleted the markers, the RECORD row of the
+  spy class and the eight alien-carrier rows (vacuous once nothing
+  fabricated is built — declared, not discovered).
 
 **What this module deliberately does NOT duplicate.**
 ``test_byte_stability.py`` (D5) is ALREADY the frozen pre-carve record of
@@ -71,7 +73,7 @@ import pytest
 
 from orpheus.data.macro_xs.mixture import Mixture
 from orpheus.homogeneous.solver import (
-    _assemble_loss_operator,
+    HomogeneousProblem,
     _pose_space,
     solve_homogeneous_infinite,
 )
@@ -122,12 +124,9 @@ _CASE_IDS = (
 
 
 def _production_operators(mix: Mixture):
-    """``(A, F)`` as the production path assembles them today."""
-    space = _pose_space(mix)
-    mat_xs = MaterialMesh.from_materials({0: mix}).material_xs_field()
-    loss = _assemble_loss_operator(mat_xs, space)
-    production = IsotropicFission.from_material_xs(mat_xs, space=space)
-    return np.asarray(loss.as_matrix()), np.asarray(production.as_matrix())
+    """``(A, F)`` as the production path assembles them — off the hub (C1)."""
+    problem = HomogeneousProblem(mix)
+    return np.asarray(problem.loss.as_matrix()), np.asarray(problem.production.as_matrix())
 
 
 # ── The structurally-independent reference: RAW Mixture arrays only ──
@@ -324,73 +323,6 @@ class TestTodaysFabricatedCarrier:
             f"the fabricated volume moved: {carrier.volumes}",
         )
 
-    @pytest.mark.parametrize("case", _CASE_IDS)
-    def test_no_fabricated_spatial_datum_reaches_the_answer(
-        self, case: str, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        r"""VACUOUS AT **C1** (nothing fabricated is constructed any more).
-
-        The strongest available statement of O1's second half, and
-        strictly stronger than G2.4 (``test_operator_spaces.py``), which
-        mutates the carrier's ``volumes`` alone: here the WHOLE fabricated
-        carrier is replaced by an alien one — edges ``[10, 13]`` (volume
-        3), node ``11.5``, a SPHERICAL chart, and consequently a
-        **different** ``bulk_space`` — and the four reported numerics are
-        bit-identical. `[M]` 8 of 8 on the unmodified tree.
-
-        ⚠ It is ALSO the pre-carve evidence for a hazard the carve closes:
-        ``MultiplicationOperator`` never compares its coefficient's space
-        to its ends (`[M]` ``grep -c 'coefficient\.space'`` = 0 in
-        ``multiplication_operator.py``), which is WHY a coefficient minted
-        on a wrong space passes today. After C1 the σ_t field is born on
-        the pose and the disagreement is unspellable on this path.
-
-        Delete this row in the C1 commit (its injection point is gone);
-        the surviving claim is the construction spy below.
-        """
-        from orpheus.geometry import CoordSystem
-        from orpheus.transport.mesh.axis import AxisMesh
-
-        mix = _d5_cases()[case]
-        baseline = solve_homogeneous_infinite(mix)
-
-        def alien(materials):
-            obj = MaterialMesh.__new__(MaterialMesh)
-            obj._init_data(
-                axes=(AxisMesh(edges=np.array([10.0, 13.0])),),
-                mesh=None, mat_map=None, materials=materials,
-            )
-            obj.coord = CoordSystem.SPHERICAL
-            return obj
-
-        # Precondition, asserted: the alien really is a different carrier
-        # (a decoy that does not discriminate is a dud — `vv` #17). Stated
-        # RELATIVE to the fabricated carrier, never against a literal, so
-        # a global measure mutation cannot red this row for an instrument
-        # reason (`[M]` battery arm VOLUMES_X2).
-        probe = alien({0: mix})
-        fabricated = MaterialMesh.from_materials({0: mix})
-        _require(
-            not np.array_equal(probe.volumes, fabricated.volumes)
-            and probe.coord is not fabricated.coord
-            and probe.coord is CoordSystem.SPHERICAL
-            and probe.bulk_space != fabricated.bulk_space,
-            "the decoy carrier does not differ from the fabricated one",
-        )
-
-        monkeypatch.setattr(MaterialMesh, "from_materials", staticmethod(alien))
-        alienated = solve_homogeneous_infinite(mix)
-
-        _require(
-            alienated.k_inf == baseline.k_inf
-            and bool(np.array_equal(alienated.flux, baseline.flux))
-            and alienated.sig_prod == baseline.sig_prod
-            and alienated.sig_abs == baseline.sig_abs,
-            f"{case}: an ALIEN fabricated carrier moved the answer — some "
-            f"fabricated spatial datum IS consumed on the homogeneous path "
-            f"(k {baseline.k_inf!r} -> {alienated.k_inf!r})",
-        )
-
 
 class TestNoMaterialMeshIsBuiltOnTheHomogeneousPath:
     r"""G2.4's ruled RE-POSE — a CONSTRUCTION SPY, with its positive control.
@@ -445,36 +377,6 @@ class TestNoMaterialMeshIsBuiltOnTheHomogeneousPath:
             f"construction body, and every count this class reports is void",
         )
 
-    def test_todays_solve_constructs_exactly_one_material_mesh(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """RED AT **C1** — the RECORD half, and the spy's own attribution leg.
-
-        `[M]` on the unmodified tree ``solve_homogeneous_infinite`` builds
-        exactly ONE ``MaterialMesh`` (``solver.py:238``). Delete this row in
-        the C1 commit, in the same edit that deletes the ``xfail`` marker
-        below. Keeping BOTH rows is what makes a failure attributable: if
-        the spy itself breaks, THIS row reds loudly instead of the ruled row
-        silently swallowing it inside its ``xfail``.
-        """
-        calls = self._count(monkeypatch)
-        solve_homogeneous_infinite(_d5_cases()["homo_2eg"])
-        _require(
-            len(calls) == 1,
-            f"the homogeneous solve constructed {len(calls)} MaterialMesh "
-            f"objects, not 1 — if this is C1 landing, delete this row and the "
-            f"xfail marker on its sibling in the same commit",
-        )
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "coda C1 has not landed: orpheus/homogeneous/solver.py:238 still "
-            "calls MaterialMesh.from_materials({0: mix}).material_xs_field(). "
-            "When C1 lands this row XPASSes — a FAILURE under strict — and the "
-            "marker must be deleted in the landing commit."
-        ),
-    )
     def test_no_material_mesh_is_constructed_on_the_homogeneous_path(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -489,8 +391,8 @@ class TestNoMaterialMeshIsBuiltOnTheHomogeneousPath:
         )
 
 
-class TestTheHubHasNotLandedYet:
-    """R-c1's todo marker — the hub's EXISTENCE, nothing more.
+class TestTheHubExists:
+    """R-c1's hub EXISTS (landed at C1) — the existence row; the contract is in ``test_homogeneous_problem.py``.
 
     The user's ruling (plan §26 R-c1): the coda mints a
     ``HomogeneousProblem``-shaped hub in ``orpheus/homogeneous/`` that owns
@@ -500,21 +402,10 @@ class TestTheHubHasNotLandedYet:
     ⚠ SCOPE, stated so nobody reads more into a green: this row asserts the
     hub EXISTS and is constructible from a ``Mixture``. Its identity
     contract (``is`` within one instance for the pose space and each field;
-    equal mixtures minting ``==`` state) is NOT asserted here — an
-    ``xfail`` hides every failure, so a contract assertion added to this
-    body would go silent the day the hub lands wrong. Those rows are
-    specified in ``scratch/_step6/test_architect_verification_plan_coda.md``
-    §3 and land IN the C1 commit as ordinary green gates.
+    equal mixtures minting ``==`` state) lives in
+    ``test_homogeneous_problem.py`` (H1–H5), landed with C1.
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "coda C1 has not landed: orpheus.homogeneous exposes no "
-            "HomogeneousProblem hub (R-c1). When C1 lands this row XPASSes — "
-            "a FAILURE under strict — and the marker must be deleted."
-        ),
-    )
     def test_the_homogeneous_problem_hub_exists(self) -> None:
         import orpheus.homogeneous.solver as solver_module
 

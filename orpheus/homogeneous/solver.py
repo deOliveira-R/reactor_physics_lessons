@@ -11,9 +11,12 @@ equation reduces to the pure energy-balance eigenvalue problem
 with k_inf = λ_max(A⁻¹F).
 
 The eigenproblem is spelled in the operator algebra itself (taxonomy step
-5b): the loss operator ``A = C − K_iso`` is composed over a MESHLESS
-single-cell MaterialMesh (``MaterialMesh.from_materials``) — the collision
-diagonal C = diag(Σ_t) minus the model-shared isotropic energy operators
+5b) over the problem's OWN hub, :class:`HomogeneousProblem` (CS4c coda,
+ruling R-c1, 2026-09-08): the place the consumed objects live — the pose
+space, the mixture-direct kernel and cross-section fields, and the bound
+operators built on them — as cached, per-instance state the solver reads
+off. The loss operator ``A = C − K_iso`` is the collision diagonal
+C = diag(Σ_t) minus the model-shared isotropic energy operators
 ``IsotropicScattering`` (Σ_s0ᵀ) and ``IsotropicN2N`` (2·Σ₂ᵀ); streaming L
 is identically zero in an infinite medium and is dropped — and the
 multiplication operator is the composition
@@ -34,7 +37,8 @@ produced with the fission spectrum χ.  Production is νΣ_f only.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
+from functools import cached_property
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -44,7 +48,9 @@ from orpheus.numerics.axis import Axis, BasisKind, EnergyAxis
 from orpheus.numerics.eigenvalue import dominant_eigenpair
 from orpheus.numerics.matrix_inverse_operator import MatrixInverseOperator
 from orpheus.numerics.space import FunctionSpace
-from orpheus.transport.mesh.material_mesh import MaterialMesh
+from orpheus.transport.fields.cross_section_field import CrossSectionField
+from orpheus.transport.kernels import FissionKernel, TransferKernel
+from orpheus.transport.material_field import FissionMaterialField, TransferMaterialField
 from orpheus.transport.reaction_rate_functional import IntegratedReactionRate
 from orpheus.transport.operators.isotropic_transfer import (
     IsotropicFission,
@@ -54,8 +60,7 @@ from orpheus.transport.operators.isotropic_transfer import (
 from orpheus.transport.operators.multiplication_operator import MultiplicationOperator
 
 if TYPE_CHECKING:
-    from orpheus.numerics.operator import OperatorSum
-    from orpheus.transport.mesh.material_xs_field import MaterialXSField
+    from orpheus.numerics.operator import OperatorProduct, OperatorSum
 
 
 # ---------------------------------------------------------------------------
@@ -126,9 +131,11 @@ def _pose_space(mix: Mixture) -> FunctionSpace:
     normalized per-unit-volume density convention; the counting-measure
     premise the rate pairing below rests on).
 
-    The degenerate carrier's ``bulk_space`` mints an ``==`` space (the
-    identity bridge gate pins it) but is no longer what production
-    consumes — the carrier supplies cross sections, not the posing.
+    Since the CS4c coda (R-c1) this is the ONE spelling of the pose: the
+    hub's :attr:`HomogeneousProblem.space` calls it, and nothing on the
+    homogeneous path builds a carrier any more (a genuine unit-cell
+    ``Mesh1D`` carrier's ``bulk_space`` mints an ``==`` space — the
+    identity-bridge gate keeps that reference honest).
 
     **CS4a-R rulings this space's consumers rest on.** The reaction
     rates in :func:`solve_homogeneous_infinite` read the typed
@@ -152,54 +159,178 @@ def _pose_space(mix: Mixture) -> FunctionSpace:
     )
 
 
-def _assemble_loss_operator(
-    mat_xs: "MaterialXSField", space: FunctionSpace
-) -> "OperatorSum":
-    r"""The loss operator :math:`A = C - K_\mathrm{iso}` for an infinite medium.
+@dataclass(frozen=True)
+class HomogeneousProblem:
+    r"""The infinite-medium problem — the HUB the homogeneous family's consumed objects live on.
 
-    Composes the model-shared transport operators on the meshless single-cell
-    carrier — collision :math:`C = M[\Sigma_t]`
-    (:class:`~orpheus.transport.operators.multiplication_operator.MultiplicationOperator`)
-    minus the isotropic energy transfer :math:`K_\mathrm{iso} = \Sigma_{s0}^T
-    + 2\Sigma_2^T`
-    (:class:`~orpheus.transport.operators.isotropic_transfer.IsotropicScattering`
-    + :class:`~orpheus.transport.operators.isotropic_transfer.IsotropicN2N`).
-    Streaming :math:`L` is identically zero in an infinite medium and dropped.
+    Ruled at the CS4c coda (R-c1, the user, 2026-09-08): *"The homogeneous
+    problem needs a hub, just like the function SNMesh (future SNProblem)
+    currently fulfills, to act as the place the consumed objects live (and
+    a save state)."* This is that hub, minted in the solver module for now;
+    the carve into a standalone ``HomogeneousProblem`` module with a thin
+    Problem → Solution solver is the consumers campaign's, alongside
+    ``SNMesh`` → ``SNProblem`` (plan §22.5).
 
-    Returned UN-materialized (an
-    :class:`~orpheus.numerics.operator.OperatorSum`) — the consumer chooses
-    the realization.  :func:`solve_homogeneous_infinite` hands it to
-    :class:`~orpheus.numerics.matrix_inverse_operator.MatrixInverseOperator`,
-    whose constructor materializes it through the operator's own
-    :meth:`~orpheus.numerics.operator.LinearOperator.as_matrix` (the
-    apply-to-basis materialization this module's retired ``_as_dense``
-    prototyped, promoted at taxonomy §12 step 5) and LU-factors it once
-    (the early ``.as_matrix()`` this function performed until taxonomy
-    step 5b moved into that constructor).
+    **What it determines, from its generating datum alone.** A
+    :class:`~orpheus.data.macro_xs.mixture.Mixture` is the whole physics
+    of an infinite homogeneous medium, so every consumed object is minted
+    from it and from nothing else (O1's *honest pose*: no ``[0, 1]`` edges,
+    no invented node, no coordinate system on the path — until the coda
+    the cross sections came through a fabricated one-cell
+    ``MaterialMesh.from_materials`` carrier whose edges, node and chart
+    `[M]` nothing consumed):
 
-    Since campaign 1 (CS1) the meshless operators pose on a REAL space,
-    and since CS4a (K2) that space is the CALLER's — the mixture-minted
-    Energy ⊗ point from :func:`_pose_space`, threaded explicitly into
-    all three arms (``C`` by direct construction, no ``from_mesh``
-    default chain), so ``C − (IsoS + IsoN2N)`` agrees on one space and
-    the ``OperatorSum`` guard VALIDATES the sum instead of skipping it.
-    Consumers no longer pass ``basis_shape=(ng, 1)`` by hand:
-    ``as_matrix``/``MatrixInverseOperator`` derive it from the threaded
-    domain (the pre-CS1 idiom existed only because these operators
-    carried no
-    :attr:`~orpheus.numerics.operator.LinearOperator.domain` to derive
-    it from). (Until K2 the space was read off the carrier's
-    ``bulk_space``; the carrier now supplies cross sections only.)
+    * the pose :attr:`space` — Energy ⊗ the quotient point
+      (:func:`_pose_space`, the one spelling);
+    * the material fields on the quotient point's one-cell :attr:`layout`
+      — the scattering and (n,2n) transfer stacks
+      (:attr:`scattering`, :attr:`n2n`) and the fission datum
+      (:attr:`fission`), each the kernel tier's own mixture-direct mint;
+    * the cross-section fields, BORN on the pose
+      (:attr:`total_cross_section_field`,
+      :attr:`absorption_cross_section_field`,
+      :attr:`fission_production_field`) — never re-posed, so a field on a
+      space nothing checks is unspellable here;
+    * the bound operators on the pose — :attr:`collision`,
+      :attr:`isotropic_transfer` (``IsoS + IsoN2N``), :attr:`loss`
+      (``C − K_iso``), :attr:`production` (the fission dyad) and the
+      multiplication operator :attr:`multiplication` (``A⁻¹F``, one eager
+      LU at construction) — and the typed reaction-rate co-vectors
+      :attr:`production_rate` / :attr:`absorption_rate`.
+
+    **State.** Every consumed object is a ``cached_property`` — minted once
+    per instance and then ``is``-identical on every read (the hub is the
+    owner: identity is ``is`` WITHIN it), keyed by the mixture in the sense
+    that two hubs over equal mixtures mint ``==`` objects (they are two
+    owners; ``is`` across them is not a claim). Per-instance, never
+    module-scope: a module memo would mask every decoy a gate installs on
+    the pose (the verification plan's H-2).
+
+    `[M]` bit-identical to the retired carrier route on the D5 population
+    (8 of 8: ``k_inf``, the flux bytes, both rates) and on the operator
+    tier (``A``/``F`` against the frozen pre-carve capture) — a re-source,
+    not a re-baseline.
     """
-    collision = MultiplicationOperator(
-        coefficient=mat_xs.total_cross_section_field, domain=space, codomain=space,
-    )
-    k_iso = IsotropicScattering.from_material_xs(
-        mat_xs, space=space,
-    ) + IsotropicN2N.from_material_xs(
-        mat_xs, space=space
-    )
-    return collision - k_iso
+
+    mixture: Mixture
+
+    @property
+    def ng(self) -> int:
+        """The group count — the mixture's."""
+        return self.mixture.ng
+
+    @cached_property
+    def space(self) -> FunctionSpace:
+        r"""The pose, Energy ⊗ the quotient point — :func:`_pose_space`, the one spelling."""
+        return _pose_space(self.mixture)
+
+    @cached_property
+    def layout(self) -> dict[int, tuple[np.ndarray, ...]]:
+        r"""The quotient point's one-cell material layout: material ``0`` on cell ``0``."""
+        return {0: (np.arange(1),)}
+
+    # ── the material fields (the kernel tier's mixture-direct mints) ────
+    @cached_property
+    def scattering(self) -> TransferMaterialField:
+        r"""The scattering channel's Legendre stack (yield 1) over the layout."""
+        return TransferMaterialField({0: TransferKernel.scattering(self.mixture)}, self.layout)
+
+    @cached_property
+    def n2n(self) -> TransferMaterialField:
+        r"""The (n,2n) channel's Legendre stack (yield 2) over the layout."""
+        return TransferMaterialField({0: TransferKernel.n2n(self.mixture)}, self.layout)
+
+    @cached_property
+    def fission(self) -> FissionMaterialField:
+        r"""The fission datum :math:`\chi \otimes \nu\Sigma_f` over the layout."""
+        return FissionMaterialField({0: FissionKernel.from_mixture(self.mixture)}, self.layout)
+
+    # ── the cross-section fields, born on the pose ─────────────────────
+    def _field(self, values: np.ndarray) -> CrossSectionField:
+        return CrossSectionField(values=np.asarray(values, dtype=float).reshape(self.ng, 1), space=self.space)
+
+    @cached_property
+    def total_cross_section_field(self) -> CrossSectionField:
+        r""":math:`\Sigma_t` on the pose (1/cm)."""
+        return self._field(self.mixture.SigT)
+
+    @cached_property
+    def absorption_cross_section_field(self) -> CrossSectionField:
+        r""":math:`\Sigma_a` on the pose (1/cm)."""
+        return self._field(self.mixture.absorption_xs)
+
+    @cached_property
+    def fission_production_field(self) -> CrossSectionField:
+        r""":math:`\nu\Sigma_f` on the pose (1/cm) — production, the only fission channel in :math:`F`."""
+        return self._field(self.mixture.SigP)
+
+    # ── the bound operators on the pose ────────────────────────────────
+    @cached_property
+    def collision(self) -> MultiplicationOperator:
+        r"""The collision diagonal :math:`C = M[\Sigma_t]` on the pose."""
+        return MultiplicationOperator(
+            coefficient=self.total_cross_section_field, domain=self.space, codomain=self.space,
+        )
+
+    @cached_property
+    def isotropic_scattering(self) -> IsotropicScattering:
+        r""":math:`\Sigma_{s0}^T` — the isotropic scattering transfer on the pose."""
+        return IsotropicScattering(self.scattering.at_order(0), domain=self.space, codomain=self.space)
+
+    @cached_property
+    def isotropic_n2n(self) -> IsotropicN2N:
+        r""":math:`2\Sigma_2^T` — the (n,2n) transfer on the pose (a loss-side multiplicity-2 channel)."""
+        return IsotropicN2N(self.n2n.at_order(0), domain=self.space, codomain=self.space)
+
+    @cached_property
+    def isotropic_transfer(self) -> "OperatorSum":
+        r""":math:`K_\mathrm{iso} = \Sigma_{s0}^T + 2\Sigma_2^T`."""
+        return self.isotropic_scattering + self.isotropic_n2n
+
+    @cached_property
+    def loss(self) -> "OperatorSum":
+        r"""The loss operator :math:`A = C - K_\mathrm{iso}` for an infinite medium.
+
+        Streaming :math:`L` is identically zero in an infinite medium and
+        dropped. Returned UN-materialized (an
+        :class:`~orpheus.numerics.operator.OperatorSum`) — the consumer
+        chooses the realization: :attr:`multiplication` hands it to
+        :class:`~orpheus.numerics.matrix_inverse_operator.MatrixInverseOperator`,
+        whose constructor materializes it through the operator's own
+        :meth:`~orpheus.numerics.operator.LinearOperator.as_matrix` (the
+        shape derives from the threaded domain) and LU-factors it once.
+        Every arm poses on :attr:`space`, so the ``OperatorSum`` guard
+        VALIDATES the sum instead of skipping it.
+        """
+        return self.collision - self.isotropic_transfer
+
+    @cached_property
+    def production(self) -> IsotropicFission:
+        r"""The fission production dyad :math:`F = \chi \otimes \nu\Sigma_f` on the pose."""
+        return IsotropicFission(self.fission, domain=self.space, codomain=self.space)
+
+    @cached_property
+    def multiplication(self) -> "OperatorProduct":
+        r"""The multiplication operator :math:`K = A^{-1} F`, spelled in the algebra.
+
+        ``MatrixInverseOperator(loss) @ production`` — one eager LU
+        factorization at construction, the realization the exactly-solvable
+        0-D problem earns (the structure-keyed ``loss.inverse()`` would
+        return the ITERATIVE splitting; constructing the matrix inverse
+        explicitly IS the strategy choice) — composed with the fission dyad.
+        """
+        return MatrixInverseOperator(self.loss) @ self.production
+
+    # ── the reaction-rate co-vectors ───────────────────────────────────
+    @cached_property
+    def production_rate(self) -> IntegratedReactionRate:
+        r"""The typed integrated co-vector :math:`\langle\nu\Sigma_f, \cdot\rangle` (EE-1)."""
+        return IntegratedReactionRate(self.fission_production_field)
+
+    @cached_property
+    def absorption_rate(self) -> IntegratedReactionRate:
+        r"""The typed integrated co-vector :math:`\langle\Sigma_a, \cdot\rangle` (EE-1)."""
+        return IntegratedReactionRate(self.absorption_cross_section_field)
 
 
 def solve_homogeneous_infinite(mix: Mixture) -> HomogeneousResult:
@@ -210,8 +341,8 @@ def solve_homogeneous_infinite(mix: Mixture) -> HomogeneousResult:
     ``K = MatrixInverseOperator(loss) @ production`` — from the loss
     operator :math:`\mathbf{A} = C - K_\mathrm{iso} =
     \operatorname{diag}(\Sigma_t) - \Sigma_{s0}^{T} - 2\Sigma_2^{T}`
-    (model-shared transport operators over a meshless single-cell
-    :class:`~orpheus.transport.mesh.material_mesh.MaterialMesh`) and the
+    (model-shared transport operators on the problem's own hub,
+    :class:`HomogeneousProblem`) and the
     fission production dyad :math:`\mathbf{F} = \chi \otimes \nu\Sigma_f`,
     then returns the dominant eigenpair of the materialized
     :math:`\mathbf{K}`: :math:`k_\infty = \lambda_{\max}` and the flux
@@ -231,61 +362,39 @@ def solve_homogeneous_infinite(mix: Mixture) -> HomogeneousResult:
     -------
     HomogeneousResult
     """
-    # The posing: the mixture-minted Energy ⊗ point space (the problem's
-    # own physics names its space); the meshless carrier supplies the
-    # cross sections — one cell, one region, no streaming.
-    space = _pose_space(mix)
-    mat_xs = MaterialMesh.from_materials({0: mix}).material_xs_field()
-    ng = mix.ng
-
-    # The multiplication operator K = A⁻¹F, spelled in the operator algebra
-    # itself from the transport operators on the meshless single cell (the
-    # SAME operators the meshed SN solver uses; #276): the loss operator
-    # A = C − K_iso, inverted DIRECTLY by MatrixInverseOperator — one eager
-    # LU factorization at construction, the realization the exactly-solvable
-    # 0-D problem earns (the structure-keyed ``loss.inverse()`` would return
-    # the ITERATIVE GreenOperator splitting; constructing the matrix inverse
-    # explicitly IS the strategy choice) — composed with the fission
-    # production dyad F = χ ⊗ νΣ_f.
-    loss = _assemble_loss_operator(mat_xs, space)
-    production = IsotropicFission.from_material_xs(mat_xs, space=space)
-    K = MatrixInverseOperator(loss) @ production
+    # The problem is the HUB (R-c1): the mixture-minted pose, the
+    # mixture-direct fields and the bound operators live on it, minted
+    # once per instance — the solver only reads.  Nothing is fabricated:
+    # no carrier, no [0, 1] edges, no node, no chart (O1's honest pose).
+    problem = HomogeneousProblem(mix)
+    space = problem.space
+    ng = problem.ng
 
     # k∞ and the flux spectrum φ are the EXACT dominant eigenpair of the
-    # materialized K, extracted by the shared Perron–Frobenius primitive
+    # materialized K = A⁻¹F (the SAME operators the meshed SN solver uses;
+    # #276), extracted by the shared Perron–Frobenius primitive
     # (:func:`~orpheus.numerics.eigenvalue.dominant_eigenpair`, the one home
     # of the complex-rejection + sign convention).  The 0-D infinite-medium
     # spectrum is exactly solvable, so the dense direct engine is the right
     # tool, not an iterative approximation.
-    k_inf, phi = dominant_eigenpair(K.as_matrix())
+    k_inf, phi = dominant_eigenpair(problem.multiplication.as_matrix())
 
-    # The reaction rates are the typed integrated co-vector ⟨Σx, ·⟩
+    # The reaction rates are the typed integrated co-vectors ⟨Σx, ·⟩
     # (IntegratedReactionRate — EE-1, landed CS4b S7): production (νΣf)
     # and absorption (Σa), each the φ†=1 degenerate of the homogenization
     # PG bilinear ⟨φ†, M[Σx]φ⟩. The functional's measure authority is its
-    # cross section's space (the σ↔geometry pairing tier), so the solver
-    # RE-POSES the carrier-minted fields onto ITS OWN pose first: the
-    # carrier supplies XS DATA, the problem poses it (CS4a K2 — the pose
-    # is the measure authority, and G2.5's ×2-weighted-pose mutation
-    # holds ONLY if the rates follow the pose). Content-neutral in
-    # production (the pose content-equals the carrier mint — the
-    # identity-bridge gate) and `replace` re-runs the field's own
-    # construction validation. `[M]` bit-identical with the pre-EE-1 raw
-    # space.inner_product spelling on νΣf/Σa × 2g/4g (4 of 4 probed;
-    # the spelling-equivalence gate pins it; D5 byte-stability is the
-    # end-to-end witness). Production is νΣf ONLY: the (n,2n) reaction is
+    # cross section's space, and the hub's fields are BORN on the pose
+    # (CS4a K2 — the pose is the measure authority; G2.5's ×2-weighted-
+    # pose mutation holds because the rates follow the pose), so the
+    # pre-coda ``replace(..., space=space)`` re-poses are gone — there is
+    # nothing to re-pose. Production is νΣf ONLY: the (n,2n) reaction is
     # a loss-side transfer folded into A as 2Σ₂ᵀ, never a production
     # channel.
-    production_rate = IntegratedReactionRate(
-        replace(mat_xs.fission_production_field, space=space),
-    )
-    absorption_rate = IntegratedReactionRate(
-        replace(mat_xs.absorption_cross_section_field, space=space),
-    )
+    production_rate = problem.production_rate
+    absorption_rate = problem.absorption_rate
 
     # Normalise the flux so the fission production rate νΣf·φ = 100 n/cm³/s.
     phi = phi * (100.0 / production_rate.evaluate(phi.reshape(ng, 1)))
-
     prod_rate = production_rate.evaluate(phi.reshape(ng, 1))
     abs_rate = absorption_rate.evaluate(phi.reshape(ng, 1))
     # The one-group condensed cross sections are INTENSIVE: σ̄x = ⟨Σx,φ⟩/⟨1,φ⟩.

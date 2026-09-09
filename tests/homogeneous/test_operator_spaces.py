@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 from orpheus.derivations.common.xs_library import get_mixture
-from orpheus.homogeneous.solver import _assemble_loss_operator, _pose_space
+from orpheus.homogeneous.solver import HomogeneousProblem, _pose_space
 from orpheus.numerics.axis import Axis, BasisKind, EnergyAxis
 from orpheus.numerics.matrix_inverse_operator import MatrixInverseOperator
 from orpheus.numerics.operator import (
@@ -60,6 +60,20 @@ def _mix(groups: str, edges: np.ndarray | None = None):
     if edges is not None:
         mix = dataclasses.replace(mix, eg=edges)
     return mix
+
+
+def _unit_cell_carrier(mix) -> MaterialMesh:
+    """A GENUINE unit-width one-cell ``Mesh1D`` carrier over ``mix`` — the
+    reference object G2.1 keeps after the fabricated carrier retires (C2):
+    its cell volume is 1, so its ``bulk_space`` canonicalizes the quotient
+    point to the counting weight exactly as the pose does."""
+    from orpheus.geometry import BC, CoordSystem, Mesh1D
+
+    mesh = Mesh1D(
+        edges=np.array([0.0, 1.0]), mat_ids=np.zeros(1, dtype=int),
+        coord=CoordSystem.CARTESIAN, bc_left=BC("reflective"), bc_right=BC("reflective"),
+    )
+    return MaterialMesh(mesh, {0: mix})
 
 
 def _mat_xs(groups: str, edges: np.ndarray | None = None):
@@ -116,7 +130,7 @@ def test_every_homogeneous_operator_reports_the_same_space(
         "weight (the normalized density convention)",
     )
 
-    loss = _assemble_loss_operator(mat_xs, space)
+    loss = HomogeneousProblem(mix).loss
     production = IsotropicFission.from_material_xs(mat_xs, space=space)
     inverse = MatrixInverseOperator(loss)
     K = inverse @ production
@@ -161,7 +175,7 @@ def test_two_group_and_four_group_sum_is_REFUSED() -> None:
 def test_matrix_inverse_of_2g_loss_composed_with_4g_fission_is_REFUSED() -> None:
     """D3 — the product-guard witness: ``M⁻¹(2g) @ F(4g)`` dies at
     construction naming the composition law."""
-    loss_2g = _assemble_loss_operator(_mat_xs("2g"), _pose_space(_mix("2g")))
+    loss_2g = HomogeneousProblem(_mix("2g")).loss
     mat_4g = _mat_xs("4g")
     f_4g = IsotropicFission.from_material_xs(
         mat_xs=mat_4g, space=mat_4g.mesh.bulk_space,
@@ -194,7 +208,7 @@ def test_H_is_bit_identical_to_the_pre_CS1_euclidean_transpose() -> None:
     """
     mat_xs = _mat_xs("2g")
     posed = _pose_space(_mix("2g"))
-    loss_threaded = _assemble_loss_operator(mat_xs, posed)
+    loss_threaded = HomogeneousProblem(_mix("2g")).loss
     # The Euclidean reference: since CS4c step 2 a space-BARE multiplier
     # is unspellable (mandatory ends), so the raw-transpose side is the
     # SAME threaded build read through apply_transpose — bit-identical to
@@ -327,7 +341,7 @@ def test_as_matrix_derives_the_basis_shape_from_the_threaded_domain() -> None:
     obligation on the 3b commit, not this gate's claim.)
     """
     mat_xs = _mat_xs("2g")
-    loss = _assemble_loss_operator(mat_xs, _pose_space(_mix("2g")))
+    loss = HomogeneousProblem(_mix("2g")).loss
     got = loss.as_matrix()
     _require(
         bool(np.allclose(got, _fused_loss_matrix(mat_xs), rtol=0.0, atol=1e-12)),
@@ -347,10 +361,16 @@ def _all_d5_mixtures():
     return _mixture_cases()
 
 
-def test_minted_space_equals_the_carrier_bulk_space() -> None:
-    r"""**G2.1** ⭐ — the space-identity bridge, on all 8 D5 cases.
+def test_minted_space_equals_a_genuine_unit_cell_carriers_bulk_space() -> None:
+    r"""**G2.1** ⭐ — the space-identity bridge, on all 8 D5 cases — RE-KEYED
+    at the CS4c coda (C1) to a GENUINE unit-width one-cell ``Mesh1D``
+    carrier (the fabricated ``from_materials`` carrier retires at C2; the
+    ruling said retire this gate, and the verification plan measured that
+    its reference object survives and that it is a live catcher — the
+    ``volumes ×2`` arm reds it and does NOT red G1.6, which gates only the
+    energy rule — so it is kept, re-keyed, stated for the user to overrule).
 
-    ``_pose_space(mix)`` and the degenerate carrier's ``bulk_space``
+    ``_pose_space(mix)`` and a unit-cell carrier's ``bulk_space``
     must mint ``==`` spaces: both route the energy arm through the ONE
     rule (``EnergyAxis.from_materials``) and both canonicalize the
     quotient point to the counting weight, so a divergence means a
@@ -371,7 +391,7 @@ def test_minted_space_equals_the_carrier_bulk_space() -> None:
     """
     for name, mix in sorted(_all_d5_mixtures().items()):
         minted = _pose_space(mix)  # type: ignore[arg-type]
-        carrier_space = MaterialMesh.from_materials({0: mix}).bulk_space  # type: ignore[dict-item]
+        carrier_space = _unit_cell_carrier(mix).bulk_space
         _require(minted is not carrier_space, f"{name}: precondition lost")
         _require(
             minted == carrier_space,
@@ -435,53 +455,6 @@ def test_rate_re_pose_reproduces_the_frozen_pre_carve_values(groups: str) -> Non
         f"absorption rate moved off the frozen pre-carve value: "
         f"{absorption!r} != {frozen_absorption!r}",
     )
-
-
-def test_carrier_volume_is_unwired_from_the_solve(monkeypatch) -> None:
-    r"""**G2.4** ⭐⭐ — the carrier's measure is UN-wired: ``volumes ×2`` moves NOTHING.
-
-    The claim did not exist before K2 and could not have been gated
-    before it (plan-authoring §6c — ``[M]`` at CS1 HEAD this same
-    mutation moved ``flux 397.946 → 198.973`` and doubled both rates).
-    The M2.7/M2.8 sensitivity table, which INVERTS across K2 (F3):
-
-    ======================  =================  ==================
-    mutation                 pre-K2 (CS1)       post-K2 (this gate)
-    ======================  =================  ==================
-    carrier ``volumes ×2``   flux/rates move    **bit-identical**
-    space point weight ×2    bit-identical      flux/rates move
-    ======================  =================  ==================
-
-    ``k_inf`` is blind to BOTH (a ratio) — no k-level row may be
-    credited for a measure claim.
-    """
-    from orpheus.homogeneous.solver import solve_homogeneous_infinite
-
-    mix = _mix("2g")
-    baseline = solve_homogeneous_infinite(mix)
-
-    original_getter = MaterialMesh.volumes.fget
-    assert original_getter is not None
-    monkeypatch.setattr(
-        MaterialMesh,
-        "volumes",
-        property(lambda self: np.asarray(original_getter(self)) * 2.0),
-    )
-    doubled = solve_homogeneous_infinite(mix)
-
-    _require(
-        bool(np.array_equal(doubled.flux, baseline.flux)),
-        "flux moved under carrier volumes ×2 — the re-pose is partial: "
-        "something on the homogeneous path still reads the carrier's "
-        "volume measure",
-    )
-    _require(
-        doubled.sig_prod == baseline.sig_prod
-        and doubled.sig_abs == baseline.sig_abs,
-        "a rate moved under carrier volumes ×2 — one of the two rate "
-        "sites still reads volume_measure",
-    )
-    _require(doubled.k_inf == baseline.k_inf, "k_inf moved (?!)")
 
 
 def test_the_space_measure_is_consulted(monkeypatch) -> None:

@@ -1,3 +1,3 @@
-from .solver import HomogeneousResult, solve_homogeneous_infinite
+from .solver import HomogeneousProblem, HomogeneousResult, solve_homogeneous_infinite
 
-__all__ = ["HomogeneousResult", "solve_homogeneous_infinite"]
+__all__ = ["HomogeneousProblem", "HomogeneousResult", "solve_homogeneous_infinite"]

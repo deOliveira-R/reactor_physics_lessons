@@ -130,7 +130,7 @@ def test_assemble_loss_operator_matches_fused_oracle():
     MatrixInverseOperator ctor densifies it; the oracle comparison here
     materializes explicitly.)
     """
-    from orpheus.homogeneous.solver import _assemble_loss_operator, _pose_space
+    from orpheus.homogeneous.solver import HomogeneousProblem, _pose_space
     from orpheus.transport.mesh.material_mesh import MaterialMesh
 
     case = get("homo_2eg_n2n")
@@ -140,7 +140,7 @@ def test_assemble_loss_operator_matches_fused_oracle():
     # CS1 3b: bare as_matrix() — the shape derives from the threaded domain
     # (the explicit basis_shape idiom is retired on this path; D9 pins the
     # derivation). CS4a K2: the space is the mixture-minted pose.
-    A = _assemble_loss_operator(mat_xs, _pose_space(mix)).as_matrix()
+    A = HomogeneousProblem(mix).loss.as_matrix()
     sig_t = mat_xs.total_cross_section[:, 0]
     sig_s0 = mat_xs.sig_s_legendre(0)[0]  # (ng, ng), [g_from, g_to]
     sig_2 = mat_xs.n2n_matrix(0)
@@ -290,7 +290,7 @@ def test_kinf_matches_direct_eigenvalue_engine_of_the_assembled_pair():
     (the SymPy anchor). rtol=1e-12 per the step-5b equivalence-class note
     above: bit-identical on this host, κ(A)·ULP-portable across BLAS builds.
     """
-    from orpheus.homogeneous.solver import _assemble_loss_operator, _pose_space
+    from orpheus.homogeneous.solver import HomogeneousProblem, _pose_space
     from orpheus.transport.mesh.material_mesh import MaterialMesh
     from orpheus.transport.operators.isotropic_transfer import (
         IsotropicFission,
@@ -302,7 +302,7 @@ def test_kinf_matches_direct_eigenvalue_engine_of_the_assembled_pair():
     # CS4a K2: mirror the production spelling — the mixture-minted pose
     # threads every arm and every as_matrix derives its shape from it.
     space = _pose_space(mix)
-    A = _assemble_loss_operator(mat_xs, space).as_matrix()
+    A = HomogeneousProblem(mix).loss.as_matrix()
     F = IsotropicFission.from_material_xs(mat_xs, space=space).as_matrix()
     k_engine = _eig.direct_eigenvalue(A, F)[0]
 
@@ -364,7 +364,7 @@ def test_K_operator_as_matrix_is_the_resolvent():
     ``IncompatibleOperatorComposition`` here means a FunctionSpace leaked
     onto a meshless operand — investigate before touching the guard).
     """
-    from orpheus.homogeneous.solver import _assemble_loss_operator, _pose_space
+    from orpheus.homogeneous.solver import HomogeneousProblem, _pose_space
     from orpheus.numerics.matrix_inverse_operator import MatrixInverseOperator
     from orpheus.transport.mesh.material_mesh import MaterialMesh
     from orpheus.transport.operators.isotropic_transfer import (
@@ -379,7 +379,7 @@ def test_K_operator_as_matrix_is_the_resolvent():
     # exactly this way — the mixture-minted pose threaded everywhere, no
     # explicit basis_shape anywhere; the shapes derive from the domain).
     space = _pose_space(mix)
-    loss = _assemble_loss_operator(mat_xs, space)
+    loss = HomogeneousProblem(mix).loss
     production = IsotropicFission.from_material_xs(mat_xs, space=space)
     K = MatrixInverseOperator(loss) @ production
 

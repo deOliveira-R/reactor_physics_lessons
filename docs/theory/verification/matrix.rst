@@ -9,7 +9,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **11903**
+Total tests collected: **11941**
 
 V&V level distribution
 ----------------------
@@ -18,11 +18,11 @@ V&V level distribution
    :header: Level, Count, Share
    :widths: 15, 10, 10
 
-   L0, 1304, 11.0%
+   L0, 1304, 10.9%
    L1, 1755, 14.7%
    L2, 71, 0.6%
    L3, 0, 0.0%
-   foundation, 8747, 73.5%
+   foundation, 8785, 73.6%
    unmarked, 26, 0.2%
 
 Tagging source
@@ -34,7 +34,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 11798
+   explicit, 11836
    class-name, 46
    func-name, 0
    case, 33
@@ -298,9 +298,11 @@ Module × level grid
    geometry/test_structured_geometry, 0, 0, 0, 0, 37, 0
    geometry/test_transformation, 0, 0, 0, 0, 96, 0
    homogeneous/test_byte_stability, 0, 0, 0, 0, 8, 0
+   homogeneous/test_coda_anchors, 0, 0, 0, 0, 29, 0
    homogeneous/test_continuous_reference, 0, 9, 0, 0, 0, 0
    homogeneous/test_homogeneous, 0, 14, 0, 0, 0, 0
-   homogeneous/test_operator_spaces, 0, 0, 0, 0, 19, 0
+   homogeneous/test_homogeneous_problem, 0, 0, 0, 0, 10, 0
+   homogeneous/test_operator_spaces, 0, 0, 0, 0, 18, 0
    mc/test_convergence, 0, 0, 3, 0, 0, 0
    mc/test_cross_verification, 0, 0, 2, 0, 0, 0
    mc/test_gaps, 7, 10, 0, 0, 0, 0

@@ -165,7 +165,7 @@ to a **one-dimensional energy balance**:
 
 
 .. implements:: inf-hom-balance
-   :by: orpheus.homogeneous.solver._assemble_loss_operator
+   :by: orpheus.homogeneous.solver.HomogeneousProblem.loss
 
    **Implemented by** 7 sites. Every symbol that executes this
    equation's arithmetic is declared, not only the canonical one: a
@@ -291,7 +291,7 @@ gives the **multi-group neutron balance** for group :math:`g`:
    moment factor is no longer a class of its own.
 
 .. implements:: mg-balance
-   :by: orpheus.homogeneous.solver._assemble_loss_operator
+   :by: orpheus.homogeneous.solver.HomogeneousProblem.loss
 
 .. implements:: mg-balance
    :by: orpheus.homogeneous.solver.solve_homogeneous_infinite
@@ -538,7 +538,7 @@ matrices are:
 
 
 .. implements:: two-group-A
-   :by: orpheus.homogeneous.solver._assemble_loss_operator
+   :by: orpheus.homogeneous.solver.HomogeneousProblem.loss
 
    **Implemented by** 3 sites. Every symbol that executes this
    equation's arithmetic is declared, not only the canonical one: a
