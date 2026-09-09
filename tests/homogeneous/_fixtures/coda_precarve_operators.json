@@ -1,0 +1,98 @@
+{
+ "homo_1eg": {
+  "A_b64": "AAAAAAAA4D8=",
+  "A_shape": [
+   1,
+   1
+  ],
+  "F_b64": "AAAAAAAA6D8=",
+  "F_shape": [
+   1,
+   1
+  ]
+ },
+ "homo_2eg": {
+  "A_b64": "uB6F61G4vj8AAAAAAAAAAJqZmZmZmbm/mJmZmZmZuT8=",
+  "A_shape": [
+   2,
+   2
+  ],
+  "F_b64": "mpmZmZmZmT+amZmZmZnJPwAAAAAAAAAAAAAAAAAAAAA=",
+  "F_shape": [
+   2,
+   2
+  ]
+ },
+ "homo_2eg_n2n": {
+  "A_b64": "3vl+arx0wz8AAAAAAAAAAOxRuB6F68G/2KNwPQrXwz8=",
+  "A_shape": [
+   2,
+   2
+  ],
+  "F_b64": "uB6F61G4nj9dj8L1KFzPPwAAAAAAAAAAAAAAAAAAAAA=",
+  "F_shape": [
+   2,
+   2
+  ]
+ },
+ "homo_2eg_with_eg": {
+  "A_b64": "uB6F61G4vj8AAAAAAAAAAJqZmZmZmbm/mJmZmZmZuT8=",
+  "A_shape": [
+   2,
+   2
+  ],
+  "F_b64": "mpmZmZmZmT+amZmZmZnJPwAAAAAAAAAAAAAAAAAAAAA=",
+  "F_shape": [
+   2,
+   2
+  ]
+ },
+ "homo_4eg": {
+  "A_b64": "vB6F61G4vj8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB7FK5H4Xq0v+R6FK5H4co/AAAAAAAAAAAAAAAAAAAAAHsUrkfhepS/uB6F61G4vr8yMzMzMzPTPwAAAAAAAAAAexSuR+F6dL+4HoXrUbiuvylcj8L1KMy/NDMzMzMzwz8=",
+  "A_shape": [
+   4,
+   4
+  ],
+  "F_b64": "FYxK6gQ0gT/fcYqO5PKPPzMzMzMzM7M/OIlBYOXQwj9towG8BRJ0P8IXJlMFo4I/ZmZmZmZmpj/ByqFFtvO1P8e6uI0G8EY/lfYGX5hMVT+amZmZmZl5P0sMAiuHFok/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  "F_shape": [
+   4,
+   4
+  ]
+ },
+ "mixture_A_1g": {
+  "A_b64": "AAAAAAAA4D8=",
+  "A_shape": [
+   1,
+   1
+  ],
+  "F_b64": "AAAAAAAA6D8=",
+  "F_shape": [
+   1,
+   1
+  ]
+ },
+ "mixture_A_2g": {
+  "A_b64": "uB6F61G4vj8AAAAAAAAAAJqZmZmZmbm/mJmZmZmZuT8=",
+  "A_shape": [
+   2,
+   2
+  ],
+  "F_b64": "mpmZmZmZmT+amZmZmZnJPwAAAAAAAAAAAAAAAAAAAAA=",
+  "F_shape": [
+   2,
+   2
+  ]
+ },
+ "mixture_A_4g": {
+  "A_b64": "vB6F61G4vj8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB7FK5H4Xq0v+R6FK5H4co/AAAAAAAAAAAAAAAAAAAAAHsUrkfhepS/uB6F61G4vr8yMzMzMzPTPwAAAAAAAAAAexSuR+F6dL+4HoXrUbiuvylcj8L1KMy/NDMzMzMzwz8=",
+  "A_shape": [
+   4,
+   4
+  ],
+  "F_b64": "FYxK6gQ0gT/fcYqO5PKPPzMzMzMzM7M/OIlBYOXQwj9towG8BRJ0P8IXJlMFo4I/ZmZmZmZmpj/ByqFFtvO1P8e6uI0G8EY/lfYGX5hMVT+amZmZmZl5P0sMAiuHFok/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  "F_shape": [
+   4,
+   4
+  ]
+ }
+}

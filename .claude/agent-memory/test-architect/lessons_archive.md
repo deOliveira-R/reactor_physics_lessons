@@ -9868,3 +9868,130 @@ for 6 hand-built test spaces, and on a 2-D windowed solve the builder drops **5 
 which `[M]` also changes the product's NAME (`spherical_harmonic_space ⊗ …#18588b58` →
 `harmonic(2, 3)*…#9e2c57a1`) and therefore the `FullFieldSpace` digest that folds it
 (`[M]` 3 of 4 `from_blocks` calls on a windowed solve carry a moment interior).
+
+---
+
+## L81 — CS4c CODA (the homogeneous path re-points last), pre-carve, 2026-09-08
+
+Dispatch: design the verification plan for the coda BEFORE any production edit, and land
+pre-carve anchors. Tree `main` @ `3c50eb4d`, clean. Deliverables:
+`scratch/_step6/test_architect_verification_plan_coda.md`,
+`tests/homogeneous/test_coda_anchors.py` (**38 rows**, 36 p / 2 xf, 1.68 s, pyright 0),
+`tests/homogeneous/_fixtures/coda_precarve_operators.json`,
+`scratch/_step6/coda_mut.py` + `coda_battery.sh` (7 arms + HONEST).
+
+### L81a — the anchor a carve needs may ALREADY be on disk; check before minting one
+
+The brief asked me to *"capture the D5 byte-stability oracle as a frozen record if it is not
+already one"*. `[M]` it already is: `tests/homogeneous/test_byte_stability.py` reads
+`_fixtures/cs1_prewiring.json`, *"captured at 3a-HEAD (`24a991ba`, post-rename,
+PRE-wiring)"*, and the capture entry point and the gate share ONE payload helper. So the
+coda's end-to-end bit-identity wall PREDATES the campaign and the only instruction owed is
+⛔ *never re-capture it*. ⟹ what I minted instead is the tier D5 cannot localize: `[M]` D5
+pins `k_inf`/`flux`/`sig_prod`/`sig_abs`; the tree pins the assembled `A` on **1 of 8** cases
+(and against the FACADE's own cached views — its docstring says so) and `F` at the matrix
+tier nowhere on this path. The new anchors are `A`/`F` on 8 cases against **raw `Mixture`
+arrays** (REFERENCE) plus a frozen byte capture (RECORD) — `lessons` §4's two-anchor
+template, with the record saying *something moved* and the raw reference saying *which side
+is right*.
+
+### L81b ⭐⭐ — a "constructed but not consumed" claim has a STRONGER spelling than the
+### field-by-field mutation, and it costs one alien object
+
+The tree's G2.4 mutates the carrier's `volumes` ×2 and asserts nothing moves. `[M]` the
+whole carrier can be replaced: edges `[10., 13.]` (⟹ `volumes = [3.]`, node `11.5`),
+`coord = SPHERICAL`, and consequently a **different `bulk_space`**
+(`energy(1,)*spatial(1,)#fb2219…` vs `#ea0d4a…`) — and all four reported numerics are
+bit-identical on **8 of 8** D5 cases. That single row states O1's *"nothing fabricated is
+consumed"* completely, where a per-field mutation states it one field at a time. ⚠ Two
+riders, both learned by running it: state the decoy's precondition **RELATIVE** to the real
+object, never against a literal (`probe.volumes != fabricated.volumes`, not
+`== [3.0]`) — `[M]` a literal made a global `volumes ×2` battery arm red 8 rows for an
+INSTRUMENT reason; and declare in the docstring that the row goes **VACUOUS** the moment the
+fabricated object stops being built (`plan-authoring` §10), so the carve deletes it instead
+of inheriting a green that cannot fail.
+
+### L81c ⛔⛔ — a guard's reachability is decided by the guard BEFORE it; the census said
+### "re-word", the measurement says "unreachable"
+
+The explorer census ruled `diffusion/augmented_mesh.py:214` (`if self.mesh is None: raise`)
+should be *"re-worded for the d≥3 axis-native carrier it now refuses"*. `[M]` it never
+refuses one — `if self.ndim != 1: raise` sits at `:207` and fires first:
+`DiffusionMesh.from_material_mesh(<d=3 axis-native>)` dies with *"supports 1-D meshes
+today"*. And `[M]` **no other producer of `mesh is None and ndim == 1` exists**:
+`SNMesh.from_axes` synthesizes a legacy `Mesh1D` adapter at `d ≤ 2` and leaves `mesh = None`
+only at `d ≥ 3`; `MaterialMesh.__init__` always carries a mesh. ⟹ after the retirement the
+arm has **zero reachable inputs**, and so do `material_mesh.py:567` (*"no faces at all"*)
+and `sn/mesh/augmented_mesh.py:824`. The honest action is RETIRE, not re-word:
+a guard that refuses nothing is `plan-authoring` §6c's mirror — it ships green and
+structurally unable to fail. ⟹ **before re-wording a refusal a retirement is said to
+"leave mis-worded", enumerate the guards ABOVE it and the PRODUCERS of its predicate; a
+re-word is only honest if some shipped input still reaches it.**
+
+### L81d ⭐ — a construction-spy's HANDLE must be the ONE construction body, and the
+### handle-completeness claim needs its own arm
+
+The ruled re-pose of G2.4 is *"no `MaterialMesh` is constructed on the homogeneous path"*.
+The obvious handle (`MaterialMesh.from_materials`) **dies with the factory** — a spy on it
+would read a confident zero for the wrong reason. The right handle is
+`MaterialMesh._init_data`, the ONE data body every surface funnels into
+(`from_materials`, `MaterialMesh.__init__`, `SNMesh._init_core`, `DiffusionMesh._init_core`).
+⚠ And the completeness of that handle is itself a claim: my first battery arm
+("route `_init_data` through an alias") reddened **0** — an INSUFFICIENT mutation, not a
+blind gate (`lessons` §2's three-hypothesis rule), because the spy patches the class
+attribute the alias still resolves through. The honest arm mints a SECOND construction path
+that **closes over** `_init_data` instead of looking it up: `[M]` **2 reds, both in the spy
+class** — the RECORD row (`count == 1` → 0) and the ruled `xfail(strict=True)` row XPASSing.
+⟹ ship THREE rows: the positive control (a construction IS seen), the RECORD of today's
+count (the attribution leg — if the spy breaks, this reds LOUDLY instead of the ruled row
+silently swallowing it inside its `xfail`), and the ruled `count == 0` under a strict xfail.
+
+### L81e ⛔ — my OWN parametrize list called production at MODULE SCOPE
+
+`_CASE_IDS = sorted(_d5_cases())` reads the mixture registry at import, i.e. at COLLECTION,
+i.e. after a battery plugin installs. `vv` Mode-8's third pipeline class / `L47d`, written
+by the author who has recorded it twice. Fixed by parametrizing over a LITERAL label tuple
+and gating that literal against `sorted(_d5_cases())` inside a body — which also gives the
+population its own falsifiable denominator row.
+
+### L81f ⭐ — the migration target of a retiring degenerate factory can be MEASURED
+### like-for-like, and that measurement is the whole class-(b) plan
+
+`[M]` `MaterialMesh(Mesh1D(edges=[0,1], mat_ids=[0]), mixtures)` reproduces every property
+the fabricated `from_materials` carrier had: `volumes [1.]`, `mat_map [0]`,
+`spatial_shape (1,)`, `cells_by_material {0: ([0],), 1: ([],)}` (**spectator retention
+preserved** — the property `test_kernels.py`'s G1.6 denominator row rides on),
+`volume_measure` nodes `[0.5]` weights `[1.]`, and `bulk_space == _pose_space(mix)` **True**.
+⟹ 20 test sites migrate by a ONE-LINE swap with no asserted value changing. ⚠ And the
+non-collision is measured too: `test_space_of_axes.py`'s B9 row discriminates the quotient
+point from *"a genuine one-cell mesh"* by the **WIDTH** (`edges=[0,2]`, `V=2`), not by
+mesh-ness, so the unit-width swap does not make B9 tautological.
+
+### L81g ⚠ — a ruled retirement can be REFUTED by the battery: G2.1 is a live catcher
+
+§26 ruled *"G2.1 retires; its claim is G1.6's"*. `[M]` battery arm `VOLUMES_X2`
+(`MaterialMesh.volumes ×2`) reds G2.1 and does **not** red G1.6, and the reference object
+survives the retirement (§L81f: a unit-width one-cell `Mesh1D`'s `bulk_space` is `==` the
+pose). So the claim is re-keyable in one line and keeps teeth. ⟹ **before accepting
+"retire X; its claim is Y's", run one arm and check that Y reds under it** — a claim
+inherited by assertion is not a claim inherited by measurement.
+
+### L81h — the battery's declared NULL that HELD, and the one that did not
+
+`[M]` `POSE_WEIGHT_X2` (a weight-2 quotient point) reds **19** tree-wide and **0** of the new
+operator-tier anchors — a correct declared blindness (`A` and `F` are matrices in the
+counting basis, so `as_matrix` cannot see the pose's measure), and shipping that zero is what
+stops a later reader crediting the operator anchors for a measure claim. `[M]`
+`VOLUMES_X2`, declared a null for the operator tier, reds **21** tree-wide — an ordinary arm,
+not a null, and the finding that produced L81g.
+
+### L81i — scope costs `[M]` for this family (canonical flags, SERIAL)
+
+`tests/homogeneous` **50 rows / 2.49 s** (→ **88 / 2.64 s** with the anchors); the whole
+§6b-reachable battery scope (homogeneous + 4 transport files + 2 numerics files +
+`tests/diffusion/test_augmented_mesh.py` + `tests/sn/architecture/test_monomorphic_leaves.py`)
+**415 p / 2 xf / 3.4 s**; `tests/transport` whole **24.2 s** (7× the scope for the 4 files the
+carve reaches — EXCLUDED, with the number); wide
+(`homogeneous+transport+numerics+diffusion`) **4526 p / 3 s / 2 xf / 50.8 s**; the ROOT tree
+(`tests/ --ignore=<the 12 trees>`) **429 p / 5 xf / 39.5 s** (⚠ the plan's §25.2 records
+427/5 at `3cb468d7`; re-measure, do not inherit). `dead_references` **0 dead / 68 checked**.

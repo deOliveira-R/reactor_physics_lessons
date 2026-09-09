@@ -2932,3 +2932,80 @@ patching the `ClassVar` alone reports MC inert. → `L76h`
   metric is read ONLY on the windowed arm (6 `norm` calls/solve, `apply_metric`
   **0**) — so a change moving `‖Δφ‖` by 91.6 % and ρ by 3.85 % reddened **4 of
   4501** rows, all four in the file written to close the gap. → `L80c`
+
+## CS4c coda additions (2026-09-08, the homogeneous path re-points last — pre-carve) → `L81`
+
+**§1 (gates that cannot red).**
+
+- **⛔⛔ A guard's REACHABILITY is decided by the guard BEFORE it — "this refusal is
+  mis-worded after the retirement" is a claim to run, and it was wrong.** `[M]` the census
+  ruled `diffusion/augmented_mesh.py:214` (`mesh is None` ⟹ refuse) should be re-worded for
+  the d≥3 carrier; `if self.ndim != 1` sits at `:207` and fires first, so it **never**
+  refuses one. And `[M]` no other producer of `mesh is None and ndim == 1` exists
+  (`SNMesh.from_axes` synthesizes a `Mesh1D` adapter at d ≤ 2; `MaterialMesh.__init__`
+  always carries a mesh) ⟹ post-retirement the arm, plus `material_mesh.py:567` and
+  `sn/mesh/augmented_mesh.py:824`, have **zero reachable inputs**. ⟹ **before re-wording a
+  refusal, enumerate the guards ABOVE it and the PRODUCERS of its predicate**; a re-word is
+  honest only if some shipped input still reaches it, else the honest action is RETIRE
+  (`plan-authoring` §6c's mirror — a gate that ships green and cannot fail). → `L81c`
+- **⭐ A CONSTRUCTION SPY's handle must be the ONE construction body, and the handle's
+  completeness needs its own arm and its own RECORD row.** `[M]` the obvious handle
+  (`MaterialMesh.from_materials`) dies with the factory being retired — it would read a
+  confident zero for the wrong reason; the surviving handle is `_init_data`, which
+  `from_materials`, `__init__`, `SNMesh._init_core` and `DiffusionMesh._init_core` all
+  funnel into. Ship THREE rows: a positive control (a construction IS seen), the RECORD of
+  today's count (the attribution leg — if the spy breaks THIS reds loudly instead of the
+  ruled row silently swallowing it inside its `xfail`), and the ruled `count == 0` under
+  `xfail(strict=True)`. ⚠ My first handle-move arm reddened **0** — an INSUFFICIENT
+  mutation (an alias still resolves through the patched class attribute), not a blind gate;
+  the honest arm mints a second path that CLOSES OVER the body: **2 reds, both in the spy
+  class**. → `L81d`
+- **⚠ A ruled retirement ("retire X; its claim is Y's") is a claim to MEASURE — run one arm
+  and check that Y reds under it.** `[M]` G2.1 was ruled redundant with G1.6; arm
+  `MaterialMesh.volumes ×2` reds G2.1 and **not** G1.6, and the reference object survives a
+  one-line re-key. A claim inherited by assertion is not a claim inherited by measurement.
+  → `L81g`
+- **⛔ MY OWN parametrize list called production at MODULE SCOPE** (`_CASE_IDS =
+  sorted(_d5_cases())`) — `vv` Mode-8's third pipeline class / `L47d`, recorded twice
+  before, committed again. Parametrize over a LITERAL label tuple and gate the literal
+  against the producer inside a body; that also gives the population a falsifiable
+  denominator row. → `L81e`
+
+**§4 (reference & claim layer).**
+
+- **⭐⭐ Before minting a pre-carve anchor, check whether the campaign ALREADY froze one —
+  and then mint at the tier the existing one cannot LOCALIZE.** `[M]` D5's
+  `_fixtures/cs1_prewiring.json` was captured PRE-wiring at `24a991ba` and is the coda's
+  end-to-end wall (instruction owed: ⛔ never re-capture). What it cannot localize is the
+  OPERATOR tier — `[M]` the tree pinned the assembled `A` on **1 of 8** cases, against the
+  facade's own cached views, and `F` at the matrix tier nowhere. The net-new anchors are
+  `A`/`F` on 8 cases against **raw `Mixture` arrays** (REFERENCE, structurally independent
+  of carrier/facade/operator) PLUS a frozen byte capture (RECORD) — §4's two-anchor
+  template. → `L81a`
+- **⭐⭐ A "constructed but NOT consumed" claim has a stronger spelling than a per-field
+  mutation: replace the WHOLE object with an alien one.** `[M]` edges `[10,13]` (⟹ `V=3`,
+  node `11.5`), `coord=SPHERICAL` and a DIFFERENT `bulk_space` leave all four reported
+  numerics bit-identical on 8 of 8 — one row where the incumbent gate mutates one field.
+  ⚠ Two riders: state the decoy's precondition RELATIVE to the real object, never against a
+  literal (`[M]` a literal made a global measure arm red 8 rows for an INSTRUMENT reason);
+  and declare in the docstring that the row goes VACUOUS the moment the object stops being
+  built, so the carve DELETES it instead of inheriting a green that cannot fail. → `L81b`
+
+**§6 (carve archetypes) — RETIRING A DEGENERATE FACTORY.**
+
+- **⭐ Measure the migration target like-for-like BEFORE classifying the call sites — the
+  measurement IS the migration plan.** `[M]` `MaterialMesh(Mesh1D(edges=[0,1],
+  mat_ids=[0]), mixtures)` reproduces every property the retiring `from_materials` carrier
+  had, including **spectator retention** (`cells_by_material {0: ([0],), 1: ([],)}`) and a
+  `==` `bulk_space` ⟹ 20 sites migrate by a one-line swap with no asserted value changing.
+  ⚠ Check the non-collision too: the sibling gate that distinguishes *"the quotient point"*
+  from *"a genuine one-cell mesh"* discriminates by the **WIDTH** (`V=2`), not by
+  mesh-ness, so a UNIT-width swap does not make it tautological. → `L81f`
+
+**§2 (harness discipline).**
+
+- **⭐ Ship the battery's DECLARED NULL that HELD, not only the arms that red.** `[M]` a
+  weighted-pose arm reds 19 tree-wide and **0** of the new operator-tier anchors — a correct
+  blindness (`as_matrix` is in the counting basis), and publishing that zero is what stops a
+  later reader crediting those anchors for a measure claim. The sibling declared null
+  (`volumes ×2`) reddened 21 and was NOT a null — that refutation produced `L81g`. → `L81h`
