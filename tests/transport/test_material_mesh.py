@@ -160,48 +160,19 @@ def test_from_material_mesh_round_trips_to_solvable_snmesh():
     assert snm.reduced is not None
 
 
-# ── Meshless single-cell carrier (from_materials) ─────────────────────
-# The degenerate carrier an infinite homogeneous medium lives on: the
-# phase space the k∞ solver assembles (C − K_iso − F/k) on with streaming
-# dropped.  These pin its defining invariants (the coding-elegance
-# standard: a type ships a test of its intrinsic contract).
+# ── Materials declaration vs assignment ──────────────────────────────
+# Until the CS4c coda (2026-09-08) this section pinned the defining
+# invariants of ``MaterialMesh.from_materials`` — the mesh-less one-cell
+# carrier of the infinite homogeneous medium. The factory retired with the
+# coda (the homogeneous problem poses on its own space and builds no
+# carrier); the ONE live guard those rows exercised survives here with its
+# witness on a genuine one-cell carrier.
 
 
-def test_from_materials_is_meshless_single_cell():
-    """One Cartesian cell, one region (id 0), no legacy mesh adapter."""
-    mm = MaterialMesh.from_materials({0: _mix([1.0, 1.5], ng=2)})
-    assert mm.mesh is None              # meshless
-    assert mm.ndim == 1
-    assert mm.spatial_shape == (1,)
-    assert mm.nx == 1
-    np.testing.assert_array_equal(mm.mat_map, [0])   # single region, id 0
-    assert mm.ng == 2                   # derived from materials (no twin)
-
-
-def test_from_materials_unit_volume_measure():
-    """The lone cell has unit volume — volume_measure weights it 1.0.
-
-    k∞ is a production/absorption ratio (volume-invariant); the unit
-    choice keeps reaction rates equal to the bare ⟨Σ,φ⟩ contraction.
-    """
-    mu = MaterialMesh.from_materials({0: _mix([1.0, 1.5], ng=2)}).volume_measure
-    np.testing.assert_array_equal(mu.weights, [1.0])
-    assert mu.weights.shape == (1,)
-
-
-def test_from_materials_resolves_xs_field():
-    """material_xs_field() resolves on the meshless carrier and exposes the
-    single material's cross sections in the lone cell."""
-    mix = _mix([1.0, 1.5], ng=2)
-    field = MaterialMesh.from_materials({0: mix}).material_xs_field()
-    assert isinstance(field, MaterialXSField)
-    sig_t = field.total_cross_section   # (ng, nx) = (2, 1)
-    assert sig_t.shape == (2, 1)
-    np.testing.assert_allclose(sig_t[:, 0], mix.SigT)
-
-
-def test_from_materials_requires_material_id_zero():
-    """The single cell carries material id 0, so a materials dict lacking
-    key 0 fails loud at construction (parse, don't validate downstream)."""
+def test_a_materials_declaration_must_cover_every_referenced_id():
+    """A cell referencing material id 0 with a declaration lacking key 0
+    fails loud at construction (parse, don't validate downstream) — the
+    ``Materials.restrict`` guard, witnessed on a genuine one-cell carrier."""
+    mesh = Mesh1D(edges=np.array([0.0, 1.0]), mat_ids=np.zeros(1, dtype=int))
     with pytest.raises(ValueError, match="references material ids"):
-        MaterialMesh.from_materials({3: _mix([1.0, 1.0], ng=2)})
+        MaterialMesh(mesh, {3: _mix([1.0, 1.0], ng=2)})

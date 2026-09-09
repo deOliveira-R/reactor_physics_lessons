@@ -32,8 +32,8 @@ hand-coded dunder skeleton. The migration:
 * Keeps ``mesh`` as an additive field — since #267 typed as the
   method-agnostic
   :class:`~orpheus.transport.mesh.material_mesh.MaterialMesh` (a scalar
-  field reads only material-mesh data, so it also lives on the meshless
-  single-region mesh of the homogeneous solver). Runtime-wise the
+  field reads only material-mesh data — no quadrature, no trace — so
+  any carrier in the hierarchy serves it). Runtime-wise the
   ``mesh`` field is duck-typed; TYPE_CHECKING-only imports keep the
   layer contract clean.
 * Preserves the strict semantics: arithmetic across two

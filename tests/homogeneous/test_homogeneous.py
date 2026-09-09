@@ -122,28 +122,27 @@ def test_assemble_loss_operator_matches_fused_oracle():
     non-trivial-(n,2n) case.
 
     A SHARP procedural pin at the A level — it localises a sign/term/omission
-    bug in the operator assembly faster than the end-to-end eig. It shares
-    ``mat_xs`` data with the fused form (so it is NOT structurally
-    independent), and therefore PAIRS with the SymPy ``case.k_inf`` anchor
+    bug in the operator assembly faster than the end-to-end eig. It reads the
+    RAW ``Mixture`` arrays (sharing only the datum with the hub's fields — so
+    it is independent of the field/operator tier, NOT of the data), and
+    therefore PAIRS with the SymPy ``case.k_inf`` anchor
     in :func:`test_kinf_exact` rather than replacing it.  (Step 5b: the
     assembly now returns the UN-materialized OperatorSum — in production the
     MatrixInverseOperator ctor densifies it; the oracle comparison here
     materializes explicitly.)
     """
-    from orpheus.homogeneous.solver import HomogeneousProblem, _pose_space
-    from orpheus.transport.mesh.material_mesh import MaterialMesh
+    from orpheus.homogeneous.solver import HomogeneousProblem
 
     case = get("homo_2eg_n2n")
     mix = next(iter(case.materials.values()))
-    mat_xs = MaterialMesh.from_materials({0: mix}).material_xs_field()
 
     # CS1 3b: bare as_matrix() — the shape derives from the threaded domain
     # (the explicit basis_shape idiom is retired on this path; D9 pins the
     # derivation). CS4a K2: the space is the mixture-minted pose.
     A = HomogeneousProblem(mix).loss.as_matrix()
-    sig_t = mat_xs.total_cross_section[:, 0]
-    sig_s0 = mat_xs.sig_s_legendre(0)[0]  # (ng, ng), [g_from, g_to]
-    sig_2 = mat_xs.n2n_matrix(0)
+    sig_t = np.asarray(mix.SigT, dtype=float)
+    sig_s0 = mix.SigS[0].toarray()  # P0 slab, (ng, ng), [g_from, g_to]
+    sig_2 = mix.Sig2[0].toarray()
     A_fused = np.diag(sig_t) - (sig_s0 + 2.0 * sig_2).T
     np.testing.assert_allclose(A, A_fused, atol=1e-12, rtol=0)
 
@@ -290,20 +289,15 @@ def test_kinf_matches_direct_eigenvalue_engine_of_the_assembled_pair():
     (the SymPy anchor). rtol=1e-12 per the step-5b equivalence-class note
     above: bit-identical on this host, κ(A)·ULP-portable across BLAS builds.
     """
-    from orpheus.homogeneous.solver import HomogeneousProblem, _pose_space
-    from orpheus.transport.mesh.material_mesh import MaterialMesh
-    from orpheus.transport.operators.isotropic_transfer import (
-        IsotropicFission,
-    )
+    from orpheus.homogeneous.solver import HomogeneousProblem
 
     case = get("homo_2eg_n2n")
     mix = next(iter(case.materials.values()))
-    mat_xs = MaterialMesh.from_materials({0: mix}).material_xs_field()
-    # CS4a K2: mirror the production spelling — the mixture-minted pose
-    # threads every arm and every as_matrix derives its shape from it.
-    space = _pose_space(mix)
-    A = HomogeneousProblem(mix).loss.as_matrix()
-    F = IsotropicFission.from_material_xs(mat_xs, space=space).as_matrix()
+    # CS4a K2 / CS4c coda: mirror the production spelling — the hub's
+    # operators, every as_matrix deriving its shape from the threaded pose.
+    problem = HomogeneousProblem(mix)
+    A = problem.loss.as_matrix()
+    F = problem.production.as_matrix()
     k_engine = _eig.direct_eigenvalue(A, F)[0]
 
     result = solve_homogeneous_infinite(mix)
@@ -362,25 +356,20 @@ def test_K_operator_as_matrix_is_the_resolvent():
     end-to-end eig). Successful construction of ``K`` doubles as the
     None-tolerant space-guard assertion for the meshless pair (an
     ``IncompatibleOperatorComposition`` here means a FunctionSpace leaked
-    onto a meshless operand — investigate before touching the guard).
+    onto an infinite-medium operand — investigate before touching the guard).
     """
-    from orpheus.homogeneous.solver import HomogeneousProblem, _pose_space
+    from orpheus.homogeneous.solver import HomogeneousProblem
     from orpheus.numerics.matrix_inverse_operator import MatrixInverseOperator
-    from orpheus.transport.mesh.material_mesh import MaterialMesh
-    from orpheus.transport.operators.isotropic_transfer import (
-        IsotropicFission,
-    )
 
     case = get("homo_2eg_n2n")
     mix = next(iter(case.materials.values()))
-    mat_xs = MaterialMesh.from_materials({0: mix}).material_xs_field()
 
     # CS4a K2: the line-for-line production mirror (solver.py builds K
     # exactly this way — the mixture-minted pose threaded everywhere, no
     # explicit basis_shape anywhere; the shapes derive from the domain).
-    space = _pose_space(mix)
-    loss = HomogeneousProblem(mix).loss
-    production = IsotropicFission.from_material_xs(mat_xs, space=space)
+    problem = HomogeneousProblem(mix)
+    loss = problem.loss
+    production = problem.production
     K = MatrixInverseOperator(loss) @ production
 
     A = loss.as_matrix()
@@ -395,7 +384,7 @@ def test_K_operator_as_matrix_is_the_resolvent():
 
 def test_rates_via_integrated_reaction_rate_are_bit_identical():
     r"""Bit-identity of the rate rerouting: ``IntegratedReactionRate(νΣf).evaluate(φ)``
-    == ``νΣf @ φ`` on the meshless unit-volume cell, for every shipped case.
+    == ``νΣf @ φ`` on the problem's pose (unit weight), for every shipped case.
 
     ``V_cell = 1`` and the short ``Σ_g νΣf_g φ_g`` reduction matches the dot
     bit-for-bit for ng ∈ {1, 2, 4}. Pins the production-rate rerouting
@@ -403,19 +392,19 @@ def test_rates_via_integrated_reaction_rate_are_bit_identical():
     the rewire. (No PRE-IMPL skip — it protects the rate-side claim regardless
     of the eigenvalue-side rewire state.)
     """
-    from orpheus.transport.mesh.material_mesh import MaterialMesh
+    from orpheus.homogeneous.solver import HomogeneousProblem
     from orpheus.transport.reaction_rate_functional import IntegratedReactionRate
 
     for case_name in ("homo_1eg", "homo_2eg", "homo_4eg", "homo_2eg_n2n"):
         case = get(case_name)
         mix = next(iter(case.materials.values()))
-        mat_xs = MaterialMesh.from_materials({0: mix}).material_xs_field()
+        problem = HomogeneousProblem(mix)
         ng = mix.ng
         phi = solve_homogeneous_infinite(mix).flux
 
-        legacy_prod = float(mat_xs.fission_production[:, 0] @ phi)
+        legacy_prod = float(np.asarray(mix.SigP, dtype=float) @ phi)
         irr_prod = float(
-            IntegratedReactionRate(mat_xs.fission_production_field).evaluate(
+            IntegratedReactionRate(problem.fission_production_field).evaluate(
                 phi.reshape(ng, 1)
             )
         )

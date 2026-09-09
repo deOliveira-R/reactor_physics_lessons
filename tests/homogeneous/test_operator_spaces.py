@@ -30,7 +30,7 @@ from orpheus.numerics.operator import (
     MissingAssembly,
 )
 from orpheus.numerics.space import FunctionSpace
-from orpheus.transport.mesh.material_mesh import MaterialMesh
+from tests.transport._carrier_helpers import unit_cell_carrier
 from orpheus.transport.operators.isotropic_transfer import (
     IsotropicFission,
 )
@@ -62,23 +62,14 @@ def _mix(groups: str, edges: np.ndarray | None = None):
     return mix
 
 
-def _unit_cell_carrier(mix) -> MaterialMesh:
-    """A GENUINE unit-width one-cell ``Mesh1D`` carrier over ``mix`` — the
-    reference object G2.1 keeps after the fabricated carrier retires (C2):
-    its cell volume is 1, so its ``bulk_space`` canonicalizes the quotient
-    point to the counting weight exactly as the pose does."""
-    from orpheus.geometry import BC, CoordSystem, Mesh1D
-
-    mesh = Mesh1D(
-        edges=np.array([0.0, 1.0]), mat_ids=np.zeros(1, dtype=int),
-        coord=CoordSystem.CARTESIAN, bc_left=BC("reflective"), bc_right=BC("reflective"),
-    )
-    return MaterialMesh(mesh, {0: mix})
 
 
 def _mat_xs(groups: str, edges: np.ndarray | None = None):
-    """The meshless carrier exactly as ``solve_homogeneous_infinite`` builds it."""
-    return MaterialMesh.from_materials({0: _mix(groups, edges)}).material_xs_field()
+    """A facade over a GENUINE unit-width one-cell carrier — for the rows that
+    exercise the carrier path (``from_mesh``, ``mesh.bulk_space``). The solver
+    itself builds no carrier since the CS4c coda; until then this helper
+    mirrored its fabricated ``from_materials`` carrier."""
+    return unit_cell_carrier({0: _mix(groups, edges)}).material_xs_field()
 
 
 def _fused_loss_matrix(mat_xs) -> np.ndarray:
@@ -105,7 +96,7 @@ def test_every_homogeneous_operator_reports_the_same_space(
     """
     edges = {False: None, True: {"2g": _EDGES_2G, "4g": _EDGES_4G}[groups]}[with_eg]
     mix = _mix(groups, edges)
-    mat_xs = MaterialMesh.from_materials({0: mix}).material_xs_field()
+    mat_xs = unit_cell_carrier({0: mix}).material_xs_field()
     ng = mat_xs.mesh.ng
     space = _pose_space(mix)
 
@@ -166,7 +157,7 @@ def test_two_group_and_four_group_sum_is_REFUSED() -> None:
     )
     _require(
         c_2g.domain is not None and c_4g.domain is not None,
-        "precondition lost: the chain no longer binds the degenerate carrier",
+        "precondition lost: the chain no longer binds the carrier",
     )
     with pytest.raises(IncompatibleOperatorComposition, match="equal domains"):
         _ = c_2g + c_4g
@@ -391,7 +382,7 @@ def test_minted_space_equals_a_genuine_unit_cell_carriers_bulk_space() -> None:
     """
     for name, mix in sorted(_all_d5_mixtures().items()):
         minted = _pose_space(mix)  # type: ignore[arg-type]
-        carrier_space = _unit_cell_carrier(mix).bulk_space
+        carrier_space = unit_cell_carrier({0: mix}).bulk_space  # type: ignore[dict-item]
         _require(minted is not carrier_space, f"{name}: precondition lost")
         _require(
             minted == carrier_space,
@@ -426,23 +417,23 @@ def test_rate_re_pose_reproduces_the_frozen_pre_carve_values(groups: str) -> Non
     Scope (CS4a-R QA-F8): this row re-computes the pairing IN-TEST, so
     the PRODUCTION rate lines are covered elsewhere — sig_prod/sig_abs
     ride the D5 byte payload (`[M]` a point-weight mutation reds all 8
-    byte rows + the production-rate-100 gate). And on the degenerate
-    carrier the volume-weighted and counting spellings are bit-identical
+    byte rows + the production-rate-100 gate). And on the pose (unit
+    weight) the volume-weighted and counting spellings are bit-identical
     (V ≡ 1), so this row carries no information about the K2a MECHANISM
     — that is G2.4 + G2.5's, per G2.4's inversion table.
     """
     mix = _mix(groups)
-    mat_xs = MaterialMesh.from_materials({0: mix}).material_xs_field()
+    problem = HomogeneousProblem(mix)
     space = _pose_space(mix)
     ng = mix.ng
     rng = np.random.default_rng(4242)
     phi = rng.random((ng, 1)) * 10.0
 
     production = space.inner_product(
-        np.asarray(mat_xs.fission_production_field.values), phi
+        np.asarray(problem.fission_production_field.values), phi
     )
     absorption = space.inner_product(
-        np.asarray(mat_xs.absorption_cross_section_field.values), phi
+        np.asarray(problem.absorption_cross_section_field.values), phi
     )
     frozen_production, frozen_absorption = _FROZEN_PRE_CARVE_RATES[groups]
     _require(
@@ -569,7 +560,7 @@ def test_adjoint_equals_transpose_on_the_minted_space() -> None:
     promoted sole witness) and by nothing else.
     """
     mix = _mix("2g")
-    mat_xs = MaterialMesh.from_materials({0: mix}).material_xs_field()
+    mat_xs = unit_cell_carrier({0: mix}).material_xs_field()
     space = _pose_space(mix)
     operators = {
         "C": MultiplicationOperator(

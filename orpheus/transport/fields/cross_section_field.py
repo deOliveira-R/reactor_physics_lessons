@@ -85,8 +85,10 @@ class CrossSectionField(CoefficientRole, ScalarField):
         The function space — the carrier's cached ``mesh.bulk_space``
         (CS4b S5). Any
         :class:`~orpheus.transport.mesh.material_mesh.MaterialMesh` mint
-        is a legitimate source — including the meshless single-region
-        carrier's (#276); this leaf does NOT narrow to ``SNMesh``.
+        is a legitimate source, and so is a space minted with no carrier
+        at all (the infinite-medium problem's fields are born on
+        ``HomogeneousProblem.space`` since the CS4c coda); this leaf does
+        NOT narrow to ``SNMesh``.
 
     Notes
     -----

@@ -105,9 +105,11 @@ if TYPE_CHECKING:
     # slice: the field is a STANDALONE dataclass (not a ``BulkField`` subclass),
     # so it retypes independently of the full typed-field-hierarchy split (the
     # bulk-data vs quad/trace-dependent ``AngularField``/``AngularBoundaryField`` base
-    # split remains the #267 back-half). The MaterialMesh dependency admits a
-    # meshless (``mesh=None``, single-region) MaterialMesh — the 0-D homogeneous
-    # phase space (campaign #276).
+    # split remains the #267 back-half). The MaterialMesh dependency is the
+    # method-agnostic carrier: any MaterialMesh (an SNMesh, a DiffusionMesh,
+    # a bare carrier) is admitted. The infinite-medium problem builds none
+    # since the CS4c coda — its fields are born on ``HomogeneousProblem.space``
+    # (until then a mesh-less single-region carrier was admitted here, #276).
     from orpheus.transport.mesh.material_mesh import MaterialMesh
 
 
@@ -140,9 +142,9 @@ class MaterialXSField:
         The mesh+materials carrier — supplies ``materials``, ``mat_map``,
         ``ng``, ``spatial_shape``.  A method-agnostic
         :class:`~orpheus.transport.mesh.material_mesh.MaterialMesh` (NOT an
-        ``SNMesh``): this field reads no quadrature/trace, so it admits a
-        meshless single-region MaterialMesh for the 0-D homogeneous medium
-        (campaign #276).
+        ``SNMesh``): this field reads no quadrature/trace, so any carrier
+        in the hierarchy is admitted (the infinite-medium problem no
+        longer builds one — CS4c coda, 2026-09-08).
 
     Attributes (cached)
     -------------------
@@ -202,8 +204,9 @@ class MaterialXSField:
         ``mesh.spatial_shape``), so it accepts any
         :class:`~orpheus.transport.mesh.material_mesh.MaterialMesh` — the
         meshed SN :class:`~orpheus.sn.mesh.augmented_mesh.SNMesh` (a
-        ``MaterialMesh`` subclass) OR a meshless single-region MaterialMesh
-        (the 0-D homogeneous medium, campaign #276).  The parameter is now
+        ``MaterialMesh`` subclass), a ``DiffusionMesh``, or a bare carrier
+        (until the CS4c coda also the retired mesh-less single-region
+        carrier of the 0-D homogeneous medium, #276).  The parameter is
         honestly typed ``MaterialMesh`` (#267 slice).
         """
         return cls(materials=mesh.materials, mesh=mesh)

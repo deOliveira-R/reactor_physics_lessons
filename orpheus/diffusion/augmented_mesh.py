@@ -55,8 +55,7 @@ Construction semantics
 Construction mirrors ``SNMesh._init_core`` order: the method-agnostic
 data block first (:meth:`MaterialMesh._init_data` — bit-identical), then
 the method layer's admission gates (1-D only today — slab / cylinder /
-sphere through the mesh's own areas + volumes; a bounded geometry —
-the mesh-less infinite-medium carrier has no boundary to trace), then
+sphere through the mesh's own areas + volumes), then
 the trace, then the realized ``bc`` dict. Every gate fires AT
 CONSTRUCTION, not lazily inside a solver step — operators built on a
 bad phase space are action-at-a-distance otherwise.
@@ -211,14 +210,12 @@ class DiffusionMesh(MaterialMesh):
                 f"diffusion stencil is a deliberate extension seam, not "
                 f"a broadcast."
             )
-        if self.mesh is None:
-            raise ValueError(
-                "DiffusionMesh requires a bounded geometry (a Mesh1D "
-                "with boundary faces); got a mesh-less MaterialMesh "
-                "(the infinite-medium 1-cell carrier). An infinite "
-                "homogeneous medium has no boundary trace — use the "
-                "homogeneous solver."
-            )
+        # ``self.mesh`` is a ``Mesh1D`` here: every d≤2 constructor carries
+        # a mesh (``mesh is None`` means d≥3, refused one gate above). The
+        # mesh-less infinite-medium 1-cell carrier a second gate once
+        # refused here retired at the CS4c coda (2026-09-08); that arm had
+        # no reachable input — the ``ndim`` gate fired first on every
+        # mesh-less carrier the tree can build.
 
         # The scalar boundary-trace space: the face inventory from
         # ``face_labels`` (the pole of a radial axis is not a face and

@@ -216,7 +216,7 @@ from orpheus.sn.operators.boundary import SNBoundaryOperator
 from orpheus.sn.operators.streaming import StreamingOperator
 from orpheus.transport.fields.angular_boundary_flux import AngularBoundaryFlux
 from orpheus.transport.fields.angular_flux import AngularFlux
-from orpheus.transport.mesh.material_mesh import MaterialMesh
+from tests.transport._carrier_helpers import unit_cell_carrier
 from orpheus.transport.operators.fission import FissionOperator
 from orpheus.transport.operators.multiplication_operator import (
     MultiplicationOperator,
@@ -1157,7 +1157,7 @@ def test_leaf_without_a_space_refuses_construction(leaf):
     test that fails on a stale fixture is a FALSE xfail — green suite, wrong
     reason. **This test was written that way first and caught itself**: the
     ``S`` row failed on a ``ValueError`` out of ``np.einsum`` (an anonymous
-    ``ScatteringOperator``'s ``.H`` will not take the meshless ``(ng, 1)``
+    ``ScatteringOperator``'s ``.H`` will not take the infinite-medium ``(ng, 1)``
     probe ``C``/``F`` accept), so it "xfailed" while asserting nothing about
     R2. The degradation demonstration is therefore BEST-EFFORT and its
     outcome — including a failure to run — is reported as *evidence text*,
@@ -1167,7 +1167,7 @@ def test_leaf_without_a_space_refuses_construction(leaf):
     hard failure that forces the marker's removal.
     """
     mixture = get_mixture("A", "2g")
-    mat_xs = MaterialMesh.from_materials({0: mixture}).material_xs_field()
+    mat_xs = unit_cell_carrier({0: mixture}).material_xs_field()
     builders = {
         "C": lambda: MultiplicationOperator(  # type: ignore[call-arg]
             coefficient=mat_xs.total_cross_section_field,  # deliberate:

@@ -18,10 +18,10 @@ docstrings before touching a row:
   against a frozen pre-carve capture (``_fixtures/coda_precarve_operators.json``,
   produced by this module's ``capture`` entry point on the unmodified tree).
   MUST STAY GREEN through C1 and C2; the capture is NEVER regenerated.
-* :class:`TestTodaysFabricatedCarrier` — **RECORD of a state the coda
-  DELETES**. Designed to red, and the commit that reds each row is named in
-  the row's own docstring. This is ``plan-authoring`` §6c's red-before
-  made executable, not a landmine.
+* ``TestTodaysFabricatedCarrier`` — **RECORD of a state the coda DELETED**
+  (the fabricated carrier's ``[0, 1]`` edges, ``0.5`` node, Cartesian
+  chart and ``mesh is None``). Designed to red at C2 and DELETED in the C2
+  commit with its subject; O1's tell is a grep obligation now, not a gate.
 * :class:`TestNoMaterialMeshIsBuiltOnTheHomogeneousPath` and
   :class:`TestTheHubExists` — the RULED post-carve gates; shipped BEFORE C1
   as ``xfail(strict=True)`` (a self-retiring todo list) and turned green
@@ -282,48 +282,6 @@ class TestTheOperatorAssemblyIsByteStableAcrossTheCoda:
                 )
 
 
-class TestTodaysFabricatedCarrier:
-    """Claim kind **RECORD of a state the coda DELETES** — designed to red.
-
-    O1's tell (``kernel_and_medium_objectives.md:72``) is *"no ``[0,1]``
-    edges, no invented node, no coordinate system on the path"*. Both
-    halves are asserted here so the carve's red is ATTRIBUTABLE: the
-    CONSTRUCTION half dies at C2 (the factory retires), the
-    NOT-CONSUMED half goes vacuous at C1 (nothing fabricated is built,
-    so an alien carrier can no longer be injected — ``plan-authoring``
-    §10's acceptance-artifact widening, declared rather than discovered).
-    """
-
-    def test_the_carrier_the_solver_builds_today_is_fabricated(self) -> None:
-        r"""RED AT **C2** (``MaterialMesh.from_materials`` retires).
-
-        Every datum here is invented by the factory, not by the physics:
-        a unit cell on ``[0, 1]``, a node at ``0.5``, a CARTESIAN chart,
-        ``mesh is None``. Delete this row in the C2 commit — its subject
-        is gone, and O1's tell is then a grep obligation, not a gate.
-        """
-        from orpheus.geometry import CoordSystem
-
-        carrier = MaterialMesh.from_materials({0: _d5_cases()["homo_2eg"]})
-        _require(
-            bool(np.array_equal(carrier.axes[0].edges, np.array([0.0, 1.0]))),
-            f"the fabricated edges moved: {carrier.axes[0].edges}",
-        )
-        _require(carrier.mesh is None, "the carrier is no longer mesh-less")
-        _require(
-            carrier.coord is CoordSystem.CARTESIAN,
-            f"the invented chart moved: {carrier.coord}",
-        )
-        _require(
-            bool(np.array_equal(carrier.volume_measure.nodes.ravel(), [0.5])),
-            f"the invented node moved: {carrier.volume_measure.nodes.ravel()}",
-        )
-        _require(
-            bool(np.array_equal(carrier.volumes, [1.0])),
-            f"the fabricated volume moved: {carrier.volumes}",
-        )
-
-
 class TestNoMaterialMeshIsBuiltOnTheHomogeneousPath:
     r"""G2.4's ruled RE-POSE — a CONSTRUCTION SPY, with its positive control.
 
@@ -334,11 +292,11 @@ class TestNoMaterialMeshIsBuiltOnTheHomogeneousPath:
     ``plan-authoring`` §10 shape; this class is what replaces it.
 
     The spy wraps ``MaterialMesh._init_data`` — the ONE data-construction
-    body EVERY surface funnels into (``from_materials``,
-    ``MaterialMesh.__init__``, ``SNMesh._init_core``,
-    ``DiffusionMesh._init_core``). That handle is chosen so it SURVIVES C2:
-    a spy on ``from_materials`` would lose its subject with the factory and
-    read a confident zero for the wrong reason.
+    body EVERY surface funnels into (``MaterialMesh.__init__``,
+    ``SNMesh._init_core``, ``DiffusionMesh._init_core``; until C2 also the
+    retired ``from_materials`` factory). That handle was chosen so it
+    SURVIVED C2: a spy on the factory would have lost its subject with it
+    and read a confident zero for the wrong reason.
     """
 
     @staticmethod

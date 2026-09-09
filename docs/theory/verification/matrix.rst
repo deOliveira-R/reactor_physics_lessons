@@ -9,7 +9,7 @@ Verification Matrix
    by ``tools/verification/generate_matrix.py``. Do not edit by
    hand — changes will be overwritten on the next rebuild.
 
-Total tests collected: **11941**
+Total tests collected: **11943**
 
 V&V level distribution
 ----------------------
@@ -22,7 +22,7 @@ V&V level distribution
    L1, 1755, 14.7%
    L2, 71, 0.6%
    L3, 0, 0.0%
-   foundation, 8785, 73.6%
+   foundation, 8787, 73.6%
    unmarked, 26, 0.2%
 
 Tagging source
@@ -34,7 +34,7 @@ How each test acquired its V&V level (see ``tests/conftest.py`` for the preceden
    :header: Source, Count
    :widths: 20, 10
 
-   explicit, 11836
+   explicit, 11838
    class-name, 46
    func-name, 0
    case, 33
@@ -252,7 +252,7 @@ Module × level grid
    derivations/test_trajectory_resolvent_chord_oracle, 0, 0, 0, 0, 21, 0
    derivations/test_trajectory_resolvent_power_iterate, 0, 0, 0, 0, 6, 0
    derivations/test_xs_library_validation, 0, 0, 0, 0, 2, 0
-   diffusion/test_augmented_mesh, 0, 0, 0, 0, 12, 0
+   diffusion/test_augmented_mesh, 0, 0, 0, 0, 11, 0
    diffusion/test_boundary_realizer, 4, 0, 0, 0, 28, 0
    diffusion/test_continuous_reference, 0, 7, 0, 0, 0, 0
    diffusion/test_mms, 0, 2, 0, 0, 0, 0
@@ -298,7 +298,7 @@ Module × level grid
    geometry/test_structured_geometry, 0, 0, 0, 0, 37, 0
    geometry/test_transformation, 0, 0, 0, 0, 96, 0
    homogeneous/test_byte_stability, 0, 0, 0, 0, 8, 0
-   homogeneous/test_coda_anchors, 0, 0, 0, 0, 29, 0
+   homogeneous/test_coda_anchors, 0, 0, 0, 0, 28, 0
    homogeneous/test_continuous_reference, 0, 9, 0, 0, 0, 0
    homogeneous/test_homogeneous, 0, 14, 0, 0, 0, 0
    homogeneous/test_homogeneous_problem, 0, 0, 0, 0, 10, 0
@@ -561,8 +561,8 @@ Module × level grid
    transport/test_integrated_reaction_rate, 0, 0, 0, 0, 11, 0
    transport/test_kernels, 0, 0, 0, 0, 88, 0
    transport/test_material_field, 0, 0, 0, 0, 46, 0
-   transport/test_material_mesh, 0, 0, 0, 0, 12, 0
-   transport/test_material_mesh_admission, 0, 0, 0, 0, 6, 0
+   transport/test_material_mesh, 0, 0, 0, 0, 9, 0
+   transport/test_material_mesh_admission, 0, 0, 0, 0, 13, 0
    transport/test_method, 0, 0, 0, 0, 4, 0
    transport/test_multiplication_operator, 0, 0, 0, 0, 25, 0
    transport/test_n2n_multiplicity_census, 0, 0, 0, 0, 2, 0

@@ -246,69 +246,19 @@ class MaterialMesh:
         # mismatched-ng materials raise at construction time.
         _ = self.ng
 
-    # ── Meshless construction (infinite homogeneous medium) ───────────
-
-    @classmethod
-    def from_materials(cls, materials: "Materials | Mapping[int, Mixture]") -> "MaterialMesh":
-        r"""Meshless single-cell carrier for an infinite homogeneous medium.
-
-        Builds the degenerate :class:`MaterialMesh` an *infinite-medium*
-        problem lives on: one Cartesian cell of unit width holding a
-        single material (id ``0``), with **no** legacy mesh adapter
-        (:attr:`mesh` is ``None``).  This is the phase space the
-        homogeneous :math:`k_\infty` solver assembles the transport
-        operators on — :math:`(C - K_\text{iso} - F/k)\,\varphi = 0` with
-        streaming :math:`L` dropped (zero in an infinite medium) — so the
-        whole infinite-medium spectrum is computed through the *same*
-        operator algebra the meshed S\ :sub:`N` solver uses, not a bespoke
-        matrix.
-
-        The lone cell carries material id ``0``, so ``materials`` MUST
-        contain key ``0`` (the canonical id for a one-region medium); any
-        additional entries are retained in the dict but unused by the
-        single cell.  The cell has unit volume, so :attr:`volume_measure`
-        weights it ``1.0`` — :math:`k_\infty` is a production/absorption
-        *ratio*, invariant to the cell volume, so the unit choice is
-        immaterial to the eigenvalue and keeps reaction rates equal to the
-        bare :math:`\langle\Sigma,\varphi\rangle` group contractions.
-
-        Parameters
-        ----------
-        materials : dict mapping material id to Mixture
-            Macroscopic cross sections; MUST contain key ``0``.  The
-            single source of truth for both the cross sections and the
-            group count :attr:`ng` (derived, never passed — no twin).
-
-        Returns
-        -------
-        MaterialMesh
-            A 1-cell, single-region, mesh-less carrier
-            (``spatial_shape == (1,)``, ``mat_map == [0]``,
-            ``mesh is None``).
-        """
-        obj = cls.__new__(cls)
-        # One Cartesian cell of unit width.  BCs default to None
-        # (mesh-level reflective — the physical infinite-medium closure)
-        # but are never read: the homogeneous solver drops the streaming
-        # operator, so no boundary trace is ever applied.  ``mat_map=None``
-        # → a single material with id 0 (``np.zeros((1,), int)``).
-        obj._init_data(
-            axes=(AxisMesh(edges=np.array([0.0, 1.0])),),
-            mesh=None,
-            mat_map=None,
-            materials=materials,
-        )
-        return obj
-
     # NOTE: a GENERAL axis-native ``MaterialMesh.from_axes`` (arbitrary
     # cell count / coordinate system) is still intentionally NOT provided.
     # ``SNMesh.from_axes`` already exists with a different
     # (quadrature-bearing) signature, so a base ``from_axes`` here would be
-    # an incompatible override; and the only axis-native consumer so far is
-    # the meshless 1-cell :meth:`from_materials` above (which manufactures
-    # its own trivial axis). ``.homogenize`` still builds via the legacy
-    # ``MaterialMesh(coarse_mesh, materials)`` ctor. Defer the general form
-    # until a real N-cell consumer exists (defer-until-≥2-instances).
+    # an incompatible override; and the base class has no axis-native
+    # consumer today — the infinite-medium problem poses on its own space
+    # (``HomogeneousProblem.space``, Energy ⊗ the counting point) and
+    # builds no carrier at all since the CS4c coda (until then a
+    # ``from_materials`` factory fabricated a mesh-less one-cell carrier
+    # here whose ``[0, 1]`` edges, node and chart nothing consumed;
+    # retired 2026-09-08). ``.homogenize`` still builds via the legacy
+    # ``MaterialMesh(coarse_mesh, materials)`` ctor. Defer the general
+    # form until a real N-cell consumer exists (defer-until-≥2-instances).
 
     # ── Materials validation ──────────────────────────────────────────
 
@@ -412,17 +362,22 @@ class MaterialMesh:
             of_axes(energy_axis, SpaceFactorAxis("spatial", spatial_shape,
                                                  weights=volumes, NODAL))
 
-        * **The degenerate carrier** (``from_materials``): ``[M]`` its
-          volumes are ``[1.0]``, so the spatial factor canonicalizes to the
-          COUNTING weight — the quotient point carrying the normalized
-          "per unit volume" density convention (collapse doctrine, clause
-          1). Shape ``(ng, 1)``: the explicit point axis the homogeneous
-          operators pose on.
-        * **A genuine one-cell mesh** keeps ``V ≠ 1`` BY THE DATA —
-          distinguished from the quotient point by MEASURE, hence (through
-          the derived name) by space identity. ⚠ Provably invisible to
-          ``.H`` (a scalar metric commutes with every operator — the F2
-          measurement); identity is the only instrument that carries it.
+        * **The quotient point** — the space the infinite-medium problem
+          poses on (``HomogeneousProblem.space``: Energy ⊗ a counting
+          point, shape ``(ng, 1)``) — is minted from the Mixture, not from
+          a carrier, since the CS4c coda. A genuine UNIT-width one-cell
+          mesh reaches the same space through this formula: ``[M]`` its
+          volumes are ``[1.0]``, so the spatial factor canonicalizes to
+          the COUNTING weight — the normalized "per unit volume" density
+          convention (collapse doctrine, clause 1) — and its
+          ``bulk_space`` is ``==`` the pose (G2.1 pins it). Until the
+          coda a fabricated ``from_materials`` carrier played this role.
+        * **A genuine one-cell mesh of width ≠ 1** keeps ``V ≠ 1`` BY THE
+          DATA — distinguished from the quotient point by MEASURE, hence
+          (through the derived name) by space identity. ⚠ Provably
+          invisible to ``.H`` (a scalar metric commutes with every
+          operator — the F2 measurement); identity is the only
+          instrument that carries it.
         * **A meshed carrier** (``SNMesh``/``DiffusionMesh`` inherit this)
           gets the honest scalar bulk ``(ng, *spatial)`` with cell-volume
           weights — the seed of CS2's single scalar-bulk mint. It is NOT
@@ -432,7 +387,8 @@ class MaterialMesh:
 
         **The energy arm** reads only materials REACHABLE from ``mat_map``
         (the leak principle: the mint consults exactly its defining data —
-        ``from_materials`` retains spectator entries, and a spectator with
+        a declaration may carry SPECTATOR materials no cell references
+        (``Materials ⊋ reachable``), and a spectator with
         ``eg=None`` must not flip the axis identity of a problem it does
         not touch). The reachable set then goes through the ONE energy-arm
         rule, :meth:`~orpheus.numerics.axis.EnergyAxis.from_materials`
@@ -554,23 +510,19 @@ class MaterialMesh:
         Raises
         ------
         AttributeError
-            If the carrier holds no per-face areas — three DISTINCT
-            arms, each naming its own case (S7 G7.2; pre-repair one
-            message claimed "2-D meshes" for all three, false on two):
-            the 2-D legacy mesh (areas live on the ``Mesh2D``), the
-            d≥2 axis-native carrier (no legacy mesh at all), and the
-            mesh-less infinite-medium 1-cell carrier (no faces at all).
-            The two ``mesh is None`` arms are different STATES (G7.3 —
-            the sentinel is not the meaning; ``ndim`` discriminates).
+            If the carrier holds no per-face areas — two DISTINCT arms,
+            each naming its own case (S7 G7.2; pre-repair one message
+            claimed "2-D meshes" for both, false on one): the 2-D legacy
+            mesh (areas live on the ``Mesh2D``) and the d≥3 axis-native
+            carrier (no legacy mesh at all). ``mesh is None`` has ONE
+            meaning — the d≥3 axis-native carrier: every d≤2 constructor
+            carries a mesh (``tests/transport/test_material_mesh_admission.py``
+            pins the theorem). Until the CS4c coda a third arm served the
+            mesh-less infinite-medium 1-cell carrier that shared the
+            sentinel (S7 G7.3 discriminated the two by ``ndim``); that
+            carrier retired with its factory, 2026-09-08.
         """
         if self._areas is None:
-            if self.mesh is None and self.ndim == 1:
-                raise AttributeError(
-                    "MaterialMesh.areas: the mesh-less infinite-medium "
-                    "1-cell carrier has no faces at all — reaction "
-                    "rates on it are bare group contractions, not "
-                    "surface quantities."
-                )
             if self.mesh is None:
                 raise AttributeError(
                     f"MaterialMesh.areas: the {self.ndim}-D axis-native "

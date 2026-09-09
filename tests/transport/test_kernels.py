@@ -36,7 +36,7 @@ from orpheus.data.macro_xs.mixture import Mixture
 from orpheus.derivations.common.xs_library import get_mixture
 from orpheus.numerics.axis import EnergyAxis
 from orpheus.transport.kernels import FissionKernel, TransferKernel
-from orpheus.transport.mesh.material_mesh import MaterialMesh
+from tests.transport._carrier_helpers import unit_cell_carrier
 from orpheus.transport.operators.fission import FissionOperator
 from orpheus.transport.operators.isotropic_transfer import (
     IsotropicFission,
@@ -114,13 +114,13 @@ def _symmetric_2g() -> Mixture:
 def _two_material_carrier():
     """A fresh two-material carrier + its mixtures, keyed by ``mid``.
 
-    ``from_materials`` retains the extra entry (the single cell uses id
-    0), and ``MaterialXSField``'s dense caches cover EVERY materials-dict
-    entry — so one degenerate carrier exercises the per-``mid`` accessor
-    surface for both ids.
+    The carrier retains the extra entry as a SPECTATOR (the single cell
+    uses id 0), and ``MaterialXSField``'s dense caches cover EVERY
+    materials-dict entry — so one one-cell carrier exercises the
+    per-``mid`` accessor surface for both ids.
     """
     mixtures = {0: _asymmetric_fissile_2g(), 1: _second_fissile_2g()}
-    return MaterialMesh.from_materials(mixtures).material_xs_field(), mixtures
+    return unit_cell_carrier(mixtures).material_xs_field(), mixtures
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -219,7 +219,7 @@ def test_kernel_equals_carrier_cache_bit_identical(build_mixture):
         mixtures = {0: _symmetric_2g()}
     else:
         mixtures = {0: build_mixture(), 1: _second_fissile_2g()}
-    mat_xs = MaterialMesh.from_materials(mixtures).material_xs_field()
+    mat_xs = unit_cell_carrier(mixtures).material_xs_field()
 
     for mid, mixture in mixtures.items():
         scattering = TransferKernel.scattering(mixture)
@@ -427,7 +427,7 @@ def test_bulk_space_energy_arm_reads_only_reachable_materials():
     with_edges = dataclasses.replace(_asymmetric_fissile_2g(), eg=_EDGES_2G)
     spectator = _symmetric_2g()
     assert spectator.eg is None
-    carrier = MaterialMesh.from_materials({0: with_edges, 1: spectator})
+    carrier = unit_cell_carrier({0: with_edges, 1: spectator})
     axes = carrier.bulk_space.axes
     assert axes is not None
     assert axes[0] == EnergyAxis.from_grid(EnergyGrid(_EDGES_2G))
@@ -804,7 +804,7 @@ def test_isotropic_energy_inherits_the_parent_binding_space():
     from orpheus.geometry import BC, CoordSystem, Mesh1D
     from orpheus.transport.operators.scattering import ScatteringOperator
 
-    carrier = MaterialMesh.from_materials({0: get_mixture("A", "2g")})
+    carrier = unit_cell_carrier({0: get_mixture("A", "2g")})
     mesh = Mesh1D(
         edges=np.linspace(0.0, 1.0, 5),
         mat_ids=np.zeros(4, dtype=int),
@@ -866,8 +866,8 @@ def test_energy_conformity_guard_three_rows():
     from orpheus.numerics.quadrature import Quadrature
     from orpheus.sn.mesh.augmented_mesh import SNMesh
 
-    carrier_2g = MaterialMesh.from_materials({0: get_mixture("A", "2g")})
-    carrier_4g = MaterialMesh.from_materials({0: get_mixture("A", "4g")})
+    carrier_2g = unit_cell_carrier({0: get_mixture("A", "2g")})
+    carrier_4g = unit_cell_carrier({0: get_mixture("A", "4g")})
     mat_2g = carrier_2g.material_xs_field()
 
     # Row 1 — axis-built positive (the fission ENERGY binding — the
@@ -947,9 +947,7 @@ def test_fission_space_is_mandatory():
     ``test_leaf_without_a_space_refuses_construction[F]`` — this row
     pins the two constructor surfaces directly.
     """
-    mat_xs = MaterialMesh.from_materials(
-        {0: get_mixture("A", "2g")}
-    ).material_xs_field()
+    mat_xs = unit_cell_carrier({0: get_mixture("A", "2g")}).material_xs_field()
     with pytest.raises(TypeError):
         FissionOperator.from_solver_data(mat_xs=mat_xs)  # type: ignore[call-arg]
     with pytest.raises(TypeError):

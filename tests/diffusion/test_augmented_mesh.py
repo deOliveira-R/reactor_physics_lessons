@@ -20,8 +20,9 @@ diffusion phase space rather than bare data:
   guards ride on it);
 * **promotion** — ``from_material_mesh`` re-derives the data block
   bit-identically with NO extra parameters (BCs live on the axes);
-* **admission refusals** — multi-D, mesh-less (unbounded), unsupported
-  BC tag, parameter-less albedo: each fires AT CONSTRUCTION, so "a
+* **admission refusals** — multi-D, unsupported BC tag, parameter-less
+  albedo (the mesh-less refusal retired at the CS4c coda with the
+  fabricated carrier it refused): each fires AT CONSTRUCTION, so "a
   diffusion phase space with unresolved/unrealizable BCs" is
   unrepresentable (the refusals moved here from the P5 solver at P7a).
 
@@ -168,14 +169,6 @@ class TestAdmissionRefusals:
         )
         with pytest.raises(ValueError, match="1-D"):
             DiffusionMesh.from_material_mesh(MaterialMesh(mesh2d, _MATS))
-
-    def test_meshless_carrier_is_refused(self):
-        """The infinite-medium 1-cell carrier has no boundary to trace
-        — the honest gate points at the homogeneous solver."""
-        with pytest.raises(ValueError, match="bounded.*homogeneous"):
-            DiffusionMesh.from_material_mesh(
-                MaterialMesh.from_materials(_MATS)
-            )
 
     def test_unsupported_bc_kind_is_refused_with_the_supported_list(self):
         # "white" is DELIBERATELY absent: at P1 it coincides with

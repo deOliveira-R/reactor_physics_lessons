@@ -136,11 +136,11 @@ def _off_diagonal_nilpotent(n: int) -> np.ndarray:
 
 def _asymmetric_2g_mat_xs():
     """2G mixture with ASYMMETRIC ``SigS`` AND non-zero asymmetric ``Sig2``
-    on the meshless single-cell carrier (Mode-6: a symmetric matrix is
+    on a unit one-cell carrier (Mode-6: a symmetric matrix is
     blind to the transpose-assembly mutation; zero ``Sig2`` would vacuum
     the ``IsotropicN2N`` oracle row)."""
     from orpheus.derivations.common.xs_library import make_mixture
-    from orpheus.transport.mesh.material_mesh import MaterialMesh
+    from tests.transport._carrier_helpers import unit_cell_carrier
 
     sig_s0 = np.array([[0.30, 0.08], [0.01, 0.45]])  # [g_from, g_to], asymmetric
     sig_2 = np.array([[0.020, 0.006], [0.001, 0.030]])  # asymmetric, non-zero
@@ -151,7 +151,7 @@ def _asymmetric_2g_mat_xs():
     )
     m.SigS = [csr_matrix(sig_s0)]
     m.Sig2 = [csr_matrix(sig_2)]
-    mat_xs = MaterialMesh.from_materials({0: m}).material_xs_field()
+    mat_xs = unit_cell_carrier({0: m}).material_xs_field()
     return mat_xs, sig_s0, sig_2, np.array([1.0, 1.5])
 
 
@@ -214,7 +214,7 @@ def test_as_matrix_energy_leaves_vs_storage_oracle():
         ),
     ):
         got = op.as_matrix(basis_shape=(ng, 1))
-        ref = op.dense_per_material()[0]  # the single meshless material
+        ref = op.dense_per_material()[0]  # the single material
         np.testing.assert_allclose(
             got, ref, rtol=0, atol=4 * _EPS * np.abs(ref).max(),
             err_msg=f"{type(op).__name__}: apply-to-basis ≠ storage transpose",
@@ -273,7 +273,7 @@ def test_as_matrix_equals_retired_as_dense_loop():
     software invariant (the registry warned on the marker conflict).
     """
     from orpheus.derivations import get
-    from orpheus.transport.mesh.material_mesh import MaterialMesh
+    from tests.transport._carrier_helpers import unit_cell_carrier
     from orpheus.transport.operators.isotropic_transfer import (
         IsotropicN2N,
         IsotropicScattering,
@@ -284,7 +284,7 @@ def test_as_matrix_equals_retired_as_dense_loop():
 
     case = get("homo_2eg_n2n")  # asymmetric SigS + non-zero Sig2 (Mode-6)
     mix = next(iter(case.materials.values()))
-    mat_xs = MaterialMesh.from_materials({0: mix}).material_xs_field()
+    mat_xs = unit_cell_carrier({0: mix}).material_xs_field()
     ng = mix.ng
     loss = MultiplicationOperator.from_mesh(
         mat_xs.total_cross_section_field, mat_xs.mesh,

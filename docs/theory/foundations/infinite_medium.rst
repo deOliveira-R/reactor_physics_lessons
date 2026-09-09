@@ -1162,26 +1162,26 @@ space; the carrier only supplies data**:
    sections, the problem poses its space" as the rule; a page that says
    the space comes off the carrier is describing the pre-K2 tree.
 
-2. **Supply the cross sections.**  A single-cell, single-region
-   :class:`~orpheus.transport.mesh.material_mesh.MaterialMesh` is built
-   from the mixture via
-   :meth:`~orpheus.transport.mesh.material_mesh.MaterialMesh.from_materials`,
-   and its
-   :meth:`~orpheus.transport.mesh.material_mesh.MaterialMesh.material_xs_field`
-   exposes the per-cell macroscopic cross sections
-   (:math:`\Sigma_t`, :math:`\chi`, :math:`\nu\Sigma_f`, and the
-   per-material transfer matrices) as the
-   :class:`~orpheus.transport.mesh.material_xs_field.MaterialXSField`
-   every transport operator consumes.  This carrier is **mesh-less** —
-   it has no spatial mesh and no boundary faces at all — and since
-   CS4b S7 the tree says so with typed refusals rather than by
-   accident: promoting it to an :math:`S_N` phase space raises a named
-   :class:`ValueError` (there is no boundary trace to sweep), and
-   asking it for :attr:`~orpheus.transport.mesh.material_mesh.MaterialMesh.areas`
-   raises naming *its* case rather than a 2-D mesh's.
+2. **Supply the cross sections.**  Since the CS4c coda (2026-09-08) the
+   problem supplies its own data:
+   :class:`~orpheus.homogeneous.solver.HomogeneousProblem` mints the
+   cross-section fields (:math:`\Sigma_t`, :math:`\Sigma_a`,
+   :math:`\nu\Sigma_f`, as
+   :class:`~orpheus.transport.fields.cross_section_field.CrossSectionField`
+   objects born on the pose) and the kernel-tier material fields
+   (scattering, :math:`(n,2n)`, fission) directly from the
+   :class:`~orpheus.data.macro_xs.mixture.Mixture` — no carrier is built.
+   Until the coda a single-cell, single-region **mesh-less**
+   ``MaterialMesh`` was fabricated by a ``from_materials`` factory
+   (retired with the coda) and its ``material_xs_field()`` supplied the
+   operators; that carrier's ``[0, 1]`` edges, node at ``0.5`` and
+   Cartesian chart were consumed by nothing (the O1 objective's tell),
+   and CS4b S7's typed refusals of it (promotion to an :math:`S_N`
+   phase space; ``areas``) retired with it — ``mesh is None`` now has
+   one meaning, the d≥3 axis-native carrier.
 
 3. **Collision diagonal** :math:`C = \mathrm{diag}(\Sigma_t)`, read from
-   :attr:`~orpheus.transport.mesh.material_xs_field.MaterialXSField.total_cross_section`.
+   the problem's ``total_cross_section_field``.
 
 4. **Isotropic energy transfer**
    :math:`K_\mathrm{iso} = \Sigma_{s0}^T + 2\Sigma_2^T`, the action of the

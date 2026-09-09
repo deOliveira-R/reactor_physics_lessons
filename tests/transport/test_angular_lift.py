@@ -43,7 +43,6 @@ from orpheus.transport.fields.angular_boundary_flux import AngularBoundaryFlux
 from orpheus.transport.fields.angular_flux import AngularFlux
 from orpheus.transport.frames.harmonic_frame import HarmonicFrame
 from orpheus.transport.full_field import FullField
-from orpheus.transport.mesh.material_mesh import MaterialMesh
 from orpheus.transport.operators.angular_lift import AngularEnd, AngularLift, MomentEnd
 from orpheus.transport.operators.fission import FissionOperator
 from orpheus.transport.operators.isotropic_transfer import (
@@ -61,12 +60,12 @@ _L1_ABS_BAND = 2.3e-16
 
 
 def _sn() -> SNMesh:
-    carrier = MaterialMesh.from_materials({0: get_mixture("A", "2g")})
+    materials = {0: get_mixture("A", "2g")}
     mesh = Mesh1D(
         edges=np.linspace(0.0, 1.0, 21), mat_ids=np.zeros(20, dtype=int),
         coord=CoordSystem.CARTESIAN, bc_left=BC("vacuum"), bc_right=BC("vacuum"),
     )
-    return SNMesh(mesh, Quadrature.gauss_legendre(n_ordinates=8), carrier.materials)
+    return SNMesh(mesh, Quadrature.gauss_legendre(n_ordinates=8), materials)
 
 
 def _mat_xs(sn: SNMesh):

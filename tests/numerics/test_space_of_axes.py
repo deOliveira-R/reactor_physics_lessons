@@ -417,9 +417,10 @@ def test_dual_of_an_axis_built_space_keeps_the_measure() -> None:
 def test_quotient_point_and_a_genuine_one_cell_mesh_are_DIFFERENT_spaces() -> None:
     r"""B9 ⭐ — the collapse doctrine's retrodiction (A.5 row 4), mechanized.
 
-    ``MaterialMesh.from_materials`` mints the QUOTIENT carrier — volumes
-    ``[1.0]``, the normalized "per unit volume" density convention, whose
-    spatial weight canonicalizes to counting. A genuine one-cell slab of
+    The infinite-medium problem's pose (``_pose_space``: Energy ⊗ the
+    counting point — the normalized "per unit volume" density convention;
+    until the CS4c coda a fabricated one-cell carrier's ``bulk_space``
+    minted the same space) is the QUOTIENT side. A genuine one-cell slab of
     width 2 keeps ``V = 2`` BY THE DATA. Both spaces have shape
     ``(ng, 1)`` — shape carries nothing; the derived NAME (hence space
     identity) is the only discriminator.
@@ -435,10 +436,11 @@ def test_quotient_point_and_a_genuine_one_cell_mesh_are_DIFFERENT_spaces() -> No
     """
     from orpheus.derivations.common.xs_library import get_mixture
     from orpheus.geometry import Mesh1D
+    from orpheus.homogeneous.solver import _pose_space
     from orpheus.transport.mesh.material_mesh import MaterialMesh
 
     mix = get_mixture("A", "2g")
-    quotient = MaterialMesh.from_materials({0: mix}).bulk_space
+    quotient = _pose_space(mix)
     one_cell_mesh = MaterialMesh(
         Mesh1D(edges=np.array([0.0, 2.0]), mat_ids=np.array([0])), {0: mix}
     )
@@ -591,12 +593,12 @@ def test_bulk_space_is_cached_and_content_stable() -> None:
     # with it.
     """
     from orpheus.derivations.common.xs_library import get_mixture
-    from orpheus.transport.mesh.material_mesh import MaterialMesh
+    from tests.transport._carrier_helpers import unit_cell_carrier
 
     mix = get_mixture("A", "2g")
-    carrier = MaterialMesh.from_materials({0: mix})
+    carrier = unit_cell_carrier({0: mix})
     _require(carrier.bulk_space is carrier.bulk_space, "must be cached")
-    twin = MaterialMesh.from_materials({0: mix})
+    twin = unit_cell_carrier({0: mix})
     _require(
         carrier.bulk_space == twin.bulk_space
         and hash(carrier.bulk_space) == hash(twin.bulk_space),

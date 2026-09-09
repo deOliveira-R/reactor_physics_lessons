@@ -584,7 +584,7 @@ def _resolve_basis_shape(
             f"domain FunctionSpace, so the basis shape cannot be derived. "
             f"Either construct the operator with a space, or pass an "
             f"explicit basis_shape= (the element shape apply consumes, "
-            f"e.g. (ng, 1) for a meshless single-cell group operator)."
+            f"e.g. (ng, 1) for an infinite-medium group operator)."
         )
     return tuple(domain.shape)
 
@@ -1082,8 +1082,8 @@ class LinearOperator(Protocol[Domain, Codomain]):
             from :attr:`domain` (``domain.shape``); REQUIRED explicitly
             for operators carrying no space (bare/test-constructed
             operators on the legal-until-CS4 ``None`` path — the
-            meshless production operators thread the carrier's
-            ``bulk_space`` since campaign 1 CS1 and derive).
+            infinite-medium production operators thread the
+            problem's pose since campaign 1 CS1 and derive).
         max_dimension : int, optional
             The size gate: refuse (``MatrixTooLarge``) when
             ``prod(basis_shape) > max_dimension``. Default ``4096`` —
