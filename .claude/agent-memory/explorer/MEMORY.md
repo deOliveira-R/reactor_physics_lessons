@@ -11,7 +11,7 @@ carries its own headings, so a summary line is a second copy that drifts
 ## 1. Lessons (read first)
 
 - [lessons.md](lessons.md) — the exploration lessons, L-001…L-038, each headed by
-  its own one-line rule (L-039 2026-09-05: Nexus `callers` on METHODS ⟹ read the `unresolved` count; L-040 2026-09-07: a retirement's PROSE census = xrefs / PROMISSORY claims / CONVENTION statements — sort before counting). The spine (blast-radius = graph+grep+constructors+doc-nodes;
+  its own one-line rule (L-039 2026-09-05: Nexus `callers` on METHODS ⟹ read the `unresolved` count; L-040 2026-09-07: a retirement's PROSE census = xrefs / PROMISSORY claims / CONVENTION statements — sort before counting; L-041 2026-09-08: an `is`-identity on an OPTIONAL constituent is vacuous on the `None` arm — probe identity predicates there and on a same-data rebuild). The spine (blast-radius = graph+grep+constructors+doc-nodes;
   verify-premise-first; durable-shape vs line-map; git-is-authoritative-for-merge-status)
   is PROMOTED to AGENT.md Operating Principles 4–7; L1/L2/L3/L5 remain there as the
   forensic war-stories behind them. Skim the headings, read the one that matches your
@@ -146,4 +146,5 @@ quantity carries the units it does.
 - [Pyright ignored-package measurement](reference_pyright_ignored_package_measurement.md)
   — true error count for a `[tool.pyright]`-ignored package: CLI file args + a /tmp
   ignore-free config; discount the editable-install import artifacts.
+- [Problem → Solution split census (consumers-campaign opener)](problem_solution_split_census.md) — the SN hub owns spaces/BCs/closure and ZERO bound operators (all built on the solver side); 3 memo slots written onto the hub from outside; the k-outer iterate is a bare ndarray with the trace smuggled via `_phi_of_trace`; `is_same_phase_space` is not a content identity (L-041).
 - [Census predicates: bound-method reference + activation traceback](census_predicates_bound_reference_and_activation_traceback.md) — a CALL census reads a BOUND verb as dead (0/1/0 = bound, say so); receiver-name regexes miss `head * bulk`; wrap-and-run with a 3-frame traceback finds the HOTTEST client (the R6 guard line = 58/118 densifier mints).

@@ -46,17 +46,34 @@ Key Facts
   rather than a flag. :func:`~orpheus.numerics.eigenvalue.direct_eigenvalue`
   (the ``(A, F)``-posed sibling engine) is **no longer on the homogeneous call
   path**
+- **The problem is a HUB.**
+  :class:`~orpheus.homogeneous.solver.HomogeneousProblem` — a frozen
+  dataclass over one
+  :class:`~orpheus.data.macro_xs.mixture.Mixture` — is the place the
+  consumed objects live: the pose, the kernel-tier material fields, the
+  cross-section fields, the bound operators and the reaction-rate
+  co-vectors, each a per-instance ``cached_property`` minted from the
+  mixture **and from nothing else**.
+  :func:`~orpheus.homogeneous.solver.solve_homogeneous_infinite` reads
+  the hub and computes; it constructs no data of its own. (CS4c coda,
+  ruling R-c1, 2026-09-08 — the hub is ``SNMesh``'s analogue on the
+  infinite path; see :ref:`homogeneous-development-history`.)
+- **Nothing is fabricated on the path.** There is no carrier, no
+  ``[0, 1]`` edges, no invented node and no coordinate system: the
+  infinite medium has no mesh, so the problem states none. Until the
+  coda the cross sections came through a *meshless* single-cell
+  :class:`~orpheus.transport.mesh.material_mesh.MaterialMesh` built by a
+  ``from_materials`` factory whose edges, node and Cartesian chart were
+  consumed by nothing; that factory retired with its last consumer.
 - **A is assembled from the transport operators**, not a bespoke matrix:
   :math:`\mathbf{A} = C - K_\mathrm{iso}`, posed on
   :math:`V_E \otimes V_{\rm pt}` (the energy axis tensored with the
-  quotient point) and reading its cross sections off a *meshless*
-  single-cell
-  :class:`~orpheus.transport.mesh.material_mesh.MaterialMesh`. **The
-  carrier supplies data; the problem poses its own space** — since
-  campaign 1 CS4a (K2) the space is minted from the MIXTURE by
-  :func:`~orpheus.homogeneous.solver._pose_space` and threaded into all
-  three arms, not read off the carrier (which mints an ``==`` space and
-  is now a reference, not the production source). With
+  quotient point) and reading its cross sections off fields the hub
+  mints **on that same pose**. The space was the problem's own from
+  campaign 1 CS4a (K2) — minted from the MIXTURE by
+  :func:`~orpheus.homogeneous.solver._pose_space` and threaded into every
+  arm — and the coda made the DATA follow it, so a field posed on a space
+  nothing checks is no longer spellable here. With
   :math:`C = \text{diag}(\Sigma_t)` and
   :math:`K_\mathrm{iso} = \Sigma_{s0}^T + 2\Sigma_2^T` supplied by
   :class:`~orpheus.transport.operators.isotropic_transfer.IsotropicScattering`
@@ -99,9 +116,10 @@ presents the direct dense eigensolve used to compute :math:`\kinf`
 and :math:`\phi(E)`.
 
 The solver is the single function
-:func:`~orpheus.homogeneous.solver.solve_homogeneous_infinite`, which
-assembles the loss matrix from the model-shared transport operators
-(see :ref:`direct-eigensolve`), takes the dominant eigenpair of
+:func:`~orpheus.homogeneous.solver.solve_homogeneous_infinite`.  It reads
+the problem's hub, :class:`~orpheus.homogeneous.solver.HomogeneousProblem`
+— which assembles the loss operator from the model-shared transport
+operators (see :ref:`direct-eigensolve`) — takes the dominant eigenpair of
 :math:`\mathbf{A}^{-1}\mathbf{F}`, and returns a
 :class:`~orpheus.homogeneous.solver.HomogeneousResult`.
 
@@ -1125,18 +1143,21 @@ The defining design decision of campaign **#276** is that the
 infinite-medium loss matrix is **not** a bespoke energy matrix — it is
 the meshed SN solver's own loss operator
 :math:`\mathbf{A} = C - K_\mathrm{iso}` evaluated on the degenerate
-phase space :math:`V_E \otimes V_{\rm pt}`, with the cross sections
-read off a *meshless* single-cell carrier.  This is Cardinal Rule 2
+phase space :math:`V_E \otimes V_{\rm pt}`.  This is Cardinal Rule 2
 (cross-model single source) applied to the simplest model in the
 curriculum: there is exactly one place in ORPHEUS where the isotropic
 in-scatter source :math:`\Sigma_{s0}^T\phi + 2\Sigma_2^T\phi` is
-assembled, and the homogeneous solver reuses it rather than
+assembled, and the homogeneous problem reuses it rather than
 re-implementing the same algebra.
 
-The construction proceeds in five steps inside
-:func:`~orpheus.homogeneous.solver.solve_homogeneous_infinite`, and the
-first two are deliberately separate — **the problem poses its own
-space; the carrier only supplies data**:
+The construction proceeds in five steps, and since the CS4c coda
+(2026-09-08) all five live on the problem's own hub,
+:class:`~orpheus.homogeneous.solver.HomogeneousProblem`, as cached
+per-instance state; the solver only reads them.  Steps 1 and 2 are
+listed separately because they answer two different questions —
+*which space?* and *which numbers?* — but they now have **one** answer
+between them: **the mixture determines both**, and each consumed object
+is minted from it and from nothing else.
 
 1. **Pose the space.**
    :func:`~orpheus.homogeneous.solver._pose_space` mints
@@ -1154,34 +1175,88 @@ space; the carrier only supplies data**:
    reaction-rate pairings consume
    (:ref:`homogeneous-rates-and-normalisation`).
 
-   ⚠ This is the campaign-1 CS4a **K2** correction, and it is a
-   separation of concerns rather than a change of value: the degenerate
-   carrier's :attr:`~orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space`
-   mints an ``==`` space (the identity-bridge gate pins it) but is no
-   longer what production consumes. Read "the carrier supplies cross
-   sections, the problem poses its space" as the rule; a page that says
-   the space comes off the carrier is describing the pre-K2 tree.
+   ⚠ **This mint is the whole story, and it has been since two
+   separate corrections.** Campaign 1 CS4a (**K2**) stopped the SPACE
+   being read off a carrier; the CS4c coda (**R-c1**) stopped the DATA
+   being read off one. A page that says the space comes off a carrier is
+   describing the pre-K2 tree; a page that says a carrier supplies the
+   cross sections is describing the pre-coda tree. What survives of the
+   old reading is a *reference*, not a source: a genuine unit-width
+   one-cell ``Mesh1D`` carrier's
+   :attr:`~orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space`
+   still mints a space that is ``==``
+   :attr:`HomogeneousProblem.space
+   <orpheus.homogeneous.solver.HomogeneousProblem.space>`, and the
+   identity-bridge gate (``tests/homogeneous/test_operator_spaces.py``
+   G2.1) keeps that equality honest — the two spellings route through
+   the same energy-arm rule and the same one-cell volume, so they cannot
+   silently diverge.
 
-2. **Supply the cross sections.**  Since the CS4c coda (2026-09-08) the
-   problem supplies its own data:
-   :class:`~orpheus.homogeneous.solver.HomogeneousProblem` mints the
-   cross-section fields (:math:`\Sigma_t`, :math:`\Sigma_a`,
-   :math:`\nu\Sigma_f`, as
+2. **Supply the cross sections — from the mixture, onto the pose.**
+   The hub mints two tiers directly from the
+   :class:`~orpheus.data.macro_xs.mixture.Mixture`.  The **kernel** tier
+   is the representation-free material data — the scattering and
+   :math:`(n,2n)` Legendre transfer stacks
+   (:attr:`~orpheus.homogeneous.solver.HomogeneousProblem.scattering`,
+   :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.n2n`) and the
+   fission datum :math:`\chi \otimes \nu\Sigma_f`
+   (:attr:`~orpheus.homogeneous.solver.HomogeneousProblem.fission`), each
+   carried over the one-cell
+   :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.layout`
+   ``{0: (arange(1),)}`` — material ``0`` on cell ``0``.  The **field**
+   tier is the three
    :class:`~orpheus.transport.fields.cross_section_field.CrossSectionField`
-   objects born on the pose) and the kernel-tier material fields
-   (scattering, :math:`(n,2n)`, fission) directly from the
-   :class:`~orpheus.data.macro_xs.mixture.Mixture` — no carrier is built.
-   Until the coda a single-cell, single-region **mesh-less**
-   ``MaterialMesh`` was fabricated by a ``from_materials`` factory
-   (retired with the coda) and its ``material_xs_field()`` supplied the
-   operators; that carrier's ``[0, 1]`` edges, node at ``0.5`` and
-   Cartesian chart were consumed by nothing (the O1 objective's tell),
-   and CS4b S7's typed refusals of it (promotion to an :math:`S_N`
-   phase space; ``areas``) retired with it — ``mesh is None`` now has
-   one meaning, the d≥3 axis-native carrier.
+   objects :math:`\Sigma_t`, :math:`\Sigma_a` and :math:`\nu\Sigma_f`
+   (:attr:`~orpheus.homogeneous.solver.HomogeneousProblem.total_cross_section_field`,
+   :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.absorption_cross_section_field`,
+   :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.fission_production_field`),
+   each reshaped to :math:`(n_g, 1)` and **born on the pose of step 1**.
 
-3. **Collision diagonal** :math:`C = \mathrm{diag}(\Sigma_t)`, read from
-   the problem's ``total_cross_section_field``.
+   *Born*, not re-posed, is the load-bearing word.  A field carries its
+   own space, and that space is the measure authority every downstream
+   pairing reads (:ref:`homogeneous-rates-and-normalisation`).  When the
+   fields were minted elsewhere and rebound afterwards, "is this field on
+   the right space?" was a question someone had to keep answering
+   correctly; minting them on the pose makes the wrong answer
+   *unspellable* — there is no other space in scope to mint them on.
+   That matters more than it looks, because
+   :class:`~orpheus.transport.operators.multiplication_operator.MultiplicationOperator`
+   does **not** validate its coefficient's space against its own ends
+   (`[M]` zero ``coefficient.space`` reads in its body), which is exactly
+   why a carrier-minted coefficient could ride the collision diagonal for
+   years without any gate objecting.
+
+   .. note::
+
+      **What this replaced, and why it went.** Until the coda a
+      single-cell, single-region **mesh-less** ``MaterialMesh`` was
+      fabricated by a ``from_materials`` factory, and its
+      ``material_xs_field()`` facade supplied the operators.  That
+      carrier existed only to be a shape the data could hang on: its
+      ``[0, 1]`` edges, its node at ``0.5`` and its Cartesian chart were
+      read by nothing on the path — the falsifiable tell of objective O1
+      ("no fabricated data reaches the operators"), and the reason the
+      retirement is a *re-source* rather than a re-baseline (`[M]` the
+      byte gate is 8 of 8 across the change).  The factory retired with
+      its last consumer, and three arms that existed only to serve it
+      went with it: ``areas``' "no faces at all" case, the
+      :math:`S_N`-promotion refusal and the diffusion bounded-geometry
+      refusal.  Each had become **input-less**: `[M]` the carrier hierarchy
+      has exactly one producer of ``mesh = None``
+      (``SNMesh.from_axes``, above :math:`d = 2`) and every other
+      constructor requires a mesh, so with the homogeneous path no
+      longer building one there is no mesh-less :math:`d \leq 2`
+      carrier left for those arms to receive.  ``mesh is None``
+      therefore carries ONE meaning again — the :math:`d \geq 3`
+      axis-native carrier — and CS4b S7's ``ndim`` discrimination has
+      nothing left to discriminate
+      (:ref:`homogeneous-development-history`).
+
+3. **Collision diagonal** :math:`C = \mathrm{diag}(\Sigma_t)`, the
+   :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.collision`
+   binding of
+   :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.total_cross_section_field`
+   with the pose as both domain and codomain.
 
 4. **Isotropic energy transfer**
    :math:`K_\mathrm{iso} = \Sigma_{s0}^T + 2\Sigma_2^T`, the action of the
@@ -1201,19 +1276,23 @@ space; the carrier only supplies data**:
    :class:`~orpheus.transport.operators.isotropic_transfer.IsotropicN2N`
    realises :math:`2\Sigma_2^T` (the loss-side multiplicity-2 transfer).
    The composed loss operator :math:`\mathbf A = C - K_\mathrm{iso}` is
-   returned **un-materialized** (an
-   :class:`~orpheus.numerics.operator.OperatorSum`) by the private
-   ``_assemble_loss_operator`` helper — the consumer chooses the
-   realization (taxonomy step 5b). Its dense :math:`(n_g, n_g)` form is
-   **not** assembled term-by-term from per-material blocks; it is produced
+   the hub's
+   :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.loss`, and it is
+   held **un-materialized** (an
+   :class:`~orpheus.numerics.operator.OperatorSum`) — the consumer chooses
+   the realization (taxonomy step 5b).  Because every arm poses on the
+   same space, the ``OperatorSum`` guard *validates* the sum rather than
+   skipping it.  Its dense :math:`(n_g, n_g)` form is **not** assembled
+   term-by-term from per-material blocks; it is produced
    one layer later, by the operator's own
    :meth:`~orpheus.numerics.operator.LinearOperator.as_matrix` apply-to-basis
-   (:ref:`matrix-inverse-operator`) on the meshless single cell — the
+   (:ref:`matrix-inverse-operator`) on the one-cell pose — the
    ``(ng, 1)`` basis shape **derived from the operators' threaded domain**
-   (the mixture-minted pose of step 1; campaign 1 CS1 gave the meshless
-   operators a real space to derive it from, and CS4a K2 made that space
-   the caller's rather than the carrier's — before CS1, every consumer
-   passed ``basis_shape=(ng, 1)`` by hand) — **inside the**
+   (the mixture-minted pose of step 1; campaign 1 CS1 gave the operators a
+   real space to derive it from, CS4a K2 made that space the problem's
+   rather than a carrier's, and the CS4c coda made the hub its owner —
+   before CS1, every consumer passed ``basis_shape=(ng, 1)`` by hand) —
+   **inside the**
    :class:`~orpheus.numerics.matrix_inverse_operator.MatrixInverseOperator`
    **constructor** (one eager materialization + LU factorization; see
    :ref:`direct-eigensolve-solve`). (The operators'
@@ -1295,27 +1374,33 @@ unique non-negative solution — the **fundamental mode** — so the spectrum
 is sign-normalised to non-negative components.
 
 Both steps are spelled in the **operator algebra** rather than posed as a
-dense ``(A, F)`` pair.  The multiplication operator
-:math:`\mathbf{K} = \mathbf{A}^{-1}\mathbf{F}` :eq:`fixed-source-solve` is
-constructed, and its dominant eigenpair taken, in four lines:
+dense ``(A, F)`` pair, and since the CS4c coda the spelling lives on the
+hub.  The solver's own body is then two lines — build the problem, take
+the eigenpair:
 
 .. code-block:: python
 
-   space = _pose_space(mix)                        # Energy ⊗ point, minted from the mixture
-   loss = _assemble_loss_operator(mat_xs, space)   # A = C − K_iso, un-materialized
-   production = IsotropicFission.from_material_xs(  # F = χ ⊗ νΣ_f
-       mat_xs, space=space,
-   )
-   K = MatrixInverseOperator(loss) @ production
-   k_inf, phi = dominant_eigenpair(K.as_matrix())
+   problem = HomogeneousProblem(mix)
+   k_inf, phi = dominant_eigenpair(problem.multiplication.as_matrix())
 
-(Since CS4a K2 the operators pose on the MIXTURE-MINTED Energy ⊗ point
-space — the problem's own physics names its space, :doc:`spaces`; the
-degenerate carrier's ``bulk_space`` mints an ``==`` space but is a
-reference, no longer the production source. ``MatrixInverseOperator``
+with the algebra itself held as cached properties of the problem, each
+posed on the one space
+:attr:`~orpheus.homogeneous.solver.HomogeneousProblem.space`:
+
+.. code-block:: python
+
+   # orpheus/homogeneous/solver.py — HomogeneousProblem
+   loss           = collision - (isotropic_scattering + isotropic_n2n)   # A = C − K_iso
+   production     = IsotropicFission(fission, domain=space, codomain=space)   # F = χ ⊗ νΣ_f
+   multiplication = MatrixInverseOperator(loss) @ production             # K = A⁻¹F
+
+(The operators pose on the MIXTURE-MINTED Energy ⊗ point space — the
+problem's own physics names its space, :doc:`spaces` — and since the coda
+the *fields they carry* are born on it too, so no rebinding step stands
+between the mint and the operator.  ``MatrixInverseOperator``
 and ``as_matrix`` **derive** the ``(ng, 1)`` basis shape from the
 threaded domain; the pre-CS1 idiom passed ``basis_shape=(ng, 1)``
-explicitly at both sites because the meshless operators carried no
+explicitly at both sites because the operators of that era carried no
 space to derive it from.)
 
 .. note::
@@ -1657,14 +1742,18 @@ the flux so that the **fission** production rate is 100 n/cm\ :sup:`3`/s:
 .. implements:: normalisation
    :by: orpheus.homogeneous.solver.solve_homogeneous_infinite
 
-   **Implemented by** 2 sites. Every symbol that executes this
-   equation's arithmetic is declared, not only the canonical one: a
-   test is adjudicated against the transcription it actually ran, so
-   declaring a single site would refute the tests that exercise the
-   others.
+   **Implemented by** 2 sites, each executing one half of the arithmetic:
+   the solver's rescale line (the ``phi * (100 / …)`` update) and the
+   hub's production-rate co-vector below, which computes the denominator
+   :math:`\nu\Sigma_f\cdot\boldsymbol{\phi}` as a typed pairing on the pose.
+   Every symbol that executes this equation's arithmetic is declared, not
+   only the canonical one: a test is adjudicated against the transcription
+   it actually ran. (Until the CS4c coda, 2026-09-08, both directives
+   named the solver — a duplicate from the 94-equation declaration pass
+   whose "2 sites" body counted one symbol twice.)
 
 .. implements:: normalisation
-   :by: orpheus.homogeneous.solver.solve_homogeneous_infinite
+   :by: orpheus.homogeneous.solver.HomogeneousProblem.production_rate
 
 The normalisation denominator is the **fission** production rate
 :math:`\nu\Sigma_f\cdot\boldsymbol{\phi}` only — consistent with the
@@ -1704,29 +1793,54 @@ one functional, one contraction, no 0-D special case.
 
 .. important::
 
-   **The solver RE-POSES the cross-section fields onto its own pose,
-   and that is a correctness requirement, not tidiness.** The
+   **The rate co-vectors read the POSE's measure — and since the CS4c
+   coda that is true by construction, not by a rebinding step.** The
    functional's measure authority is its cross section's space (the
    :math:`\sigma`\ ↔geometry pairing tier), while the total-flux leg
-   below is the *pose's* pairing. Bind the rates to the
-   carrier-minted space and the two legs would read **different**
-   measures — so re-weighting the pose would move one and not the
-   other, and the condensed cross sections would stop being ratios of
-   commensurable quantities. The solver therefore rebinds
-   (``replace(field, space=space)``) before wrapping, and ``replace``
-   re-runs the field's own construction validation on the way.
+   below is the *pose's* pairing. Bind the rates to a foreign space and
+   the two legs would read **different** measures — so re-weighting the
+   pose would move one and not the other, and the condensed cross
+   sections would stop being ratios of commensurable quantities.
 
-   In production this is content-neutral: the pose content-equals the
-   carrier's mint (the identity-bridge gate pins it), and `[M]` the
-   rewiring is **bit-identical** with the pre-EE-1 raw
-   ``space.inner_product`` spelling on
-   :math:`\nu\Sigma_f` and :math:`\Sigma_a` across the 2-group and
-   4-group fixtures (4 of 4 probed; the spelling-equivalence gate pins
-   it, and the D5 byte-stability suite is the end-to-end witness).
-   Neutral *today* is not the same claim as *correct under the
-   mutation*: the CS4a-R G2.5 gate scales the pose's point weight by
-   two and requires the rates to move with it, and that gate is what
-   the rebinding exists to satisfy.
+   The hub's cross-section fields are **born on the pose**
+   (:ref:`direct-eigensolve-assembly`, step 2), so the two legs share a
+   measure with nothing in between: the rate co-vectors
+   :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.production_rate`
+   and
+   :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.absorption_rate`
+   simply wrap fields that were never posed anywhere else.  The gate
+   that adjudicates this is unchanged, and it is worth reading exactly,
+   because its assertion is *not* "the rates double": the CS4a-R
+   **G2.5** leg scales the pose's point weight by two and pins,
+   bit-exactly (``×2`` and ``÷2`` are exact in binary floating point),
+   that the normalised flux **halves** — proof that the pairing consults
+   the space's measure at all — while both condensed cross sections stay
+   **unchanged**, because :math:`\bar\sigma_x = \langle \Sigma_x,
+   \varphi\rangle / \langle 1, \varphi\rangle` is the same pairing
+   top and bottom and the weight cancels (the CS4a-R **XD-6**
+   intensivity ruling).  Until CS4a-R that leg asserted the rates
+   DOUBLE — the covariant reading the pre-review spelling shipped — and
+   the ruling replaced it; a page that still says G2.5 "requires the
+   rates to move" is quoting the pre-XD-6 gate.
+
+   .. note::
+
+      **What changed here at the coda (2026-09-08), and why the
+      distinction matters.** Until then the fields were minted on a
+      carrier's space and the solver *rebound* them —
+      ``replace(field, space=space)`` — immediately before wrapping.
+      That was correct, and this page recorded it as load-bearing:
+      the rebinding existed precisely to satisfy G2.5. What replaced it
+      is not a shorter spelling of the same step but the **removal of
+      the step**:
+      with no second space in scope there is no rebinding to forget, and
+      the class of bug G2.5 catches becomes unspellable on this path
+      rather than merely caught. `[M]` the change is bit-identical
+      end-to-end — the byte gate reads 8 of 8 on
+      :math:`k_\infty`, the flux bytes and both rates — because the
+      pose and the retired carrier's mint were content-equal all along;
+      that equality is what made the rebinding safe, and its removal is
+      why nothing had to be re-baselined.
 
 **The total flux is NOT a reaction rate.** The denominator of the
 one-group condensation is
@@ -1760,8 +1874,11 @@ and being ratios of two integrals against the *same* measure they are
 moves numerator and denominator together and leaves
 :math:`\bar\sigma_x` fixed. That is the CS4a-R **XD-6** ruling — a
 quantity documented as a cross section must not scale with the point
-weight — and its gate is the same ×2 pose mutation, asserting
-*rates move, ratio stays*. The counting weight of step 1 is a
+weight — and its gate is the same ×2 pose mutation (G2.5), asserting
+*the normalised flux halves, the ratios stay*: the halving is what
+proves the pairing reads the measure at all (without it the gate would
+be compatible with "the rate reads nothing"), and the two fixed ratios
+are XD-6 itself. The counting weight of step 1 is a
 convention the posing function states; it is not a contract these
 ratios depend on.
 
@@ -2031,3 +2148,126 @@ spatially-dependent solvers available in ORPHEUS:
      - :class:`CPSolver`
      - :class:`SNSolver`
      - :class:`DiffusionSolver`
+
+.. _homogeneous-development-history:
+
+Development history
+===================
+
+Reverse-chronological changelog of the **architectural** milestones of
+*this page's subject* — how the infinite-medium problem is posed, where
+its consumed objects live, and what supplies its data.  It is
+deliberately short: this chapter's machinery is mostly inherited, so the
+space layer's own changelog is on :doc:`spaces`, the operator algebra's
+on :doc:`operator_algebra`, and the S\ :sub:`N` solver's (which
+introduced most of the shared operators this page reuses) is
+:ref:`sn-development-history`.  Only milestones that changed *this
+problem's* posing are recorded here; iteration-rate work, gate counts and
+intermediate replans are deliberately omitted.  **Merge status is a git
+question, never a frozen note** — every entry lands with its commit
+hash, and ``git`` outranks this column.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 50 12 28
+
+   * - When
+     - Architectural milestone
+     - Issue
+     - Where
+   * - 2026-09-08
+     - **The infinite-medium problem gets its HUB, and the fabricated
+       carrier retires** (campaign 1 residue, CS4c *coda*; rulings R-c1
+       and R-c2, the user, 2026-09-08).  Two commits, in that order.
+
+       **(1) The hub.**  Ruled verbatim (R-c1): *"The homogeneous
+       problem needs a hub, just like the function SNMesh (future
+       SNProblem) currently fulfills, to act as the place the consumed
+       objects live (and a save state)."*
+       :class:`~orpheus.homogeneous.solver.HomogeneousProblem` is that
+       hub — a frozen dataclass over one
+       :class:`~orpheus.data.macro_xs.mixture.Mixture`, every consumed
+       object a per-instance ``cached_property`` minted from the mixture
+       and from nothing else: the pose
+       :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.space` and
+       the one-cell
+       :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.layout`; the
+       kernel-tier material fields
+       (:attr:`~orpheus.homogeneous.solver.HomogeneousProblem.scattering`,
+       :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.n2n`,
+       :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.fission`);
+       the three cross-section fields **born on the pose**; the bound
+       operators
+       (:attr:`~orpheus.homogeneous.solver.HomogeneousProblem.collision`,
+       the two isotropic transfers and their sum,
+       :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.loss`,
+       :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.production`,
+       :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.multiplication`);
+       and the two typed rate co-vectors.
+       :func:`~orpheus.homogeneous.solver.solve_homogeneous_infinite`
+       became a thin reader.  Three things retired in the same commit:
+       the private ``_assemble_loss_operator`` helper (into
+       :attr:`~orpheus.homogeneous.solver.HomogeneousProblem.loss`), the
+       two ``replace(..., space=space)`` field re-poses (the fields are
+       born on the pose, so there is nothing to re-pose), and the last
+       production call to the fabricated carrier.  ⭐ *Per-instance* is
+       the design decision, not an implementation detail: a module-scope
+       memo would mask every decoy a gate installs on the pose, so the
+       hub's identity claim is ``is``-stability **within** one instance,
+       and ``==``-equality (with equal hashes) **across** hubs built over
+       equal mixtures — ``is`` across hubs is deliberately not claimed.
+
+       **(2) The retirement.**  With its last consumer gone,
+       ``MaterialMesh.from_materials`` — the factory that fabricated a
+       mesh-less one-cell carrier with ``[0, 1]`` edges, a node at
+       ``0.5`` and a Cartesian chart that `[M]` nothing consumed — was
+       deleted, and with it the three arms that existed only to serve it:
+       ``areas``' "no faces at all" case, the :math:`S_N`-promotion
+       refusal and the diffusion bounded-geometry refusal.  Each was
+       **input-less**, and the argument is a closure rather than a
+       census, which is what makes it durable: `[M]` the whole carrier
+       hierarchy has exactly **one** producer of ``mesh = None`` —
+       :meth:`SNMesh.from_axes
+       <orpheus.sn.mesh.augmented_mesh.SNMesh.from_axes>`, which
+       synthesises a legacy adapter when ``len(axes) <= 2`` and returns
+       ``None`` only above that — while every other constructor
+       (``MaterialMesh.__init__``, ``SNMesh.__init__``,
+       ``DiffusionMesh.__init__``) takes a mesh as a *required*
+       argument.  So once the homogeneous path stopped building one, no
+       producer of a mesh-less :math:`d \leq 2` carrier existed at all,
+       and three refusals were left refusing nothing — which is
+       ``plan-authoring`` §6c's mirror (a gate that ships with no case
+       to catch, arrived at from the other direction: a case that
+       retired out from under its gate).  ``mesh is None`` therefore
+       carries ONE meaning again — the :math:`d \geq 3` axis-native
+       carrier — and CS4b S7's ``ndim`` discrimination (G7.3) became the
+       **singleton law** ``mesh is None ⟹ ndim ≥ 3``, gated with a
+       positive control and every :math:`d \leq 2` construction path.
+       A companion gate makes the retirement *unspellable* rather than
+       merely done (``not hasattr(cls, "from_materials")`` over
+       ``MaterialMesh`` / ``SNMesh`` / ``DiffusionMesh``); the homonym
+       :meth:`EnergyAxis.from_materials
+       <orpheus.numerics.axis.EnergyAxis.from_materials>` — a different
+       object, and the one energy-arm rule both spellings of the pose
+       route through — survives untouched.  Test fixtures that had used
+       the fabricated carrier for convenience moved to ONE shared home,
+       a **genuine** unit-width one-cell ``Mesh1D`` carrier, `[M]`
+       like-for-like on every read surface the migrated sites touch.
+
+       **(3) Why this is a re-source, not a re-baseline.**  `[M]`
+       bit-identical across both commits: the byte gate 8 of 8 on
+       :math:`k_\infty`, the flux bytes and both condensed cross
+       sections, against a fixture captured before the campaign and never
+       regenerated; and the operator tier (:math:`A` and :math:`F`) 8 of
+       8 ``array_equal`` against a capture frozen on the pre-carve tree.
+       The hub re-sources the *same* kernels, einsums, dyad and pairing —
+       which is exactly what objective **O1** predicted, since the
+       fabricated data was consumed by nothing.
+
+       ⚠ **Interim home, stated.** The hub lives in the solver module.
+       Carving it into a standalone ``Problem`` module with a thin
+       ``Problem → Solution`` solver is the consumers campaign's work,
+       alongside the same split for ``SNMesh`` → ``SNProblem``; the
+       ruling names that as the long-term shape.
+     - —
+     - ``5caad3d6`` (the hub), ``39e7f32f`` (the retirement)

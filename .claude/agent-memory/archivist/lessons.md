@@ -104,6 +104,26 @@ every retired symbol leaves no present-tense-false mention · the build's WARNIN
   `#448` was a different piece of work, and `—` is the convention when nothing tracks the row.
   → L-100, L-099
 
+- **⭐⭐ A BRIEF'S NAMED STALENESS TARGET CAN MEASURE **0**, AND THE REAL ROT ON THAT
+  FILE IS A DIFFERENT PREDICATE — census the named file on YOUR OWN vocabulary before
+  reporting "nothing to do".** `[M]` briefed *"D5's module docstring describes the
+  pre-coda path; re-tense whatever names the carrier or `_assemble_loss_operator` as
+  present"* — `grep -E "meshless|from_materials|_assemble_loss_operator|carrier|fabricat|
+  coda"` over that file returns **0**. What WAS stale: a `⚠ LIVE CONSUMER` note naming
+  **one** importer of its shared helper where `grep -rn` finds **two**, and a retire-note
+  whose premise the coda had re-broken (the module is now the coda's bit-identity wall,
+  8/8 twice). ⟹ the honest report is *"the briefed predicate is empty; here is what the
+  file's own predicate finds"* — a 0 on someone else's grep is not a clean file.
+  → L-102
+- **⭐⭐ A DOCSTRING THAT QUOTES A SIBLING DOCSTRING VERBATIM IS AN UNGATED CROSS-FILE
+  DEPENDENCY.** `[M]` an anchors module quoted the fused-oracle row's own disclaimer
+  (*"shares `mat_xs` data with the fused form (so it is NOT structurally independent)"*)
+  to justify its own existence; the carve had rewritten that row to read the RAW `Mixture`,
+  so the quotation was false and the justification inverted (the sibling became MORE
+  independent, not less). No build, `grep`, or `dead_references` can see it — the quoted
+  text names no symbol. ⟹ when a docstring quotes another, grep the quoted FRAGMENT in
+  its source file as part of any pass over either. → L-102
+
 **Meta-rule: the brief is the FLOOR; live code is the rule.** Brief, docstring, verdict memo,
 retirement shim, scanner finding, plan line and "MEASURED" block are point-in-time snapshots.
 Verify, then write, then FLAG every scope-expansion the verification forced.
@@ -297,6 +317,20 @@ Verify, then write, then FLAG every scope-expansion the verification forced.
   `n2n-source`'s claiming test asserts `_add_n2n_source`, a **P0** body. Order: grep
   `tests/` for the label → read the body → the existing label keeps what its marker
   asserts → mint the NEW label for the generalisation → state the RANKING in prose. → L-094
+- **⭐⭐ PROSE THAT SUMMARISES A GATE OUTLIVES THE GATE'S ASSERTION — and the gate's own
+  docstring usually RECORDS the date it inverted.** `[M]` a theory page said the ×2-pose
+  mutation *"requires the rates to move with it"*, twice, in two sections. The gate asserts
+  the normalised flux **HALVES** and both condensed cross sections **STAY** (a same-pairing
+  ratio; the weight cancels) — and its docstring says so in as many words: *"Until CS4a-R
+  this leg asserted the rates DOUBLE … recorded as intended before the intensivity ruling
+  decided it."* So the page was quoting the PRE-ruling gate, and the ruling that replaced it
+  is named on the page's own neighbouring paragraph. ⟹ **for every sentence that
+  characterises a gate, open the gate and read its assertions AND its history note** — a
+  gate whose docstring contains "until <phase> this asserted X" is a gate whose prose
+  summaries elsewhere are presumed stale. The repair is worth more than the fix: naming
+  *which half proves the measure is read at all* (the halving) versus *which half is the
+  ruling* (the invariance) turns a wrong one-liner into the gate's design rationale.
+  → L-102
 - **⚠ An `.. error-entry::` has NO `id` — `:ref:`ERR-NNN <err-nnn>`` is silent death.**
   `[M]` the directive emits `container` + `rubric` only; cross-doc dangling `:ref:` renders
   plain-text unwarned. Cite plain `ERR-NNN` + `:ref:`the L0 error catalogue
@@ -509,7 +543,13 @@ Verify, then write, then FLAG every scope-expansion the verification forced.
   `dual` merely THREAD one), therefore …"* — the derivation stays true as the tree grows, and the
   grep that establishes it is free reconnaissance (mine surfaced `mm.axes` = the GEOMETRIC tuple
   vs `mm.bulk_space.axes` = the SPACE-FACTOR tuple: one attribute NAME, one object, neither
-  derived from the other — a publishable gotcha). → L-064
+  derived from the other — a publishable gotcha). ⭐ Second instance, and the shape a
+  RETIREMENT wants: a memo's *"no producer of X remains"* census becomes durable as
+  *"the hierarchy has exactly ONE producer of `mesh = None` (`SNMesh.from_axes`, above
+  `len(axes) == 2`) and every other constructor takes a mesh as a REQUIRED argument"* — I
+  proved it in one grep (`grep "mesh = None|else None"` over the 3 carrier files = 1 real
+  hit) and it upgrades three retired guards from *"nothing feeds them today"* to *"nothing
+  CAN"*. → L-064, L-102
 - **Read the live `def`/body before citing any convention, shape, signature or design decision.**
   Seen: a docstring lying about an index convention and a return layout; a verdict memo recording
   the RECOMMENDATION while the code shipped the alternative; a brief naming args the live Protocol
@@ -2676,6 +2716,15 @@ never paraphrase a level definition. → L-010
   forms" from an assertion into a measured bound, in ~3 minutes. → L-069
 - **zsh does NOT word-split an unquoted `$var`** — a uniqueness loop ran once on the concatenated
   string and printed a false "0 collisions". An `Edit` `old_string` must match LIVE bytes. → L-030
+  ⭐⭐ **And its sibling that ATE MY GATE: an UNQUOTED heredoc (`<<PY`, chosen to interpolate a
+  path) runs COMMAND SUBSTITUTION on every backtick pair inside it.** My four markup patterns
+  (`\*\*` + two backticks, etc.) had their backticks deleted before Python ever saw them, so
+  three of the four collapsed to *"match any `**bold**`"* and the gate printed **120 hits on my
+  own clean prose**. It failed LOUD only by luck — the same collapse in the other direction
+  prints a clean 0. ⟹ **write every gate to a FILE under a QUOTED heredoc (`<<'PYEOF'`) and pass
+  paths by env var**, spell backticks as `chr(96)`, and — the check that actually caught it —
+  **assert each pattern against its own witness before running it** (`assert re.search(p, '**``x``')`).
+  Four one-line controls; the whole class dies. → L-102, L-061
 - **An error-message string inside `raise` is EXECUTABLE — report it, don't edit it, under a doc-only
   constraint** (tests `pytest.raises` match on those strings). Same for a brief item that is a LATER
   phase's acceptance-gate text: leave it, name the owning phase. → L-041

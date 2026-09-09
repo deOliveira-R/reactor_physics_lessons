@@ -5,11 +5,24 @@ r"""CS1 migration gate D5 — the homogeneous solve is BYTE-stable across 3b.
 # the campaign merges green it is subsumed by ``test_kinf_exact`` (the L1
 # correctness anchor) and ``test_as_matrix_equals_retired_as_dense_loop``
 # (the materialization byte pin), per the aggressive-retirement rule.
-# ⚠ LIVE CONSUMER (CS4a-R QA-F11): ``test_operator_spaces.py`` G2.1
-# imports ``_mixture_cases`` from this module — move that helper to a
-# shared home in the retiring commit, or the retirement ImportErrors a
-# green gate. (And CS4a made this module the D5 exit-criterion gate, so
-# the retire-note's own premise is stale until the campaign re-rules it.)
+# ⚠ LIVE CONSUMERS (CS4a-R QA-F11): ``_mixture_cases`` is imported from
+# this module by ``test_operator_spaces.py`` G2.1 AND (since 2026-09-08)
+# by ``test_coda_anchors.py``, which builds its eight-case population
+# from it so there is ONE list — move the helper to a shared home in any
+# retiring commit, or the retirement ImportErrors two green gates.
+# (And CS4a made this module the D5 exit-criterion gate, so the
+# retire-note's own premise is stale until the campaign re-rules it.)
+#
+# ⛔ 2026-09-08 — the retire-note is stale AGAIN, in the direction that
+# matters: this module is now the CS4c coda's bit-identity wall. The
+# coda re-sourced the whole homogeneous data path (C1 ``5caad3d6``: the
+# problem gets a hub and mints its own fields; C2 ``39e7f32f``: the
+# fabricated one-cell carrier and its factory retire) and this gate read
+# 8 of 8 across both commits, which is what licensed calling the change
+# a re-source rather than a re-baseline. The capture
+# (``_fixtures/cs1_prewiring.json``, ``24a991ba``) MUST NOT be
+# regenerated: its value is precisely that it predates every campaign
+# that has since claimed to move no bytes.
 
 Bit-identity (``np.array_equal`` / exact ``==``, never ``allclose``) is the
 correct contract here: the counting-measure theorem makes the CS1 space

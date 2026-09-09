@@ -1265,14 +1265,23 @@ them.  Trust ``git``, not this column.
        :doc:`/theory/foundations/spaces`; the field-layer narrative is on
        :doc:`/theory/foundations/field_algebra`.  **(5) The mesh-less
        carrier's two meanings un-weld** (S7): promoting the
-       infinite-medium 1-cell carrier to an S\ :sub:`N` phase space now
-       raises a typed ``ValueError`` naming the reason — pre-repair a
+       infinite-medium 1-cell carrier to an S\ :sub:`N` phase space
+       raised a typed ``ValueError`` naming the reason — pre-repair a
        messageless bare ``assert`` that the canonical ``python -O``
        runner **strips**, leaving a deep ``AttributeError`` in the
        streaming constructor (``vv-principles`` failure mode 8, live in
        production) — and :attr:`MaterialMesh.areas
-       <orpheus.transport.mesh.material_mesh.MaterialMesh.areas>` names
+       <orpheus.transport.mesh.material_mesh.MaterialMesh.areas>` named
        its own three arms instead of blaming a 2-D mesh for all three.
+       ⛔ **Retired at the CS4c coda (2026-09-08)**, so do not go
+       looking: the mesh-less 1-cell carrier died with its
+       ``from_materials`` factory, taking the promotion refusal and one
+       of ``areas``' three arms with it (two remain), and
+       ``mesh is None`` carries ONE meaning again — the
+       :math:`d \geq 3` axis-native carrier — so S7's ``ndim``
+       discrimination has nothing left to discriminate. What S7 built
+       is not wrong, it is *input-less*; the account is
+       :ref:`homogeneous-development-history`.
        ⭐ **Two honest-tier corrections landed with the docs audit, and
        the method behind each is the reusable part.** (a) The
        frame-induced divisor was pinned ``np.array_equal`` against the

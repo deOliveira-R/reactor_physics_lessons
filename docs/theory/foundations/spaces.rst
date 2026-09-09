@@ -550,7 +550,7 @@ folds each member's ``(name, shape)`` pair into its own
 ``full_field#<digest>``, so an injective member name is still what makes
 the composite content-keyed.
 
-The mechanism is visible in one construction. The homogeneous carrier's
+The mechanism is visible in one construction. The homogeneous problem's
 quotient point and a genuine one-cell mesh with :math:`V_{\rm cell} = 2`
 have the same shape :math:`(2, 1)` and the same readable prefix, and are
 **unequal** spaces:
@@ -3188,12 +3188,25 @@ quotiented. Buckling then restricts to an irrep of that surviving group.
    geometry :math:`\to` {medium, mesh} :math:`\to` the pullback that
    carries materials on cells — is a design conclusion of the same
    dialogue, scheduled as its own phase (CS1.5) between CS1 and CS2.
-   Today the homogeneous path still constructs a degenerate
+   Read this subsection as *why the quotient is licensed one level above
+   the mesh*, not as a description of a class that exists.
+
+   ⛔ **Corrected 2026-09-08 (CS4c coda).** This warning used to add
+   that "today the homogeneous path still constructs a degenerate
    :class:`~orpheus.transport.mesh.material_mesh.MaterialMesh` through
    ``from_materials``, which is the pullback wearing a constructor story
-   it does not have a mesh for. Read this subsection as *why the
-   quotient is licensed one level above the mesh*, not as a description
-   of a class that exists.
+   it does not have a mesh for." That is now history: the factory is
+   deleted and the homogeneous path constructs no carrier at all — its
+   problem hub
+   (:class:`~orpheus.homogeneous.solver.HomogeneousProblem`) mints the
+   quotient pose and every field on it straight from the
+   :class:`~orpheus.data.macro_xs.mixture.Mixture`
+   (:doc:`infinite_medium`). So the *misplacement* the sentence
+   complained about is gone, and the ``Medium`` layer's own charter is
+   untouched by that: what the infinite path has today is an
+   **aggregate** over a mixture, not the stage-1 medium this law argues
+   for — the lattice above still describes a class that does not
+   exist.
 
 
 
@@ -4563,6 +4576,16 @@ status.
        integrated co-vector, **re-posed onto the solver's own pose** so
        the pose stays the measure authority
        (:doc:`/theory/foundations/infinite_medium`).
+       ⛔ **Both S7 halves were superseded at the CS4c coda
+       (2026-09-08)** — do not go looking for either in the tree. The
+       mesh-less 1-cell carrier retired with its ``from_materials``
+       factory, taking the :math:`S_N`-promotion refusal and one of
+       ``areas``' three arms with it (two remain, and ``mesh is None``
+       carries one meaning again, so there is nothing left for S7's
+       ``ndim`` discrimination to discriminate); and the rate
+       co-vectors' cross-section fields are now *born* on the pose, so
+       the re-posing step does not exist rather than being done
+       correctly. See :ref:`homogeneous-development-history`.
      - —
      - merged @ ``55bb47b9`` —
        ``b00bf2d7`` … ``2690a434`` (space-primary construction),
@@ -4599,7 +4622,12 @@ status.
        <orpheus.transport.mesh.material_mesh.MaterialMesh.bulk_space>`
        mints the scalar bulk through ONE uniform formula, so the
        degenerate carrier's quotient point, a genuine one-cell mesh and
-       a meshed carrier all fall out of the same body; the homogeneous
+       a meshed carrier all fell out of the same body (the degenerate
+       carrier retired at the CS4c coda, 2026-09-08; the uniformity
+       claim is unchanged for the two survivors, and a genuine
+       unit-width one-cell mesh's ``bulk_space`` is still ``==`` the
+       homogeneous problem's pose — the identity-bridge gate pins it);
+       the homogeneous
        solver then poses :math:`A = C - K_{\rm iso}` and
        :math:`F` on that real space, retiring both hand-written
        **production** ``basis_shape=(ng, 1)`` spellings and turning the

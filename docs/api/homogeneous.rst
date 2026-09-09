@@ -64,14 +64,28 @@ tests on asymmetric scattering matrices.
 Implementation
 --------------
 
-The solver is the single function
-:func:`~orpheus.homogeneous.solver.solve_homogeneous_infinite`. It
-assembles the loss matrix from the **model-shared transport
-operators** over a meshless single-cell
-:class:`~orpheus.transport.mesh.material_mesh.MaterialMesh` (campaign
-#276, Cardinal Rule 2 — the infinite-medium spectrum runs through the
-same operator algebra as the meshed SN solver, not a bespoke matrix),
-then takes the dominant eigenpair directly:
+The package ships two objects.
+:class:`~orpheus.homogeneous.solver.HomogeneousProblem` is the
+**hub** — a frozen dataclass over one
+:class:`~orpheus.data.macro_xs.mixture.Mixture` that owns, as
+per-instance ``cached_property`` state minted from that mixture and from
+nothing else, every object the calculation consumes: the pose space, the
+one-cell material layout, the kernel-tier material fields, the three
+cross-section fields born on the pose, the bound operators, and the two
+typed reaction-rate co-vectors.
+:func:`~orpheus.homogeneous.solver.solve_homogeneous_infinite` is the
+**solver** — it reads the hub and computes, constructing no data of its
+own.  Nothing is fabricated on the path: the infinite medium has no mesh,
+so no carrier is built (CS4c coda, 2026-09-08; until then a meshless
+single-cell ``MaterialMesh`` supplied the cross sections and its
+``from_materials`` factory has since retired — see
+:ref:`homogeneous-development-history`).
+
+The hub assembles the loss operator from the **model-shared transport
+operators** (campaign #276, Cardinal Rule 2 — the infinite-medium
+spectrum runs through the same operator algebra as the meshed SN solver,
+not a bespoke matrix), and the solver then takes the dominant eigenpair
+directly:
 
 * **Loss matrix** :math:`\mathbf{A} = C - K_\mathrm{iso} =
   \operatorname{diag}(\Sigma_t) - \Sigma_{s0}^{\mathsf T} -
@@ -85,10 +99,11 @@ then takes the dominant eigenpair directly:
   :math:`C - K_\mathrm{iso}` is materialised densely via its own
   :meth:`~orpheus.numerics.operator.LinearOperator.as_matrix`
   apply-to-basis — the ``(ng, 1)`` basis shape derived from the threaded
-  domain (the mixture-minted Energy ⊗ point space from the solver's
-  ``_pose_space``; CS4a K2 — until then the carrier's axis-built
-  ``bulk_space``, which still mints an ``==`` space but is no longer
-  what production consumes).
+  domain (the mixture-minted Energy ⊗ point space
+  :attr:`HomogeneousProblem.space
+  <orpheus.homogeneous.solver.HomogeneousProblem.space>`; CS4a K2 — until
+  then a carrier's axis-built ``bulk_space``, which a genuine one-cell
+  carrier still mints ``==`` to as a *reference*, never as the source).
   Streaming :math:`L \equiv 0` in an infinite medium and is dropped.
 * **Production dyad** :math:`\mathbf{F} = \chi \otimes \nu\Sigma_f`,
   the rank-1 form of the fission energy binding
@@ -98,10 +113,13 @@ then takes the dominant eigenpair directly:
   infinite medium), likewise materialised densely via its own
   :meth:`~orpheus.numerics.operator.LinearOperator.as_matrix`.
 * **Eigenpair** :math:`k_\infty = \lambda_{\max}(\mathbf{A}^{-1}\mathbf{F})`
-  and the dominant right eigenvector, computed by one
-  :func:`numpy.linalg.solve` (to apply :math:`\mathbf{A}^{-1}`) plus
-  one :func:`numpy.linalg.eig`. There is **no inner or outer
-  iteration**.
+  and the dominant right eigenvector: one ``scipy.linalg.lu_factor`` of
+  :math:`\mathbf{A}`, taken eagerly when
+  :class:`~orpheus.numerics.matrix_inverse_operator.MatrixInverseOperator`
+  is constructed and reused for every basis column, plus one
+  :func:`numpy.linalg.eig` on the materialised
+  :math:`[\mathbf{K}] = \mathbf{A}^{-1}\mathbf{F}`. There is **no inner
+  or outer iteration**.
 
 The function normalises the flux so that the **fission** production
 rate :math:`\nu\Sigma_f\cdot\phi` equals :math:`100\ {\rm n/cm^3/s}`

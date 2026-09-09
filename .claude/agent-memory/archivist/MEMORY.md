@@ -41,6 +41,11 @@ means merged). **No owed Sphinx pass on merged work.** Landed SN milestones live
 
 **One line per pass. The evidence is in the lesson; `git log --oneline -- docs/` is the index.**
 
+- **CS4c coda C3** — a HUB replaces a fabricated carrier (2026-09-08; 4 `.rst`, 3 plans, 2 test
+  docstrings, +513/−130). The brief's named staleness target measured **0** and the file's rot was a
+  different predicate; a docstring QUOTING a sibling's was false; prose summarising a gate kept its
+  PRE-inversion reading (the gate's own docstring dates the flip); my markup gate was eaten by an
+  unquoted heredoc's backticks and printed 120 false hits → L-102
 - **CS4c step 6 item 6.2c-iii** — a class retires into an AXIS (2026-09-08; 7 `.rst`, +499/−145).
   Re-counting a neighbouring rule's census missed that the rule INVERTED; a stand-in for the retired
   object measures the pre-carve state without a worktree, and the equal-SHAPE control is the finding

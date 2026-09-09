@@ -1536,3 +1536,25 @@ Four cheap corollaries from the same run:
 - **The memory/absence claim**: a chartered assertion ("no state-sized weight tensor is allocated") had
   **0 spellings** in the tree — the deliverable flips from "fix the prose" to "the step OWES the gate";
   say so explicitly, because a zero from a validated filter reads as "nothing to do".
+
+---
+
+## L-041 -- An identity predicate spelled with `is` on an OPTIONAL constituent is vacuously TRUE on the arm where the constituent is absent — probe identity on the `None` arm, and on a same-data re-construction
+
+Censusing the SN hub for the Problem → Solution split (2026-09-08), the hub's own
+identity predicate `is_same_phase_space` read as a careful CONSTITUENT-identity
+(`mesh is`, `quad is`, per-material `is`, `type(scheme)`) with a long docstring
+defending the strong tier. Two 10-line probes refuted it as an identity in both
+directions: (a) at d=3 the legacy `mesh` adapter is `None` on every instance, so
+`None is None` made two meshes with DIFFERENT edges (unequal volumes, unequal
+`bulk_space`) read `True`; (b) at d=1 two `from_axes` calls on the SAME edges /
+quad / materials read `False`, because each call mints a fresh adapter object.
+Neither arm is visible from the docstring, the graph, or a grep — only from
+running the predicate on (1) the arm where an `Optional` constituent is absent and
+(2) a re-construction from identical generating data.
+
+How to apply: whenever a brief involves "identity", "same problem", "save/load",
+or `compare`, find the predicate's `is` comparisons, list which operands are
+`Optional`, and run it on the `None` arm AND on a same-data rebuild. Sibling of
+L-010 (a signed selector has a third bucket) — here the third bucket is `None`.
+Report both results as `[M]` with the fixture (d, quadrature, edges).

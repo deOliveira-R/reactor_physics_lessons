@@ -12090,3 +12090,230 @@ of you.
 | `AVERAGE_MOMENT` consumers | AST: **5** modules, **10** loads; `average_moment_index` **0** in source (only stale `__pycache__`) |
 | `*` production sites | AST `BinOp(Mult)`, name-filtered: **2** (was 4), positive control = both known sites |
 | `FunctionSpace` public subclasses | **8**; 2 axis-built heads, 6 content-folded composites/traces; `__post_init__` owners = 3 |
+
+---
+
+## L-102 — the CODA record: a hub replaces a fabricated carrier, and four staleness classes no instrument sees
+
+**Task (2026-09-08, CS4c coda C3).** Write the documentation record of two
+production commits that landed the same day on `main`: **C1 `5caad3d6`** —
+`HomogeneousProblem(mixture)`, a frozen dataclass in
+`orpheus/homogeneous/solver.py` that owns, as per-instance `cached_property`
+state minted from the `Mixture` alone, every object the infinite-medium
+calculation consumes (the pose `space`, the one-cell `layout`, the kernel-tier
+material fields, the three cross-section fields BORN on the pose, the bound
+operators `collision`/`isotropic_*`/`loss`/`production`/`multiplication`, and
+the two `IntegratedReactionRate` co-vectors); and **C2 `39e7f32f`** —
+`MaterialMesh.from_materials` deleted with the three arms that only it could
+reach. Scope: 4 `.rst`, 3 plan files, 2 test docstrings; `orpheus/` untouched.
+Ruling R-c1 (user, verbatim): *"The homogeneous problem needs a hub, just like
+the function SNMesh (future SNProblem) currently fulfills, to act as the place
+the consumed objects live (and a save state)."*
+
+### 1. The brief's named staleness target measured **0**
+
+The brief's item 5 said *"D5's module docstring (`tests/homogeneous/
+test_byte_stability.py`) describes the pre-wiring/pre-coda path; re-tense
+whatever names the carrier or `_assemble_loss_operator` as present."*
+
+`[M]` `grep -nE "meshless|mesh-less|from_materials|_assemble_loss_operator|
+carrier|fabricat|coda"` over that file: **0 hits.** The header names neither.
+
+What was actually stale, found by censusing the file on its OWN vocabulary:
+
+* a `⚠ LIVE CONSUMER (CS4a-R QA-F11)` note naming **one** importer of the
+  module's shared `_mixture_cases` helper — `grep -rn "_mixture_cases" tests/`
+  finds **two** (`test_operator_spaces.py:350` and, since the coda's anchors
+  landed, `test_coda_anchors.py:96`). A singular claim about a consumer set is
+  the same defect class as a missing denominator, one tier down;
+* the retire-note's premise ("retire after the merge cycle; subsumed by …") had
+  been re-broken by the coda itself: the module is now the coda's bit-identity
+  wall, read 8-of-8 across BOTH commits, and its capture (`24a991ba`,
+  pre-wiring) must never be regenerated *because* it predates every campaign
+  that has since claimed to move no bytes.
+
+⟹ **the transferable rule:** a 0 on someone else's grep is not a clean file.
+Census the named file on your own predicate and report the difference — the
+brief's predicate being empty IS a finding, and the file's real rot is usually
+adjacent rather than absent.
+
+### 2. A docstring QUOTING a sibling docstring — an ungated cross-file dependency
+
+`tests/homogeneous/test_coda_anchors.py`'s class docstring justified its own
+eight-case sweep by quoting the tree's other A-level pin verbatim:
+
+> Today the tree pins :math:`A` on ONE case
+> (`test_homogeneous.py::test_assemble_loss_operator_matches_fused_oracle`,
+> whose own docstring says its reference *"shares ``mat_xs`` data with the
+> fused form (so it is NOT structurally independent)"*)
+
+`[M]` C2 had rewritten that row: it now reads the RAW `Mixture` arrays
+(`SigT`, `SigS[0]`, `Sig2[0]`) and its docstring says *"independent of the
+field/operator tier, NOT of the data"*. So the quotation was false, and the
+inference built on it inverted — the sibling had become MORE independent, not
+less, which weakens rather than strengthens the "we are not redundant with it"
+argument. The surviving honest argument is different and had to be found: the
+sibling still pins **one** case and pins `F` at the matrix tier nowhere.
+
+Nothing can see this. The quoted text contains no symbol, so `dead_references`,
+`-W` at any severity, and every symbol grep are blind; only reading the quoted
+file catches it.
+
+⟹ **when a docstring quotes another, grep the quoted FRAGMENT in its source
+file** as part of any pass over either file.
+
+### 3. Prose summarising a GATE keeps the pre-inversion reading — and the gate's own docstring dates the inversion
+
+The page said, in two places, that the ×2-pose mutation *"requires the rates to
+move with it"* and that its gate asserts *rates move, ratio stays*.
+
+`[M]` `tests/homogeneous/test_operator_spaces.py::test_the_space_measure_is_consulted`
+(**G2.5**) asserts, bit-exactly (×2 and ÷2 are exact in binary FP):
+
+| quantity | assertion |
+|---|---|
+| `flux` | **HALVES** (`array_equal(weighted.flux, baseline.flux / 2.0)`) |
+| `sig_prod`, `sig_abs` | **UNCHANGED** (same-pairing ratio; the weight cancels — ruling XD-6) |
+| `k_inf` | unchanged (a ratio, blind by construction) |
+
+and its own docstring records the flip: *"Until CS4a-R this leg asserted the
+rates DOUBLE — the covariant behaviour the pre-review spelling shipped,
+recorded as intended before the intensivity ruling decided it."* The page was
+quoting the pre-CS4a-R gate, while naming the XD-6 ruling that replaced it two
+paragraphs away.
+
+⟹ **for every sentence characterising a gate, open the gate and read its
+assertions AND its history note.** A docstring containing *"until <phase> this
+asserted X"* is a flag that every prose summary of it elsewhere is presumed
+stale. And the repair is worth more than the correction: separating *which half
+proves the measure is consulted at all* (the halving — without it the gate is
+compatible with "the rate reads nothing") from *which half is the ruling* (the
+two fixed ratios) turns a wrong one-liner into the gate's design rationale.
+
+### 4. My own gate was eaten by the shell — and it failed LOUD only by luck
+
+Running the added-lines markup gate I used an **unquoted** heredoc (`<<PY`) so I
+could interpolate a scratch path. zsh performs **command substitution** on
+backticks inside an unquoted heredoc, so three of the four patterns —
+`\*\*` + two backticks, two backticks + `\*\*`, `\*\*:[a-z]+:` + backtick —
+had their backticks deleted before Python parsed them and collapsed to *"match
+any `**bold**`"*. The gate reported **120 hits** on prose I had just written.
+
+The same collapse in the other direction prints a clean **0**, which is the
+failure I would have shipped.
+
+⟹ two fixes, both mechanical: **(a)** write gates to a FILE under a QUOTED
+heredoc (`<<'PYEOF'`) and pass paths by environment variable, spelling
+backticks as `chr(96)`; **(b)** **assert every pattern against its own witness
+before running it** —
+
+```python
+CTRL = ['**``x``', '``x``**', '**:math:`x`', '```']
+for (p, why), c in zip(PATS, CTRL):
+    assert re.search(p, c), "CONTROL FAILED for " + why
+```
+
+Four lines, and the whole class dies. Re-run under the quoted heredoc:
+`positive controls: 4/4` and **0 hits**.
+
+### 5. Publish the CLOSURE argument, not the census (second instance — L-064's shape, for a RETIREMENT)
+
+C2's memo justified deleting three guards with *"`[M]` (memo H-1) no producer of
+`mesh is None and ndim == 1` exists."* True, and it is a census: it goes stale
+the moment someone adds a constructor.
+
+`[M]` mine, one grep over the three carrier files
+(`grep -rn "mesh=None|mesh = None|else None"` on `material_mesh.py`,
+`sn/mesh/augmented_mesh.py`, `diffusion/augmented_mesh.py`): **exactly one**
+producer of `mesh = None` in the entire hierarchy —
+`SNMesh.from_axes:758`, `legacy_mesh_from_axes(...) if len(axes) <= 2 else None`
+— and every other constructor (`MaterialMesh.__init__(mesh: Mesh1D | Mesh2D,
+...)`, `SNMesh.__init__`, `DiffusionMesh.__init__`) takes a mesh as a
+**required** argument.
+
+That is a closure, so it upgrades the retirement's justification from *"nothing
+feeds those arms today"* to *"nothing CAN"*, and it stays true as the tree
+grows. It also gives the retirement its `plan-authoring` §6c framing, run in
+reverse: §6c guards a gate that lands with no case to catch; this is a **case
+that retired out from under its gate**.
+
+### 6. Two claims I published only after re-measuring
+
+* *"`MultiplicationOperator` never validates its coefficient's space against its
+  own ends"* — `[M]` `grep -c "coefficient\.space"
+  orpheus/transport/operators/multiplication_operator.py` = **0** (the five
+  `self.coefficient` reads are all `.values`). This is the WHY behind
+  "born on the pose": the class of bug becomes unspellable rather than caught,
+  because no other space is in scope to mint on.
+* *"a genuine unit-width one-cell carrier's `bulk_space` is `==` the problem's
+  pose"* — G2.1 (`test_minted_space_equals_a_genuine_unit_cell_carriers_bulk_space`)
+  compares `_pose_space(mix)` against `unit_cell_carrier({0: mix}).bulk_space`
+  on all 8 D5 cases, `==` with an `is not` precondition so it can never degrade
+  into an identity tautology. The gate was RE-KEYED at C1 from the fabricated
+  carrier to a genuine one — the ruling had said retire it, and the verification
+  plan measured it a live catcher, so it was kept and the deviation stated.
+
+### 7. Stale claims found BEYOND the brief's list (the second-census yield)
+
+The brief's census was `meshless|mesh-less|from_materials|_assemble_loss_operator|
+degenerate carrier`. My independently-vocabularied second census —
+`single-cell|one-cell|1-cell|carrier|MaterialXSField|material_xs_field|
+MaterialMesh`, windowed ±3 lines against `homogeneous|infinite medium|k_inf` —
+found five sites the first could not:
+
+| site | the stale claim |
+|---|---|
+| `infinite_medium.rst:52-58` (Key Facts) | *"reading its cross sections off a meshless single-cell `MaterialMesh`. **The carrier supplies data; the problem poses its own space**"* — the whole rule inverted |
+| `infinite_medium.rst:104` (Overview) | *"the single function … which assembles the loss matrix"* — the hub does |
+| `infinite_medium.rst:1139` | *"the carrier only supplies data"* (the five-step lead-in) |
+| `infinite_medium.rst:1712-1730` | the `.. important::` *"The solver RE-POSES the cross-section fields … `replace(field, space=space)`"* — the step no longer exists |
+| `spaces.rst:553` | *"The homogeneous **carrier's** quotient point"* |
+
+Plus, outside both censuses: `api/homogeneous.rst:100-104` claimed the eigenpair
+is *"one `numpy.linalg.solve` plus one `numpy.linalg.eig`"* — `[M]`
+`matrix_inverse_operator.py:162` is `lu_factor(matrix, overwrite_a=True)` at
+construction with per-column `lu_solve`, a re-baseline the SN history page's own
+#226 row records. Found by verifying a neighbouring sentence, not by any census.
+
+### 8. Residue reported, not fixed
+
+* `infinite_medium.rst:1657-1667` carries **two identical**
+  `.. implements:: normalisation :by: orpheus.homogeneous.solver.solve_homogeneous_infinite`
+  directives under a body reading *"**Implemented by** 2 sites"*. `git log -S`
+  puts both in `596093fa` ("declare what implements the 94 claimed equations") —
+  a generator artefact, pre-dating the coda. It builds clean (the edge is just
+  declared twice), and de-duplicating it would make the "2 sites" count false,
+  so the honest repair is either a second real site or a corrected count — a
+  claim I would be minting, not recording. Reported to the main agent.
+
+### Gates run (no Sphinx build — the main agent owns the one build)
+
+* **docutils error-SET diff**, pre-edit (`git show HEAD:<file>`) vs post, over
+  all four `.rst`, Sphinx-only roles/directives filtered: **0 NEW diagnostics**
+  on every file. The new `list-table` was confirmed to actually PARSE (1 table,
+  2 rows) rather than being skipped as an unknown directive.
+* **markup adjacency** on ADDED LINES ONLY, with 4/4 validated positive
+  controls: **0**.
+* **reference resolution** on added lines — 10 `:ref:` against an 887-label
+  corpus harvest, 4 `:doc:` against the filesystem, 48 python-domain xrefs
+  import-resolved, with extraction counts printed and a negative control
+  (`HomogeneousProblem.NOT_A_FIELD` → DEAD, `MaterialMesh.from_materials` →
+  DEAD) proving the probe bites: **0 dead**.
+* **whole-file** python-xref scan of the two homogeneous pages: 127 checked, 4
+  flagged and all four rescued by the `dataclasses.fields` fallback
+  (`HomogeneousResult.sig_prod`/`sig_abs`/`representative_energy`,
+  `Mixture.SigS` — declared fields, so autodoc emits real targets).
+* `ast.parse` on both edited test modules; `git status --porcelain -- orpheus/`
+  empty at the end.
+* **HEAD moved under me** (`82c0d441`, `7e9b6210` — plan-hash commits landing in
+  parallel); re-verified every docs baseline blob was unchanged and that the two
+  commits touched only `cs4c_binding_design.md`, which I had not edited.
+
+### Quality self-assessment
+
+Derivation depth 4 (no new math; the WHY — *born, not re-posed* → the class of
+bug becomes unspellable — is the page's new load-bearing argument) · Cross-refs
+5 · Numerical evidence 4 (D5 8/8, the operator anchor 8/8, the G2.5 exact table,
+the one-producer closure) · Failed approaches 5 (three retired guards documented
+as *input-less* with the closure that makes it durable; the pre-XD-6 gate
+reading named as superseded) · Code traceability 5 · Derivation source n/a.

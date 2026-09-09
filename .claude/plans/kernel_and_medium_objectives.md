@@ -74,6 +74,16 @@ assembly's verification leans on.
   the posed physics — Energy ⊗ the spatial quotient point, counting measure,
   per-unit-volume convention. *Tell:* no `[0,1]` edges, no invented node, no
   coordinate system on the path; results bit-identical (D5, 8/8).
+  ✅ REMEDIED 2026-09-08 by the CS4c coda — C1 `5caad3d6` / C2 `39e7f32f`. The tell is MET, in both halves: `[M]` the homogeneous path
+  constructs no `MaterialMesh` at all (a construction spy over
+  `MaterialMesh._init_data` — the one body every surface funnels into —
+  counts zero while every consumed object is touched), so there are no
+  `[0,1]` edges, no node and no chart; and the byte gate reads 8 of 8 on
+  `k_inf`, the flux bytes and both rates, against a fixture captured
+  before the campaign and never regenerated. The pose's data is minted
+  by `HomogeneousProblem` from the `Mixture` alone (C1); the fabricated
+  carrier's factory is deleted (C2). Record:
+  `docs/theory/foundations/infinite_medium.rst`, "Development history".
 
 - **O2 — Operators are decided at construction.** How material data becomes
   an operator is decided when the operator is CONSTRUCTED (what was bound),
@@ -135,6 +145,17 @@ assembly's verification leans on.
   silently — F5), the ambiguous sentinel gone. *Tell:* retirement greps +
   `dead_references` return only past-tense history; one grep-findable owner
   per datum.
+  ✅ REMEDIED 2026-09-08 by the CS4c coda — C1 `5caad3d6` / C2 `39e7f32f` — for the FABRICATED-PATH clause only; the one-spelling-per-datum
+  and Region/StructuredGeometry clauses are untouched and O7 stays open on
+  them. `[M]` at C2: `MaterialMesh.from_materials` deleted (the homonym
+  `EnergyAxis.from_materials` survives and is a different object), the
+  facade's meshless-admission prose retired, the ambiguous `mesh is None`
+  sentinel now carries ONE meaning (d≥3 axis-native) and is gated as the
+  singleton law `mesh is None ⟹ ndim ≥ 3`, 29 test call sites in 11 files
+  migrated to one shared genuine-carrier fixture or to the hub, and a
+  `not hasattr(cls, "from_materials")` gate over the three-class hierarchy
+  makes the retirement unspellable rather than merely done.
+  `dead_references` 0 dead / 68 checked at C2.
 
 - **O8 — Refusals are honest.** Whatever refuses — a binding on
   non-conforming data, a method layer on an un-discretized statement — does

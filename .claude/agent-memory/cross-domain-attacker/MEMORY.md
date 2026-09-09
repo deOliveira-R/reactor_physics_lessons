@@ -7,7 +7,7 @@ AGENT.md kernel. Fire from those — never re-derive or re-copy them into memory
 
 ## 1. Lessons — read `lessons.md` FIRST, every dispatch
 
-- [lessons.md](lessons.md) — 22 detection lessons. Spine: an attack's value is a concrete
+- [lessons.md](lessons.md) — 23 detection lessons. Spine: an attack's value is a concrete
   reformulation with a FAIL-ABLE first test, OR a crisp refutation carrying its structural
   reason. A named-but-payoff-free frame is rejected output. ⭐ L-021: on a cross-method
   "who consumes X" brief, find the GENERAL-CASE derivation first — one equation decides
@@ -15,6 +15,9 @@ AGENT.md kernel. Fire from those — never re-derive or re-copy them into memory
   FACTORY proposal is settled by THREE counts taken first — branches collapsed, fiber
   members, who actually consumes it; a satellite property beats a factory (construction
   vs convention), and shipped machinery with ZERO callers reframes the whole brief.
+  ⭐ L-023: on a SPLIT brief, sort the FUSED object's attributes (the boundary is never
+  where the brief names it) and run the chartered rule over the straddlers counting
+  INVERSIONS — then re-phrase it on the SOLUTION SET, not on the operator.
 
 ## 2. Active / in-flight state
 
@@ -26,6 +29,9 @@ one whose campaign was still in flight at last curation.
 ## 3. Durable design pointers
 
 Open the file for the verdict; the hook only tells you whether to open it.
+
+### Problem → Solution (the consumers campaign's opening)
+- [Problem/Solution split](problem_solution_split_frames.md) — ⭐⭐ the carve cuts through `SNSolver` (12/6/2), the campaign owes THREE types, the chartered rule inverts on 3 of 12 straddlers, and `scattering_order` is homeless.
 
 ### Operator algebra (the SN/transport spine)
 - [#208 operator algebra](issue_208_operator_algebra_frames.md) — dagger inverse biproduct category + metric G (†=G⁻¹AᵀG); adjoint-for-free = theorem.

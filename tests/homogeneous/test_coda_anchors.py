@@ -161,11 +161,16 @@ class TestTheOperatorAssemblyAgainstRawMixtureData:
     dies) unchanged, and what makes them a genuine anchor rather than a
     twin of the thing under test.
 
-    Today the tree pins :math:`A` on ONE case
-    (``test_homogeneous.py::test_assemble_loss_operator_matches_fused_oracle``,
-    whose own docstring says its reference *"shares ``mat_xs`` data with
-    the fused form (so it is NOT structurally independent)"*) and pins
-    :math:`F` at the matrix tier nowhere on this path.
+    The tree's other :math:`A`-level pin is
+    ``test_homogeneous.py::test_assemble_loss_operator_matches_fused_oracle``,
+    on ONE case. When this module landed, that row's reference read the
+    ``MaterialXSField`` facade and its own docstring disclaimed the
+    independence (*"shares ``mat_xs`` data with the fused form"*); C2
+    (``39e7f32f``) re-pointed it at the raw ``Mixture`` arrays, so it is
+    now independent of the field/operator tier in the same sense these
+    rows are — independent of the tier, not of the datum. It still pins
+    ONE case, and :math:`F` at the matrix tier is pinned nowhere else on
+    this path, so the eight-case sweep below is not redundant with it.
     """
 
     @pytest.mark.parametrize("case", _CASE_IDS)

@@ -250,6 +250,20 @@ never-on-Mixture half is unchanged.)
   the O-4 sequencing logic: aggregates AFTER the operator shape
   crystallizes.
 
+  ✅ REMEDIED 2026-09-08 by the CS4c coda — C1 `5caad3d6` / C2
+  `39e7f32f`. The aggregate ships as **`HomogeneousProblem`** (ruling
+  R-c1's name), in `orpheus/homogeneous/solver.py`, frozen, taking one
+  `Mixture` directly. "Absorption of the carrier" resolved by
+  RETIREMENT, not absorption: the hub mints the material and
+  cross-section fields itself, and `MaterialMesh.from_materials` is
+  deleted — zero `if infinite:` arms anywhere, and the twin-path
+  condition is met the strong way (there is no second path left to be a
+  twin of). ⚠ The `[M]` four lines up is now stale as a description:
+  `_pose_space`'s docstring no longer demotes a carrier, it records that
+  nothing on the path builds one, and names a genuine unit-cell
+  `Mesh1D`'s `bulk_space` as an `==` REFERENCE kept honest by the
+  identity-bridge gate.
+
 **Geometry (the overlay).** Declares: the region partition; the
 **deck identifications**; the genuine **boundary data**; and the
 **region → material assignment** (direction matters: region→material is the
@@ -1222,7 +1236,7 @@ is one of the memo's `(λ,ν)` members (needs the 1991 M&C paper).
 | R20 | `Materials` home: `orpheus/data/materials.py`; the incumbent property-correlation package renames `data/materials/` → `data/material_properties/` ("long overdue"; `[M]` 6 consumers, all TH/kinetics/fuel zone) | 2026-08-25 |
 | R21 | `Materials` final shape: frozen `eq=False` identity wrapper over `Mapping[int, Mixture]` (MappingProxyType); admission refuses only the empty declaration; `restrict(ids)` = guard 2; **no `ng` property, no preview** — concrete-property resolution is LAZY at the consuming stage; today's mesh-time `InconsistentMaterialsError` untouched this arc | 2026-08-25 |
 | R22 | The data-kind taxonomy: macro data arises ≥3 ways (GENDF-class / PENDF-class / collapsed-from-solve); per-kind consistency checks (a GENDF check supersedes scalar-ng); PENDF → MC exclusively; GENDF + collapsed → one method-agnostic final object (multigroup MC included); the data-layer overhaul is priced future work (§9.6); first heavy consumer of concrete energy-structure numbers = Campaign 2 partitioning (spectral-radius direction, hedged) | 2026-08-25 |
-| R23 | `InfiniteMedium` reframed: the homogeneous family's AGGREGATE (`SNMesh`'s analog — organization + shared objects), in `orpheus/homogeneous/`, taking `mixture` directly (never a Materials); R3's first data point; design after the operator shape crystallizes | 2026-08-25 |
+| R23 | `InfiniteMedium` reframed: the homogeneous family's AGGREGATE (`SNMesh`'s analog — organization + shared objects), in `orpheus/homogeneous/`, taking `mixture` directly (never a Materials); R3's first data point; design after the operator shape crystallizes — ✅ REMEDIED 2026-09-08 by the CS4c coda — C1 `5caad3d6` / C2 `39e7f32f`, and it landed exactly as ruled EXCEPT for the name: the aggregate ships as **`HomogeneousProblem`** (ruling R-c1's word, `orpheus/homogeneous/solver.py`), a frozen dataclass taking one `Mixture` directly, owning the pose + the mixture-direct fields + the bound operators + the rate co-vectors as per-instance `cached_property` state. The timing condition was honoured (it was designed after the CS4c operator shape crystallized). ⚠ Its home is INTERIM: the carve into a standalone module with a thin Problem → Solution solver is the consumers campaign's, alongside `SNMesh` → `SNProblem`. | 2026-08-25 |
 
 ## 7. The adversarial record (distilled; refuted candidates are first-class output)
 

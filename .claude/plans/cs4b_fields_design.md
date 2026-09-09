@@ -229,6 +229,17 @@ DECOMPOSE — they are not one kind of thing.
 
 ### F5 — the homogeneous rebind slice (the "and THEN" tension)
 
+> ✅ REMEDIED 2026-09-08 by the CS4c coda — C1 `5caad3d6` / C2 `39e7f32f`. The ruled branch (defer; the SN path is the first kernel
+> consumer, the homogeneous path re-points LAST as the degenerate coda)
+> was executed at the coda: `HomogeneousProblem` supplies the data (C1)
+> and `MaterialMesh.from_materials` — with the three arms and the
+> witnesses that served only it — is deleted (C2). `[M]` bit-identical:
+> the D5 byte gate 8 of 8, the operator-tier anchor (A and F) 8 of 8
+> `array_equal`. O1's tell completes. Record:
+> `docs/theory/foundations/infinite_medium.rst`, "Development history".
+> The rows below are PRESERVED as the reasoning that produced the
+> ruling — read them as history, not as a description of the tree.
+
 Census §9.5: CS4a K1's kernels have ZERO production consumers; the rebind that
 dissolves `from_materials`' last consumer is chartered CS4c; the CS4b charter
 says "and THEN the fabricated path retires". Either:
@@ -417,6 +428,11 @@ boundary thread, #367). The complete forgetful family: **retract**
   where `from_materials` then dissolves. The ruled phase order (CS4b →
   CS1.5′ → CS2 → CS4c) already places the SN binding after every axis
   exists, so the order satisfies the ruling as-is.
+  — ✅ REMEDIED 2026-09-08 by the CS4c coda — C1 `5caad3d6` / C2 `39e7f32f`: the coda ran exactly as ruled. C1 gave the problem a HUB
+  (`HomogeneousProblem`, ruling R-c1) that supplies its own data, and C2
+  deleted `from_materials` with its three now-input-less arms. `[M]`
+  bit-identical (D5 8/8; the operator anchor A/F 8/8), so the O1 tell
+  the CS4b done-when had DROPPED is now completed by the coda instead.
 
 ## Round 3 (2026-08-22) — Q3 ruled; Q5/Q6 explained
 

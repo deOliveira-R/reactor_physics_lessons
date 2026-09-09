@@ -1134,3 +1134,69 @@ non-singleton fiber ⟹ refuted as a dispatcher; then look for the INVERSE objec
 (a functor GENERATING the sibling, not a dispatcher CHOOSING it) — a shared
 primitive whose own docstring states a defer-until-2 trigger is where to look,
 because the trigger has usually already fired.
+
+---
+
+## L-023 -- On a SPLIT brief, do two things before frames: sort the FUSION POINT's attributes, and run the brief's own discriminating rule over the tree's straddlers counting INVERSIONS
+
+A "split X into A and B" brief (Problem/Solution, model/run, data/behaviour,
+kernel/driver) invites an argument about where the boundary goes. Two
+measurements settle more than any argument, and both are greps
+([[problem-solution-split-frames]]).
+
+**(a) The boundary almost never runs where the brief names it — find the object
+where the two halves are currently FUSED and sort its attributes.** A brief that
+says "split the hub from the result" is naming the two objects that already
+EXIST; the fusion lives in the third object nobody named, because that is where
+the split's absence is doing its work. Sort every attribute that object's
+`__init__` sets and report the counts.
+
+Worked (CS4c §22.5): the brief named `SNMesh` and `Solution`; `[M]` the boundary
+runs through `SNSolver.__init__` (`sn/solver.py:1418-1589`), which is **12
+Problem-side / 6 Strategy / 2 Solution-in-progress** — 60 % of the "solver" is
+the Problem. That one count (i) sizes the carve, (ii) shows the campaign owes
+THREE types not two (the fiber coordinate has no home either), and (iii) names
+the five Problem-side data that exist nowhere else, so a returned Solution cannot
+be re-solved. It also converts a design argument into a checklist.
+
+**(b) A chartered discriminating rule is a hypothesis about the tree — run it
+over the straddlers and COUNT the inversions before proposing anything.** A rule
+phrased on *what the code constructs* inverts on every case where an object is
+manufactured without the mathematics moving. `[M]` 3 of 12 shipped straddlers
+invert (a schedule kwarg that builds an operator yet leaves the fixed point
+fixed; a splitting; and — the other way — a strategy object that builds nothing
+at solve time yet deletes a term from `A`). The repair is one clause, and it is
+the same clause every time: **phrase the rule on the SOLUTION SET, not on the
+operator** — Problem-side iff changing it moves `{ψ : Aψ = q}`; Solution-side iff
+the set is fixed and only the path to it changes. That phrasing also IS the
+acceptance gate (solve one problem at two values of each Solution-side
+coordinate; the limits must agree to a tolerance that SHRINKS with the
+tolerances).
+
+⭐ **The corollary that pays on its own: report the row you got WRONG.** My first
+pass ruled `inner_schedule` Problem-side by following the chartered rule
+literally, and the tree's own measurement inverted it. A rule that a careful
+reader follows into the wrong answer is a finding about the rule, not a slip —
+say so in the deliverable, with the row.
+
+**(c) Two riders, each a one-grep check worth running on any split brief.**
+- *Which side has identity?* L-019 says a God object is a fixed point of a weak
+  identity relation. The INVERTED case is now sighted: `[M]` everything the hub
+  induces has structural `__eq__`; the hub has none. A "the container's identity
+  IS the identity of what it induces" charter is then **false in the only
+  checkable direction**, and the fix is to DERIVE the container's `__eq__` from
+  its induced objects rather than hand-write it.
+- *Does the proposed A-side get MUTATED by the B-side today?* Grep
+  `<b_object>\.<a_object>\._` and `setattr`. `[M]` four sites stamped σ-dependent
+  memos onto the save-state candidate, and the reader never validated σ. A
+  save-state charter is refuted by any such site, and enumerating them is the
+  minimal enforcement (freezing is the cheapest ENFORCEMENT, not the
+  REQUIREMENT — the requirement is only that solving does not mutate).
+
+How to apply: on any split/carve/ontology brief — (1) find the fused object and
+publish its attribute sort; (2) run the brief's rule over the straddlers and
+publish the inversion count with the re-phrasing that fixes it; (3) check the
+identity direction and the mutation sites. Only then reach for frames. Pairs with
+L-013 and L-017 (the true deliverable is usually smaller than the proposal and
+sits somewhere else) and with L-022 (the fiber count — here the fiber is the
+STRATEGY, and a non-singleton fiber means the campaign owes a third type).
